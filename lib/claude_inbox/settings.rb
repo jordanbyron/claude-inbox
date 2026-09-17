@@ -7,7 +7,7 @@ module ClaudeInbox
   # settings files it reads, most specific wins. Values are strings, or
   # nil when nothing sets them — then the CLI decides at launch.
   module Settings
-    Defaults = Struct.new(:model, :effort, :permission_mode, keyword_init: true)
+    Defaults = Struct.new(:model, :effort, :permission_mode)
 
     def self.defaults(cwd, home: Dir.home)
       layers = [

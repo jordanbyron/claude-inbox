@@ -133,6 +133,16 @@ module ClaudeInbox
       end
     end
 
+    # Runs a block off the main thread; a failure lands in the status line
+    # rather than killing the thread silently.
+    def in_background
+      Thread.new do
+        yield
+      rescue => e
+        @queue << [:error, e.message]
+      end
+    end
+
     # PR lookups and the reap sweep both happen here, on the poller, so
     # neither a slow `gh` nor a `claude rm` can stall a frame.
     #
@@ -528,14 +538,12 @@ module ClaudeInbox
     def start_session(form, attach:)
       v = form.values
       notice("starting session…")
-      Thread.new do
+      in_background do
         id = @client.spawn(prompt: v[:prompt], cwd: v[:cwd], model: v[:model], effort: v[:effort],
           permission_mode: v[:permission_mode], worktree: v[:worktree], name: v[:name])
         notice("started #{id}")
         @pending_select = id
         attach ? @queue << [:attach, id] : poll_once
-      rescue => e
-        @queue << [:error, e.message]
       end
     end
 
@@ -605,23 +613,19 @@ module ClaudeInbox
     end
 
     def stop_session(id)
-      Thread.new do
+      in_background do
         @client.stop(id)
         poll_once
-      rescue => e
-        @queue << [:error, e.message]
       end
     end
 
     def delete_session(id)
       notice("deleting #{id}…")
-      Thread.new do
+      in_background do
         @client.rm(id)
         @store.forget(id)
         notice("deleted #{id}")
         poll_once
-      rescue => e
-        @queue << [:error, e.message]
       end
     end
 
