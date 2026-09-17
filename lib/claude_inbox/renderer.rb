@@ -29,7 +29,7 @@ module ClaudeInbox
 
     KEYS = [
       ["j/k", "move"], ["⏎", "attach"], ["n", "new"], ["s", "snooze"], ["u", "wake"],
-      ["a", "alias"], ["x", "stop"], ["p", "peek"], ["⇥", "section"],
+      ["a", "alias"], ["o", "PR"], ["x", "stop"], ["p", "peek"], ["⇥", "section"],
       ["za", "fold"], ["/", "filter"], [":q", "quit"]
     ].freeze
 
@@ -42,8 +42,10 @@ module ClaudeInbox
     # opts: selected (id | :settled | nil), settled_expanded, top (scroll),
     #       peek (Array<String> | nil), peek_title, modal (Array<String> | nil),
     #       status (String), now (Time), filter (String | nil), command,
-    #       tick (Integer, drives the spinner)
+    #       tick (Integer, drives the spinner),
+    #       screen ({lines:, footer:} takes over everything below the header)
     def frame(sections, width:, height:, now:, **opts)
+      return full_screen(sections, width, height, now, opts) if opts[:screen]
       selected = opts[:selected]
       list_w = width_for_list(width, opts[:peek])
       body, items = body_lines(sections, list_w, selected, opts, now)
@@ -80,6 +82,14 @@ module ClaudeInbox
       top = idx - 2 if idx && idx - 2 < top # keep the section title in view
       top = idx - view_h + 1 if idx && idx >= top + view_h
       top.clamp(0, [size - view_h, 0].max)
+    end
+
+    def full_screen(sections, width, height, now, opts)
+      view_h = height - 2
+      body = opts[:screen][:lines].first(view_h)
+      body += [""] * (view_h - body.size)
+      lines = [header(sections, width, opts[:status], now)] + body.map { |l| Text.pad(l, width) } + [Text.pad(" " + opts[:screen][:footer], width)]
+      Frame.new(lines, [nil] * (view_h + 2), opts[:top] || 0)
     end
 
     # ----- chrome -------------------------------------------------------------
@@ -227,20 +237,38 @@ module ClaudeInbox
 
     def meta_for(row, section, now)
       s = row.session
-      case section
-      when :snoozed
-        return @p.magenta("parked") if row.parked?
-        @p.magenta("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
-      when :settled
-        @p.dim("#{s.state} · #{Text.age(now.to_i - row.state_since.to_i)}")
-      else
-        if s.interactive?
-          where = s.remote? ? "remote" : "your terminal"
-          age = row.state_since ? Text.age(now.to_i - row.state_since.to_i) : Text.age(now - s.started_at)
-          return state_badge(s) + @p.dim(" · #{where} · #{age}")
+      base =
+        case section
+        when :snoozed
+          row.parked? ? @p.magenta("parked") : @p.magenta("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
+        when :settled
+          @p.dim("#{s.state} · #{Text.age(now.to_i - row.state_since.to_i)}")
+        else
+          if s.interactive?
+            where = s.remote? ? "remote" : "your terminal"
+            age = row.state_since ? Text.age(now.to_i - row.state_since.to_i) : Text.age(now - s.started_at)
+            state_badge(s) + @p.dim(" · #{where} · #{age}")
+          else
+            age = row.state_since ? @p.dim(" · " + Text.age(now.to_i - row.state_since.to_i)) : ""
+            state_badge(s) + age
+          end
         end
-        age = row.state_since ? @p.dim(" · " + Text.age(now.to_i - row.state_since.to_i)) : ""
-        state_badge(s) + age
+      pr = pr_badge(s, section)
+      pr ? base + @p.dim(" · ") + pr : base
+    end
+
+    # "#885 open" in GitHub's colours: green open, dim draft, purple merged,
+    # red closed. Only the first PR is shown; the peek subtitle lists them all.
+    def pr_badge(s, section)
+      pr = s.pr
+      return nil unless pr
+      return @p.dim("#{pr.short} #{pr.state&.downcase}".strip) if section == :settled
+      case pr.state
+      when "OPEN" then @p.green("#{pr.short} open")
+      when "DRAFT" then @p.dim("#{pr.short} draft")
+      when "MERGED" then @p.magenta("#{pr.short} merged")
+      when "CLOSED" then @p.red("#{pr.short} closed")
+      else @p.dim(pr.short)
       end
     end
 

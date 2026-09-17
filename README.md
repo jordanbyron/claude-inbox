@@ -2,7 +2,8 @@
 
 Inbox-style triage on top of Claude Code's background sessions. A companion to
 `claude agents`, not a replacement: it reads the same daemon state through
-`claude agents --json` and adds **snooze** and **auto-settle**.
+`claude agents --json` and adds **snooze**, **auto-settle** and the session's
+**pull request**.
 
 ```
 bin/claude-inbox                       # live
@@ -24,7 +25,11 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
    can be attached, peeked or stopped from outside; you can land on them, and
    Enter tells you why nothing happens.
 3. **Snoozed** — sorted by wake time; parked ("until I wake it") entries last.
-4. **Settled** — `done`/`stopped` and quiet for 10 minutes. Collapsed; Enter expands.
+4. **Settled** — `done`/`stopped` and quiet for 10 minutes, or whose pull
+   request is merged or closed. Collapsed; Enter expands.
+
+A row with a pull request shows it after the state: `#885 open`, `#885 draft`,
+`#885 merged`, `#885 closed`. `o` opens it in the browser.
 
 ## Keys
 
@@ -41,13 +46,16 @@ Keyboard only, vim flavoured. Arrows work too.
 | `za` `zo` `zc` | toggle / open / close the Settled fold |
 | `p` | toggle the read-only peek pane |
 | `J` `K` (`Ctrl-e` `Ctrl-y`) | scroll the peek pane |
-| `n` | new session: prompt, name, directory, model, effort, permissions, worktree |
+| `n` | new session (full screen): multi-line prompt (`Enter` breaks a line, `Ctrl-S` starts), name, directory (`Tab` completes), model, effort, permissions, worktree — "default" choices show what your settings resolve to |
 | `s` | snooze: `1` 15m · `2` 1h · `3` tomorrow 9am · `4` until woken |
-| `u` | wake a snoozed session now |
+| `u` | wake a snoozed session now, or bring back one you settled |
+| `x` | settle a working or needs-you session by hand (returns when it changes state, unless it just finished) |
 | `a` | set a local alias (never touches the real session name) |
-| `x` | stop the session (`y` to confirm) |
+| `o` | open the session's pull request in the browser |
+| `P` | link a pull request by hand (empty clears; the scanned links return) |
+| `X` | stop the session (`y` to confirm) |
 | `/` | filter by name or cwd; `Enter` keeps it, `Esc` clears |
-| `:q` | quit (`:peek`, `:refresh` also exist) |
+| `:q` | quit (`:peek`, `:refresh`, `:pr` also exist) |
 | `R` | poll now |
 | `q` | quit |
 
@@ -83,25 +91,50 @@ triage logic lives.
 or when it *becomes* blocked or failed after being snoozed. A session that was
 already blocked when you snoozed it stays snoozed; that is the point of snoozing.
 
-**Settle.** `done` or `stopped` and unchanged for `SETTLE_AFTER` (10 minutes).
+**Settle.** `done` or `stopped` and unchanged for `SETTLE_AFTER` (10 minutes),
+or settled by hand with `x`. A hand-settled session stays put when it
+finishes, and returns as soon as it changes state in any other way: working
+again, blocked, or failed. `u` brings it back at any time.
 `failed` never settles. A never-before-seen finished session with no live
 process settles on the first poll, because the supervisor only reaps a process
 after about an hour idle, which is longer than the settle window.
 
+A session with a pull request follows the PR instead of the clock: it stays in
+Working while any of its PRs is open or a draft, however long it has been
+quiet, and settles the moment every one is merged or closed. A PR whose state
+is not known yet (no `gh`, offline) is ignored and the clock rule applies.
+
+## Pull requests
+
+Claude Code already links sessions to PRs. The daemon scans each background
+session's transcript for links and writes them to
+`~/.claude/jobs/<id>/state.json` as `children` (`kind: "pr"`); `claude agents
+--json` does not expose that, so `PullRequests` reads the file. It is a link
+scan, so a session that only *reviews* a PR gets it too. Interactive sessions
+have no job file, so for them (or to correct a bad scan) `P` sets the link by
+hand; that lives in our own state file as `pr` and replaces the scanned list.
+
+State is seeded from `~/.claude/gh-pr-status-cache.json`, whatever Claude Code
+last saw, then refreshed with `gh pr view` on the poller thread, at most once a
+minute per PR and never for one already merged or closed. Without `gh` the
+cached state is all you get.
+
 ## State
 
 `~/.config/claude-inbox/state.json`, keyed by session id, atomic writes.
-Holds `wake_at`, `snoozed_at`, `alias`, `last_state`, `state_since`, `last_seen`.
+Holds `wake_at`, `snoozed_at`, `alias`, `pr`, `last_state`, `state_since`, `last_seen`.
 Entries not seen in a poll for 7 days are pruned.
 
 ## Layout
 
 ```
-AgentsClient  →  Store  →  Renderer  →  App
- (shells out)   (pure)    (strings)   (terminal + key loop)
+AgentsClient  →  PullRequests  →  Store  →  Renderer  →  App
+ (shells out)    (jobs dir + gh)  (pure)    (strings)   (terminal + key loop)
 ```
 
 - `AgentsClient` is the only thing that runs `claude`. `FixtureClient` swaps in a JSON file.
+- `PullRequests` fills in each session's `prs` from `~/.claude/jobs` and `gh`.
+  `--fixture` points it at `test/fixtures/jobs` with `gh` off.
 - `Store` holds the last poll and the snooze table behind a mutex; rules are class methods.
 - `Renderer` turns sections into an array of fixed-width strings. `Painter` diffs frames
   and repaints only changed rows.
@@ -131,6 +164,11 @@ AgentsClient  →  Store  →  Renderer  →  App
 - Interactive sessions (a `claude` you started in a terminal yourself) appear in
   the JSON with no `id` and no `state`, only `status`, and cannot be attached,
   peeked or stopped from outside.
+- `~/.claude/jobs/<id>/state.json` is where the daemon keeps what the JSON
+  leaves out: `children` (scanned PR and issue links), `intent`, `worktreePath`,
+  `worktreeBranch`, token count and the transcript path. `~/.claude/gh-pr-status-cache.json`
+  is keyed by PR url and calls an open draft `DRAFT`; `gh pr view` reports
+  `OPEN` plus `isDraft`.
 
 ## Development
 

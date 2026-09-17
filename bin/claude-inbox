@@ -10,8 +10,10 @@ $stderr.reopen(ENV["CLAUDE_INBOX_STDERR"], "a") if ENV["CLAUDE_INBOX_STDERR"]
 
 opts = {}
 if (i = ARGV.index("--fixture"))
-  opts[:client] = ClaudeInbox::FixtureClient.new(ARGV[i + 1], logs: File.binread(File.join(__dir__, "..", "test", "fixtures", "logs_raw.txt")))
+  fixtures = File.join(__dir__, "..", "test", "fixtures")
+  opts[:client] = ClaudeInbox::FixtureClient.new(ARGV[i + 1], logs: File.binread(File.join(fixtures, "logs_raw.txt")))
   opts[:store] = ClaudeInbox::Store.new(path: nil)
+  opts[:pull_requests] = ClaudeInbox::PullRequests.new(jobs_dir: File.join(fixtures, "jobs"), cache_path: File.join(fixtures, "gh-pr-status-cache.json"), gh: nil)
 end
 opts[:color] = false if ARGV.include?("--no-color")
 

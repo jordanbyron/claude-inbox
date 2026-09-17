@@ -46,7 +46,7 @@ module ClaudeInbox
     # Fold a fresh poll into the entry table. Returns a new table.
     #   * bumps `state_since` only when `state` actually changed
     #   * records `last_seen`
-    #   * clears an elapsed or overridden snooze (wake rule)
+    #   * clears an elapsed or overridden snooze (wake rule) or hand-settle
     #   * prunes entries not seen for PRUNE_AFTER
     def self.merge_entries(entries, sessions, now)
       now_i = now.to_i
@@ -65,6 +65,7 @@ module ClaudeInbox
         e["last_seen"] = now_i
         e.delete("wake_at") if woken?(s, e, now_i)
         e.delete("snoozed_at") unless e["wake_at"]
+        e.delete("settled_at") if e["settled_at"] && !hand_settled?(s, e)
       end
       out
     end
@@ -97,9 +98,23 @@ module ClaudeInbox
       entry && entry["wake_at"] && !woken?(session, entry, now_i)
     end
 
+    # Hand-settle rule: `x` parks a row in Settled whatever the clock says. It
+    # comes back when the session changes state afterwards and is not merely
+    # finishing: working again, blocked, or failed. Finishing keeps it parked.
+    def self.hand_settled?(session, entry)
+      return false unless entry && entry["settled_at"]
+      session.finished? || entry["state_since"].to_i <= entry["settled_at"].to_i
+    end
+
     # Settle rule: done/stopped and quiet for SETTLE_AFTER. `failed` never settles.
+    # A session with a pull request follows the PR instead: it stays up while
+    # any PR is open and settles the moment every one is merged or closed.
+    # A PR whose state nobody knows yet (no gh, offline) is ignored.
     def self.settled?(session, entry, now_i)
+      return true if hand_settled?(session, entry)
       return false unless session.finished?
+      known = session.prs.select(&:known?)
+      return known.all?(&:resolved?) if known.any?
       since = entry && entry["state_since"]
       return false unless since
       now_i - since.to_i > SETTLE_AFTER
@@ -115,6 +130,7 @@ module ClaudeInbox
         section =
           if s.terminal? then s.needs_you? ? :needs_you : :working # you're in it; never settle or hide it
           elsif snoozed?(s, e, now_i) then :snoozed
+          elsif hand_settled?(s, e) then :settled
           elsif s.needs_you? then :needs_you
           elsif settled?(s, e, now_i) then :settled
           elsif s.finished? then :working
@@ -180,8 +196,19 @@ module ClaudeInbox
       end
     end
 
+    # Also lifts a hand-settle, so `u` undoes `x` as well as `s`.
     def wake(id)
       edit(id) do |e|
+        e.delete("wake_at")
+        e.delete("snoozed_at")
+        e.delete("settled_at")
+      end
+    end
+
+    def settle(id)
+      now = @clock.call
+      edit(id) do |e|
+        e["settled_at"] = now.to_i
         e.delete("wake_at")
         e.delete("snoozed_at")
       end
@@ -190,6 +217,14 @@ module ClaudeInbox
     def set_alias(id, name)
       edit(id) { |e| name.to_s.empty? ? e.delete("alias") : e["alias"] = name }
     end
+
+    # Hand-set PR link; empty clears it and the scanned links show again.
+    def set_pr(id, url)
+      edit(id) { |e| url.to_s.empty? ? e.delete("pr") : e["pr"] = url }
+    end
+
+    # session key => url, for PullRequests#enrich.
+    def pr_overrides = @mutex.synchronize { @entries.select { |_, e| e["pr"] }.transform_values { |e| e["pr"] } }
 
     def entry(id) = @mutex.synchronize { @entries[id]&.dup }
 

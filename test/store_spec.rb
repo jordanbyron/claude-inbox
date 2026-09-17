@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "tmpdir"
 require_relative "test_helper"
 
 Store = ClaudeInbox::Store
@@ -55,6 +56,31 @@ describe Store do
       sec = sections([session(id: "a", state: "done")], entries)
       _(ids(sec.working)).must_equal %w[a]
       _(sec.settled).must_be_empty
+    end
+
+    def pr(state) = ClaudeInbox::PullRequest.new(number: 1, url: "https://github.com/o/r/pull/1", state: state)
+
+    it "keeps a finished session up while its PR is open, however long it has been quiet" do
+      entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 86_400}}
+      %w[OPEN DRAFT].each do |st|
+        sec = sections([session(id: "a", state: "done", prs: [pr(st)])], entries)
+        _(ids(sec.working)).must_equal %w[a]
+      end
+    end
+
+    it "settles a finished session the moment its PR is merged or closed" do
+      entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 5}}
+      %w[MERGED CLOSED].each do |st|
+        sec = sections([session(id: "a", state: "done", prs: [pr(st)])], entries)
+        _(ids(sec.settled)).must_equal %w[a]
+      end
+    end
+
+    it "waits for every PR, and falls back to the quiet window when no state is known" do
+      entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - Store::SETTLE_AFTER - 1}}
+      _(ids(sections([session(id: "a", state: "done", prs: [pr("MERGED"), pr("OPEN")])], entries).working)).must_equal %w[a]
+      _(ids(sections([session(id: "a", state: "done", prs: [pr(nil)])], entries).settled)).must_equal %w[a]
+      _(ids(sections([session(id: "a", state: "working", prs: [pr("MERGED")])], entries).working)).must_equal %w[a]
     end
   end
 
@@ -141,6 +167,53 @@ describe Store do
     it "lets snooze win over settle while the timer is live" do
       entries = {"a" => {"wake_at" => now.to_i + 900, "last_state" => "done", "state_since" => now.to_i - 3600}}
       _(ids(sections([session(id: "a", state: "done")], entries).snoozed)).must_equal %w[a]
+    end
+  end
+
+  describe "hand settle" do
+    it "settles a working session at once" do
+      entries = {"a" => {"settled_at" => now.to_i, "last_state" => "working", "state_since" => now.to_i - 60}}
+      _(ids(sections([session(id: "a")], entries).settled)).must_equal %w[a]
+    end
+
+    it "settles a blocked session and keeps it settled while still blocked" do
+      entries = {"a" => {"settled_at" => now.to_i, "last_state" => "blocked", "state_since" => now.to_i - 60}}
+      sec = sections([session(id: "a", state: "blocked")], entries, now + 3600)
+      _(ids(sec.settled)).must_equal %w[a]
+      _(sec.needs_you).must_be_empty
+    end
+
+    it "stays settled when the session finishes" do
+      entries = {"a" => {"settled_at" => now.to_i, "last_state" => "working", "state_since" => now.to_i - 60}}
+      later = Store.merge_entries(entries, [session(id: "a", state: "done")], now + 30)
+      _(later["a"]["settled_at"]).must_equal now.to_i
+      _(ids(sections([session(id: "a", state: "done")], later, now + 30).settled)).must_equal %w[a]
+    end
+
+    it "comes back when the session starts working again" do
+      entries = {"a" => {"settled_at" => now.to_i, "last_state" => "blocked", "state_since" => now.to_i - 60}}
+      later = Store.merge_entries(entries, [session(id: "a", state: "working")], now + 30)
+      _(later["a"]).wont_include "settled_at"
+      _(ids(sections([session(id: "a", state: "working")], later, now + 30).working)).must_equal %w[a]
+    end
+
+    it "comes back when the session becomes blocked afterwards" do
+      entries = {"a" => {"settled_at" => now.to_i, "last_state" => "working", "state_since" => now.to_i - 60}}
+      later = Store.merge_entries(entries, [session(id: "a", state: "blocked")], now + 30)
+      _(later["a"]).wont_include "settled_at"
+      _(ids(sections([session(id: "a", state: "blocked")], later, now + 30).needs_you)).must_equal %w[a]
+    end
+
+    it "is lifted by wake and replaces a snooze" do
+      Dir.mktmpdir do |dir|
+        store = Store.new(path: File.join(dir, "state.json"), clock: -> { now })
+        store.snooze("a", :h1)
+        store.settle("a")
+        _(store.entry("a")).wont_include "wake_at"
+        _(store.entry("a")["settled_at"]).must_equal now.to_i
+        store.wake("a")
+        _(store.entry("a")).wont_include "settled_at"
+      end
     end
   end
 

@@ -25,7 +25,7 @@ describe ClaudeInbox::Keymap do
   it "drops a chord on an unknown second key" do
     km.press("g", "g")
     _(km.press("x", "x")).must_be_nil
-    _(km.press("x", "x")).must_equal :stop
+    _(km.press("x", "x")).must_equal :settle
   end
 
   it "expires a pending chord after the timeout" do
@@ -49,7 +49,8 @@ describe ClaudeInbox::Keymap do
     _(km.press("s", "s")).must_equal :snooze
     _(km.press("u", "u")).must_equal :wake
     _(km.press("a", "a")).must_equal :alias
-    _(km.press("x", "x")).must_equal :stop
+    _(km.press("x", "x")).must_equal :settle
+    _(km.press("X", "X")).must_equal :stop
     _(km.press("p", "p")).must_equal :toggle_peek
     _(km.press("n", "n")).must_equal :new_session
     _(km.press(:tab, "\t")).must_equal :next_section

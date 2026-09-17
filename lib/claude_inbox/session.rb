@@ -12,7 +12,7 @@ module ClaudeInbox
   # beyond parsing and a few predicates.
   Session = Struct.new(
     :id, :cwd, :kind, :started_at, :session_id, :name,
-    :state, :pid, :status, :waiting_for, :origin
+    :state, :pid, :status, :waiting_for, :origin, :prs
   ) do
     def self.from_hash(h)
       new(
@@ -58,5 +58,10 @@ module ClaudeInbox
     def display_name = name || id || session_id || "(unnamed)"
 
     def project = cwd ? File.basename(cwd) : ""
+
+    # Pull requests tied to this session; PullRequests fills these in.
+    def prs = self[:prs] || []
+
+    def pr = prs.first
   end
 end

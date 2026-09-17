@@ -5,8 +5,10 @@
 require "bundler/setup"
 require_relative "../lib/claude_inbox"
 
+fixtures = File.expand_path("../test/fixtures", __dir__)
 client = ARGV[0] ? ClaudeInbox::FixtureClient.new(ARGV[0]) : ClaudeInbox::AgentsClient.new
-sessions = client.list
+prs = ARGV[0] ? ClaudeInbox::PullRequests.new(jobs_dir: File.join(fixtures, "jobs"), cache_path: File.join(fixtures, "gh-pr-status-cache.json"), gh: nil) : ClaudeInbox::PullRequests.new
+sessions = prs.enrich(client.list)
 store = ClaudeInbox::Store.new(path: nil)
 store.update(sessions)
 
@@ -16,6 +18,7 @@ store.sections(now).each_section do |name, rows|
   rows.each do |r|
     s = r.session
     age = s.started_at ? "#{((now - s.started_at) / 60).round}m" : "?"
-    puts format("  %-9s %-8s %-8s %-6s %-40s %s", s.id || "-", s.state || s.kind, s.status || "-", age, r.label[0, 40], s.project)
+    pr = s.prs.map { |x| "#{x.short} #{x.state || "?"}" }.join(" ")
+    puts format("  %-9s %-8s %-8s %-6s %-40s %-14s %s", s.id || "-", s.state || s.kind, s.status || "-", age, r.label[0, 40], s.project, pr)
   end
 end

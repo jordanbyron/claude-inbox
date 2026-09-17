@@ -11,6 +11,7 @@ require_relative "renderer"
 require_relative "peek"
 require_relative "keymap"
 require_relative "new_session_form"
+require_relative "pull_requests"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
@@ -27,9 +28,10 @@ module ClaudeInbox
       ["4", "until I wake it", :until_woken]
     ].freeze
 
-    def initialize(client: AgentsClient.new, store: Store.new, out: $stdout, input: $stdin, color: true)
+    def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new, out: $stdout, input: $stdin, color: true)
       @client = client
       @store = store
+      @pull_requests = pull_requests
       @out = out
       @input = input
       @color = color
@@ -119,8 +121,9 @@ module ClaudeInbox
       end
     end
 
+    # PR lookups happen here, on the poller, so a slow `gh` never stalls a frame.
     def poll_once
-      @queue << [:sessions, @client.list]
+      @queue << [:sessions, @pull_requests.enrich(@client.list, @store.pr_overrides)]
     rescue => e
       @queue << [:error, e.message]
     end
@@ -183,7 +186,7 @@ module ClaudeInbox
         sections, width: width, height: height, now: now,
         selected: @selected, top: @top, settled_expanded: @settled_expanded,
         peek: peek_lines, peek_title: peek_title, peek_subtitle: peek_subtitle(sections),
-        modal: modal_lines(width), status: status_text(now),
+        modal: modal_lines(width), screen: screen_lines(width, height), status: status_text(now),
         filter: @filter, filter_editing: @filter_editing, command: @command, tick: @tick / 2
       )
       @items = frame.items.compact
@@ -285,6 +288,7 @@ module ClaudeInbox
       return nil unless row
       s = row.session
       parts = [s.effective_state, s.status, s.waiting_for, s.id, s.started_at&.strftime("started %b %-d %H:%M")].compact
+      parts += s.prs.map { |pr| "#{pr.short} #{pr.state&.downcase || "?"}" }
       parts.join(" · ")
     end
 
@@ -334,7 +338,10 @@ module ClaudeInbox
       when :fold_toggle then @settled_expanded = !@settled_expanded
       when :snooze then open_snooze_menu
       when :wake then wake_selected
+      when :settle then settle_selected
       when :alias then open_alias_editor
+      when :link_pr then open_pr_editor
+      when :open_pr then open_pr
       when :stop then open_stop_confirm
       when :refresh then Thread.new { poll_once }
       when :toggle_peek then toggle_peek
@@ -411,6 +418,12 @@ module ClaudeInbox
       @store.wake(@selected) if require_storable
     end
 
+    def settle_selected
+      return unless require_storable
+      @store.settle(@selected)
+      notice("settled — u brings it back")
+    end
+
     # ----- attach handoff ---------------------------------------------------
 
     def attach(id)
@@ -443,6 +456,21 @@ module ClaudeInbox
       @modal = {kind: :alias, id: @selected, buffer: +current}
     end
 
+    def open_pr_editor
+      return unless require_storable
+      current = @store.entry(@selected)&.dig("pr") || selected_session&.pr&.url || ""
+      @modal = {kind: :pr, id: @selected, buffer: +current}
+    end
+
+    # Hands the first PR to the OS browser opener.
+    def open_pr
+      pr = selected_session&.pr
+      return notice("no pull request linked — P sets one") unless pr
+      opener = RUBY_PLATFORM.include?("darwin") ? "open" : "xdg-open"
+      notice("opening #{pr.short}")
+      Thread.new { Subprocess.capture(opener, pr.url) }
+    end
+
     def open_new_session
       cwd = selected_session&.cwd || Dir.pwd
       @modal = {kind: :new, form: NewSessionForm.new(cwd: cwd, pastel: Pastel.new(enabled: @color))}
@@ -462,12 +490,14 @@ module ClaudeInbox
       end
     end
 
+    def screen_lines(width, height)
+      return nil unless @modal && @modal[:kind] == :new
+      form = @modal[:form]
+      {lines: form.screen(width, height - 2), footer: form.footer}
+    end
+
     def modal_lines(width)
-      return nil unless @modal
-      if @modal[:kind] == :new
-        box_w = [width - 4, 76].min
-        return TTY::Box.frame(@modal[:form].lines(box_w - 4).join("\n"), title: {top_left: " New session "}, padding: [0, 1], width: box_w).split("\n")
-      end
+      return nil unless @modal && @modal[:kind] != :new
       content =
         case @modal[:kind]
         when :snooze
@@ -476,8 +506,10 @@ module ClaudeInbox
           ["  Stop session #{@modal[:id]}?", "", "  y  stop it", "  esc  cancel"]
         when :alias
           ["  New alias:", "", "  > #{@modal[:buffer]}_", "", "  ⏎ save · esc cancel"]
+        when :pr
+          ["  Pull request URL (empty clears):", "", "  > #{@modal[:buffer]}_", "", "  ⏎ save · esc cancel"]
         end
-      title = {snooze: " Snooze ", stop: " Stop ", alias: " Alias "}[@modal[:kind]]
+      title = {snooze: " Snooze ", stop: " Stop ", alias: " Alias ", pr: " Pull request "}[@modal[:kind]]
       TTY::Box.frame(content.join("\n"), title: {top_left: title}, padding: [0, 1], width: [width - 4, 44].min)
         .split("\n")
     end
@@ -499,12 +531,10 @@ module ClaudeInbox
           @store.snooze(@modal[:id], entry[2])
           @modal = nil
         end
-      when :alias
+      when :alias, :pr
         case name
         when :escape then @modal = nil
-        when :return, :enter
-          @store.set_alias(@modal[:id], @modal[:buffer].strip)
-          @modal = nil
+        when :return, :enter then save_text_modal
         when :backspace, :ctrl_h then @modal[:buffer] = @modal[:buffer][0...-1]
         else @modal[:buffer] << key if key.is_a?(String) && key.match?(/\A[[:print:]]\z/)
         end
@@ -522,6 +552,19 @@ module ClaudeInbox
           @modal = nil
         end
       end
+    end
+
+    def save_text_modal
+      value = @modal[:buffer].strip
+      if @modal[:kind] == :alias
+        @store.set_alias(@modal[:id], value)
+      elsif value.empty? || PullRequests.valid_url?(value)
+        @store.set_pr(@modal[:id], value)
+        Thread.new { poll_once }
+      else
+        return notice("that's not a github.com pull request url")
+      end
+      @modal = nil
     end
 
     # ----- filter / command line ---------------------------------------------
