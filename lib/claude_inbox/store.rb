@@ -70,6 +70,7 @@ module ClaudeInbox
         e.delete("wake_at") if woken?(s, e, now_i)
         e.delete("snoozed_at") unless e["wake_at"]
         e.delete("settled_at") if e["settled_at"] && !hand_settled?(s, e)
+        e.delete("acknowledged_at") if e["acknowledged_at"] && !acknowledged?(s, e)
       end
       out
     end
@@ -110,6 +111,14 @@ module ClaudeInbox
       session.finished? || entry["state_since"].to_i <= entry["settled_at"].to_i
     end
 
+    # Acknowledge rule: attaching to a session marks its current state seen, so
+    # it drops out of Needs You without being archived to Settled. It comes
+    # back the moment the state changes again — same "state_since" test as
+    # hand-settle, just routed to Working instead of Settled.
+    def self.acknowledged?(session, entry)
+      entry && entry["acknowledged_at"] && entry["state_since"].to_i <= entry["acknowledged_at"].to_i
+    end
+
     # Settle rule: done/stopped and quiet for SETTLE_AFTER. `failed` never settles.
     # A session with a pull request follows the PR instead: it stays up while
     # any PR is open and settles the moment every one is merged or closed.
@@ -138,7 +147,7 @@ module ClaudeInbox
           elsif e && e["pinned"] then :pinned
           elsif snoozed?(s, e, now_i) then :snoozed
           elsif hand_settled?(s, e) then :settled
-          elsif s.needs_you? then :needs_you
+          elsif s.needs_you? then acknowledged?(s, e) ? :working : :needs_you
           elsif settled?(s, e, now_i) then :settled
           elsif s.finished? then :working
           else :working
@@ -211,6 +220,11 @@ module ClaudeInbox
         e.delete("snoozed_at")
         e.delete("settled_at")
       end
+    end
+
+    def acknowledge(id)
+      now = @clock.call
+      edit(id) { |e| e["acknowledged_at"] = now.to_i }
     end
 
     def settle(id)

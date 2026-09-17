@@ -433,6 +433,7 @@ module ClaudeInbox
     # ----- attach handoff ---------------------------------------------------
 
     def attach(id)
+      @store.acknowledge(id)
       @paused = true
       restore_screen
       @out.print TTY::Cursor.clear_screen

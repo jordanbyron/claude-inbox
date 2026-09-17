@@ -254,6 +254,34 @@ describe Store do
     end
   end
 
+  describe "acknowledge rule" do
+    it "moves an acknowledged blocked session to Working, not Settled" do
+      entries = {"a" => {"acknowledged_at" => now.to_i, "last_state" => "blocked", "state_since" => now.to_i - 60}}
+      sec = sections([session(id: "a", state: "blocked")], entries)
+      _(ids(sec.working)).must_equal %w[a]
+      _(sec.needs_you).must_be_empty
+      _(sec.settled).must_be_empty
+    end
+
+    it "comes back to Needs You once the state changes again after acknowledging" do
+      entries = {"a" => {"acknowledged_at" => now.to_i, "last_state" => "blocked", "state_since" => now.to_i - 60}}
+      later = Store.merge_entries(entries, [session(id: "a", state: "working")], now + 30)
+      later = Store.merge_entries(later, [session(id: "a", state: "blocked")], now + 60)
+      _(later["a"]).wont_include "acknowledged_at"
+      _(ids(sections([session(id: "a", state: "blocked")], later, now + 60).needs_you)).must_equal %w[a]
+    end
+
+    it "acknowledge sets acknowledged_at via the store" do
+      Dir.mktmpdir do |dir|
+        store = Store.new(path: File.join(dir, "state.json"), clock: -> { now })
+        store.update([session(id: "a", state: "blocked")])
+        store.acknowledge("a")
+        _(store.entry("a")["acknowledged_at"]).must_equal now.to_i
+        _(store.sections.working.map(&:id)).must_equal %w[a]
+      end
+    end
+  end
+
   describe ".merge_entries" do
     it "bumps state_since only when state changes" do
       e = Store.merge_entries({}, [session(id: "a")], now)
