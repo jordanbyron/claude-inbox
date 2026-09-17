@@ -129,8 +129,8 @@ module ClaudeInbox
 
     def erase_line(mode)
       case mode
-      when 0 then (@col...@cols).each { |c| @grid[@row][c] = " " }
-      when 1 then (0..@col).each { |c| @grid[@row][c] = " " }
+      when 0 then @grid[@row].fill(" ", @col)
+      when 1 then @grid[@row].fill(" ", 0, @col + 1)
       else @grid[@row].fill(" ")
       end
     end
