@@ -105,6 +105,18 @@ the second start needs a letter of its own.
 The directory defaults to the selected row's. It runs `claude --bg "<prompt>"`
 with only the flags you changed from default, in that directory.
 
+A prompt that starts with `/` is a slash command, the same as at Claude
+Code's own prompt: `claude` expands `/unslop README.md` into the skill with
+its arguments before the session starts. Typing the `/` opens a menu of what
+the CLI would offer under it — project and personal skills and commands,
+plugin skills as `plugin:name`, claude.ai's synced skills as
+`anthropic-skills:name` — narrowed as you type, each with the description
+from its front matter. `↑` `↓` choose, `Tab` or `Enter` drop the command in
+with a space after it, `Esc` closes the menu (a second `Esc` cancels the
+form). Only the first word of the prompt counts, so a path later on never
+opens it. Built-ins such as `/init` live inside the CLI and are not listed;
+typing one still works. Project commands follow the Directory field.
+
 ### Why `←` comes back here and not to native agent view
 
 Inside an attached session, `←` on an empty prompt detaches. `claude attach`
@@ -216,6 +228,9 @@ AgentsClient  →  PullRequests  →  Store  →  Renderer  →  App
   place that spawns a child.
 - `VtScreen` is a small cursor-addressed grid used to turn the `claude logs` replay
   into readable lines for the peek pane.
+- `SlashCommands` reads the skills and commands `claude` would offer from the
+  same directories it reads them, front matter included, for the new-session
+  prompt's menu. Pure filesystem; it never runs `claude`.
 
 ## Things learned from the real CLI (2.1.273)
 
@@ -235,6 +250,12 @@ AgentsClient  →  PullRequests  →  Store  →  Renderer  →  App
   shell. Under the hood `←` makes the attach process exec `claude agents` in place,
   same pid, using its own executable path, so a PATH shim never sees it.
 - `CLAUDE_CODE_DISABLE_AGENT_VIEW=1` disables `agents`, `attach` and `logs` alike.
+- A prompt beginning with a slash command is expanded, `$ARGUMENTS` and all,
+  in `-p` and `--bg` alike (checked on 2.1.274 with a project command).
+  Installed plugins are listed in `~/.claude/plugins/installed_plugins.json`,
+  keyed `name@marketplace`, each pointing at its `installPath`; claude.ai's
+  synced skills sit in `~/.claude/skills/synced/<bucket>/<name>/SKILL.md`
+  and show up as `anthropic-skills:<name>`.
 - Interactive sessions (a `claude` you started in a terminal yourself) appear in
   the JSON with no `id` and no `state`, only `status`, and cannot be attached,
   peeked or stopped from outside.

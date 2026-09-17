@@ -36,6 +36,18 @@ module ClaudeInbox
       self
     end
 
+    # Everything before the cursor, as one string.
+    def head = @g[0...@cursor].join
+
+    # Swaps the text before the cursor for `text`, leaving the cursor right
+    # after it and the rest untouched — how completion drops a picked
+    # command in over the half-typed one.
+    def replace_head(text)
+      tail = @g[@cursor..]
+      @g = text.grapheme_clusters + tail
+      @cursor = @g.size - tail.size
+    end
+
     def insert(text)
       g = text.grapheme_clusters
       @g.insert(@cursor, *g)
