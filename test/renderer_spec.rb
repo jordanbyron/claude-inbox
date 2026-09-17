@@ -84,6 +84,19 @@ describe ClaudeInbox::Renderer do
     _(text).must_include "⇅ 1 remote"
   end
 
+  it "separates an agent that is thinking from one waiting on what it started" do
+    thinking = ClaudeInbox::JobState.new("tempo" => "active", "inFlight" => {"tasks" => 2},
+      "fan" => [{"kind" => "in_process_teammate"}, {"kind" => "in_process_teammate"}])
+    waiting = ClaudeInbox::JobState.new("tempo" => "idle", "inFlight" => {"tasks" => 1},
+      "fan" => [{"kind" => "local_bash"}])
+    rows = [session(id: "t1", name: "thinking", job_state: thinking), session(id: "t2", name: "watching", job_state: waiting)]
+    sec = Store.sectionize(rows, Store.merge_entries({}, rows, now), now)
+    text = renderer.frame(sec, width: 90, height: 12, now: now, tick: 0).lines.join("\n")
+    _(text).must_match(/⠋ thinking\s+working · 2 agents/)
+    _(text).must_match(/◌ watching\s+idle · 1 shell/)
+    _(text).must_match(/✻ 1 working.*◌ 1 idle/)
+  end
+
   it "renders an idle terminal as done and a waiting one as needing you" do
     idle = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u1", name: "shell")
     waiting = session(id: nil, kind: "interactive", state: nil, status: "waiting", waiting_for: "permission prompt", session_id: "u2", name: "shell2")

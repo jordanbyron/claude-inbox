@@ -34,6 +34,7 @@ describe ClaudeInbox::App do
       client: client,
       store: store,
       pull_requests: ClaudeInbox::PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, gh: nil),
+      jobs_dir: fixture_path("jobs"),
       out: out, input: StringIO.new, color: false
     )
   end
@@ -137,6 +138,7 @@ describe ClaudeInbox::App do
       a = ClaudeInbox::App.new(
         client: client, store: store, reaper: reaper,
         pull_requests: ClaudeInbox::PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, gh: nil),
+        jobs_dir: fixture_path("jobs"),
         out: out, input: StringIO.new, color: false
       )
       a.send(:poll_once)

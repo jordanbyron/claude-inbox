@@ -108,7 +108,8 @@ module ClaudeInbox
     def header_chips(sections, compact:)
       pn = sections.pinned.size
       n = sections.needs_you.size
-      w = sections.active.count { |r| r.session.effective_state == "working" }
+      w = sections.active.count { |r| r.session.effective_state == "working" && !r.session.waiting_on_work? }
+      q = sections.active.count { |r| r.session.waiting_on_work? }
       i = sections.all.count { |r| r.session.terminal? }
       m = sections.all.count { |r| r.session.remote? }
       z = sections.snoozed.size
@@ -117,6 +118,7 @@ module ClaudeInbox
       chips << @p.cyan.bold(compact ? "★ #{pn}" : "★ #{pn} pinned") if pn > 0
       chips << @p.red.bold(compact ? "● #{n}" : "● #{n} need#{"s" if n == 1} you") if n > 0
       chips << @p.yellow(compact ? "✻ #{w}" : "✻ #{w} working") if w > 0
+      chips << @p.yellow(compact ? "◌ #{q}" : "◌ #{q} idle") if q > 0
       chips << @p.dim(compact ? "○ #{i}" : "○ #{i} terminal#{"s" if i > 1}") if i > 0
       chips << @p.blue(compact ? "⇅ #{m}" : "⇅ #{m} remote") if m > 0
       chips << @p.magenta(compact ? "z #{z}" : "z #{z} snoozed") if z > 0
@@ -233,7 +235,7 @@ module ClaudeInbox
       case s.effective_state
       when "blocked" then @p.red.bold("●")
       when "failed" then @p.red.bold("✗")
-      when "working" then @p.yellow(SPINNER[tick % SPINNER.size])
+      when "working" then s.waiting_on_work? ? @p.yellow("◌") : @p.yellow(SPINNER[tick % SPINNER.size])
       when "done" then @p.green("✓")
       when "stopped" then @p.dim("■")
       else @p.dim("?")
@@ -283,12 +285,20 @@ module ClaudeInbox
         detail = s.waiting_for ? ": #{s.waiting_for}" : ""
         @p.red.bold("needs you#{detail}")
       when "failed" then @p.red.bold("failed")
-      when "working"
-        (s.status == "waiting") ? @p.yellow("waiting#{": #{s.waiting_for}" if s.waiting_for}") : @p.yellow("working")
+      when "working" then working_badge(s)
       when "done" then @p.green("done") + ((s.alive? && !s.interactive?) ? @p.dim(" · #{s.status}") : "")
       when "stopped" then @p.dim("stopped")
       else @p.dim(s.state.to_s)
       end
+    end
+
+    # "working" while the agent is thinking, "idle" once it has stopped and
+    # only the work it kicked off is still open — with that work named either
+    # way, since "working · 2 agents" is the answer to "working on what?".
+    def working_badge(s)
+      return @p.yellow("waiting#{": #{s.waiting_for}" if s.waiting_for}") if s.status == "waiting"
+      label = s.job_state&.in_flight_label
+      @p.yellow(s.waiting_on_work? ? "idle" : "working") + (label ? @p.dim(" · #{label}") : "")
     end
 
     def short_path(path)

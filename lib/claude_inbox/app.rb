@@ -37,10 +37,12 @@ module ClaudeInbox
     # The reaper defaults to off. It is the only thing here that deletes a
     # session, so switching it on is `bin/claude-inbox`'s job and nothing
     # reaches it by forgetting an argument.
-    def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new, reaper: Reaper.disabled, out: $stdout, input: $stdin, color: true)
+    def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new, jobs_dir: JobState::DEFAULT_DIR,
+      reaper: Reaper.disabled, out: $stdout, input: $stdin, color: true)
       @client = client
       @store = store
       @pull_requests = pull_requests
+      @jobs_dir = jobs_dir
       @reaper = reaper
       @out = out
       @input = input
@@ -139,7 +141,7 @@ module ClaudeInbox
     # this list would be recreated moments after `forget` cleared it and
     # flicker back for a poll.
     def poll_once
-      sessions = @pull_requests.enrich(@client.list, @store.pr_overrides)
+      sessions = JobState.enrich(@pull_requests.enrich(@client.list, @store.pr_overrides), jobs_dir: @jobs_dir)
       reaped = @reaper.sweep(sessions, Time.now)
       @queue << [:sessions, sessions.reject { |s| reaped.include?(s.key) }]
       notice_reaped(reaped) if reaped.any?
