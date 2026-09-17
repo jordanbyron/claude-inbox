@@ -39,12 +39,16 @@ module ClaudeInbox
     def effective_state = state || INTERACTIVE_STATE[status] || "done"
 
     # Where an interactive session is driven from. The JSON does not say;
-    # AgentsClient fills this in from the process tree.
+    # AgentsClient fills this in from the process tree, then drops
+    # :subagent rows before anyone downstream sees them.
     #   :terminal  a claude you opened in a terminal yourself
-    #   :remote    a Remote Control worker driven from claude.ai/code
+    #   :remote    a Remote Control worker driven from claude.ai/code, unreachable from here
+    #   :subagent  a sub-agent spawned locally by another claude process; attach to that parent instead
     def remote? = origin == :remote
 
-    def terminal? = interactive? && !remote?
+    def subagent? = origin == :subagent
+
+    def terminal? = interactive? && !remote? && !subagent?
 
     # Selection handle: short id for background sessions, the UUID otherwise.
     def key = id || session_id
