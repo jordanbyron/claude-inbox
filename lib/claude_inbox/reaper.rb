@@ -1,0 +1,95 @@
+# frozen_string_literal: true
+
+require "fileutils"
+require_relative "store"
+require_relative "agents_client"
+
+module ClaudeInbox
+  # Reaps sessions that have sat idle past Store::REAP_AFTER.
+  #
+  # The one thing in the inbox that destroys anything without being asked
+  # first, so the whole of it lives here rather than spread through the poll
+  # loop: one public method, and one append-only log that is the last record
+  # a session ever existed once `claude rm` has taken its transcript.
+  #
+  # Unpushed work is safe by construction. `claude rm` refuses a worktree
+  # holding commits that aren't pushed and reports a --discard-unpushed token
+  # to override it; nothing here ever passes that token, so a refusal is the
+  # end of it. Refusals are logged and retried at most daily.
+  class Reaper
+    RETRY_AFTER = 24 * 3600
+    DEFAULT_LOG = File.join(Dir.home, ".config", "claude-inbox", "reaped.log")
+
+    attr_reader :log_path
+
+    def initialize(client, store, log_path: DEFAULT_LOG, enabled: self.class.enabled?)
+      @client = client
+      @store = store
+      @log_path = log_path
+      @enabled = enabled
+    end
+
+    def self.enabled? = ENV["CLAUDE_INBOX_NO_REAP"].to_s.empty?
+
+    # For --fixture runs and tests: selects nothing, deletes nothing, and
+    # needs neither a client nor a store to do it.
+    def self.disabled = new(nil, nil, enabled: false)
+
+    # Reaps everything due, returning the keys it actually deleted so the
+    # caller can drop those rows before they reach the store. Refusals come
+    # back as survivors rather than exceptions: one worktree with unpushed
+    # commits must not stop the rest of the sweep.
+    #
+    # Raises if the log cannot be opened, before anything is deleted. No
+    # audit trail, no reaping.
+    def sweep(sessions, now)
+      return [] unless @enabled
+      now_i = now.to_i
+      due = sessions.filter_map { |s| entry_if_due(s, now_i) }
+      return [] if due.empty?
+      with_log { |log| due.filter_map { |session, entry| reap(session, entry, log, now_i) } }
+    end
+
+    private
+
+    def entry_if_due(session, now_i)
+      entry = session.key && @store.entry(session.key)
+      return nil unless Store.reapable?(session, entry, now_i)
+      backing_off?(entry, now_i) ? nil : [session, entry]
+    end
+
+    def backing_off?(entry, now_i)
+      at = entry["reap_failed_at"]
+      !at.nil? && now_i - at.to_i < RETRY_AFTER
+    end
+
+    def reap(session, entry, log, now_i)
+      @client.rm(session.id)
+      write(log, session, entry, now_i, "reaped")
+      @store.forget(session.key)
+      session.key
+    rescue AgentsClient::Error => e
+      reason = e.message.lines.first.to_s.strip
+      @store.mark_reap_failed(session.key, reason)
+      write(log, session, entry, now_i, "kept — #{reason}")
+      nil
+    end
+
+    def write(log, session, entry, now_i, outcome)
+      idle_days = (now_i - entry["state_since"].to_i) / 86_400
+      log.puts([
+        Time.at(now_i).utc.strftime("%FT%TZ"),
+        session.id,
+        "idle #{idle_days}d",
+        session.display_name.inspect,
+        session.cwd,
+        outcome
+      ].join("  "))
+    end
+
+    def with_log
+      FileUtils.mkdir_p(File.dirname(@log_path))
+      File.open(@log_path, "a") { |f| yield f }
+    end
+  end
+end

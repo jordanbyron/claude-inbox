@@ -13,8 +13,14 @@ if (i = ARGV.index("--fixture"))
   fixtures = File.join(__dir__, "..", "test", "fixtures")
   opts[:client] = ClaudeInbox::FixtureClient.new(ARGV[i + 1], logs: File.binread(File.join(fixtures, "logs_raw.txt")))
   opts[:store] = ClaudeInbox::Store.new(path: nil)
-  opts[:pull_requests] = ClaudeInbox::PullRequests.new(jobs_dir: File.join(fixtures, "jobs"), cache_path: File.join(fixtures, "gh-pr-status-cache.json"), gh: nil)
-  opts[:job_state] = ClaudeInbox::JobState.new(jobs_dir: File.join(fixtures, "jobs"))
+  opts[:jobs_dir] = File.join(fixtures, "jobs")
+  opts[:pull_requests] = ClaudeInbox::PullRequests.new(jobs_dir: opts[:jobs_dir], cache_path: File.join(fixtures, "gh-pr-status-cache.json"), gh: nil)
+else
+  # The only place the reaper is armed. Everything else — tests, --fixture,
+  # anything embedding App — gets one that deletes nothing.
+  opts[:client] = ClaudeInbox::AgentsClient.new
+  opts[:store] = ClaudeInbox::Store.new
+  opts[:reaper] = ClaudeInbox::Reaper.new(opts[:client], opts[:store])
 end
 opts[:color] = false if ARGV.include?("--no-color")
 

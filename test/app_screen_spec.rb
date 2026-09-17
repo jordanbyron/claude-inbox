@@ -34,7 +34,7 @@ describe ClaudeInbox::App do
       client: client,
       store: store,
       pull_requests: ClaudeInbox::PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, gh: nil),
-      job_state: ClaudeInbox::JobState.new(jobs_dir: fixture_path("jobs")),
+      jobs_dir: fixture_path("jobs"),
       out: out, input: StringIO.new, color: false
     )
   end
@@ -123,6 +123,36 @@ describe ClaudeInbox::App do
       _(wait_for { client.stopped == %w[f23c8673] }).must_equal true
       _(client.removed).must_be_empty
       _(store.entry("f23c8673")).wont_be_nil
+    end
+  end
+
+  describe "the reaper" do
+    it "is off unless something arms it, so a poll on its own deletes nothing" do
+      loaded_app(nil)
+      _(client.removed).must_be_empty
+      _(store.sections.all.map(&:id)).must_include "f23c8673"
+    end
+
+    # A reaped row has to be dropped on the way to the store, not after it
+    # gets there: `update` would fold it straight back into the entry table
+    # and the row would reappear for a poll.
+    it "keeps what it reaped out of the frame" do
+      reaper = Class.new {
+        def sweep(_sessions, _now) = %w[f23c8673]
+
+        def log_path = File::NULL
+      }.new
+      a = ClaudeInbox::App.new(
+        client: client, store: store, reaper: reaper,
+        pull_requests: ClaudeInbox::PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, gh: nil),
+        jobs_dir: fixture_path("jobs"),
+        out: out, input: StringIO.new, color: false
+      )
+      a.send(:poll_once)
+      a.send(:drain_queue)
+
+      _(store.sections.all.map(&:id)).wont_include "f23c8673"
+      _(store.entry("f23c8673")).must_be_nil
     end
   end
 end

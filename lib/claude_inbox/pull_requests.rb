@@ -24,11 +24,11 @@ module ClaudeInbox
   # Finds the PRs a session is tied to and keeps their state fresh.
   #
   # Claude Code already does the hard part: the daemon scans each background
-  # session's transcript for links and writes them to the job's state file as
-  # `children` (kind "pr"). `claude agents --json` does not expose that, so
-  # JobState reads it. It is a link scan, so a session that merely mentions a
-  # PR gets it too. Interactive sessions have no job file; for those the
-  # store's `pr` override is the only source.
+  # session's transcript for links and writes them to the session's job state
+  # file, which JobState reads. `claude agents --json` does not expose them.
+  # It is a link scan, so a session that merely mentions a PR gets it too.
+  # Interactive sessions have no job file; for those the store's `pr` override
+  # is the only source.
   #
   # State comes first from ~/.claude/gh-pr-status-cache.json (whatever Claude
   # Code last saw), then from `gh pr view` for PRs that are still open, at
@@ -39,9 +39,9 @@ module ClaudeInbox
 
     CLAUDE_DIR = File.join(Dir.home, ".claude")
 
-    def initialize(jobs_dir: File.join(CLAUDE_DIR, "jobs"), cache_path: File.join(CLAUDE_DIR, "gh-pr-status-cache.json"),
+    def initialize(jobs_dir: JobState::DEFAULT_DIR, cache_path: File.join(CLAUDE_DIR, "gh-pr-status-cache.json"),
       gh: "gh", clock: -> { Time.now })
-      @jobs = JobState.new(jobs_dir: jobs_dir)
+      @jobs_dir = jobs_dir
       @cache_path = cache_path
       @gh = gh
       @clock = clock
@@ -61,9 +61,7 @@ module ClaudeInbox
     end
 
     # PR urls the daemon scanned out of a background session's transcript.
-    def linked(id)
-      @jobs.children(id).select { |c| c["kind"] == "pr" && c["href"] }.map { |c| c["href"] }
-    end
+    def linked(id) = JobState.read(id, jobs_dir: @jobs_dir)&.pr_urls || []
 
     # Best known state for a url, refreshed through gh when due.
     def status(url)

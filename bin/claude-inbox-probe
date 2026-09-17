@@ -7,9 +7,9 @@ require_relative "../lib/claude_inbox"
 
 fixtures = File.expand_path("../test/fixtures", __dir__)
 client = ARGV[0] ? ClaudeInbox::FixtureClient.new(ARGV[0]) : ClaudeInbox::AgentsClient.new
-prs = ARGV[0] ? ClaudeInbox::PullRequests.new(jobs_dir: File.join(fixtures, "jobs"), cache_path: File.join(fixtures, "gh-pr-status-cache.json"), gh: nil) : ClaudeInbox::PullRequests.new
-jobs = ARGV[0] ? ClaudeInbox::JobState.new(jobs_dir: File.join(fixtures, "jobs")) : ClaudeInbox::JobState.new
-sessions = jobs.enrich(prs.enrich(client.list))
+jobs_dir = ARGV[0] ? File.join(fixtures, "jobs") : ClaudeInbox::JobState::DEFAULT_DIR
+prs = ARGV[0] ? ClaudeInbox::PullRequests.new(jobs_dir: jobs_dir, cache_path: File.join(fixtures, "gh-pr-status-cache.json"), gh: nil) : ClaudeInbox::PullRequests.new
+sessions = ClaudeInbox::JobState.enrich(prs.enrich(client.list), jobs_dir: jobs_dir)
 store = ClaudeInbox::Store.new(path: nil)
 store.update(sessions)
 
@@ -20,6 +20,8 @@ store.sections(now).each_section do |name, rows|
     s = r.session
     age = s.started_at ? "#{((now - s.started_at) / 60).round}m" : "?"
     pr = s.prs.map { |x| "#{x.short} #{x.state || "?"}" }.join(" ")
-    puts format("  %-9s %-8s %-8s %-6s %-40s %-14s %-7s %s", s.id || "-", s.state || s.kind, s.status || "-", age, r.label[0, 40], s.project, s.color || "-", pr)
+    work = s.job_state&.in_flight_label
+    pulse = s.waiting_on_work? ? "idle" : (s.status || "-")
+    puts format("  %-9s %-8s %-8s %-6s %-40s %-14s %-7s %s", s.id || "-", s.state || s.kind, pulse, age, r.label[0, 40], s.project, s.color || "-", [work, pr].compact.reject(&:empty?).join("  "))
   end
 end

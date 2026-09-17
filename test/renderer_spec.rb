@@ -84,6 +84,19 @@ describe ClaudeInbox::Renderer do
     _(text).must_include "⇅ 1 remote"
   end
 
+  it "separates an agent that is thinking from one waiting on what it started" do
+    thinking = ClaudeInbox::JobState.new("tempo" => "active", "inFlight" => {"tasks" => 2},
+      "fan" => [{"kind" => "in_process_teammate"}, {"kind" => "in_process_teammate"}])
+    waiting = ClaudeInbox::JobState.new("tempo" => "idle", "inFlight" => {"tasks" => 1},
+      "fan" => [{"kind" => "local_bash"}])
+    rows = [session(id: "t1", name: "thinking", job_state: thinking), session(id: "t2", name: "watching", job_state: waiting)]
+    sec = Store.sectionize(rows, Store.merge_entries({}, rows, now), now)
+    text = renderer.frame(sec, width: 90, height: 12, now: now, tick: 0).lines.join("\n")
+    _(text).must_match(/⠋ thinking\s+working · 2 agents/)
+    _(text).must_match(/◌ watching\s+idle · 1 shell/)
+    _(text).must_match(/✻ 1 working.*◌ 1 idle/)
+  end
+
   it "renders an idle terminal as done and a waiting one as needing you" do
     idle = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u1", name: "shell")
     waiting = session(id: nil, kind: "interactive", state: nil, status: "waiting", waiting_for: "permission prompt", session_id: "u2", name: "shell2")
@@ -171,13 +184,17 @@ describe "renderer session colours" do
   let(:renderer) { ClaudeInbox::Renderer.new(color: true, home: "/Users/byron") }
   let(:orange) { "\e[38;5;208m" }
 
+  def coloured(name, **attrs)
+    session(id: "z", name: "tinted", job_state: ClaudeInbox::JobState.new("color" => name), **attrs)
+  end
+
   def line_for(session, entries = {}, **opts)
     sec = Store.sectionize([session], Store.merge_entries(entries, [session], now), now)
     renderer.frame(sec, width: 80, height: 14, now: now, **opts).lines.find { |l| l.include?(session.name) }
   end
 
   it "paints the label of a session /color gave a colour" do
-    _(line_for(session(id: "z", name: "tinted", color: "orange"))).must_include "#{orange}tinted"
+    _(line_for(coloured("orange"))).must_include "#{orange}tinted"
   end
 
   it "leaves a session with no colour exactly as it was" do
@@ -185,21 +202,21 @@ describe "renderer session colours" do
   end
 
   it "keeps the glyph in the state's colour while the label takes the session's" do
-    line = line_for(session(id: "z", name: "tinted", color: "green", state: "blocked"))
+    line = line_for(coloured("green", state: "blocked"))
     _(line).must_include "\e[31;1m●"
     _(line).must_include "\e[31;1mneeds you"
     _(line).must_include "\e[32mtinted\e[39m"
   end
 
   it "dims a settled row instead of colouring it" do
-    s = session(id: "z", name: "tinted", color: "orange", state: "done")
+    s = coloured("orange", state: "done")
     line = line_for(s, {"z" => {"settled_at" => now.to_i}}, expanded: {settled: true})
     _(line).wont_include orange
     _(line).must_include "\e[2m"
   end
 
   it "still pads a coloured row to exactly the frame width" do
-    sec = Store.sectionize([session(id: "z", name: "tinted", color: "pink")], {}, now)
+    sec = Store.sectionize([coloured("pink")], {}, now)
     renderer.frame(sec, width: 64, height: 12, now: now).lines.each { |l| _(Text.width(l)).must_equal 64 }
   end
 end

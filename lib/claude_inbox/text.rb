@@ -20,16 +20,7 @@ module ClaudeInbox
     def truncate(s, w)
       return "" if w <= 0
       return s if width(s) <= w
-      out = +""
-      used = 0
-      limit = w - width(ELLIPSIS)
-      s.each_grapheme_cluster do |g|
-        gw = Unicode::DisplayWidth.of(g)
-        break if used + gw > limit
-        out << g
-        used += gw
-      end
-      out << ELLIPSIS
+      take(s, w - width(ELLIPSIS)) << ELLIPSIS
     end
 
     # First `n` columns of plain text, no ellipsis.
