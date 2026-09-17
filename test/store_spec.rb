@@ -26,6 +26,23 @@ describe Store do
       _(sec.working.first.session.effective_state).must_equal "working"
     end
 
+    it "settles an idle remote session once quiet, and lets it snooze" do
+      r = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9", origin: :remote, started_at: now - 3600)
+      entries = {"u9" => {"last_state" => "done", "state_since" => now.to_i - Store::SETTLE_AFTER - 1}}
+      _(sections([r], entries).settled.map(&:key)).must_equal %w[u9]
+      snoozed = {"u9" => {"wake_at" => now.to_i + 900, "last_state" => "done", "state_since" => now.to_i - 3600}}
+      _(sections([r], snoozed).snoozed.map(&:key)).must_equal %w[u9]
+    end
+
+    it "tracks remote sessions in merge_entries by session uuid" do
+      r = session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "u9", origin: :remote)
+      e = Store.merge_entries({}, [r], now)
+      _(e["u9"]["last_state"]).must_equal "working"
+      e = Store.merge_entries(e, [r.dup.tap { |x| x.status = "idle" }], now + 60)
+      _(e["u9"]["last_state"]).must_equal "done"
+      _(e["u9"]["state_since"]).must_equal (now + 60).to_i
+    end
+
     it "never settles or snoozes a terminal, even when idle for ages" do
       s = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "uuid", started_at: now - 86_400)
       sec = sections([s], {}, now)
@@ -155,8 +172,8 @@ describe Store do
       _(e["kept"]["alias"]).must_equal "y"
     end
 
-    it "ignores interactive rows" do
-      _(Store.merge_entries({}, [session(id: nil, kind: "interactive")], now)).must_be_empty
+    it "skips rows with no key at all" do
+      _(Store.merge_entries({}, [session(id: nil, session_id: nil, kind: "interactive")], now)).must_be_empty
     end
   end
 

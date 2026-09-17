@@ -12,7 +12,7 @@ module ClaudeInbox
   # beyond parsing and a few predicates.
   Session = Struct.new(
     :id, :cwd, :kind, :started_at, :session_id, :name,
-    :state, :pid, :status, :waiting_for
+    :state, :pid, :status, :waiting_for, :origin
   ) do
     def self.from_hash(h)
       new(
@@ -37,6 +37,14 @@ module ClaudeInbox
     def actionable? = background? && !id.nil?
 
     def effective_state = state || INTERACTIVE_STATE[status] || "done"
+
+    # Where an interactive session is driven from. The JSON does not say;
+    # AgentsClient fills this in from the process tree.
+    #   :terminal  a claude you opened in a terminal yourself
+    #   :remote    a Remote Control worker driven from claude.ai/code
+    def remote? = origin == :remote
+
+    def terminal? = interactive? && !remote?
 
     # Selection handle: short id for background sessions, the UUID otherwise.
     def key = id || session_id

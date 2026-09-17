@@ -56,10 +56,10 @@ module ClaudeInbox
         out[id] = e.dup
       end
       sessions.each do |s|
-        next unless s.actionable?
-        e = out[s.id] ||= {"last_state" => s.state, "state_since" => first_seen_since(s, now_i)}
-        if e["last_state"] != s.state
-          e["last_state"] = s.state
+        next unless s.key
+        e = out[s.key] ||= {"last_state" => s.effective_state, "state_since" => first_seen_since(s, now_i)}
+        if e["last_state"] != s.effective_state
+          e["last_state"] = s.effective_state
           e["state_since"] = now_i
         end
         e["last_seen"] = now_i
@@ -111,9 +111,9 @@ module ClaudeInbox
       now_i = now.to_i
       sec = Sections.new(needs_you: [], working: [], snoozed: [], settled: [])
       sessions.each do |s|
-        e = s.id && entries[s.id]
+        e = s.key && entries[s.key]
         section =
-          if s.interactive? then s.needs_you? ? :needs_you : :working
+          if s.terminal? then s.needs_you? ? :needs_you : :working # you're in it; never settle or hide it
           elsif snoozed?(s, e, now_i) then :snoozed
           elsif s.needs_you? then :needs_you
           elsif settled?(s, e, now_i) then :settled

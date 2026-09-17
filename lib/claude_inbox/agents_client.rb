@@ -20,7 +20,7 @@ module ClaudeInbox
       args += ["--cwd", cwd] if cwd
       out, err, status = Open3.capture3(*args)
       raise Error, "claude agents failed: #{err.strip}" unless status.success?
-      parse(out)
+      classify_origins(parse(out))
     end
 
     # Raw terminal replay for a session, or nil when the daemon can't serve it
@@ -66,6 +66,34 @@ module ClaudeInbox
       JSON.parse(json).map { |h| Session.from_hash(h) }
     end
 
+    # The JSON reports Remote Control workers as `interactive`, same as a
+    # terminal you opened yourself. The process tree tells them apart: a
+    # remote worker runs with --sdk-url under a `claude rc` parent.
+    def classify_origins(sessions)
+      pids = sessions.select { |s| s.interactive? && s.pid }.map(&:pid)
+      return sessions if pids.empty?
+      remote = remote_pids(pids)
+      sessions.each { |s| s.origin = remote.include?(s.pid) ? :remote : :terminal if s.interactive? }
+      sessions
+    end
+
+    def remote_pids(pids)
+      out, _err, status = Open3.capture3("ps", "-o", "pid=,ppid=,command=", "-p", pids.join(","))
+      return [] unless status.success?
+      rows = out.lines.map { |l|
+        pid, ppid, *cmd = l.split
+        [pid.to_i, ppid.to_i, cmd.join(" ")]
+      }
+      by_sdk = rows.select { |_, _, cmd| cmd.include?("--sdk-url") }.map(&:first)
+      parents = rows.map { |_, ppid, _| ppid }.uniq
+      pout, _perr, pstatus = Open3.capture3("ps", "-o", "pid=,command=", "-p", parents.join(","))
+      rc_parents = pstatus.success? ? pout.lines.select { |l| l.split[1..].join(" ").match?(/\bclaude rc\b/) }.map { |l| l.split.first.to_i } : []
+      by_rc = rows.select { |_, ppid, _| rc_parents.include?(ppid) }.map(&:first)
+      (by_sdk + by_rc).uniq
+    rescue Errno::ENOENT
+      []
+    end
+
     private
 
     def kill_when_agents_view(pid)
@@ -93,13 +121,18 @@ module ClaudeInbox
 
   # Reads a committed JSON fixture instead of the daemon.
   class FixtureClient < AgentsClient
-    def initialize(path, logs: nil)
+    def initialize(path, logs: nil, remote_pids: [])
       super()
       @path = path
       @logs = logs
+      @remote_pids = remote_pids
     end
 
-    def list(**) = parse(File.read(@path))
+    # Fixture rows carry no process tree; treat every interactive row as remote
+    # when `remote_pids` is given, otherwise as a terminal.
+    def list(**)
+      parse(File.read(@path)).each { |s| s.origin = @remote_pids.include?(s.pid) ? :remote : :terminal if s.interactive? }
+    end
 
     def logs(_id) = @logs
 

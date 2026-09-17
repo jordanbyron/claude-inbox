@@ -29,6 +29,14 @@ describe ClaudeInbox::AgentsClient do
     _(s.display_name).must_equal "claude-inbox-38"
   end
 
+  it "classifies fixture interactive rows as remote when told their pids" do
+    c = ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), remote_pids: [57405])
+    s = c.list.find(&:interactive?)
+    _(s).must_be :remote?
+    _(s).wont_be :terminal?
+    _(sessions.find(&:interactive?)).must_be :terminal?
+  end
+
   it "keeps a session whose pid vanished" do
     s = sessions.find { |x| x.id == "b03695b1" }
     _(s).wont_be :alive?

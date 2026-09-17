@@ -55,7 +55,7 @@ describe ClaudeInbox::Renderer do
        ↳ ~/code/comma3                                                  
                                                                         
  ▎ WORKING ───────────────────────────────────────────────────────── 2  
-   ⠋ claude-inbox-38          working · your terminal · 4m  claude-inbox
+   ⠋ claude-inbox-38          working · your terminal · 0s  claude-inbox
        ↳ ~/code/claude-inbox                                            
    ✓ comma3x led flashing screen unresponsive   done · idle · 0s  comma3
        ↳ ~/code/comma3                                                  
@@ -74,6 +74,14 @@ describe ClaudeInbox::Renderer do
 
   it "selects interactive rows by session uuid and includes the settled toggle" do
     _(frame.items.compact.map(&:key)).must_equal ["f23c8673", "4a93393d-1c06-57da-9fb8-12f5b1535d95", "823b882f", :settled]
+  end
+
+  it "badges remote sessions and counts them in the header" do
+    r = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9", name: "web", origin: :remote)
+    sec = Store.sectionize([r], {}, now)
+    text = renderer.frame(sec, width: 90, height: 12, now: now).lines.join("\n")
+    _(text).must_match(/✓ web\s+done · remote/)
+    _(text).must_include "⇅ 1 remote"
   end
 
   it "renders an idle terminal as done and a waiting one as needing you" do

@@ -15,10 +15,14 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
 
 1. **Needs you** — `blocked` or `failed`.
 2. **Working** — `working`, plus recently finished sessions that have not settled yet,
-   plus your own terminal sessions. A terminal reports only `status`, so it is
-   mapped: busy is working, idle is done, waiting needs you. Terminals never
-   settle and cannot be attached, peeked, stopped or snoozed from outside; you
-   can land on them, and Enter tells you why nothing happens.
+   plus interactive sessions. Those report only `status`, so it is mapped: busy
+   is working, idle is done, waiting needs you. The JSON calls both a terminal
+   you opened yourself and a Remote Control worker "interactive"; the client
+   tells them apart from the process tree (a remote worker runs with
+   `--sdk-url` under a `claude rc` parent). Remote sessions settle and snooze
+   like any other row. A terminal you are sitting in never settles. Neither
+   can be attached, peeked or stopped from outside; you can land on them, and
+   Enter tells you why nothing happens.
 3. **Snoozed** — sorted by wake time; parked ("until I wake it") entries last.
 4. **Settled** — `done`/`stopped` and quiet for 10 minutes. Collapsed; Enter expands.
 

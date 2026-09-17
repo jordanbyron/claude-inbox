@@ -97,13 +97,15 @@ module ClaudeInbox
     def header_chips(sections, compact:)
       n = sections.needs_you.size
       w = sections.working.count { |r| r.session.effective_state == "working" }
-      i = sections.all.count { |r| r.session.interactive? }
+      i = sections.all.count { |r| r.session.terminal? }
+      m = sections.all.count { |r| r.session.remote? }
       z = sections.snoozed.size
       d = sections.settled.size
       chips = []
       chips << @p.red.bold(compact ? "● #{n}" : "● #{n} need#{"s" if n == 1} you") if n > 0
       chips << @p.yellow(compact ? "✻ #{w}" : "✻ #{w} working") if w > 0
       chips << @p.dim(compact ? "○ #{i}" : "○ #{i} terminal#{"s" if i > 1}") if i > 0
+      chips << @p.blue(compact ? "⇅ #{m}" : "⇅ #{m} remote") if m > 0
       chips << @p.magenta(compact ? "z #{z}" : "z #{z} snoozed") if z > 0
       chips << @p.dim(compact ? "∙ #{d}" : "∙ #{d} settled") if d > 0
       chips << @p.dim("nothing running") if sections.all.empty?
@@ -233,7 +235,9 @@ module ClaudeInbox
         @p.dim("#{s.state} · #{Text.age(now.to_i - row.state_since.to_i)}")
       else
         if s.interactive?
-          return state_badge(s) + @p.dim(" · your terminal · #{Text.age(now - s.started_at)}")
+          where = s.remote? ? "remote" : "your terminal"
+          age = row.state_since ? Text.age(now.to_i - row.state_since.to_i) : Text.age(now - s.started_at)
+          return state_badge(s) + @p.dim(" · #{where} · #{age}")
         end
         age = row.state_since ? @p.dim(" · " + Text.age(now.to_i - row.state_since.to_i)) : ""
         state_badge(s) + age

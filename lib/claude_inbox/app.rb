@@ -227,10 +227,20 @@ module ClaudeInbox
       @store.sessions.find { |s| s.key == @selected }
     end
 
-    # Guard for attach/snooze/stop/alias: refuse politely on a terminal row.
+    # Guard for attach/stop: refuse politely on a terminal or remote row.
     def require_actionable
       return true if actionable_id?(@selected)
-      notice("that's your own terminal — switch to that window") if selected_session&.interactive?
+      if (s = selected_session)&.interactive?
+        notice(s.remote? ? "that's a remote session — open it at claude.ai/code" : "that's your own terminal — switch to that window")
+      end
+      false
+    end
+
+    # Guard for snooze/wake/alias: anything with a key, since those live in
+    # our own store. A terminal you are sitting in is the one exception.
+    def require_storable
+      return true if @selected.is_a?(String) && !selected_session&.terminal?
+      notice("you're in that terminal right now — nothing to snooze") if selected_session&.terminal?
       false
     end
 
@@ -252,10 +262,11 @@ module ClaudeInbox
       @peek.cached(row.session.id) || ["(loading…)"]
     end
 
-    INTERACTIVE_NOTE = "This is a claude you opened in a terminal yourself. The daemon can't attach to it, read its output, or stop it from outside. Switch to that window."
+    TERMINAL_NOTE = "This is a claude you opened in a terminal yourself. The daemon can't attach to it, read its output, or stop it from outside. Switch to that window."
+    REMOTE_NOTE = "This is a Remote Control session driven from claude.ai/code. The daemon can't attach to it or read its output from here. Open it in the web or mobile app instead."
 
     def interactive_note(s)
-      [INTERACTIVE_NOTE, "", "pid #{s.pid} · #{s.cwd}", "session #{s.session_id}"]
+      [s.remote? ? REMOTE_NOTE : TERMINAL_NOTE, "", "pid #{s.pid} · #{s.cwd}", "session #{s.session_id}"]
     end
 
     def notice(msg)
@@ -389,7 +400,7 @@ module ClaudeInbox
     end
 
     def wake_selected
-      @store.wake(@selected) if require_actionable
+      @store.wake(@selected) if require_storable
     end
 
     # ----- attach handoff ---------------------------------------------------
@@ -409,7 +420,7 @@ module ClaudeInbox
     # ----- modals -----------------------------------------------------------
 
     def open_snooze_menu
-      return unless require_actionable
+      return unless require_storable
       @modal = {kind: :snooze, id: @selected}
     end
 
@@ -419,7 +430,7 @@ module ClaudeInbox
     end
 
     def open_alias_editor
-      return unless require_actionable
+      return unless require_storable
       current = @store.entry(@selected)&.dig("alias") || ""
       @modal = {kind: :alias, id: @selected, buffer: +current}
     end
