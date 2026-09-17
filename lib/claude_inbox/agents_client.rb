@@ -86,45 +86,59 @@ module ClaudeInbox
       JSON.parse(json).map { |h| Session.from_hash(h) }
     end
 
-    # The JSON reports Remote Control workers and local sub-agents as
-    # `interactive`, same as a terminal you opened yourself. The process tree
-    # tells them apart: a remote worker runs with --sdk-url, or is parented
-    # by `claude rc`; a local sub-agent is parented by another `claude`
-    # process instead of a shell. Sub-agents are dropped here rather than
-    # merely flagged: attach lands on their parent, so there is nothing
-    # useful to show or act on directly.
+    # Flags that mark a claude process as one a program drives rather than one
+    # you type in: the headless print mode and the SDK's stream protocol.
+    HEADLESS_FLAGS = %w[-p --print --input-format --output-format].freeze
+
+    # The JSON reports Remote Control workers, local sub-agents and headless
+    # runs as `interactive`, same as a terminal you opened yourself, each named
+    # after its directory. The process tree tells them apart; see `origins`.
+    # Everything but a terminal and a remote worker is dropped here rather than
+    # merely flagged: attach lands on the session that asked for it, so there
+    # is nothing useful to show or act on directly.
     def classify_origins(sessions)
       pids = sessions.select { |s| s.interactive? && s.pid }.map(&:pid)
       return sessions if pids.empty?
-      assign_origins(sessions, *origins_by_pid(pids))
+      assign_origins(sessions, origins_by_pid(pids))
     end
 
-    # Tags each interactive session with where it is driven from and drops
-    # the sub-agents, whose parent is the row worth showing.
-    def assign_origins(sessions, remote, sub)
-      sessions.each { |s| s.origin = origin_for(s.pid, remote, sub) if s.interactive? }
-      sessions.reject(&:subagent?)
+    # Tags each interactive session with where it is driven from (pid =>
+    # origin, terminal when unlisted) and drops the unattended ones, whose
+    # parent is the row worth showing.
+    def assign_origins(sessions, origins)
+      sessions.each { |s| s.origin = origins.fetch(s.pid, :terminal) if s.interactive? }
+      sessions.reject(&:unattended?)
     end
 
-    def origin_for(pid, remote, sub)
-      return :remote if remote.include?(pid)
-      return :subagent if sub.include?(pid)
-      :terminal
+    # pid => origin, given `ps` for the sessions and for their parents. Pure.
+    #
+    #   :remote    a Remote Control worker: --sdk-url, or a `claude rc` parent
+    #   :headless  `claude -p "..."` or an SDK stream run. Its parent is
+    #              whatever shell spawned it, not the claude that asked for
+    #              it, so only its own command line gives it away
+    #   :subagent  parented by another claude process
+    #   :terminal  everything else, which is a claude you are sitting in
+    def self.origins(rows, parent_cmd)
+      rows.to_h do |pid, ppid, cmd|
+        parent = parent_cmd[ppid].to_s
+        origin =
+          if cmd.include?("--sdk-url") || parent.match?(/\bclaude rc\b/) then :remote
+          elsif headless?(cmd) then :headless
+          elsif parent.match?(/(^|\/)claude\b/) then :subagent
+          else :terminal
+          end
+        [pid, origin]
+      end
     end
 
-    # pids => [remote_pids, subagent_pids], both subsets of `pids`.
+    def self.headless?(cmd) = cmd.split.drop(1).any? { |arg| HEADLESS_FLAGS.include?(arg) }
+
     def origins_by_pid(pids)
       rows = ps_rows(pids)
-      return [[], []] if rows.empty?
-      by_sdk = rows.select { |_, _, cmd| cmd.include?("--sdk-url") }.map(&:first)
-      parent_cmd = ps_commands(rows.map { |_, ppid, _| ppid }.uniq)
-      rc_ppids = parent_cmd.select { |_, cmd| cmd.match?(/\bclaude rc\b/) }.keys
-      claude_ppids = parent_cmd.select { |_, cmd| cmd.match?(/(^|\/)claude\b/) }.keys - rc_ppids
-      remote = (by_sdk + rows.select { |_, ppid, _| rc_ppids.include?(ppid) }.map(&:first)).uniq
-      sub = rows.select { |_, ppid, _| claude_ppids.include?(ppid) }.map(&:first) - remote
-      [remote, sub]
+      return {} if rows.empty?
+      self.class.origins(rows, ps_commands(rows.map { |_, ppid, _| ppid }.uniq))
     rescue Errno::ENOENT
-      [[], []]
+      {}
     end
 
     def ps_rows(pids)
@@ -174,19 +188,20 @@ module ClaudeInbox
 
   # Reads a committed JSON fixture instead of the daemon.
   class FixtureClient < AgentsClient
-    def initialize(path, logs: nil, remote_pids: [], subagent_pids: [])
+    def initialize(path, logs: nil, remote_pids: [], subagent_pids: [], headless_pids: [])
       super()
       @path = path
       @logs = logs
-      @remote_pids = remote_pids
-      @subagent_pids = subagent_pids
+      @origins = remote_pids.to_h { |p| [p, :remote] }
+        .merge(subagent_pids.to_h { |p| [p, :subagent] })
+        .merge(headless_pids.to_h { |p| [p, :headless] })
     end
 
     # Fixture rows carry no process tree; classify each interactive row from
-    # the pid lists the test hands in, otherwise as a terminal, then drop
-    # sub-agents same as the real client does.
+    # the pid lists the test hands in, otherwise as a terminal, then drop the
+    # unattended ones same as the real client does.
     def list(**)
-      assign_origins(parse(File.read(@path)), @remote_pids, @subagent_pids)
+      assign_origins(parse(File.read(@path)), @origins)
     end
 
     def logs(_id) = @logs

@@ -43,6 +43,50 @@ describe ClaudeInbox::AgentsClient do
     _(c.list.any? { |s| s.pid == 57405 }).must_equal false
   end
 
+  it "drops headless rows too" do
+    c = ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), headless_pids: [57405])
+    _(c.list.size).must_equal sessions.size - 1
+    _(c.list.any? { |s| s.pid == 57405 }).must_equal false
+  end
+
+  describe "reading origins out of the process tree" do
+    def origins(rows, parents) = ClaudeInbox::AgentsClient.origins(rows, parents)
+
+    it "knows a terminal by its shell parent" do
+      rows = [[100, 200, "claude"]]
+      _(origins(rows, {200 => "-zsh"})).must_equal({100 => :terminal})
+    end
+
+    it "knows a Remote Control worker by its flag or its parent" do
+      _(origins([[100, 200, "claude --sdk-url wss://x"]], {200 => "-zsh"})).must_equal({100 => :remote})
+      _(origins([[100, 200, "claude"]], {200 => "claude rc --worker"})).must_equal({100 => :remote})
+    end
+
+    it "knows a sub-agent by its claude parent" do
+      rows = [[100, 200, "claude"]]
+      _(origins(rows, {200 => "/Users/x/.local/bin/claude bg-spare --bg-spare /tmp/x.sock"})).must_equal({100 => :subagent})
+    end
+
+    # A headless run started from a session's Bash call has that shell for a
+    # parent, so the parent test below never sees the claude behind it. This
+    # is the tree a real one leaves, `timeout` and all.
+    it "knows a headless run by its own flags, whatever spawned it" do
+      rows = [[38482, 38480, "claude -p Reply with exactly: OK"]]
+      parents = {38480 => "timeout 90 claude -p Reply with exactly: OK"}
+      _(origins(rows, parents)).must_equal({38482 => :headless})
+
+      shell_parent = {38480 => "/bin/zsh -c source /Users/x/.claude/shell-snapshots/snapshot-zsh-1.sh"}
+      _(origins([[38482, 38480, "claude --input-format stream-json"]], shell_parent)).must_equal({38482 => :headless})
+    end
+
+    it "does not take a prompt that mentions a flag for the flag itself" do
+      rows = [[100, 200, "claude"]]
+      _(origins(rows, {200 => "-zsh"})).must_equal({100 => :terminal})
+      _(ClaudeInbox::AgentsClient.headless?("claude")).must_equal false
+      _(ClaudeInbox::AgentsClient.headless?("claude -p x")).must_equal true
+    end
+  end
+
   it "keeps a session whose pid vanished" do
     s = sessions.find { |x| x.id == "b03695b1" }
     _(s).wont_be :alive?
