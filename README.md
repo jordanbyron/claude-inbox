@@ -21,18 +21,29 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
 
 ## Keys
 
+Keyboard only, vim flavoured. Arrows work too.
+
 | Key | Action |
 |---|---|
-| `↑` `↓` `j` `k` `g` `G` | move |
-| `Enter` | attach (full-screen handoff; `←`, `Ctrl+Z` or `/exit` return here) |
-| `s` | snooze: 15m / 1h / tomorrow 9am / until woken |
+| `j` `k` | move down / up |
+| `gg` `G` | first / last row |
+| `Ctrl-d` `Ctrl-u` | half page down / up (`Ctrl-f` `Ctrl-b` full page) |
+| `Enter` `l` | attach (full-screen handoff; `←`, `Ctrl+Z` or `/exit` return here), or expand Settled |
+| `h` | close the peek pane, else collapse Settled |
+| `za` `zo` `zc` | toggle / open / close the Settled fold |
+| `p` `Tab` | toggle the read-only peek pane |
+| `J` `K` (`Ctrl-e` `Ctrl-y`) | scroll the peek pane |
+| `s` | snooze: `1` 15m · `2` 1h · `3` tomorrow 9am · `4` until woken |
 | `u` | wake a snoozed session now |
 | `a` | set a local alias (never touches the real session name) |
-| `x` | stop the session (asks first) |
-| `Tab` | toggle the read-only peek pane |
-| `/` | filter by name or cwd; `Esc` clears |
+| `x` | stop the session (`y` to confirm) |
+| `/` | filter by name or cwd; `Enter` keeps it, `Esc` clears |
+| `:q` | quit (`:peek`, `:refresh` also exist) |
 | `R` | poll now |
 | `q` | quit |
+
+Bindings live in `ClaudeInbox::Keymap`, a pure resolver with chord support
+that is unit tested on its own.
 
 ## Rules
 
@@ -87,7 +98,7 @@ AgentsClient  →  Store  →  Renderer  →  App
 
 ```
 bundle install
-bundle exec rake test
+bundle exec rake test        # minitest/spec, test/**/*_spec.rb
 bundle exec standardrb
 bin/claude-inbox-probe [fixture.json]   # print sections, no TUI
 ```

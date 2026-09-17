@@ -2,7 +2,11 @@
 
 require "bundler/setup"
 require "minitest/autorun"
+require "minitest/spec"
 require_relative "../lib/claude_inbox"
+require_relative "../lib/claude_inbox/renderer"
+require_relative "../lib/claude_inbox/vt_screen"
+require_relative "../lib/claude_inbox/keymap"
 
 module Fixtures
   DIR = File.expand_path("fixtures", __dir__)
@@ -18,3 +22,5 @@ module Fixtures
     )
   end
 end
+
+Minitest::Spec.include Fixtures

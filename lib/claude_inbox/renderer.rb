@@ -88,7 +88,11 @@ module ClaudeInbox
     end
 
     def footer(width, opts)
-      text = opts[:filter] ? " /#{opts[:filter]}" : " #{HELP}"
+      text =
+        if opts[:command] then " :#{opts[:command]}"
+        elsif opts[:filter] then " /#{opts[:filter]}"
+        else " #{opts[:help] || HELP}"
+        end
       Text.pad(@p.dim(text), width)
     end
 

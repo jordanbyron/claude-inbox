@@ -9,6 +9,7 @@ require_relative "agents_client"
 require_relative "store"
 require_relative "renderer"
 require_relative "peek"
+require_relative "keymap"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
@@ -38,6 +39,8 @@ module ClaudeInbox
       @top = 0
       @settled_expanded = false
       @peek_on = false
+      @peek_offset = 0
+      @keymap = Keymap.new
       @modal = nil
       @filter = nil
       @status = "starting…"
@@ -150,13 +153,14 @@ module ClaudeInbox
       if @peek_on && @selected.is_a?(String)
         row = sections.all.find { |r| r.id == @selected }
         peek_lines = peek_body(row)
+        peek_lines = scrolled(peek_lines, height - 2)
         peek_title = row&.label || @selected
       end
       frame = @renderer.frame(
         sections, width: width, height: height, now: now,
         selected: @selected, top: @top, settled_expanded: @settled_expanded,
         peek: peek_lines, peek_title: peek_title, modal: modal_lines(width),
-        status: status_text(now), filter: @filter
+        status: status_text(now), filter: @filter, command: @command, help: Keymap::HELP
       )
       @items = frame.items.compact
       @top = frame.top
@@ -219,32 +223,67 @@ module ClaudeInbox
     def handle_key(key)
       name = key_name(key)
       return handle_modal_key(name, key) if @modal
-      return handle_filter_key(name, key) if @filter_editing
+      return handle_line_key(name, key) if @filter_editing || @command
 
-      case name
-      when :ctrl_c, "q" then @quit = true
-      when :up, "k" then move(-1)
-      when :down, "j" then move(1)
-      when "g" then move(-1_000_000)
-      when "G" then move(1_000_000)
-      when :return, :enter then activate
-      when "s" then open_snooze_menu
-      when "u" then wake_selected
-      when "x" then open_stop_confirm
-      when "a" then open_alias_editor
-      when "R" then Thread.new { poll_once }
-      when :tab then toggle_peek
-      when "/" then start_filter
+      action = @keymap.press(name, key)
+      perform(action) if action
+    end
+
+    def perform(action)
+      case action
+      when :quit then @quit = true
+      when :up then move(-1)
+      when :down then move(1)
+      when :top then move(-1_000_000)
+      when :bottom then move(1_000_000)
+      when :half_page_down then move(page / 2)
+      when :half_page_up then move(-(page / 2))
+      when :page_down then move(page)
+      when :page_up then move(-page)
+      when :peek_down then @peek_offset = [@peek_offset - 1, 0].max
+      when :peek_up then @peek_offset += 1
+      when :activate then activate
+      when :collapse then collapse
+      when :fold_open then @settled_expanded = true
+      when :fold_close then @settled_expanded = false
+      when :fold_toggle then @settled_expanded = !@settled_expanded
+      when :snooze then open_snooze_menu
+      when :wake then wake_selected
+      when :alias then open_alias_editor
+      when :stop then open_stop_confirm
+      when :refresh then Thread.new { poll_once }
+      when :toggle_peek then toggle_peek
+      when :filter then start_filter
+      when :command then @command = +""
       when :escape then clear_filter
       end
     end
+
+    def page = [size[1] - 2, 1].max
 
     def move(delta)
       return if @items.nil? || @items.empty?
       keys = selectable_keys(filtered(@store.sections))
       idx = keys.index(@selected) || 0
       @selected = keys[(idx + delta).clamp(0, keys.size - 1)]
+      @peek_offset = 0
       @peek.want(@selected) if @selected.is_a?(String)
+    end
+
+    # vim-ish "h": close whatever is open, innermost first.
+    def collapse
+      if @peek_on then @peek_on = false
+      elsif @settled_expanded then @settled_expanded = false
+      end
+      @painter.invalidate
+    end
+
+    # Peek lines are shown tail-first; offset scrolls back into history.
+    def scrolled(lines, view_h)
+      return lines if @peek_offset.zero?
+      max_off = [lines.size - view_h, 0].max
+      @peek_offset = [@peek_offset, max_off].min
+      lines[0, lines.size - @peek_offset]
     end
 
     def activate
@@ -346,7 +385,7 @@ module ClaudeInbox
       end
     end
 
-    # ----- filter -----------------------------------------------------------
+    # ----- filter / command line ---------------------------------------------
 
     def start_filter
       @filter ||= +""
@@ -356,16 +395,30 @@ module ClaudeInbox
     def clear_filter
       @filter = nil
       @filter_editing = false
+      @command = nil
     end
 
-    def handle_filter_key(name, key)
+    def handle_line_key(name, key)
+      buffer = @command || @filter
       case name
-      when :escape then clear_filter
-      when :return, :enter then @filter_editing = false
+      when :escape
+        @command ? @command = nil : clear_filter
+      when :return, :enter
+        if @command
+          action = Keymap.command(@command)
+          @command = nil
+          perform(action) if action
+        else
+          @filter_editing = false
+        end
       when :backspace, :ctrl_h
-        @filter = @filter[0...-1]
+        if buffer.empty?
+          @command ? @command = nil : clear_filter
+        else
+          buffer.slice!(-1)
+        end
       else
-        @filter << key if key.is_a?(String) && key.match?(/\A[[:print:]]\z/)
+        buffer << key if key.is_a?(String) && key.match?(/\A[[:print:]]\z/)
       end
     end
   end
