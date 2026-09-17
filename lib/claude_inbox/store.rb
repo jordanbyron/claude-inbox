@@ -263,6 +263,16 @@ module ClaudeInbox
 
     def entry(id) = @mutex.synchronize { @entries[id]&.dup }
 
+    # Forgets a session at once instead of waiting out PRUNE_AFTER, for one
+    # the daemon no longer has and that no future poll can bring back.
+    def forget(id)
+      @mutex.synchronize do
+        next unless @entries.delete(id)
+        @sessions = @sessions.reject { |s| s.key == id }
+        save
+      end
+    end
+
     private
 
     def edit(id)

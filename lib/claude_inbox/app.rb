@@ -351,6 +351,7 @@ module ClaudeInbox
       when :link_pr then open_pr_editor
       when :open_pr then open_pr
       when :stop then open_stop_confirm
+      when :delete then open_delete_confirm
       when :refresh then Thread.new { poll_once }
       when :toggle_peek then toggle_peek
       when :new_session then open_new_session
@@ -463,6 +464,13 @@ module ClaudeInbox
       @modal = {kind: :stop, id: @selected}
     end
 
+    # Ctrl-X opens this; a second Ctrl-X inside it deletes. Only that same
+    # chord confirms — no `y` — so nothing irreversible rides on a stray key.
+    def open_delete_confirm
+      return unless require_actionable
+      @modal = {kind: :delete, id: @selected}
+    end
+
     def open_alias_editor
       return unless require_storable
       current = @store.entry(@selected)&.dig("alias") || ""
@@ -517,12 +525,15 @@ module ClaudeInbox
           SNOOZE_MENU.map { |k, label, _| "  #{k}  #{label}" } + ["", "  esc  cancel"]
         when :stop
           ["  Stop session #{@modal[:id]}?", "", "  y  stop it", "  esc  cancel"]
+        when :delete
+          ["  Delete session #{@modal[:id]}?", "  Its worktree and conversation", "  go with it.",
+            "", "  ^x  delete it", "  esc  keep it"]
         when :alias
           ["  New alias:", "", "  > #{@modal[:buffer]}_", "", "  ⏎ save · esc cancel"]
         when :pr
           ["  Pull request URL (empty clears):", "", "  > #{@modal[:buffer]}_", "", "  ⏎ save · esc cancel"]
         end
-      title = {snooze: " Snooze ", stop: " Stop ", alias: " Alias ", pr: " Pull request "}[@modal[:kind]]
+      title = {snooze: " Snooze ", stop: " Stop ", delete: " Delete ", alias: " Alias ", pr: " Pull request "}[@modal[:kind]]
       TTY::Box.frame(content.join("\n"), title: {top_left: title}, padding: [0, 1], width: [width - 4, 44].min)
         .split("\n")
     end
@@ -564,6 +575,26 @@ module ClaudeInbox
         elsif name == :escape || key == "n"
           @modal = nil
         end
+      when :delete
+        if name == :ctrl_x
+          id = @modal[:id]
+          @modal = nil
+          delete_session(id)
+        elsif name == :escape || key == "n" || key == "q"
+          @modal = nil
+        end
+      end
+    end
+
+    def delete_session(id)
+      notice("deleting #{id}…")
+      Thread.new do
+        @client.rm(id)
+        @store.forget(id)
+        notice("deleted #{id}")
+        poll_once
+      rescue => e
+        @queue << [:error, e.message]
       end
     end
 

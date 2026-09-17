@@ -336,6 +336,25 @@ describe Store do
     end
   end
 
+  describe "forget" do
+    it "drops the entry and the row without waiting for the prune window" do
+      store = Store.new(path: nil, clock: -> { now })
+      store.update([session(id: "a"), session(id: "b")])
+      store.toggle_pin("a")
+
+      store.forget("a")
+      _(store.entry("a")).must_be_nil
+      _(store.sections.all.map(&:id)).must_equal %w[b]
+    end
+
+    it "leaves an unknown id alone" do
+      store = Store.new(path: nil, clock: -> { now })
+      store.update([session(id: "a")])
+      store.forget("nope")
+      _(store.sections.all.map(&:id)).must_equal %w[a]
+    end
+  end
+
   describe "persistence" do
     it "round-trips through the file atomically" do
       Dir.mktmpdir do |dir|

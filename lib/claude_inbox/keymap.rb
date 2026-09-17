@@ -25,6 +25,7 @@ module ClaudeInbox
       :return => :activate, :enter => :activate, "l" => :activate,
       "h" => :collapse,
       "s" => :snooze, "u" => :wake, "a" => :alias, "x" => :settle, "X" => :stop,
+      :ctrl_x => :delete,
       "o" => :open_pr, "P" => :link_pr, "t" => :toggle_pin,
       "R" => :refresh, "p" => :toggle_peek, "n" => :new_session,
       :tab => :next_section, :back_tab => :prev_section,
@@ -44,7 +45,7 @@ module ClaudeInbox
       "pr" => :open_pr, "pin" => :toggle_pin
     }.freeze
 
-    HELP = "j/k move · gg/G top/bottom · ^d/^u page · ⏎/l attach · t pin · s snooze · u wake · a alias · x settle · o open PR · P link PR · X stop · n new · p peek · tab section · za fold · / filter · :q quit"
+    HELP = "j/k move · gg/G top/bottom · ^d/^u page · ⏎/l attach · t pin · s snooze · u wake · a alias · x settle · o open PR · P link PR · X stop · ^x^x delete · n new · p peek · tab section · za fold · / filter · :q quit"
 
     attr_reader :pending
 
