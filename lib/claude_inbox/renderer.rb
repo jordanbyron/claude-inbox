@@ -108,8 +108,8 @@ module ClaudeInbox
     def header_chips(sections, compact:)
       pn = sections.pinned.size
       n = sections.needs_you.size
-      w = sections.active.count { |r| r.session.effective_state == "working" && !r.session.waiting_on_work? }
-      q = sections.active.count { |r| r.session.waiting_on_work? }
+      w = sections.active.count { |r| r.session.effective_state == "working" && !r.session.idling? }
+      q = sections.active.count { |r| r.session.idling? }
       i = sections.all.count { |r| r.session.terminal? }
       m = sections.all.count { |r| r.session.remote? }
       z = sections.snoozed.size
@@ -235,7 +235,7 @@ module ClaudeInbox
       case s.effective_state
       when "blocked" then @p.red.bold("●")
       when "failed" then @p.red.bold("✗")
-      when "working" then s.waiting_on_work? ? @p.yellow("◌") : @p.yellow(SPINNER[tick % SPINNER.size])
+      when "working" then s.idling? ? @p.yellow("◌") : @p.yellow(SPINNER[tick % SPINNER.size])
       when "done" then @p.green("✓")
       when "stopped" then @p.dim("■")
       else @p.dim("?")
@@ -298,7 +298,7 @@ module ClaudeInbox
     def working_badge(s)
       return @p.yellow("waiting#{": #{s.waiting_for}" if s.waiting_for}") if s.status == "waiting"
       label = s.job_state&.in_flight_label
-      @p.yellow(s.waiting_on_work? ? "idle" : "working") + (label ? @p.dim(" · #{label}") : "")
+      @p.yellow(s.idling? ? "idle" : "working") + (label ? @p.dim(" · #{label}") : "")
     end
 
     def short_path(path)

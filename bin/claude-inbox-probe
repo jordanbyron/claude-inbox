@@ -21,7 +21,7 @@ store.sections(now).each_section do |name, rows|
     age = s.started_at ? "#{((now - s.started_at) / 60).round}m" : "?"
     pr = s.prs.map { |x| "#{x.short} #{x.state || "?"}" }.join(" ")
     work = s.job_state&.in_flight_label
-    pulse = s.waiting_on_work? ? "idle" : (s.status || "-")
+    pulse = s.idling? ? "idle" : (s.status || "-")
     puts format("  %-9s %-8s %-8s %-6s %-40s %-14s %s", s.id || "-", s.state || s.kind, pulse, age, r.label[0, 40], s.project, [work, pr].compact.reject(&:empty?).join("  "))
   end
 end

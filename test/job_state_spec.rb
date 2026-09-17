@@ -28,7 +28,7 @@ describe JobState do
       _(js.tempo).must_equal "idle"
       _(js.tasks).must_equal 1
       _(js.pr_urls).must_equal ["https://github.com/o/r/pull/7"]
-      _(js).must_be :waiting_on_work?
+      _(js).must_be :agent_idle?
       _(js.in_flight_label).must_equal "1 shell"
     end
   end
@@ -57,19 +57,17 @@ describe JobState do
   it "falls back to a bare count when the file does not name the work" do
     js = JobState.new("tempo" => "idle", "inFlight" => {"tasks" => 2})
     _(js.in_flight_label).must_equal "2 tasks"
-    _(js).must_be :waiting_on_work?
   end
 
-  it "says nothing about work when the agent is thinking or nothing is open" do
-    thinking = JobState.new("tempo" => "active", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}])
-    _(thinking).wont_be :waiting_on_work?
-    _(thinking.in_flight_label).must_equal "1 shell"
+  # The two records of open work disagree on live sessions: a state file can
+  # name a sub-agent in `fan` while `inFlight` still counts nothing, and count
+  # three tasks while naming two. Either one means something is open.
+  it "takes open work from whichever of the two records has it" do
+    named_only = JobState.new("inFlight" => {"tasks" => 0}, "fan" => [{"kind" => "in_process_teammate"}])
+    _(named_only).must_be :in_flight?
+    _(named_only.in_flight_label).must_equal "1 agent"
 
-    # A session whose process died leaves an idle pulse behind with nothing in
-    # flight; that is not the same as waiting, so it claims nothing.
-    stalled = JobState.new("tempo" => "idle", "inFlight" => {"tasks" => 0})
-    _(stalled).wont_be :waiting_on_work?
-    _(stalled.in_flight_label).must_be_nil
+    _(JobState.new("inFlight" => {"tasks" => 0})).wont_be :in_flight?
   end
 
   it "enriches background sessions only" do
@@ -79,8 +77,30 @@ describe JobState do
       term = session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "u1")
       JobState.enrich([bg, term], jobs_dir: dir)
       _(bg.job_state.in_flight_label).must_equal "1 shell"
-      _(bg).must_be :waiting_on_work?
+      _(bg).must_be :idling?
       _(term.job_state).must_be_nil
     end
+  end
+end
+
+describe ClaudeInbox::Session do
+  # Measured against transcript freshness on nine live sessions: `status` says
+  # busy while a session only holds background shells, and `tempo` keeps
+  # claiming active long after the session stopped writing its file. Neither
+  # calls a thinking agent idle, so one saying idle is enough.
+  it "believes either source that says the agent has stopped" do
+    idle_file = ClaudeInbox::JobState.new("tempo" => "idle", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}])
+    stale_file = ClaudeInbox::JobState.new("tempo" => "active", "inFlight" => {"tasks" => 0})
+
+    _(session(status: "busy", job_state: idle_file)).must_be :idling?
+    _(session(status: "idle", job_state: stale_file)).must_be :idling?
+    _(session(status: "busy", job_state: stale_file)).wont_be :idling?
+    _(session(status: nil, job_state: nil)).wont_be :idling?
+  end
+
+  it "only calls a session idle while the daemon still calls it working" do
+    idle_file = ClaudeInbox::JobState.new("tempo" => "idle", "inFlight" => {"tasks" => 1})
+    _(session(state: "done", status: "idle", job_state: idle_file)).wont_be :idling?
+    _(session(state: "blocked", status: "idle", job_state: idle_file)).wont_be :idling?
   end
 end

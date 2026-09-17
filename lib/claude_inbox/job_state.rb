@@ -54,18 +54,18 @@ module ClaudeInbox
       @pr_urls = (hash["children"] || []).select { |c| c["kind"] == "pr" && c["href"] }.map { |c| c["href"] }
     end
 
-    # The agent itself is not thinking. On its own this means little — a
-    # session whose process died leaves the same reading behind — so it only
-    # says something paired with work still in flight.
+    # The agent's own pulse, as of the last time it wrote the file. A session
+    # that stops writing leaves this claiming `active` for ever, so it is only
+    # ever read as one half of Session#idling?.
     def agent_idle? = tempo == "idle"
 
-    def in_flight? = tasks.positive?
+    # `fan` and `inFlight` disagree: a named piece of work is not always
+    # counted, and the count runs ahead of the names. Either one is enough to
+    # say something is still open.
+    def in_flight? = kinds.any? || tasks.positive?
 
-    # True when the agent has stopped and is only waiting on what it started.
-    def waiting_on_work? = agent_idle? && in_flight?
-
-    # "1 shell", "2 agents · 1 shell". Falls back to a bare count for a state
-    # file that counts the open tasks without naming them.
+    # "1 shell", "2 agents · 1 shell", or a bare count when the file records
+    # open work without naming it.
     def in_flight_label
       return nil unless in_flight?
       return count_label if kinds.empty?

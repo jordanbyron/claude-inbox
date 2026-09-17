@@ -53,9 +53,13 @@ module ClaudeInbox
     # Selection handle: short id for background sessions, the UUID otherwise.
     def key = id || session_id
 
-    # "working" from the daemon means either the agent is thinking or it has
-    # stopped and is waiting on work it started. JobState tells them apart.
-    def waiting_on_work? = effective_state == "working" && job_state&.waiting_on_work? == true
+    # "working" covers both a thinking agent and one that has stopped and is
+    # only waiting on work it started. Two sources answer that, each wrong in
+    # one direction: the daemon's `status` calls a session busy while it holds
+    # a background shell, and the job file's `tempo` goes on claiming active
+    # after the session stops writing it. Neither ever claims idle wrongly, so
+    # one saying so settles it, and thinking means both agree it is.
+    def idling? = effective_state == "working" && (status == "idle" || job_state&.agent_idle? == true)
 
     def needs_you? = %w[blocked failed].include?(effective_state)
 
