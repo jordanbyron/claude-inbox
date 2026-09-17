@@ -28,6 +28,7 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
    can be attached, peeked or stopped from outside; you can land on them, and
    Enter tells you why nothing happens.
 4. **Snoozed** — sorted by wake time; parked ("until I wake it") entries last.
+   Collapsed; Enter expands.
 5. **Settled** — `done`/`stopped` and quiet for 10 minutes, or whose pull
    request is merged or closed. Collapsed; Enter expands.
 
@@ -45,10 +46,10 @@ alternate scroll mode (`\e[?1007h`) — Apple Terminal does not.
 | `j` `k` | move down / up |
 | `gg` `G` | first / last row |
 | `Ctrl-d` `Ctrl-u` | half page down / up (`Ctrl-f` `Ctrl-b` full page) |
-| `Enter` `l` | attach (full-screen handoff; `←` or `Ctrl+Z` return here), or expand Settled |
+| `Enter` `l` | attach (full-screen handoff; `←` or `Ctrl+Z` return here), or expand Snoozed / Settled |
 | `Tab` `Shift+Tab` | jump to the next / previous section |
-| `h` | close the peek pane, else collapse Settled |
-| `za` `zo` `zc` | toggle / open / close the Settled fold |
+| `h` | close the peek pane, else collapse the current Snoozed / Settled fold |
+| `za` `zo` `zc` | toggle / open / close the Snoozed or Settled fold under the cursor |
 | `p` | toggle the read-only peek pane |
 | `J` `K` (`Ctrl-e` `Ctrl-y`) | scroll the peek pane |
 | `n` | new session (full screen): multi-line prompt (`Enter` breaks a line, `Ctrl-S` starts), name, directory (`Tab` completes), model, effort, permissions, worktree — "default" choices show what your settings resolve to; attaches as soon as it starts |

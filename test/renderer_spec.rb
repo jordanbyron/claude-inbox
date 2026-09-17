@@ -96,9 +96,21 @@ describe ClaudeInbox::Renderer do
   end
 
   it "lists settled rows when expanded" do
-    f = renderer.frame(sections, width: 80, height: 30, now: now, settled_expanded: true)
+    f = renderer.frame(sections, width: 80, height: 30, now: now, expanded: {settled: true})
     _(f.items.compact.map(&:key)).must_equal ["f23c8673", "4a93393d-1c06-57da-9fb8-12f5b1535d95", "823b882f", "dcbc1d98", "b0b18338", "fbf5253a", "b03695b1"]
     _(f.lines.join("\n")).must_match(/app store release strategy\s+done · 18d/)
+  end
+
+  it "lists snoozed rows when expanded, and folds them by default" do
+    entries = {"823b882f" => {"wake_at" => now.to_i + 900, "snoozed_at" => now.to_i}}
+    snoozed_sections = Store.sectionize(sessions, Store.merge_entries(entries, sessions, now), now)
+
+    folded = renderer.frame(snoozed_sections, width: 80, height: 30, now: now)
+    _(folded.items.compact.map(&:key)).must_include :snoozed
+    _(folded.lines.join("\n")).must_match(/… 1 snoozed/)
+
+    expanded = renderer.frame(snoozed_sections, width: 80, height: 30, now: now, expanded: {snoozed: true})
+    _(expanded.items.compact.map(&:key)).must_include "823b882f"
   end
 
   it "truncates long emoji names instead of slicing" do

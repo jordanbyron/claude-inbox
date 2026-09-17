@@ -13,7 +13,7 @@ module ClaudeInbox
     Item = Struct.new(:kind, :row, :section) do
       def id = row&.id
 
-      def key = (kind == :settled_toggle) ? :settled : row&.key
+      def key = (kind == :fold_toggle) ? section : row&.key
     end
 
     Frame = Struct.new(:lines, :items, :top)
@@ -40,7 +40,7 @@ module ClaudeInbox
       @home = home
     end
 
-    # opts: selected (id | :settled | nil), settled_expanded, top (scroll),
+    # opts: selected (id | :snoozed | :settled | nil), expanded ({snoozed:, settled:} => bool), top (scroll),
     #       peek (Array<String> | nil), peek_title, modal (Array<String> | nil),
     #       status (String), now (Time), filter (String | nil), command,
     #       tick (Integer, drives the spinner),
@@ -160,13 +160,14 @@ module ClaudeInbox
       if sections.all.empty?
         return [empty_state(width), []]
       end
+      expanded = opts[:expanded] || {}
       sections.each_section do |name, rows|
         next if rows.empty?
         lines << "" << section_title(name, rows.size, width)
         items << nil << nil
-        if name == :settled && !opts[:settled_expanded]
-          lines << settled_toggle(rows.size, selected, width)
-          items << Item.new(:settled_toggle, nil, :settled)
+        if Store::FOLDABLE_SECTIONS.include?(name) && !expanded[name]
+          lines << fold_toggle_line(name, rows.size, selected, width)
+          items << Item.new(:fold_toggle, nil, name)
           next
         end
         rows.each do |row|
@@ -188,10 +189,10 @@ module ClaudeInbox
       ]
     end
 
-    def settled_toggle(count, selected, width)
-      sel = selected == :settled
+    def fold_toggle_line(name, count, selected, width)
+      sel = selected == name
       marker = sel ? @p.cyan.bold("▶") : " "
-      text = @p.dim("… #{count} settled") + (sel ? @p.dim("   ⏎ or zo to expand") : "")
+      text = @p.dim("… #{count} #{SECTION_TITLES[name].downcase}") + (sel ? @p.dim("   ⏎ or zo to expand") : "")
       Text.pad(" #{marker} " + text, width)
     end
 
