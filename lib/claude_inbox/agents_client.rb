@@ -96,7 +96,12 @@ module ClaudeInbox
     def classify_origins(sessions)
       pids = sessions.select { |s| s.interactive? && s.pid }.map(&:pid)
       return sessions if pids.empty?
-      remote, sub = origins_by_pid(pids)
+      assign_origins(sessions, *origins_by_pid(pids))
+    end
+
+    # Tags each interactive session with where it is driven from and drops
+    # the sub-agents, whose parent is the row worth showing.
+    def assign_origins(sessions, remote, sub)
       sessions.each { |s| s.origin = origin_for(s.pid, remote, sub) if s.interactive? }
       sessions.reject(&:subagent?)
     end
@@ -181,9 +186,7 @@ module ClaudeInbox
     # the pid lists the test hands in, otherwise as a terminal, then drop
     # sub-agents same as the real client does.
     def list(**)
-      sessions = parse(File.read(@path))
-      sessions.each { |s| s.origin = origin_for(s.pid, @remote_pids, @subagent_pids) if s.interactive? }
-      sessions.reject(&:subagent?)
+      assign_origins(parse(File.read(@path)), @remote_pids, @subagent_pids)
     end
 
     def logs(_id) = @logs
