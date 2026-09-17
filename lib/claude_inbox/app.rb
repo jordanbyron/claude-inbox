@@ -20,6 +20,12 @@ module ClaudeInbox
     POLL_INTERVAL = 4
     ALT_ON = "\e[?1049h"
     ALT_OFF = "\e[?1049l"
+    # Alternate scroll mode: while the alt screen is up the terminal turns
+    # wheel ticks into cursor keys, so a scroll moves the selection instead of
+    # dragging the scrollback we are covering into view. Terminals that don't
+    # know the mode ignore it and keep scrolling their own history.
+    WHEEL_KEYS_ON = "\e[?1007h"
+    WHEEL_KEYS_OFF = "\e[?1007l"
 
     SNOOZE_MENU = [
       ["1", "15 minutes", :m15],
@@ -79,7 +85,7 @@ module ClaudeInbox
     end
 
     def enter_screen
-      @out.print ALT_ON, TTY::Cursor.hide, TTY::Cursor.clear_screen
+      @out.print ALT_ON, WHEEL_KEYS_ON, TTY::Cursor.hide, TTY::Cursor.clear_screen
       @out.flush
       @input.raw! if @input.respond_to?(:raw!) && @input.tty?
       @restored = false
@@ -91,7 +97,7 @@ module ClaudeInbox
       return if @restored
       @restored = true
       @input.cooked! if @input.respond_to?(:cooked!) && @input.tty?
-      @out.print TTY::Cursor.show, ALT_OFF
+      @out.print TTY::Cursor.show, WHEEL_KEYS_OFF, ALT_OFF
       @out.flush
     rescue
       nil

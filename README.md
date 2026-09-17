@@ -34,7 +34,9 @@ A row with a pull request shows it after the state: `#885 open`, `#885 draft`,
 
 ## Keys
 
-Keyboard only, vim flavoured. Arrows work too.
+Keyboard only, vim flavoured. Arrows work too. The wheel moves the selection
+rather than uncovering the scrollback behind us, in terminals that support
+alternate scroll mode (`\e[?1007h`) — Apple Terminal does not.
 
 | Key | Action |
 |---|---|
