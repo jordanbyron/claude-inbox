@@ -47,7 +47,7 @@ module ClaudeInbox
       @queue = Queue.new
       @selected = nil
       @top = 0
-      @settled_expanded = false
+      @expanded = Hash.new(false)
       @peek_on = false
       @peek_offset = 0
       @keymap = Keymap.new
@@ -191,7 +191,7 @@ module ClaudeInbox
       @tick += 1
       frame = @renderer.frame(
         sections, width: width, height: height, now: now,
-        selected: @selected, top: @top, settled_expanded: @settled_expanded,
+        selected: @selected, top: @top, expanded: @expanded,
         peek: peek_lines, peek_title: peek_title, peek_subtitle: peek_subtitle(sections),
         modal: modal_lines(width), screen: screen_lines(width, height), status: status_text(now),
         filter: @filter, filter_editing: @filter_editing, command: @command, tick: @tick / 2
@@ -264,14 +264,16 @@ module ClaudeInbox
     def selectable_keys(sections)
       keys = []
       sections.each_section do |name, rows|
-        if name == :settled && !@settled_expanded
-          keys << :settled unless rows.empty?
+        if folded?(name)
+          keys << name unless rows.empty?
         else
           rows.each { |r| keys << r.key if r.selectable? }
         end
       end
       keys
     end
+
+    def folded?(name) = Store::FOLDABLE_SECTIONS.include?(name) && !@expanded[name]
 
     def peek_body(row)
       return ["(nothing selected)"] unless row
@@ -340,9 +342,9 @@ module ClaudeInbox
       when :peek_up then @peek_offset += 1
       when :activate then activate
       when :collapse then collapse
-      when :fold_open then @settled_expanded = true
-      when :fold_close then @settled_expanded = false
-      when :fold_toggle then @settled_expanded = !@settled_expanded
+      when :fold_open then set_expanded(true)
+      when :fold_close then set_expanded(false)
+      when :fold_toggle then set_expanded(!@expanded[current_fold_section])
       when :snooze then open_snooze_menu
       when :wake then wake_selected
       when :toggle_pin then toggle_pin_selected
@@ -374,8 +376,8 @@ module ClaudeInbox
       sections = filtered(@store.sections)
       firsts = []
       sections.each_section do |name, rows|
-        if name == :settled && !@settled_expanded
-          firsts << :settled unless rows.empty?
+        if folded?(name)
+          firsts << name unless rows.empty?
         else
           first = rows.find(&:selectable?)
           firsts << first.id if first
@@ -390,15 +392,25 @@ module ClaudeInbox
     end
 
     def section_of(key, sections)
-      return :settled if key == :settled
+      return key if Store::FOLDABLE_SECTIONS.include?(key)
       sections.each_section { |name, rows| return name if rows.any? { |r| r.key == key } }
       nil
+    end
+
+    # The foldable section the cursor is currently on or inside, if any.
+    def current_fold_section
+      name = section_of(@selected, filtered(@store.sections))
+      name if Store::FOLDABLE_SECTIONS.include?(name)
+    end
+
+    def set_expanded(value, name: current_fold_section)
+      @expanded[name] = value if name
     end
 
     # vim-ish "h": close whatever is open, innermost first.
     def collapse
       if @peek_on then @peek_on = false
-      elsif @settled_expanded then @settled_expanded = false
+      elsif (name = current_fold_section) && @expanded[name] then @expanded[name] = false
       end
       @painter.invalidate
     end
@@ -412,7 +424,7 @@ module ClaudeInbox
     end
 
     def activate
-      return @settled_expanded = true if @selected == :settled
+      return @expanded[@selected] = true if Store::FOLDABLE_SECTIONS.include?(@selected)
       attach(@selected) if require_actionable
     end
 

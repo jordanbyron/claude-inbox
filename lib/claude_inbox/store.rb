@@ -15,6 +15,8 @@ module ClaudeInbox
     PRUNE_AFTER = 7 * 24 * 3600 # forget entries not seen in a poll for this long
     UNTIL_WOKEN = "until_woken"
     SECTIONS = %i[pinned needs_you active snoozed settled].freeze
+    # Sections long enough to be worth hiding behind a fold toggle.
+    FOLDABLE_SECTIONS = %i[snoozed settled].freeze
 
     Sections = Struct.new(:pinned, :needs_you, :active, :snoozed, :settled) do
       def each_section = SECTIONS.each { |k| yield k, self[k] }
