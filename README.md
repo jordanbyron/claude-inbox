@@ -47,7 +47,7 @@ Keyboard only, vim flavoured. Arrows work too.
 | `za` `zo` `zc` | toggle / open / close the Settled fold |
 | `p` | toggle the read-only peek pane |
 | `J` `K` (`Ctrl-e` `Ctrl-y`) | scroll the peek pane |
-| `n` | new session (full screen): multi-line prompt (`Enter` breaks a line, `Ctrl-S` starts), name, directory (`Tab` completes), model, effort, permissions, worktree — "default" choices show what your settings resolve to |
+| `n` | new session (full screen): multi-line prompt (`Enter` breaks a line, `Ctrl-S` starts), name, directory (`Tab` completes), model, effort, permissions, worktree — "default" choices show what your settings resolve to; attaches as soon as it starts |
 | `t` | pin / unpin (parks it in Pinned at the top, regardless of state) |
 | `s` | snooze: `1` 15m · `2` 1h · `3` tomorrow 9am · `4` until woken |
 | `u` | wake a snoozed session now, or bring back one you settled |
