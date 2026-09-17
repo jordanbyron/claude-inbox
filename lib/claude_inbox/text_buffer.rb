@@ -36,6 +36,15 @@ module ClaudeInbox
       self
     end
 
+    # Everything before the cursor, as one string.
+    def head = @g[0...@cursor].join
+
+    # How completion drops a picked command in over the half-typed one.
+    def replace_before(count, text)
+      delete(@cursor - count, count)
+      insert(text)
+    end
+
     def insert(text)
       g = text.grapheme_clusters
       @g.insert(@cursor, *g)

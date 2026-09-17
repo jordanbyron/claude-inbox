@@ -2,6 +2,7 @@
 
 require_relative "agents_client"
 require_relative "settings"
+require_relative "slash_commands"
 require_relative "text"
 require_relative "text_buffer"
 
@@ -18,6 +19,8 @@ module ClaudeInbox
     # the screen shows what that resolves to instead.
     DEFAULT = "default"
 
+    MENU_ROWS = 6
+
     def initialize(cwd:, pastel:, home: Dir.home)
       @p = pastel
       @home = home
@@ -33,6 +36,9 @@ module ClaudeInbox
       @focus = 0
       @error = nil
       @defaults_for = nil
+      @commands_for = nil
+      @pick = 0
+      @dismissed = nil
     end
 
     def focused = @fields[@focus]
@@ -41,6 +47,8 @@ module ClaudeInbox
     def press(name, raw)
       @error = nil
       @candidates = nil
+      return :changed if menu && menu_press(name)
+      before = command_query
       case name
       when :escape then return :cancel
       when :ctrl_s then return submit(attach: false)
@@ -53,8 +61,25 @@ module ClaudeInbox
       else
         editable? ? focused.value.press(name, raw) : choose(name, raw)
       end
+      edited = before && command_query && command_query != before
+      @pick = 0 if edited
+      @dismissed = nil if edited
       :changed
     end
+
+    def command_query
+      return nil unless focused.key == :prompt
+      focused.value.head[/(?:\A|\s)\/(\S*)\z/, 1]
+    end
+
+    def menu
+      q = command_query
+      return nil if q.nil? || @dismissed == q
+      found = SlashCommands.match(commands, q)
+      found.empty? ? nil : found
+    end
+
+    def picked = menu&.fetch(@pick.clamp(0, menu.size - 1))
 
     def values
       @fields.to_h { |f| [f.key, f.value.to_s] }.tap do |v|
@@ -74,17 +99,28 @@ module ClaudeInbox
       @defaults = Settings.defaults(cwd, home: @home)
     end
 
+    # Project commands live under the Directory field's path, so they
+    # follow it as the defaults do.
+    def commands
+      cwd = values[:cwd]
+      return @commands if @commands_for == cwd
+      @commands_for = cwd
+      @commands = SlashCommands.list(cwd: cwd, home: @home)
+    end
+
     # Full-screen body: a tall prompt editor, then one row per setting with
     # every choice visible. Exactly `height` lines.
     def screen(width, height)
       inner_w = width - 4
       fixed = 3 + 2 + 1 + (@fields.size - 1) + 1
-      prompt_h = [height - fixed, 3].max
+      menu_rows = menu_lines(inner_w, [height - fixed - 3, MENU_ROWS].min)
+      prompt_h = [height - fixed - menu_rows.size, 3].max
       out = [""]
       out << "  " + @p.bold("New session")
       out << ""
       out << "  " + field_label(@fields[0]) + @p.dim("  ⏎ newline")
       out += prompt_box(@fields[0], inner_w, prompt_h)
+      out += menu_rows
       out << ""
       @fields[1..].each { |f| out << "  " + field_label(f) + field_value(f, inner_w - 14) }
       out.first(height) + [""] * [height - out.size, 0].max
@@ -93,6 +129,10 @@ module ClaudeInbox
     def footer
       return @p.red(@error) if @error
       return @p.dim("matches: ") + @candidates.join(@p.dim("  ")) if @candidates
+      if menu
+        return [["↑ ↓", "choose"], ["⇥ ⏎", "pick"], ["esc", "close"]]
+            .map { |k, d| @p.cyan.bold(k) + " " + @p.dim(d) }.join("  ")
+      end
       keys =
         case focused.kind
         when :multiline then [["⏎", "newline"]]
@@ -105,6 +145,44 @@ module ClaudeInbox
     end
 
     private
+
+    def menu_press(name)
+      case name
+      when :up, :ctrl_p then @pick = (@pick - 1) % menu.size
+      when :down, :ctrl_n then @pick = (@pick + 1) % menu.size
+      when :tab, :return, :enter then accept(picked)
+      when :escape then @dismissed = command_query
+      else return false
+      end
+      true
+    end
+
+    def accept(cmd)
+      focused.value.replace_before(command_query.grapheme_clusters.size + 1, "#{cmd} ")
+      @pick = 0
+    end
+
+    # Scrolled so the pick never falls off the bottom; the count of what is
+    # cut rides on the last row rather than costing one of its own.
+    def menu_lines(w, h)
+      items = menu
+      return [] if items.nil? || h <= 0
+      pick = @pick.clamp(0, items.size - 1)
+      first = [pick - h + 1, 0].max
+      shown = items[first, h]
+      left = items.size - first - shown.size
+      more = (left > 0) ? "  +#{left} more" : ""
+      name_w = [shown.map { |c| Text.width(c.to_s) }.max, 36].min
+      rows = shown.each_with_index.map do |c, i|
+        on = first + i == pick
+        name = Text.pad(c.to_s, name_w)
+        tag = (i == shown.size - 1) ? more.size : 0
+        desc = Text.truncate(c.description, w - name_w - 8 - tag)
+        "    " + (on ? @p.black.on_cyan(" #{name} ") : @p.cyan(" #{name} ")) + " " + (on ? desc : @p.dim(desc))
+      end
+      rows[-1] = Text.pad(rows[-1], w - more.size) + @p.dim(more)
+      rows
+    end
 
     def field_label(f)
       on = f.equal?(focused)
@@ -135,7 +213,7 @@ module ClaudeInbox
     end
 
     def default_text(f)
-      resolved = {model: defaults.model, effort: defaults.effort, permission_mode: defaults.permission_mode}[f.key]
+      resolved = defaults[f.key]
       resolved ? "#{resolved} (settings)" : "auto (cli default)"
     end
 

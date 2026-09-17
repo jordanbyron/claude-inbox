@@ -33,7 +33,7 @@ describe ClaudeInbox::App do
     ClaudeInbox::App.new(
       client: client,
       store: store,
-      pull_requests: ClaudeInbox::PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, gh: nil),
+      pull_requests: ClaudeInbox::PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, resolved_path: nil, gh: nil),
       jobs_dir: fixture_path("jobs"),
       out: out, input: StringIO.new, color: false
     )
@@ -66,6 +66,13 @@ describe ClaudeInbox::App do
     out.rewind
   }
 
+  # A row's screen line, found the same way the paint did it: by scanning
+  # the row->item map render just built, rather than assuming a layout.
+  def row_for(a, key)
+    idx = a.instance_variable_get(:@row_items).index { |item| item&.key == key }
+    idx + 1
+  end
+
   it "takes the wheel for the duration of the alt screen and hands it back" do
     app.send(:enter_screen)
     entered = taken
@@ -77,6 +84,82 @@ describe ClaudeInbox::App do
     _(left).must_include ClaudeInbox::App::WHEEL_KEYS_OFF
     # The mode belongs to the alt screen, so it has to go first.
     _(left.index(ClaudeInbox::App::WHEEL_KEYS_OFF)).must_be :<, left.index(ClaudeInbox::App::ALT_OFF)
+  end
+
+  it "takes over the mouse for the duration of the alt screen and hands it back" do
+    app.send(:enter_screen)
+    entered = taken
+    _(entered).must_include ClaudeInbox::App::MOUSE_ON
+
+    app.send(:restore_screen)
+    left = taken
+    _(left).must_include ClaudeInbox::App::MOUSE_OFF
+    _(left.index(ClaudeInbox::App::MOUSE_OFF)).must_be :<, left.index(ClaudeInbox::App::ALT_OFF)
+  end
+
+  describe "clicking a row" do
+    def with_peek(a)
+      a.instance_variable_set(:@peek, ClaudeInbox::Peek.new(client, Queue.new))
+      a
+    end
+
+    it "selects it and attaches, same as landing on it and pressing Enter" do
+      a = with_peek(loaded_app(nil))
+      a.send(:render)
+      attached = []
+      a.define_singleton_method(:attach) { |id| attached << id }
+      row = row_for(a, "f23c8673")
+
+      a.send(:handle_input, "\e[<0;5;#{row}M")
+
+      _(a.instance_variable_get(:@selected)).must_equal "f23c8673"
+      _(attached).must_equal ["f23c8673"]
+    end
+
+    it "refuses on a terminal row instead of attaching, same as Enter" do
+      a = with_peek(loaded_app(nil))
+      a.send(:render)
+      row = row_for(a, "4a93393d-1c06-57da-9fb8-12f5b1535d95")
+
+      a.send(:handle_input, "\e[<0;5;#{row}M")
+
+      _(a.instance_variable_get(:@notice)[0]).must_include "terminal"
+    end
+
+    it "expands a folded section when its toggle line is clicked" do
+      a = with_peek(loaded_app(nil))
+      a.send(:render)
+      row = row_for(a, :settled)
+
+      a.send(:handle_input, "\e[<0;5;#{row}M")
+
+      _(a.instance_variable_get(:@expanded)[:settled]).must_equal true
+    end
+
+    it "ignores a click past the list column, such as one landing in the peek pane" do
+      a = with_peek(loaded_app("f23c8673"))
+      a.instance_variable_set(:@peek_on, true)
+      a.send(:render)
+      attached = []
+      a.define_singleton_method(:attach) { |id| attached << id }
+      row = row_for(a, "f23c8673")
+      col = a.instance_variable_get(:@list_width) + 5
+
+      a.send(:handle_input, "\e[<0;#{col};#{row}M")
+
+      _(attached).must_be_empty
+    end
+  end
+
+  it "moves the selection on a wheel tick, the same way j/k would" do
+    a = loaded_app("f23c8673")
+    a.send(:render)
+    keys = a.send(:selectable_keys, a.send(:filtered, store.sections))
+    idx = keys.index("f23c8673")
+
+    a.send(:handle_input, "\e[<65;1;1M")
+
+    _(a.instance_variable_get(:@selected)).must_equal keys[idx + 1]
   end
 
   describe "ctrl-x deletes a session" do
@@ -135,16 +218,19 @@ describe ClaudeInbox::App do
 
     # A reaped row has to be dropped on the way to the store, not after it
     # gets there: `update` would fold it straight back into the entry table
-    # and the row would reappear for a poll.
+    # and the row would reappear for a poll. That holds for the early
+    # hand-over too, the one that goes up before `claude rm` runs.
     it "keeps what it reaped out of the frame" do
       reaper = Class.new {
+        def due(_sessions, _now) = %w[f23c8673]
+
         def sweep(_sessions, _now) = %w[f23c8673]
 
         def log_path = File::NULL
       }.new
       a = ClaudeInbox::App.new(
         client: client, store: store, reaper: reaper,
-        pull_requests: ClaudeInbox::PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, gh: nil),
+        pull_requests: ClaudeInbox::PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, resolved_path: nil, gh: nil),
         jobs_dir: fixture_path("jobs"),
         out: out, input: StringIO.new, color: false
       )
@@ -153,6 +239,26 @@ describe ClaudeInbox::App do
 
       _(store.sections.all.map(&:id)).wont_include "f23c8673"
       _(store.entry("f23c8673")).must_be_nil
+    end
+
+    it "brings a row back when its reap was refused" do
+      reaper = Class.new {
+        def due(_sessions, _now) = %w[f23c8673]
+
+        def sweep(_sessions, _now) = []
+
+        def log_path = File::NULL
+      }.new
+      a = ClaudeInbox::App.new(
+        client: client, store: store, reaper: reaper,
+        pull_requests: ClaudeInbox::PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, resolved_path: nil, gh: nil),
+        jobs_dir: fixture_path("jobs"),
+        out: out, input: StringIO.new, color: false
+      )
+      a.send(:poll_once)
+      a.send(:drain_queue)
+
+      _(store.sections.all.map(&:id)).must_include "f23c8673"
     end
   end
 end

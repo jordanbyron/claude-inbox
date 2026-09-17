@@ -61,6 +61,18 @@ describe Reaper do
     _(log).must_include "reaped"
   end
 
+  it "names what it is about to take without taking anything" do
+    sessions = [quiet_session("old1"), session(id: "busy", state: "working")]
+    store = store_for(sessions)
+    reaper = Reaper.new(client, store, log_path: log_path)
+
+    _(reaper.due(sessions, now)).must_equal %w[old1]
+    _(client.removed).must_be_empty
+    _(store.entry("old1")).wont_be_nil
+    _(log).must_equal ""
+    _(Reaper.disabled.due(sessions, now)).must_be_empty
+  end
+
   it "leaves a session that has not been quiet long enough, and writes no log at all" do
     sessions = [session(id: "fresh", state: "done")]
 

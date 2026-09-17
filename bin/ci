@@ -1,0 +1,108 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Local CI, modeled on Rails 8.1's bin/ci (ActiveSupport::ContinuousIntegration).
+# Runs the full signoff: lint, security audit, tests. If everything passes and
+# HEAD is on the remote, sets a green `signoff` status via gh-signoff.
+# See CONTRIBUTING.md.
+
+Dir.chdir(File.expand_path("..", __dir__))
+
+class CI
+  COLORS = {
+    banner: "\e[1;32m",
+    title: "\e[1;35m",
+    subtitle: "\e[1;90m",
+    error: "\e[1;31m",
+    success: "\e[1;32m"
+  }.freeze
+
+  attr_reader :results
+
+  def self.run(title = "Continuous Integration", subtitle = "Running style checks, security audits, and tests", &block)
+    new.tap do |ci|
+      ENV["CI"] = "true"
+      ci.heading title, subtitle, padding: false
+      ci.report(title, &block)
+      abort unless ci.success?
+    end
+  end
+
+  def initialize
+    @results = []
+  end
+
+  def step(title, *command)
+    heading title, command.join(" "), type: :title
+    report(title) { results << system(*command) }
+  end
+
+  def success?
+    results.all?
+  end
+
+  def failure(title, subtitle = nil)
+    heading title, subtitle, type: :error
+  end
+
+  def heading(heading, subtitle = nil, type: :banner, padding: true)
+    echo "#{"\n\n" if padding}#{heading}", type: type
+    echo "#{subtitle}#{"\n" if padding}", type: :subtitle if subtitle
+  end
+
+  def echo(text, type:)
+    puts colorize(text, type)
+  end
+
+  def report(title, &block)
+    Signal.trap("INT") { abort colorize("\n❌ #{title} interrupted", :error) }
+
+    ci = self.class.new
+    elapsed = timing { ci.instance_eval(&block) }
+
+    if ci.success?
+      echo "\n✅ #{title} passed in #{elapsed}", type: :success
+    else
+      echo "\n❌ #{title} failed in #{elapsed}", type: :error
+    end
+
+    results.concat ci.results
+  ensure
+    Signal.trap("INT", "DEFAULT")
+  end
+
+  private
+
+  def timing
+    started_at = Time.now.to_f
+    yield
+    min, sec = (Time.now.to_f - started_at).divmod(60)
+    "#{"#{min}m" if min > 0}%.2fs" % sec
+  end
+
+  def colorize(text, type)
+    "#{COLORS.fetch(type)}#{text}\e[0m"
+  end
+end
+
+CI.run do
+  step "Setup", "bundle", "install", "--quiet"
+
+  step "Style: Ruby", "bundle", "exec", "standardrb"
+
+  step "Security: Gem audit", "bundle", "exec", "bundle-audit", "check", "--update", "--quiet"
+
+  step "Tests: minitest", "bundle", "exec", "rake", "test"
+
+  head_is_pushed = system("git merge-base --is-ancestor HEAD @{push}", out: File::NULL, err: File::NULL)
+
+  if !success?
+    failure "Signoff: CI failed. Do not merge.", "Fix the issues and try again."
+  elsif head_is_pushed
+    step "Signoff: All systems go. Ready for merge.", "gh", "signoff"
+  else
+    heading "Signoff: skipped, HEAD is not on the remote yet.",
+      "Push the branch, then run `gh signoff` to set the green status.",
+      type: :subtitle
+  end
+end

@@ -6,10 +6,12 @@ require "tty-reader"
 require "tty-screen"
 require "tty-box"
 require_relative "agents_client"
+require_relative "debug"
 require_relative "store"
 require_relative "renderer"
 require_relative "peek"
 require_relative "keymap"
+require_relative "mouse"
 require_relative "new_session_form"
 require_relative "pull_requests"
 
@@ -26,6 +28,13 @@ module ClaudeInbox
     # know the mode ignore it and keep scrolling their own history.
     WHEEL_KEYS_ON = "\e[?1007h"
     WHEEL_KEYS_OFF = "\e[?1007l"
+    # Real mouse reporting: button events plus the SGR encoding, so clicks
+    # and wheel ticks arrive as escape sequences we parse ourselves (Mouse)
+    # instead of the terminal only ever translating the wheel to arrow
+    # keys. Terminals that don't understand either mode just ignore it and
+    # fall back to WHEEL_KEYS_ON's translation, or their own scrollback.
+    MOUSE_ON = "\e[?1000h\e[?1006h"
+    MOUSE_OFF = "\e[?1006l\e[?1000l"
 
     SNOOZE_MENU = [
       ["1", "15 minutes", :m15],
@@ -52,6 +61,8 @@ module ClaudeInbox
       @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
       @queue = Queue.new
       @selected = nil
+      @row_items = []
+      @list_width = nil
       @top = 0
       @expanded = Hash.new(false)
       @peek_on = false
@@ -69,6 +80,7 @@ module ClaudeInbox
     end
 
     def run
+      @booted_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       install_traps
       enter_screen
       @poller = Thread.new { poll_loop }
@@ -91,7 +103,7 @@ module ClaudeInbox
     end
 
     def enter_screen
-      @out.print ALT_ON, WHEEL_KEYS_ON, TTY::Cursor.hide, TTY::Cursor.clear_screen
+      @out.print ALT_ON, WHEEL_KEYS_ON, MOUSE_ON, TTY::Cursor.hide, TTY::Cursor.clear_screen
       @out.flush
       @input.raw! if @input.respond_to?(:raw!) && @input.tty?
       @restored = false
@@ -103,7 +115,7 @@ module ClaudeInbox
       return if @restored
       @restored = true
       @input.cooked! if @input.respond_to?(:cooked!) && @input.tty?
-      @out.print TTY::Cursor.show, WHEEL_KEYS_OFF, ALT_OFF
+      @out.print TTY::Cursor.show, MOUSE_OFF, WHEEL_KEYS_OFF, ALT_OFF
       @out.flush
     rescue
       nil
@@ -133,20 +145,51 @@ module ClaudeInbox
       end
     end
 
+    # Runs a block off the main thread; a failure lands in the status line
+    # rather than killing the thread silently.
+    def in_background
+      Thread.new do
+        yield
+      rescue => e
+        @queue << [:error, e.message]
+      end
+    end
+
     # PR lookups and the reap sweep both happen here, on the poller, so
-    # neither a slow `gh` nor a `claude rm` can stall a frame.
+    # neither a slow `gh` nor a `claude rm` can stall a frame. Neither is
+    # allowed ahead of the list either: the rows go up as soon as `claude
+    # agents` answers, and the slow calls follow. A dozen serial `gh pr
+    # view`s, or a couple of `claude rm`s clearing worktrees, is the
+    # difference between the inbox appearing at once and five seconds later.
     #
     # Reaped rows are dropped before the queue and not after: `update` folds
     # whatever it is handed back into the entry table, so a session still in
     # this list would be recreated moments after `forget` cleared it and
-    # flicker back for a poll.
+    # flicker back for a poll. So the reaper says what it is about to take
+    # (a pure lookup) and those rows are held back from the first hand-over;
+    # only a refused reap brings one back. Rows are handed over as copies so
+    # the gh refresh can write PR states into its own set and publish again
+    # only if one moved.
     def poll_once
+      now = Time.now
       sessions = JobState.enrich(@pull_requests.enrich(@client.list, @store.pr_overrides), jobs_dir: @jobs_dir)
-      reaped = @reaper.sweep(sessions, Time.now)
-      @queue << [:sessions, sessions.reject { |s| reaped.include?(s.key) }]
+      doomed = @reaper.due(sessions, now)
+      publish(sessions, doomed)
+      reaped = @reaper.sweep(sessions, now)
+      live = publish(sessions, reaped) if reaped != doomed
+      live ||= sessions.reject { |s| doomed.include?(s.key) }
       notice_reaped(reaped) if reaped.any?
+      @queue << [:sessions, live] if @pull_requests.refresh(live)
     rescue => e
       @queue << [:error, e.message]
+    end
+
+    # Hands the sessions minus `without` to the main thread; returns the
+    # list it kept.
+    def publish(sessions, without)
+      live = sessions.reject { |s| without.include?(s.key) }
+      @queue << [:sessions, live.map(&:dup)]
+      live
     end
 
     def notice_reaped(keys)
@@ -184,14 +227,14 @@ module ClaudeInbox
         end
         render
         key = @reader.read_keypress(echo: false, raw: false, nonblock: true)
-        split_keys(key).each { |k| handle_key(k) } if key
+        handle_input(key) if key
       end
     end
 
-    # CLAUDE_INBOX_DEBUG=1 appends slow-frame notes to /tmp/inbox-debug.log.
-    def debug(msg)
-      return unless ENV["CLAUDE_INBOX_DEBUG"]
-      File.write("/tmp/inbox-debug.log", "#{Time.now.strftime("%H:%M:%S.%L")} #{msg}\n", mode: "a")
+    def handle_input(key)
+      events = Mouse.events(key)
+      return events.each { |e| handle_mouse(e) } if events.any?
+      split_keys(key).each { |k| handle_key(k) }
     end
 
     def render
@@ -214,13 +257,24 @@ module ClaudeInbox
         selected: @selected, top: @top, expanded: @expanded,
         peek: peek_lines, peek_title: peek_title, peek_subtitle: peek_subtitle(sections),
         modal: modal_lines(width), screen: screen_lines(width, height), status: status_text(now),
-        filter: @filter, filter_editing: @filter_editing, command: @command, tick: @tick / 2
+        filter: @filter, filter_editing: @filter_editing, command: @command, tick: @tick / 2,
+        loading: loading_for
       )
       @items = frame.items.compact
+      @row_items = frame.items
+      @list_width = frame.list_width
       @top = frame.top
       @painter.paint(frame.lines)
       dt = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
-      debug("render #{(dt * 1000).round}ms") if dt > 0.05
+      Debug.log("render #{(dt * 1000).round}ms") if dt > 0.05
+    end
+
+    # Seconds spent waiting for the first poll; nil once one has landed, or
+    # failed — a failure has its own line in the header and the empty state
+    # already says how to retry.
+    def loading_for
+      return nil if @last_poll || @error || !@booted_at
+      Process.clock_gettime(Process::CLOCK_MONOTONIC) - @booted_at
     end
 
     def status_text(now)
@@ -343,6 +397,36 @@ module ClaudeInbox
 
       action = @keymap.press(name, key)
       perform(action) if action
+    end
+
+    # A modal or an open filter/command line already claims every keypress
+    # ahead of the normal action table (see handle_key); mouse input defers
+    # to the same rule rather than reaching past whatever has focus.
+    def handle_mouse(event)
+      return if @modal || @filter_editing || @command
+      case event.kind
+      when :click then click_row(event.row, event.col)
+      when :scroll_up then perform(:up)
+      when :scroll_down then perform(:down)
+      end
+    end
+
+    # Clicking a row selects it and attaches, same as landing on it with
+    # j/k and pressing Enter — activate already knows how to expand a fold
+    # or refuse a terminal/remote row, so this doesn't repeat that.
+    def click_row(row, col)
+      return if @list_width && col > @list_width
+      item = row_item_at(row)
+      return unless item
+      select(item.key)
+      activate
+    end
+
+    # The wrapped detail line under a two-line row ("↳ ~/code/x") carries
+    # no item of its own; a click there resolves to the row above it.
+    def row_item_at(row)
+      idx = row - 1
+      @row_items[idx] || (@row_items[idx - 1] if idx > 0 && @row_items[idx - 1]&.kind == :row)
     end
 
     def perform(action)
@@ -528,14 +612,12 @@ module ClaudeInbox
     def start_session(form, attach:)
       v = form.values
       notice("starting session…")
-      Thread.new do
+      in_background do
         id = @client.spawn(prompt: v[:prompt], cwd: v[:cwd], model: v[:model], effort: v[:effort],
           permission_mode: v[:permission_mode], worktree: v[:worktree], name: v[:name])
         notice("started #{id}")
         @pending_select = id
         attach ? @queue << [:attach, id] : poll_once
-      rescue => e
-        @queue << [:error, e.message]
       end
     end
 
@@ -605,23 +687,19 @@ module ClaudeInbox
     end
 
     def stop_session(id)
-      Thread.new do
+      in_background do
         @client.stop(id)
         poll_once
-      rescue => e
-        @queue << [:error, e.message]
       end
     end
 
     def delete_session(id)
       notice("deleting #{id}…")
-      Thread.new do
+      in_background do
         @client.rm(id)
         @store.forget(id)
         notice("deleted #{id}")
         poll_once
-      rescue => e
-        @queue << [:error, e.message]
       end
     end
 

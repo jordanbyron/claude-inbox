@@ -2,6 +2,7 @@
 
 require "json"
 require_relative "job_state"
+require_relative "records"
 require_relative "subprocess"
 
 module ClaudeInbox
@@ -30,19 +31,29 @@ module ClaudeInbox
   # Interactive sessions have no job file; for those the store's `pr` override
   # is the only source.
   #
-  # State comes first from ~/.claude/gh-pr-status-cache.json (whatever Claude
-  # Code last saw), then from `gh pr view` for PRs that are still open, at
-  # most once per REFRESH_AFTER. A merged or closed PR never changes again,
-  # so it is never asked about twice.
+  # State comes first from our own record of resolved PRs, then from
+  # ~/.claude/gh-pr-status-cache.json (whatever Claude Code last saw), then
+  # from `gh pr view` for PRs that are still open, at most once per
+  # REFRESH_AFTER. A merged or closed PR never changes again, so it is never
+  # asked about twice — and once gh has said so, it is written to
+  # RESOLVED_PATH so the next launch does not ask either. Claude Code's cache
+  # only covers PRs its own sessions opened, and a link scan picks up plenty
+  # of others.
+  #
+  # `enrich` never touches gh; it is what stands between `claude agents` and
+  # the first frame. `refresh` is the slow half, one network round trip per
+  # open PR, and the poller calls it after the list has already gone up.
   class PullRequests
     REFRESH_AFTER = 60
 
     CLAUDE_DIR = File.join(Dir.home, ".claude")
+    RESOLVED_PATH = File.join(Dir.home, ".config", "claude-inbox", "prs.json")
 
     def initialize(jobs_dir: JobState::DEFAULT_DIR, cache_path: File.join(CLAUDE_DIR, "gh-pr-status-cache.json"),
-      gh: "gh", clock: -> { Time.now })
+      resolved_path: RESOLVED_PATH, gh: "gh", clock: -> { Time.now })
       @jobs_dir = jobs_dir
       @cache_path = cache_path
+      @resolved_path = resolved_path
       @gh = gh
       @clock = clock
       @known = {}      # url => PullRequest
@@ -50,18 +61,39 @@ module ClaudeInbox
       @mutex = Mutex.new
     end
 
-    # Fills in `prs` on every session. `overrides` maps session key => url
-    # for links set by hand; an override replaces the scanned list.
+    # Fills in `prs` on every session from what is already known, asking
+    # nobody. `overrides` maps session key => url for links set by hand; an
+    # override replaces the scanned list.
     def enrich(sessions, overrides = {})
       sessions.each do |s|
         urls = overrides[s.key] ? [overrides[s.key]] : linked(s.id)
-        s.prs = urls.map { |u| status(u) }
+        s.prs = urls.map { |u| known(u) }
       end
       sessions
     end
 
+    # Asks gh about every PR on these sessions that is due and writes the
+    # answers back into `prs`. True when any state changed, so the caller
+    # knows whether the list is worth publishing again.
+    def refresh(sessions)
+      changed = false
+      sessions.each do |s|
+        s.prs = s.prs.map { |pr|
+          fresh = status(pr.url)
+          changed = true if fresh.state != pr.state
+          fresh
+        }
+      end
+      changed
+    end
+
     # PR urls the daemon scanned out of a background session's transcript.
     def linked(id) = JobState.read(id, jobs_dir: @jobs_dir)&.pr_urls || []
+
+    # Best known state for a url without asking gh.
+    def known(url)
+      @mutex.synchronize { @known[url] ||= seed(url) }
+    end
 
     # Best known state for a url, refreshed through gh when due.
     def status(url)
@@ -70,7 +102,9 @@ module ClaudeInbox
         return pr if pr.resolved? || !due?(url)
         @checked_at[url] = @clock.call.to_i
         fresh = fetch(url)
-        fresh ? (@known[url] = fresh) : pr
+        return pr unless fresh
+        remember(fresh) if fresh.resolved?
+        @known[url] = fresh
       end
     end
 
@@ -96,16 +130,30 @@ module ClaudeInbox
 
     def seed(url)
       number = url[%r{/pull/(\d+)}, 1]&.to_i
-      cached = claude_cache[url]
+      cached = resolved[url] || claude_cache[url]
       PullRequest.new(number: cached&.dig("number") || number, url: url, state: cached&.dig("state"), title: cached&.dig("title"))
     end
 
+    # Same shape as Claude Code's cache, so `seed` reads both alike.
+    def resolved
+      @resolved ||= read_json(@resolved_path)
+    end
+
     def claude_cache
-      @claude_cache ||= begin
-        (@cache_path && File.exist?(@cache_path)) ? JSON.parse(File.read(@cache_path)) : {}
-      rescue JSON::ParserError
-        {}
-      end
+      @claude_cache ||= read_json(@cache_path)
+    end
+
+    def read_json(path)
+      (path && File.exist?(path)) ? JSON.parse(File.read(path)) : {}
+    rescue JSON::ParserError
+      {}
+    end
+
+    # Under @mutex.
+    def remember(pr)
+      resolved[pr.url] = {"number" => pr.number, "state" => pr.state, "title" => pr.title}
+      return unless @resolved_path
+      Records.save(@resolved_path, resolved)
     end
 
     def fetch(url)

@@ -14,22 +14,27 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
 
 ## Sections
 
-1. **Pinned** — parked at the top by hand, regardless of state. `P` toggles it.
-2. **Needs you** — `blocked` or `failed`, unless you've attached to it since (see
+1. **Pinned.** Parked at the top by hand, regardless of state. `P` toggles it.
+2. **Needs you.** `blocked` or `failed`, unless you've attached to it since (see
    Acknowledge below).
-3. **Active** — `working`, plus recently finished sessions that have not settled
+3. **Active.** `working`, plus recently finished sessions that have not settled
    yet, plus interactive sessions, plus a needs-you session you've attached to
-   but that hasn't resolved. Interactive sessions report only `status`, so it is
-   mapped: busy is working, idle is done, waiting needs you. The JSON calls both
-   a terminal you opened yourself and a Remote Control worker "interactive"; the
-   client tells them apart from the process tree (a remote worker runs with
-   `--sdk-url` under a `claude rc` parent). Remote sessions settle and snooze
+   but that hasn't resolved. Interactive sessions report only `status`, so it
+   gets mapped: busy is working, idle is done, waiting needs you. The JSON calls
+   a terminal you opened yourself, a Remote Control worker, a sub-agent and a
+   headless `claude -p` run all "interactive", each named after its directory;
+   the client tells them apart from the process tree (a remote worker runs with
+   `--sdk-url` under a `claude rc` parent, a sub-agent has a `claude` for a
+   parent, and a headless run gives itself away with `-p` or the SDK's stream
+   flags, since the shell that spawned it hides the session behind it).
+   Sub-agents and headless runs are dropped: nobody is sitting in them and
+   attach lands on whatever asked for them. Remote sessions settle and snooze
    like any other row. A terminal you are sitting in never settles. Neither
    can be attached, peeked or stopped from outside; you can land on them, and
    Enter tells you why nothing happens.
-4. **Snoozed** — sorted by wake time; parked ("until I wake it") entries last.
+4. **Snoozed.** Sorted by wake time, parked ("until I wake it") entries last.
    Collapsed; Enter expands.
-5. **Settled** — `done`/`stopped` and quiet for 10 minutes, or whose pull
+5. **Settled.** `done`/`stopped` and quiet for 10 minutes, or whose pull
    request is merged or closed. Collapsed; Enter expands.
 
 A row with a pull request shows it after the state: `#885 open`, `#885 draft`,
@@ -37,8 +42,8 @@ A row with a pull request shows it after the state: `#885 open`, `#885 draft`,
 
 `working` from the daemon covers two situations, and the row says which. A
 spinner and `working` mean the agent is thinking. A steady `◌` and `idle · 1
-shell` mean the agent has stopped and is only waiting on work it started — a
-`--watch` shell, a sub-agent — which is why a session with nothing left to do
+shell` mean the agent has stopped and is only waiting on work it started, such as
+a `--watch` shell or a sub-agent. That is why a session with nothing left to do
 can sit there for an hour. Whatever the agent is up to, the open work is named
 next to the state: `working · 2 agents`, `idle · 1 shell`. The count comes from
 the session's own job file, which `claude agents --json` does not expose; the
@@ -50,9 +55,15 @@ A session you gave a colour to with `/color` wears it on the label — see
 
 ## Keys
 
-Keyboard only, vim flavoured. Arrows work too. The wheel moves the selection
-rather than uncovering the scrollback behind us, in terminals that support
-alternate scroll mode (`\e[?1007h`) — Apple Terminal does not.
+Keyboard-first, vim flavoured, but the mouse works too. Arrows work as well
+as `j`/`k`. Clicking a row does what landing on it and pressing `Enter`
+would: selects it and attaches (or expands a fold, or refuses on a terminal
+row you can't be attached to from here). The wheel moves the selection
+rather than uncovering the scrollback behind us, in terminals that report
+mouse events (`\e[?1000h` + `\e[?1006h`, the same mode clicks use) or that at
+least support alternate scroll mode (`\e[?1007h`, wheel-as-arrows only, no
+clicks). Apple Terminal supports neither escape, so there the wheel scrolls
+its own history and clicking a row does nothing.
 
 | Key | Action |
 |---|---|
@@ -65,7 +76,7 @@ alternate scroll mode (`\e[?1007h`) — Apple Terminal does not.
 | `za` `zo` `zc` | toggle / open / close the Snoozed or Settled fold under the cursor |
 | `p` | toggle the read-only peek pane |
 | `J` `K` (`Ctrl-e` `Ctrl-y`) | scroll the peek pane |
-| `n` | new session (full screen): multi-line prompt (`Enter` breaks a line, `Ctrl-S` starts it, `Ctrl-O` starts and opens it), name, directory (`Tab` completes), model, effort, permissions, worktree — "default" choices show what your settings resolve to |
+| `n` | new session (full screen): multi-line prompt (`Enter` breaks a line, `Ctrl-S` starts it, `Ctrl-O` starts and opens it), name, directory (`Tab` completes), model, effort, permissions, worktree; "default" choices show what your settings resolve to |
 | `t` | pin / unpin (parks it in Pinned at the top, regardless of state) |
 | `s` | snooze: `1` 15m · `2` 1h · `3` tomorrow 9am · `4` until woken |
 | `u` | wake a snoozed session now, or bring back one you settled |
@@ -74,7 +85,7 @@ alternate scroll mode (`\e[?1007h`) — Apple Terminal does not.
 | `o` | open the session's pull request in the browser |
 | `P` | link a pull request by hand (empty clears; the scanned links return) |
 | `X` | stop the session (`y` to confirm) |
-| `Ctrl-x` | delete the session for good — conversation and worktree with it (`y` to confirm) |
+| `Ctrl-x` | delete the session for good, conversation and worktree with it (`y` to confirm) |
 | `/` | filter by name or cwd; `Enter` keeps it, `Esc` clears |
 | `:q` | quit (`:peek`, `:refresh`, `:pr`, `:pin` also exist) |
 | `R` | poll now |
@@ -86,7 +97,7 @@ into two keys, since tty-reader would otherwise glue them together.
 
 `X` and `Ctrl-x` both ask before they act, and both take `y`, but they are not
 the same thing. `X` runs `claude stop`: the process ends, the conversation is
-kept, and `Enter` resumes it later. `Ctrl-x` runs `claude rm` — the session,
+kept, and `Enter` resumes it later. `Ctrl-x` runs `claude rm`. The session,
 its transcript and its worktree all go, and so does our own state entry for
 it, rather than sitting out the seven-day prune. Nothing resumes afterwards,
 so read the box before answering.
@@ -107,6 +118,21 @@ the second start needs a letter of its own.
 
 The directory defaults to the selected row's. It runs `claude --bg "<prompt>"`
 with only the flags you changed from default, in that directory.
+
+Slash commands work as they do at Claude Code's own prompt: a prompt that
+starts with one, `/unslop README.md`, is expanded by `claude` into the skill
+with its arguments before the session starts; one further into the text is
+left for the agent to read and act on. Typing `/` at the start of any word
+opens a menu of what the CLI would offer — project and personal skills and
+commands, plugin skills as `plugin:name`, claude.ai's synced skills as
+`anthropic-skills:name` — narrowed as you type, each with the description
+from its front matter. `↑` `↓` choose, `Tab` or `Enter` drop the command in
+with a space after it, `Esc` closes the menu (a second `Esc` cancels the
+form). A `/` inside a word, as in `a/b`, opens nothing, and the menu only
+appears while something matches, so a path like `/Users/…` is left alone
+after its first letters. Built-ins such as `/init` live inside the CLI and
+are not listed; typing one still works. Project commands follow the
+Directory field.
 
 ### Why `←` comes back here and not to native agent view
 
@@ -130,7 +156,7 @@ already blocked when you snoozed it stays snoozed; that is the point of snoozing
 
 **Acknowledge.** Attaching to a needs-you session (`Enter`) marks its current
 state seen, moving it to Active instead of leaving it in Needs You. It comes
-back to Needs You the moment its state changes again — still blocked with a
+back to Needs You the moment its state changes again. Still blocked with a
 new prompt doesn't count, only an actual state change does, same as hand-settle.
 
 **Settle.** `done` or `stopped` and unchanged for `SETTLE_AFTER` (10 minutes),
@@ -153,13 +179,13 @@ without asking first, so read the rest of this before you leave it running.
 
 Reaping does *not* key on Settled, deliberately. Settling answers "should I
 still be looking at this?", and the PR rule keeps a row in Active for as long
-as a pull request stays open — so an abandoned draft parks a session there for
+as a pull request stays open, so an abandoned draft parks a session there for
 ever and the deadest rows in the list are precisely the ones Settled never
 reaches. Idle time, measured from `state_since`, is the only clock.
 
 Four things are never reaped, whatever the clock says: a `working` session, one
 that still holds a process, a pin, and a snooze. `failed` *is* reaped, even
-though it never settles — it earns a permanent row because you ought to see it,
+though it never settles. It earns a permanent row because you ought to see it,
 and after a fortnight of not seeing it you never will. A pin or a parked
 snooze ("until I wake it") is the way to keep a session indefinitely; both are
 deliberate gestures, so both outrank the reaper.
@@ -189,23 +215,36 @@ last saw, then refreshed with `gh pr view` on the poller thread, at most once a
 minute per PR and never for one already merged or closed. Without `gh` the
 cached state is all you get.
 
-## Colours
+`gh pr view` is a network round trip, so each poll publishes the list first,
+with whatever states are already known, and asks gh afterwards; the rows come
+round again only if an answer moved one. That is why the inbox is up in well
+under a second rather than after a dozen serial `gh` calls. Once gh has said a
+PR is merged or closed the answer is kept in `~/.config/claude-inbox/prs.json`,
+in the same shape as Claude Code's cache, because that cache only covers PRs
+its own sessions opened and a link scan picks up plenty of others — without
+the file every launch would ask about every merged PR again.
+
+Until the first poll lands the body is blank rather than claiming "nothing
+running"; past a second and a half it gets a spinner and a rotating excuse
+with the elapsed time, and past ten seconds a hint to check the daemon.
+
+## Colors
 
 `/color` inside a session is the only way to set one; there is no key for it
 here, and nothing is stored on our side. The daemon writes it to the job file
 as `color`, `claude agents --json` leaves it out, so `JobState` reads it on
-every poll and a colour you change shows up on the next one.
+every poll and a color you change shows up on the next one.
 
 It lands on the label and nowhere else. The glyph, the state badge and the PR
-badge keep the colours their own state gives them, so no colour you pick can
+badge keep the colors their own state gives them, so no color you pick can
 stop a blocked session looking blocked. Settled rows stay dim — that section is
-meant to be quiet, and a colour shouting out of a collapsed fold would undo it.
+meant to be quiet, and a color shouting out of a collapsed fold would undo it.
 
-The eight colours `/color` offers are mapped the way Claude Code's own tmux
+The eight colors `/color` offers are mapped the way Claude Code's own tmux
 code maps them when it tints a teammate pane: `red`, `blue`, `green`, `yellow`,
-`purple` and `cyan` go to the terminal's own ansi colours, so they follow your
-theme; `orange` and `pink` have no ansi name and go through 256-colour indexes
-208 and 205. Anything else is left unpainted. Colours close with SGR 39
+`purple` and `cyan` go to the terminal's own ansi colors, so they follow your
+theme; `orange` and `pink` have no ansi name and go through 256-color indexes
+208 and 205. Anything else is left unpainted. Colors close with SGR 39
 (default foreground) rather than 0, so a label that is already bold or italic
 stays that way.
 
@@ -231,18 +270,26 @@ AgentsClient  →  PullRequests  →  JobState  →  Store  →  Renderer  →  
   links `PullRequests` wants, the open work behind a `working` state, and the `/color`
   each session carries. Never cached.
 - `PullRequests` fills in each session's `prs` from `JobState` and `gh`.
-  `--fixture` points it at `test/fixtures/jobs` with `gh` off.
-- `Palette` maps a session colour to an escape sequence and knows nothing else.
+  `enrich` never asks gh; `refresh` is the slow half and runs after the list
+  has gone up. `--fixture` points it at `test/fixtures/jobs` with `gh` off.
+- `Palette` maps a session color to an escape sequence and knows nothing else.
 - `Store` holds the last poll and the snooze table behind a mutex; rules are class methods.
 - `Renderer` turns sections into an array of fixed-width strings. `Painter` diffs frames
   and repaints only changed rows.
 - `Reaper` runs `claude rm` over whatever `Store.reapable?` picks and appends a
-  line to the log for each one. One public method, `sweep`, called from the
-  poller so a slow `rm` never stalls a frame.
+  line to the log for each one. `due` names them without touching anything;
+  `sweep` does the deleting. Both run on the poller, and the list goes up
+  between them, so a slow `rm` stalls neither a frame nor the first one.
 - `App` owns the terminal, the poller thread and the peek thread, and is the only
   place that spawns a child.
 - `VtScreen` is a small cursor-addressed grid used to turn the `claude logs` replay
   into readable lines for the peek pane.
+- `SlashCommands` reads the skills and commands `claude` would offer from the
+  same directories it reads them, front matter included, for the new-session
+  prompt's menu. Pure filesystem; it never runs `claude`.
+- `Mouse` turns the SGR escape sequences the terminal sends for clicks and
+  wheel ticks into `Event`s; `App` maps a click's row back to whatever
+  `Renderer` painted there.
 
 ## Things learned from the real CLI (2.1.273)
 
@@ -262,6 +309,12 @@ AgentsClient  →  PullRequests  →  JobState  →  Store  →  Renderer  →  
   shell. Under the hood `←` makes the attach process exec `claude agents` in place,
   same pid, using its own executable path, so a PATH shim never sees it.
 - `CLAUDE_CODE_DISABLE_AGENT_VIEW=1` disables `agents`, `attach` and `logs` alike.
+- A prompt beginning with a slash command is expanded, `$ARGUMENTS` and all,
+  in `-p` and `--bg` alike (checked on 2.1.274 with a project command).
+  Installed plugins are listed in `~/.claude/plugins/installed_plugins.json`,
+  keyed `name@marketplace`, each pointing at its `installPath`; claude.ai's
+  synced skills sit in `~/.claude/skills/synced/<bucket>/<name>/SKILL.md`
+  and show up as `anthropic-skills:<name>`.
 - Interactive sessions (a `claude` you started in a terminal yourself) appear in
   the JSON with no `id` and no `state`, only `status`, and cannot be attached,
   peeked or stopped from outside.
@@ -281,10 +334,10 @@ AgentsClient  →  PullRequests  →  JobState  →  Store  →  Renderer  →  
 
 ```
 bundle install
+bin/ci                       # full signoff: lint, gem audit, tests (see CONTRIBUTING.md)
 bundle exec rake test        # minitest/spec, test/**/*_spec.rb
 bundle exec standardrb
-bin/claude-inbox-probe [fixture.json]   # print sections, no TUI
 CLAUDE_INBOX_STDERR=/tmp/err.log bin/claude-inbox   # crash traces off the alt screen
-CLAUDE_INBOX_DEBUG=1 bin/claude-inbox               # slow-frame notes in /tmp/inbox-debug.log
+DEBUG=1 bin/claude-inbox                            # slow-frame notes in /tmp/inbox-debug.log
 CLAUDE_INBOX_NO_REAP=1 bin/claude-inbox             # never delete an idle session
 ```

@@ -11,6 +11,11 @@ describe Text do
     _(Text.truncate("abc", 3)).must_equal "abc"
   end
 
+  it "drops leading columns by display width" do
+    _(Text.drop("ab🎉cd", 2)).must_equal "🎉cd"
+    _(Text.drop("ab🎉cd", 3)).must_equal "cd"
+  end
+
   it "pads ignoring ANSI" do
     s = "\e[31mred\e[0m"
     _(Text.width(s + "  ")).must_equal 5
@@ -172,6 +177,31 @@ describe ClaudeInbox::Renderer do
     f = renderer.frame(sec, width: 60, height: 10, now: now)
     _(f.lines.join("\n")).must_include "Nothing running."
     _(f.items.compact).must_be_empty
+  end
+
+  # Until the first poll lands "nothing running" would be a guess, so the
+  # loading screen shows neither that nor the chips. Short waits are blank;
+  # long ones get the spinner and a quip; very long ones a hint.
+  it "waits quietly for the first poll, then keeps the user company" do
+    sec = Store.sectionize([], {}, now)
+    quick = renderer.frame(sec, width: 60, height: 12, now: now, loading: 0.4, tick: 0, status: "polling…")
+    _(quick.lines.join("\n")).wont_include "Nothing running."
+    _(quick.lines.join("\n")).wont_include "nothing running"
+    _(quick.lines[1..-2].map(&:strip).join).must_equal ""
+    _(quick.items.compact).must_be_empty
+
+    slow = renderer.frame(sec, width: 60, height: 12, now: now, loading: 3.2, tick: 0, status: "polling…")
+    text = slow.lines.join("\n")
+    _(text).must_include ClaudeInbox::Renderer::SPINNER[0]
+    _(text).must_include ClaudeInbox::Renderer::QUIPS[0]
+    _(text).must_include "waiting on claude agents · 3s"
+    _(text).wont_include "claude daemon status"
+    later = renderer.frame(sec, width: 60, height: 12, now: now, loading: 3.2, tick: 7, status: "polling…").lines.join("\n")
+    _(later).must_include ClaudeInbox::Renderer::QUIPS[1]
+    _(later).wont_equal text
+
+    stuck = renderer.frame(sec, width: 60, height: 12, now: now, loading: 12, tick: 0, status: "polling…").lines.join("\n")
+    _(stuck).must_include "claude daemon status"
   end
 
   it "shows the command line in the footer" do

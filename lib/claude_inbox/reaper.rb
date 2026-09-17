@@ -50,6 +50,15 @@ module ClaudeInbox
       with_log { |log| due.filter_map { |session, entry| reap(session, entry, log, now_i) } }
     end
 
+    # Keys `sweep` would go after right now, without touching any of them.
+    # Pure store lookups, so the poller can hand the list over minus these
+    # before it starts on the `claude rm` calls.
+    def due(sessions, now)
+      return [] unless @enabled
+      now_i = now.to_i
+      sessions.filter_map { |s| entry_if_due(s, now_i)&.first&.key }
+    end
+
     private
 
     def entry_if_due(session, now_i)

@@ -9,6 +9,7 @@ describe ClaudeInbox::VtScreen do
   it("turns cursor-forward into spaces") { _(screen("a\e[2Cb").lines).must_equal ["a  b"] }
   it("ignores SGR and OSC") { _(screen("\e[31mred\e[0m\e]0;title\a text").lines).must_equal ["red text"] }
   it("scrolls at the bottom") { _(screen("a\r\nb\r\nc\r\nd", rows: 3, cols: 5).lines).must_equal %w[b c d] }
+  it("erases to the start of the line") { _(screen("abcdef\e[3G\e[1K").lines).must_equal ["   def"] }
 
   it "positions absolutely and erases to end of line" do
     _(screen("\e[3;5Hxyz\e[1;1Hfirst\e[3;6H\e[K").lines).must_equal ["first", "", "    x"]

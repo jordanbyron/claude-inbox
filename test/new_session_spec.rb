@@ -183,4 +183,125 @@ describe ClaudeInbox::NewSessionForm do
   it "cancels on escape" do
     _(form.press(:escape, "\e")).must_equal :cancel
   end
+
+  describe "slash commands" do
+    def with_commands
+      Dir.mktmpdir do |home|
+        Dir.mktmpdir do |proj|
+          %w[unslop unsplit babysit].each do |n|
+            FileUtils.mkdir_p("#{home}/.claude/skills/#{n}")
+            File.write("#{home}/.claude/skills/#{n}/SKILL.md", "---\ndescription: #{n} does things\n---\n")
+          end
+          FileUtils.mkdir_p("#{proj}/.claude/commands")
+          File.write("#{proj}/.claude/commands/deploy.md", "---\ndescription: Ship it\n---\n")
+          f = ClaudeInbox::NewSessionForm.new(cwd: proj, pastel: Pastel.new(enabled: false), home: home)
+          yield f
+        end
+      end
+    end
+
+    def type(f, str) = str.each_char { |c| f.press((c == " ") ? :space : c, c) }
+
+    it "opens a menu on a leading slash and narrows it as you type" do
+      with_commands do |f|
+        type(f, "/")
+        _(f.menu.map(&:name)).must_equal %w[babysit deploy unslop unsplit]
+        _(f.footer).must_include "pick"
+        type(f, "uns")
+        _(f.menu.map(&:name)).must_equal %w[unslop unsplit]
+        rows = f.screen(80, 24)
+        _(rows.find { |r| r.include?("/unsplit") }).must_include "unsplit does things"
+        _(rows.find { |r| r.include?("/unslop") }).wont_be_nil
+        _(rows.find { |r| r.include?("Worktree") }).wont_be_nil
+        type(f, "zz")
+        _(f.menu).must_be_nil
+      end
+    end
+
+    it "picks with tab or enter, leaving the cursor after the command and a space" do
+      with_commands do |f|
+        type(f, "/unsl")
+        _(f.press(:tab, "\t")).must_equal :changed
+        _(f.values[:prompt]).must_equal "/unslop"
+        _(f.focused.value.to_s).must_equal "/unslop "
+        _(f.menu).must_be_nil
+        type(f, "the readme")
+        _(f.press(:return, "\r")).must_equal :changed
+        type(f, "/dep")
+        _(f.menu.map(&:name)).must_equal %w[deploy]
+        f.press(:return, "\r")
+        _(f.values[:prompt]).must_equal "/unslop the readme\n/deploy"
+      end
+    end
+
+    it "moves the pick with the arrows and keeps enter for picking" do
+      with_commands do |f|
+        type(f, "/")
+        f.press(:down, "\e[B")
+        _(f.picked.name).must_equal "deploy"
+        f.press(:up, "\e[A")
+        f.press(:up, "\e[A")
+        _(f.picked.name).must_equal "unsplit"
+        f.press(:return, "\r")
+        _(f.values[:prompt]).must_equal "/unsplit"
+        _(f.focused.key).must_equal :prompt
+      end
+    end
+
+    it "closes the menu on escape without leaving the form, until the query changes" do
+      with_commands do |f|
+        type(f, "/un")
+        _(f.press(:escape, "\e")).must_equal :changed
+        _(f.menu).must_be_nil
+        _(f.press(:tab, "\t")).must_equal :changed
+        _(f.focused.key).must_equal :name
+        f.press(:back_tab, "\e[Z")
+        _(f.menu).must_be_nil
+        type(f, "s")
+        _(f.menu.map(&:name)).must_equal %w[unslop unsplit]
+        _(f.press(:escape, "\e")).must_equal :changed
+        _(f.press(:escape, "\e")).must_equal :cancel
+      end
+    end
+
+    it "offers commands for a slash word anywhere in the prompt, but not mid-word" do
+      with_commands do |f|
+        type(f, "first do")
+        f.press(:return, "\r")
+        type(f, "then /uns")
+        _(f.menu.map(&:name)).must_equal %w[unslop unsplit]
+        f.press(:tab, "\t")
+        _(f.values[:prompt]).must_equal "first do\nthen /unslop"
+        type(f, "a/b")
+        _(f.menu).must_be_nil
+        f.press(:ctrl_u, "\x15")
+        type(f, "/unslop x")
+        _(f.menu).must_be_nil
+        f.press(:left, "\e[D")
+        f.press(:left, "\e[D")
+        _(f.menu.map(&:name)).must_equal %w[unslop]
+        f.press(:tab, "\t")
+        _(f.focused.value.to_s).must_equal "/unslop  x"
+      end
+    end
+
+    it "keeps the pick in view and counts the rest on the last row" do
+      Dir.mktmpdir do |home|
+        ("a".."j").each do |n|
+          FileUtils.mkdir_p("#{home}/.claude/skills/cmd-#{n}")
+          File.write("#{home}/.claude/skills/cmd-#{n}/SKILL.md", "---\ndescription: #{n}\n---\n")
+        end
+        f = ClaudeInbox::NewSessionForm.new(cwd: home, pastel: Pastel.new(enabled: false), home: home)
+        type(f, "/")
+        rows = f.screen(80, 24)
+        _(rows.count { |r| r.include?("/cmd-") }).must_equal 6
+        _(rows.find { |r| r.include?("/cmd-f") }).must_include "+4 more"
+        7.times { f.press(:down, "\e[B") }
+        rows = f.screen(80, 24)
+        _(rows.find { |r| r.include?("/cmd-b") }).must_be_nil
+        _(rows.find { |r| r.include?("/cmd-c") }).wont_be_nil
+        _(rows.find { |r| r.include?("/cmd-h") }).must_include "+2 more"
+      end
+    end
+  end
 end
