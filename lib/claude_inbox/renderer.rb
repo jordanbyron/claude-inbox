@@ -10,7 +10,7 @@ module ClaudeInbox
   # `width` columns wide) plus a parallel Array of selectable items.
   # Pure: no terminal, no IO, no clock beyond the `now` it is handed.
   class Renderer
-    Item = Struct.new(:kind, :row) do
+    Item = Struct.new(:kind, :row, :section) do
       def id = row&.id
 
       def key = (kind == :settled_toggle) ? :settled : id
@@ -19,30 +19,34 @@ module ClaudeInbox
     Frame = Struct.new(:lines, :items, :top)
 
     SECTION_TITLES = {
-      needs_you: "Needs you",
-      working: "Working",
-      snoozed: "Snoozed",
-      settled: "Settled"
+      needs_you: "NEEDS YOU",
+      working: "WORKING",
+      snoozed: "SNOOZED",
+      settled: "SETTLED"
     }.freeze
 
-    GLYPH = {
-      "blocked" => "✽", "failed" => "✗", "working" => "✻",
-      "done" => "∙", "stopped" => "∙"
-    }.freeze
+    SPINNER = %w[⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏].freeze
 
-    HELP = "↑↓ move · ⏎ attach · s snooze · u wake · a alias · x stop · ⇥ peek · / filter · q quit"
+    KEYS = [
+      ["j/k", "move"], ["⏎", "attach"], ["s", "snooze"], ["u", "wake"],
+      ["a", "alias"], ["x", "stop"], ["p", "peek"], ["⇥", "section"],
+      ["za", "fold"], ["/", "filter"], [":q", "quit"]
+    ].freeze
 
-    def initialize(color: true, min_left: 44)
+    def initialize(color: true, min_left: 44, home: Dir.home)
       @p = Pastel.new(enabled: color)
       @min_left = min_left
+      @home = home
     end
 
     # opts: selected (id | :settled | nil), settled_expanded, top (scroll),
     #       peek (Array<String> | nil), peek_title, modal (Array<String> | nil),
-    #       status (String), now (Time), filter (String | nil)
+    #       status (String), now (Time), filter (String | nil), command,
+    #       tick (Integer, drives the spinner)
     def frame(sections, width:, height:, now:, **opts)
       selected = opts[:selected]
-      body, items = body_lines(sections, width_for_list(width, opts[:peek]), selected, opts, now)
+      list_w = width_for_list(width, opts[:peek])
+      body, items = body_lines(sections, list_w, selected, opts, now)
 
       view_h = height - 2 # header + footer
       top = clamp_top(opts[:top] || 0, body.size, view_h, items, selected)
@@ -51,11 +55,11 @@ module ClaudeInbox
       visible += [""] * (view_h - visible.size)
       visible_items += [nil] * (view_h - visible_items.size)
 
-      list_w = width_for_list(width, opts[:peek])
       if opts[:peek]
-        peek_lines = peek_pane(opts[:peek], opts[:peek_title], width - list_w - 1, view_h)
+        peek_w = width - list_w - 1
+        peek_lines = peek_pane(opts[:peek], opts[:peek_title], opts[:peek_subtitle], peek_w, view_h)
         visible = visible.each_with_index.map do |l, i|
-          Text.pad(l, list_w) + @p.dim("│") + Text.pad(peek_lines[i] || "", width - list_w - 1)
+          Text.pad(l, list_w) + @p.dim("│") + Text.pad(peek_lines[i] || "", peek_w)
         end
       end
 
@@ -73,97 +77,150 @@ module ClaudeInbox
 
     def clamp_top(top, size, view_h, items, selected)
       idx = items.index { |item| item && item.key == selected }
-      top = idx if idx && idx < top
+      top = idx - 2 if idx && idx - 2 < top # keep the section title in view
       top = idx - view_h + 1 if idx && idx >= top + view_h
       top.clamp(0, [size - view_h, 0].max)
     end
 
+    # ----- chrome -------------------------------------------------------------
+
     def header(sections, width, status, now)
-      total = sections.all.size
-      needs = sections.needs_you.size
-      left = @p.bold(" claude-inbox") + @p.dim("  #{total} sessions")
-      left += @p.red("  #{needs} need#{"s" if needs == 1} you") if needs > 0
-      right = status ? @p.dim(status + " ") : ""
-      Text.pad(left, width - Text.width(right)) + right
+      brand = " " + @p.cyan.bold("▌ claude-inbox")
+      right = status ? @p.dim(status) + " " : ""
+      room = width - Text.width(brand) - Text.width(right) - 3
+      chips = header_chips(sections, compact: false)
+      chips = header_chips(sections, compact: true) if Text.width(chips) > room
+      chips = "" if Text.width(chips) > room
+      Text.pad(brand + "   " + chips, width - Text.width(right)) + right
+    end
+
+    def header_chips(sections, compact:)
+      n = sections.needs_you.size
+      w = sections.working.count { |r| !r.session.interactive? }
+      i = sections.working.count { |r| r.session.interactive? }
+      z = sections.snoozed.size
+      d = sections.settled.size
+      chips = []
+      chips << @p.red.bold(compact ? "● #{n}" : "● #{n} need#{"s" if n == 1} you") if n > 0
+      chips << @p.yellow(compact ? "✻ #{w}" : "✻ #{w} working") if w > 0
+      chips << @p.dim(compact ? "○ #{i}" : "○ #{i} interactive") if i > 0
+      chips << @p.magenta(compact ? "z #{z}" : "z #{z} snoozed") if z > 0
+      chips << @p.dim(compact ? "∙ #{d}" : "∙ #{d} settled") if d > 0
+      chips << @p.dim("nothing running") if sections.all.empty?
+      chips.join(compact ? "  " : @p.dim("  ·  "))
     end
 
     def footer(width, opts)
       text =
-        if opts[:command] then " :#{opts[:command]}"
-        elsif opts[:filter] then " /#{opts[:filter]}"
-        else " #{opts[:help] || HELP}"
+        if opts[:command] then " " + @p.cyan.bold(":") + opts[:command] + @p.dim("▏")
+        elsif opts[:filter] then " " + @p.cyan.bold("/") + opts[:filter] + (opts[:filter_editing] ? @p.dim("▏") : @p.dim("  esc clears"))
+        else " " + KEYS.map { |k, d| @p.cyan.bold(k) + " " + @p.dim(d) }.join("  ")
         end
-      Text.pad(@p.dim(text), width)
+      Text.pad(text, width)
     end
+
+    def section_title(name, count, width)
+      title = " #{SECTION_TITLES[name]} "
+      count_s = " #{count} "
+      fill = [width - 3 - Text.width(title) - Text.width(count_s), 0].max
+      color = section_color(name)
+      Text.pad(" " + color.call("▎") + color.call(@p.bold(title)) + @p.dim("─" * fill) + @p.dim(count_s), width)
+    end
+
+    def section_color(name)
+      case name
+      when :needs_you then ->(s) { @p.red(s) }
+      when :working then ->(s) { @p.yellow(s) }
+      when :snoozed then ->(s) { @p.magenta(s) }
+      else ->(s) { @p.dim(s) }
+      end
+    end
+
+    # ----- body ---------------------------------------------------------------
 
     def body_lines(sections, width, selected, opts, now)
       lines = []
       items = []
+      if sections.all.empty?
+        return [empty_state(width), []]
+      end
       sections.each_section do |name, rows|
         next if rows.empty?
         lines << "" << section_title(name, rows.size, width)
         items << nil << nil
         if name == :settled && !opts[:settled_expanded]
           lines << settled_toggle(rows.size, selected, width)
-          items << Item.new(:settled_toggle, nil)
+          items << Item.new(:settled_toggle, nil, :settled)
           next
         end
         rows.each do |row|
-          row_lines(row, name, selected, width, now).each_with_index do |l, i|
+          row_lines(row, name, selected, width, now, opts[:tick].to_i).each_with_index do |l, i|
             lines << l
-            items << ((i.zero? && row.selectable?) ? Item.new(:row, row) : nil)
+            items << ((i.zero? && row.selectable?) ? Item.new(:row, row, name) : nil)
           end
         end
       end
       [lines, items]
     end
 
-    def section_title(name, count, width)
-      Text.pad(@p.bold(" #{SECTION_TITLES[name]}") + @p.dim(" #{count}"), width)
+    def empty_state(width)
+      [
+        "", "",
+        Text.pad("   " + @p.bold("Nothing running."), width),
+        Text.pad("   " + @p.dim("Start one from any terminal with ") + @p.cyan("claude --bg \"task\""), width),
+        Text.pad("   " + @p.dim("or press ") + @p.cyan("R") + @p.dim(" to poll again."), width)
+      ]
     end
 
     def settled_toggle(count, selected, width)
-      marker = (selected == :settled) ? @p.cyan("▶") : " "
-      Text.pad(" #{marker} " + @p.dim("… #{count} settled"), width)
+      sel = selected == :settled
+      marker = sel ? @p.cyan.bold("▶") : " "
+      text = @p.dim("… #{count} settled") + (sel ? @p.dim("   ⏎ or zo to expand") : "")
+      Text.pad(" #{marker} " + text, width)
     end
 
-    def row_lines(row, section, selected, width, now)
+    def row_lines(row, section, selected, width, now, tick)
       s = row.session
       sel = row.selectable? && selected == row.id
-      marker = sel ? @p.cyan("▶") : " "
-      glyph = glyph_for(s, section)
-      project = @p.dim(s.project)
+      marker = sel ? @p.cyan.bold("▶") : " "
+      glyph = glyph_for(s, section, tick)
+      project = @p.cyan(s.project)
+      project = @p.dim(s.project) if section == :settled || s.interactive?
       meta = meta_for(row, section, now)
 
-      # marker(1) + spaces + glyph + gap + label + gap + meta + gap + project
-      fixed = 1 + 2 + 1 + 1 + 2 + Text.width(meta) + 2 + Text.width(project)
+      # " " marker " " glyph " " label "  " meta "  " project
+      fixed = 1 + 1 + 1 + 1 + 1 + 2 + Text.width(meta) + 2 + Text.width(project)
       label_w = [width - fixed, 8].max
       label = Text.truncate(row.label, label_w)
-      label = if s.interactive? || section == :settled
-        @p.dim(label)
-      elsif sel
-        @p.bold(label)
-      else
-        label
-      end
+      label = style_label(label, row, section, sel)
       first = " #{marker} #{glyph} " + Text.pad(label, label_w) + "  " + meta + "  " + project
 
       return [Text.pad(first, width)] unless %i[needs_you working].include?(section) && !s.interactive?
 
-      detail = @p.dim("      #{s.cwd}")
+      detail = @p.dim("       ↳ #{short_path(s.cwd)}")
       [Text.pad(first, width), Text.pad(detail, width)]
     end
 
-    def glyph_for(s, section)
+    def style_label(label, row, section, sel)
+      s = row.session
+      if s.interactive? || section == :settled then @p.dim(label)
+      elsif row.alias_name then sel ? @p.bold.italic(label) : @p.italic(label)
+      elsif sel then @p.bold(label)
+      else label
+      end
+    end
+
+    def glyph_for(s, section, tick)
       return @p.dim("○") if s.interactive?
-      return @p.dim("z") if section == :snoozed
-      g = GLYPH.fetch(s.state, "?")
+      return @p.magenta("z") if section == :snoozed
+      return @p.dim("∙") if section == :settled
       case s.state
-      when "blocked" then @p.red(g)
-      when "failed" then @p.red(g)
-      when "working" then @p.yellow(g)
-      when "done" then @p.green(g)
-      else @p.dim(g)
+      when "blocked" then @p.red.bold("●")
+      when "failed" then @p.red.bold("✗")
+      when "working" then (s.status == "waiting") ? @p.yellow("◐") : @p.yellow(SPINNER[tick % SPINNER.size])
+      when "done" then @p.green("✓")
+      when "stopped" then @p.dim("■")
+      else @p.dim("?")
       end
     end
 
@@ -171,34 +228,48 @@ module ClaudeInbox
       s = row.session
       case section
       when :snoozed
-        return @p.dim("parked") if row.parked?
-        @p.dim("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
+        return @p.magenta("parked") if row.parked?
+        @p.magenta("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
       when :settled
-        @p.dim("#{s.state} #{Text.age(now.to_i - row.state_since.to_i)}")
+        @p.dim("#{s.state} · #{Text.age(now.to_i - row.state_since.to_i)}")
       else
         return @p.dim("#{s.status || "interactive"} · #{Text.age(now - s.started_at)}") if s.interactive?
-        parts = []
-        parts << state_word(s)
-        parts << s.waiting_for if s.waiting_for
-        parts << Text.age(now.to_i - row.state_since.to_i) if row.state_since
-        @p.dim(parts.join(" · "))
+        age = row.state_since ? @p.dim(" · " + Text.age(now.to_i - row.state_since.to_i)) : ""
+        state_badge(s) + age
       end
     end
 
-    def state_word(s)
+    def state_badge(s)
       case s.state
-      when "blocked" then @p.red("needs you")
-      when "failed" then @p.red("failed")
-      when "working" then (s.status == "waiting") ? "waiting" : "working"
-      else s.state
+      when "blocked"
+        detail = s.waiting_for ? ": #{s.waiting_for}" : ""
+        @p.red.bold("needs you#{detail}")
+      when "failed" then @p.red.bold("failed")
+      when "working"
+        (s.status == "waiting") ? @p.yellow("waiting#{": #{s.waiting_for}" if s.waiting_for}") : @p.yellow("working")
+      when "done" then @p.green("done") + (s.alive? ? @p.dim(" · #{s.status}") : "")
+      when "stopped" then @p.dim("stopped")
+      else @p.dim(s.state.to_s)
       end
     end
 
-    def peek_pane(lines, title, width, height)
-      out = [Text.pad(@p.bold(" #{title}"), width), Text.pad(@p.dim(" " + "─" * [width - 2, 0].max), width)]
-      lines.last(height - 2).each { |l| out << Text.pad(" " + l, width) }
+    def short_path(path)
+      return "" unless path
+      path.start_with?(@home) ? path.sub(@home, "~") : path
+    end
+
+    # ----- peek ---------------------------------------------------------------
+
+    def peek_pane(lines, title, subtitle, width, height)
+      bar = Text.pad(" " + (title || ""), width)
+      out = [@p.inverse(bar)]
+      out << Text.pad(" " + @p.dim(subtitle.to_s), width) if subtitle
+      body_h = height - out.size
+      lines.last(body_h).each { |l| out << Text.pad(" " + l, width) }
       out
     end
+
+    # ----- modal --------------------------------------------------------------
 
     # Centre a block of lines over the frame.
     def overlay(lines, block, width)
@@ -211,10 +282,8 @@ module ClaudeInbox
         next if y >= out.size
         base = Text.strip_ansi(out[y])
         prefix = Text.pad(Text.take(base, left), left)
-        suffix_start = left + block_w
-        suffix = Text.strip_ansi(base)
-        suffix = drop_columns(suffix, suffix_start)
-        out[y] = Text.pad(prefix + Text.pad(bl, block_w) + suffix, width)
+        suffix = drop_columns(base, left + block_w)
+        out[y] = Text.pad(@p.dim(prefix) + Text.pad(bl, block_w) + @p.dim(suffix), width)
       end
       out
     end

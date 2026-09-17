@@ -5,6 +5,9 @@ require "bundler/setup"
 require_relative "../lib/claude_inbox"
 require_relative "../lib/claude_inbox/app"
 
+# Crash traces go here instead of the alt screen when set.
+$stderr.reopen(ENV["CLAUDE_INBOX_STDERR"], "a") if ENV["CLAUDE_INBOX_STDERR"]
+
 opts = {}
 if (i = ARGV.index("--fixture"))
   opts[:client] = ClaudeInbox::FixtureClient.new(ARGV[i + 1], logs: File.binread(File.join(__dir__, "..", "test", "fixtures", "logs_raw.txt")))

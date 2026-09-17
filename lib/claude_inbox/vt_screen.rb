@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "strscan"
 require "unicode/display_width"
 
 module ClaudeInbox
@@ -10,9 +11,9 @@ module ClaudeInbox
   # grid does not. This is not a VT emulator: it handles the handful of
   # sequences the replay actually uses and ignores the rest.
   class VtScreen
-    CSI = /\A\e\[([0-9;?]*)([A-Za-z@`])/
-    OSC = /\A\e\][^\a\e]*(?:\a|\e\\)?/
-    ESC_OTHER = /\A\e[()#][A-Za-z0-9]|\A\e[A-Za-z0-9=>78]/
+    CSI = /\e\[([0-9;?]*)([A-Za-z@`])/
+    OSC = /\e\][^\a\e]*(?:\a|\e\\)?/
+    ESC_OTHER = /\e[()#][A-Za-z0-9]|\e[A-Za-z0-9=>78]/
 
     attr_reader :rows, :cols
 
@@ -25,21 +26,15 @@ module ClaudeInbox
     end
 
     def feed(str)
-      s = str.dup.force_encoding("UTF-8").scrub
-      i = 0
-      while i < s.size
-        rest = s[i..]
-        if (m = CSI.match(rest))
-          csi(m[1], m[2])
-          i += m[0].size
-        elsif (m = OSC.match(rest))
-          i += m[0].size
-        elsif (m = ESC_OTHER.match(rest))
-          i += m[0].size
+      ss = StringScanner.new(str.dup.force_encoding("UTF-8").scrub)
+      until ss.eos?
+        if ss.scan(CSI)
+          csi(ss[1], ss[2])
+        elsif ss.scan(OSC) || ss.scan(ESC_OTHER)
+          next
         else
-          ch = rest[0]
+          ch = ss.getch
           control(ch) || put(ch)
-          i += 1
         end
       end
       self
@@ -78,8 +73,9 @@ module ClaudeInbox
     end
 
     def put(ch)
-      return if ch.ord < 32
-      w = Unicode::DisplayWidth.of(ch)
+      o = ch.ord
+      return if o < 32
+      w = (o < 127) ? 1 : Unicode::DisplayWidth.of(ch)
       return if w <= 0
       if @col + w > @cols
         @col = 0

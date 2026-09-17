@@ -29,7 +29,7 @@ describe ClaudeInbox::Renderer do
   let(:now) { Time.at(1_789_604_500) }
   let(:sessions) { fixture_sessions }
   let(:sections) { Store.sectionize(sessions, Store.merge_entries({}, sessions, now), now) }
-  let(:renderer) { ClaudeInbox::Renderer.new(color: false) }
+  let(:renderer) { ClaudeInbox::Renderer.new(color: false, home: "/Users/byron") }
 
   def frame(**o) = renderer.frame(sections, width: 80, height: 24, now: now, **o)
 
@@ -42,18 +42,18 @@ describe ClaudeInbox::Renderer do
   it "matches the snapshot" do
     f = renderer.frame(sections, width: 72, height: 20, now: now, selected: "f23c8673")
     expected = <<-TXT.lines.map(&:chomp)
- claude-inbox  7 sessions  1 needs you                                  
+ ▌ claude-inbox   ● 1  ✻ 1  ○ 1  ∙ 4                                    
                                                                         
- Needs you 1                                                            
- ▶ ✽ comma3x not booting                          needs you · 0s  comma3
-      /Users/byron/code/comma3                                          
+ ▎ NEEDS YOU ─────────────────────────────────────────────────────── 1  
+ ▶ ● comma3x not booting                          needs you · 0s  comma3
+       ↳ ~/code/comma3                                                  
                                                                         
- Working 2                                                              
+ ▎ WORKING ───────────────────────────────────────────────────────── 2  
    ○ claude-inbox-38                             busy · 4m  claude-inbox
-   ∙ comma3x led flashing screen unresponsive          done · 0s  comma3
-      /Users/byron/code/comma3                                          
+   ✓ comma3x led flashing screen unresponsive   done · idle · 0s  comma3
+       ↳ ~/code/comma3                                                  
                                                                         
- Settled 4                                                              
+ ▎ SETTLED ───────────────────────────────────────────────────────── 4  
    … 4 settled                                                          
                                                                         
                                                                         
@@ -61,7 +61,7 @@ describe ClaudeInbox::Renderer do
                                                                         
                                                                         
                                                                         
- ↑↓ move · ⏎ attach · s snooze · u wake · a alias · x stop · ⇥ peek · /…
+ j/k move  ⏎ attach  s snooze  u wake  a alias  x stop  p peek  ⇥ secti…
     TXT
     _(f.lines).must_equal expected
   end
@@ -73,7 +73,7 @@ describe ClaudeInbox::Renderer do
   it "lists settled rows when expanded" do
     f = renderer.frame(sections, width: 80, height: 30, now: now, settled_expanded: true)
     _(f.items.compact.map(&:key)).must_equal ["f23c8673", "823b882f", "dcbc1d98", "b0b18338", "fbf5253a", "b03695b1"]
-    _(f.lines.join("\n")).must_match(/app store release strategy\s+done 18d/)
+    _(f.lines.join("\n")).must_match(/app store release strategy\s+done · 18d/)
   end
 
   it "truncates long emoji names instead of slicing" do
@@ -104,8 +104,28 @@ describe ClaudeInbox::Renderer do
     _(f.lines[5]).wont_include "…"
   end
 
+  it "falls back to compact header chips when narrow, full when wide" do
+    _(renderer.frame(sections, width: 100, height: 10, now: now).lines.first).must_include "1 needs you"
+    _(renderer.frame(sections, width: 60, height: 10, now: now).lines.first).must_include "● 1  ✻ 1"
+  end
+
+  it "spins the working glyph with the tick" do
+    sec = Store.sectionize([session(id: "w", state: "working")], {}, now)
+    a = renderer.frame(sec, width: 60, height: 10, now: now, tick: 0).lines[3]
+    b = renderer.frame(sec, width: 60, height: 10, now: now, tick: 1).lines[3]
+    _(a).wont_equal b
+    _(a).must_include ClaudeInbox::Renderer::SPINNER[0]
+  end
+
+  it "renders an empty state" do
+    sec = Store.sectionize([], {}, now)
+    f = renderer.frame(sec, width: 60, height: 10, now: now)
+    _(f.lines.join("\n")).must_include "Nothing running."
+    _(f.items.compact).must_be_empty
+  end
+
   it "shows the command line in the footer" do
-    _(frame(command: "q").lines.last).must_match(/^ :q\s+$/)
+    _(frame(command: "q").lines.last).must_match(/^ :q▏\s+$/)
   end
 end
 

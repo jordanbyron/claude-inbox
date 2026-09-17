@@ -51,7 +51,8 @@ describe ClaudeInbox::Keymap do
     _(km.press("a", "a")).must_equal :alias
     _(km.press("x", "x")).must_equal :stop
     _(km.press("p", "p")).must_equal :toggle_peek
-    _(km.press(:tab, "\t")).must_equal :toggle_peek
+    _(km.press(:tab, "\t")).must_equal :next_section
+    _(km.press(:back_tab, "\e[Z")).must_equal :prev_section
     _(km.press("/", "/")).must_equal :filter
     _(km.press(":", ":")).must_equal :command
     _(km.press("q", "q")).must_equal :quit

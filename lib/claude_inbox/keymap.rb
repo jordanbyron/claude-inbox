@@ -25,7 +25,8 @@ module ClaudeInbox
       :return => :activate, :enter => :activate, "l" => :activate,
       "h" => :collapse,
       "s" => :snooze, "u" => :wake, "a" => :alias, "x" => :stop,
-      "R" => :refresh, :tab => :toggle_peek, "p" => :toggle_peek,
+      "R" => :refresh, "p" => :toggle_peek,
+      :tab => :next_section, :back_tab => :prev_section,
       "/" => :filter, ":" => :command, :escape => :escape,
       "q" => :quit, :ctrl_c => :quit
     }.freeze
@@ -41,7 +42,7 @@ module ClaudeInbox
       "peek" => :toggle_peek, "refresh" => :refresh
     }.freeze
 
-    HELP = "j/k move · gg/G top/bottom · ^d/^u page · ⏎/l attach · s snooze · u wake · a alias · x stop · p peek · za fold · / filter · :q quit"
+    HELP = "j/k move · gg/G top/bottom · ^d/^u page · ⏎/l attach · s snooze · u wake · a alias · x stop · p peek · tab section · za fold · / filter · :q quit"
 
     attr_reader :pending
 

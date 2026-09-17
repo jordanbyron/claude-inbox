@@ -28,10 +28,11 @@ Keyboard only, vim flavoured. Arrows work too.
 | `j` `k` | move down / up |
 | `gg` `G` | first / last row |
 | `Ctrl-d` `Ctrl-u` | half page down / up (`Ctrl-f` `Ctrl-b` full page) |
-| `Enter` `l` | attach (full-screen handoff; `←`, `Ctrl+Z` or `/exit` return here), or expand Settled |
+| `Enter` `l` | attach (full-screen handoff; `←` or `Ctrl+Z` return here), or expand Settled |
+| `Tab` `Shift+Tab` | jump to the next / previous section |
 | `h` | close the peek pane, else collapse Settled |
 | `za` `zo` `zc` | toggle / open / close the Settled fold |
-| `p` `Tab` | toggle the read-only peek pane |
+| `p` | toggle the read-only peek pane |
 | `J` `K` (`Ctrl-e` `Ctrl-y`) | scroll the peek pane |
 | `s` | snooze: `1` 15m · `2` 1h · `3` tomorrow 9am · `4` until woken |
 | `u` | wake a snoozed session now |
@@ -43,7 +44,19 @@ Keyboard only, vim flavoured. Arrows work too.
 | `q` | quit |
 
 Bindings live in `ClaudeInbox::Keymap`, a pure resolver with chord support
-that is unit tested on its own.
+that is unit tested on its own. A fast `Esc` followed by `:` is split back
+into two keys, since tty-reader would otherwise glue them together.
+
+### Why `←` comes back here and not to native agent view
+
+Inside an attached session, `←` on an empty prompt detaches. `claude attach`
+then execs itself in place as `claude agents`, so you would land in the native
+view and only get back to the inbox after quitting that. No flag or setting
+suppresses just that relaunch: the one switch that exists disables `attach`
+too. So the inbox watches its child's command line and, the moment it turns
+into the agents view, terminates it. Measured round trip is about 0.4s and the
+agents view never draws a frame. `Ctrl+Z` is handled locally by the attach
+client and returns directly with no trick needed.
 
 ## Rules
 
@@ -91,8 +104,13 @@ AgentsClient  →  Store  →  Renderer  →  App
   Feeding it through a screen grid produces readable text.
 - `claude logs` fails with "job not found" for a finished session whose process the
   supervisor has reaped. The peek pane shows a notice instead.
-- `claude attach --help` confirms `←` returns to agent view, `Ctrl+Z` drops to the
-  shell, and the session keeps running either way.
+- `claude attach --help` says `←` returns to agent view and `Ctrl+Z` drops to the
+  shell. Under the hood `←` makes the attach process exec `claude agents` in place,
+  same pid, using its own executable path, so a PATH shim never sees it.
+- `CLAUDE_CODE_DISABLE_AGENT_VIEW=1` disables `agents`, `attach` and `logs` alike.
+- Interactive sessions (a `claude` you started in a terminal yourself) appear in
+  the JSON with no `id` and cannot be attached, peeked or stopped from outside.
+  They show dimmed and are skipped by navigation.
 
 ## Development
 
@@ -101,4 +119,6 @@ bundle install
 bundle exec rake test        # minitest/spec, test/**/*_spec.rb
 bundle exec standardrb
 bin/claude-inbox-probe [fixture.json]   # print sections, no TUI
+CLAUDE_INBOX_STDERR=/tmp/err.log bin/claude-inbox   # crash traces off the alt screen
+CLAUDE_INBOX_DEBUG=1 bin/claude-inbox               # slow-frame notes in /tmp/inbox-debug.log
 ```

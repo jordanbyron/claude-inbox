@@ -30,9 +30,26 @@ module ClaudeInbox
       (status.success? && !out.empty?) ? out : nil
     end
 
+    # Poll interval for the agents-view watchdog below.
+    WATCH_INTERVAL = 0.05
+
     # Hands the terminal to the child; caller must have restored cooked mode.
     # Returns when the user detaches. Detaching never stops the session.
-    def attach(id) = system(@bin, "attach", id)
+    #
+    # Pressing ← inside an attached session detaches it and then `claude
+    # attach` execs itself in place as `claude agents` (same pid). There is
+    # no flag or env var that suppresses only that relaunch: the one switch
+    # that exists disables attach too. So we watch the child's command line
+    # and, the moment it becomes the agents view, terminate it. The user then
+    # lands back in the inbox instead of native agent view.
+    def attach(id)
+      pid = Process.spawn(@bin, "attach", id)
+      watchdog = Thread.new { kill_when_agents_view(pid) }
+      _, status = Process.wait2(pid)
+      status
+    ensure
+      watchdog&.kill
+    end
 
     def stop(id) = run(@bin, "stop", id)
 
@@ -50,6 +67,22 @@ module ClaudeInbox
     end
 
     private
+
+    def kill_when_agents_view(pid)
+      loop do
+        sleep WATCH_INTERVAL
+        cmd = `ps -o command= -p #{pid.to_i} 2>/dev/null`
+        break if cmd.empty?
+        next unless cmd.split[1] == "agents"
+        File.write("/tmp/inbox-debug.log", "#{Time.now} watchdog saw #{cmd.inspect}\n", mode: "a") if ENV["CLAUDE_INBOX_DEBUG"]
+        Process.kill("TERM", pid)
+        sleep 1
+        Process.kill("KILL", pid)
+        break
+      end
+    rescue Errno::ESRCH, Errno::ECHILD
+      nil
+    end
 
     def run(*argv)
       _out, err, status = Open3.capture3(*argv)

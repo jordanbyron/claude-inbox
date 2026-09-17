@@ -41,6 +41,7 @@ module ClaudeInbox
       @peek_on = false
       @peek_offset = 0
       @keymap = Keymap.new
+      @tick = 0
       @modal = nil
       @filter = nil
       @status = "starting…"
@@ -78,6 +79,7 @@ module ClaudeInbox
       @out.flush
       @input.raw! if @input.respond_to?(:raw!) && @input.tty?
       @restored = false
+      @size = nil
       @painter.invalidate
     end
 
@@ -91,8 +93,18 @@ module ClaudeInbox
       nil
     end
 
+    # Cached: querying the terminal can fall back to spawning `tput`, which
+    # is far too slow to do on every frame. Refreshed on WINCH and re-entry.
     def size
-      rows, cols = TTY::Screen.size
+      @size ||= measure_size
+    end
+
+    def measure_size
+      rows, cols = begin
+        (@out.respond_to?(:winsize) && @out.tty?) ? @out.winsize : TTY::Screen.size
+      rescue
+        TTY::Screen.size
+      end
       [[cols, 40].max, [rows, 8].max]
     end
 
@@ -135,15 +147,23 @@ module ClaudeInbox
         @peek.tick
         if @resize
           @resize = false
+          @size = nil
           @painter.invalidate
         end
         render
         key = @reader.read_keypress(echo: false, raw: false, nonblock: true)
-        handle_key(key) if key
+        split_keys(key).each { |k| handle_key(k) } if key
       end
     end
 
+    # CLAUDE_INBOX_DEBUG=1 appends slow-frame notes to /tmp/inbox-debug.log.
+    def debug(msg)
+      return unless ENV["CLAUDE_INBOX_DEBUG"]
+      File.write("/tmp/inbox-debug.log", "#{Time.now.strftime("%H:%M:%S.%L")} #{msg}\n", mode: "a")
+    end
+
     def render
+      t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       now = Time.now
       sections = filtered(@store.sections(now))
       width, height = size
@@ -156,15 +176,19 @@ module ClaudeInbox
         peek_lines = scrolled(peek_lines, height - 2)
         peek_title = row&.label || @selected
       end
+      @tick += 1
       frame = @renderer.frame(
         sections, width: width, height: height, now: now,
         selected: @selected, top: @top, settled_expanded: @settled_expanded,
-        peek: peek_lines, peek_title: peek_title, modal: modal_lines(width),
-        status: status_text(now), filter: @filter, command: @command, help: Keymap::HELP
+        peek: peek_lines, peek_title: peek_title, peek_subtitle: peek_subtitle(sections),
+        modal: modal_lines(width), status: status_text(now),
+        filter: @filter, filter_editing: @filter_editing, command: @command, tick: @tick / 2
       )
       @items = frame.items.compact
       @top = frame.top
       @painter.paint(frame.lines)
+      dt = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+      debug("render #{(dt * 1000).round}ms") if dt > 0.05
     end
 
     def status_text(now)
@@ -202,22 +226,30 @@ module ClaudeInbox
 
     def peek_body(row)
       return ["(nothing selected)"] unless row
+      @peek.cached(row.session.id) || ["(loading…)"]
+    end
+
+    def peek_subtitle(sections)
+      row = sections.all.find { |r| r.id == @selected }
+      return nil unless row
       s = row.session
-      head = [
-        "#{s.state}#{" · #{s.status}" if s.status}#{" · #{s.waiting_for}" if s.waiting_for}",
-        s.cwd.to_s,
-        "id #{s.id} · session #{s.session_id}",
-        "started #{s.started_at&.strftime("%Y-%m-%d %H:%M")}",
-        ""
-      ]
-      body = @peek.cached(s.id) || ["(loading…)"]
-      head + body
+      parts = [s.state, s.status, s.waiting_for, s.id, s.started_at&.strftime("started %b %-d %H:%M")].compact
+      parts.join(" · ")
     end
 
     # ----- keys -------------------------------------------------------------
 
     def key_name(key)
       @reader.console.keys[key] || key
+    end
+
+    # tty-reader glues ESC to whatever arrives within 100ms, so a fast
+    # "esc :q" comes in as one unknown key "\e:q". Vim hands make that
+    # constantly. Unknown ESC-prefixed strings become ESC + the rest.
+    def split_keys(key)
+      return [key] if key.size <= 1 || @reader.console.keys.key?(key)
+      return [key] unless key.start_with?("\e")
+      ["\e"] + key[1..].chars
     end
 
     def handle_key(key)
@@ -240,6 +272,8 @@ module ClaudeInbox
       when :half_page_up then move(-(page / 2))
       when :page_down then move(page)
       when :page_up then move(-page)
+      when :next_section then jump_section(1)
+      when :prev_section then jump_section(-1)
       when :peek_down then @peek_offset = [@peek_offset - 1, 0].max
       when :peek_up then @peek_offset += 1
       when :activate then activate
@@ -268,6 +302,34 @@ module ClaudeInbox
       @selected = keys[(idx + delta).clamp(0, keys.size - 1)]
       @peek_offset = 0
       @peek.want(@selected) if @selected.is_a?(String)
+    end
+
+    # Tab / Shift-Tab: first selectable row of the next / previous section.
+    def jump_section(dir)
+      sections = filtered(@store.sections)
+      firsts = []
+      sections.each_section do |name, rows|
+        if name == :settled && !@settled_expanded
+          firsts << :settled unless rows.empty?
+        else
+          first = rows.find(&:selectable?)
+          firsts << first.id if first
+        end
+      end
+      return if firsts.empty?
+      current = section_of(@selected, sections)
+      order = Store::SECTIONS.select { |k| firsts.any? { |f| section_of(f, sections) == k } }
+      idx = order.index(current) || -1
+      target = order[(idx + dir) % order.size]
+      @selected = firsts.find { |f| section_of(f, sections) == target }
+      @peek_offset = 0
+      @peek.want(@selected) if @selected.is_a?(String)
+    end
+
+    def section_of(key, sections)
+      return :settled if key == :settled
+      sections.each_section { |name, rows| return name if rows.any? { |r| r.id == key } }
+      nil
     end
 
     # vim-ish "h": close whatever is open, innermost first.
