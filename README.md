@@ -51,7 +51,7 @@ alternate scroll mode (`\e[?1007h`) — Apple Terminal does not.
 | `za` `zo` `zc` | toggle / open / close the Settled fold |
 | `p` | toggle the read-only peek pane |
 | `J` `K` (`Ctrl-e` `Ctrl-y`) | scroll the peek pane |
-| `n` | new session (full screen): multi-line prompt (`Enter` breaks a line, `Ctrl-S` starts), name, directory (`Tab` completes), model, effort, permissions, worktree — "default" choices show what your settings resolve to; attaches as soon as it starts |
+| `n` | new session (full screen): multi-line prompt (`Enter` breaks a line, `Ctrl-S` starts it, `Ctrl-O` starts and opens it), name, directory (`Tab` completes), model, effort, permissions, worktree — "default" choices show what your settings resolve to |
 | `t` | pin / unpin (parks it in Pinned at the top, regardless of state) |
 | `s` | snooze: `1` 15m · `2` 1h · `3` tomorrow 9am · `4` until woken |
 | `u` | wake a snoozed session now, or bring back one you settled |
@@ -71,12 +71,20 @@ into two keys, since tty-reader would otherwise glue them together.
 
 ### New session
 
-`n` opens a form. `Tab` / `Shift+Tab` move between fields, text fields take
-typing, choice fields cycle with `h` `l` or the arrows, `Enter` moves on
-(inside the prompt it breaks a line), `Ctrl-S` starts it, `Esc` cancels.
+`n` opens a form. `Tab` / `Shift+Tab` move between fields, `Enter` moves on
+(inside the prompt it breaks a line), `Esc` cancels. Choice fields cycle with
+`h` `l` or the arrows. Text fields are a real editor: `←` `→` move the cursor,
+`Ctrl-A` / `Ctrl-E` jump to the ends, `Backspace` and `Delete` cut either side
+of it, `Ctrl-W` takes the word before it and `Ctrl-U` / `Ctrl-K` everything
+before / after it.
+
+`Ctrl-S` starts the session and drops you back in the inbox; `Ctrl-O` starts it
+and hands the terminal straight over. Either way the new row is selected once
+it shows up. Terminals send the same byte for `Ctrl-S` and `Ctrl-Shift-S`, so
+the second start needs a letter of its own.
+
 The directory defaults to the selected row's. It runs `claude --bg "<prompt>"`
-with only the flags you changed from default, in that directory, and selects
-the new row once it shows up in the next poll.
+with only the flags you changed from default, in that directory.
 
 ### Why `←` comes back here and not to native agent view
 
