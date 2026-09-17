@@ -68,10 +68,11 @@ into two keys, since tty-reader would otherwise glue them together.
 ### New session
 
 `n` opens a form. `Tab` / `Shift+Tab` move between fields, text fields take
-typing, choice fields cycle with `h` `l` or the arrows, `Enter` starts it,
-`Esc` cancels. The directory defaults to the selected row's. It runs
-`claude --bg "<prompt>"` with only the flags you changed from default, in
-that directory, and selects the new row once it shows up in the next poll.
+typing, choice fields cycle with `h` `l` or the arrows, `Enter` moves on
+(inside the prompt it breaks a line), `Ctrl-S` starts it, `Esc` cancels.
+The directory defaults to the selected row's. It runs `claude --bg "<prompt>"`
+with only the flags you changed from default, in that directory, and selects
+the new row once it shows up in the next poll.
 
 ### Why `←` comes back here and not to native agent view
 

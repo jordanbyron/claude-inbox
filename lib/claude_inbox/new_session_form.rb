@@ -45,8 +45,7 @@ module ClaudeInbox
       when :down then move(1)
       when :back_tab, :up then move(-1)
       when :return, :enter
-        return submit unless focused.kind == :multiline
-        focused.value << "\n"
+        focused.kind == :multiline ? focused.value << "\n" : move(1)
       when :ctrl_u then focused.value = +"" if editable?
       when :backspace, :ctrl_h then focused.value.slice!(-1) if editable?
       when :left then cycle(-1)
@@ -98,8 +97,8 @@ module ClaudeInbox
     def footer
       return @p.red(@error) if @error
       return @p.dim("matches: ") + @candidates.join(@p.dim("  ")) if @candidates
-      keys = focused.kind == :multiline ? [["⏎", "newline"], ["^S", "start"]] : [["← → h l", "change"], ["⏎ ^S", "start"]]
-      keys += [["⇥", focused.key == :cwd ? "complete / next" : "next"], ["esc", "cancel"]]
+      keys = focused.kind == :multiline ? [["⏎", "newline"]] : [["← → h l", "change"], ["⏎", "next"]]
+      keys += [["^S", "start"], ["⇥", focused.key == :cwd ? "complete / next" : "next"], ["esc", "cancel"]]
       keys.map { |k, d| @p.cyan.bold(k) + " " + @p.dim(d) }.join("  ")
     end
 

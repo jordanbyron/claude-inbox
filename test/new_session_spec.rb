@@ -48,7 +48,7 @@ describe ClaudeInbox::NewSessionForm do
     2.times { form.press(:tab, "\t") }
     form.press(:ctrl_u, "\x15")
     type("/nope/nowhere")
-    _(form.press(:return, "\r")).must_equal :changed
+    _(form.press(:ctrl_s, "\x13")).must_equal :changed
     _(form.footer).must_include "no such directory"
     form.press(:tab, "\t")
     _(form.focused.key).must_equal :model
@@ -58,11 +58,20 @@ describe ClaudeInbox::NewSessionForm do
     type("do it")
     6.times { form.press(:tab, "\t") }
     form.press(:space, " ")
-    _(form.press(:return, "\r")).must_equal :submit
+    _(form.press(:ctrl_s, "\x13")).must_equal :submit
     v = form.values
     _(v[:worktree]).must_equal true
     _(v[:name]).must_be_nil
     _(v[:cwd]).must_equal Dir.pwd
+  end
+
+  it "moves to the next field on enter instead of starting" do
+    type("do it")
+    3.times { form.press(:tab, "\t") }
+    form.press("l", "l")
+    _(form.press(:return, "\r")).must_equal :changed
+    _(form.focused.key).must_equal :effort
+    _(form.values[:model]).must_equal "fable"
   end
 
   it "takes a multi-line prompt: enter breaks the line, ^S starts" do
