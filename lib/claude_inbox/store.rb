@@ -80,11 +80,13 @@ module ClaudeInbox
       end
     end
 
-    # Wake rule: snoozed session comes back when it needs you or the timer ran out.
+    # Wake rule: a snoozed session comes back when the timer ran out or when
+    # it *becomes* blocked/failed after being snoozed. A session that was
+    # already blocked when you snoozed it stays snoozed — that is the point.
     def self.woken?(session, entry, now_i)
       wake_at = entry["wake_at"]
       return false if wake_at.nil?
-      return true if session.needs_you?
+      return true if session.needs_you? && entry["state_since"].to_i > entry["snoozed_at"].to_i
       return false if wake_at == UNTIL_WOKEN
       wake_at.to_i <= now_i
     end

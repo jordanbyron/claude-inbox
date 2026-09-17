@@ -76,15 +76,28 @@ class StoreRulesTest < Minitest::Test
   end
 
   def test_snoozed_then_blocked_wakes
-    entries = {"a" => {"wake_at" => NOW.to_i + 900, "last_state" => "working"}}
+    entries = {"a" => {"wake_at" => NOW.to_i + 900, "snoozed_at" => NOW.to_i - 300, "last_state" => "working", "state_since" => NOW.to_i - 400}}
+    entries = Store.merge_entries(entries, [session(id: "a", state: "blocked")], NOW)
     sec = sections([session(id: "a", state: "blocked")], entries)
     assert_equal %w[a], ids(sec.needs_you)
     assert_empty sec.snoozed
+    refute entries["a"].key?("wake_at")
   end
 
   def test_snoozed_then_failed_wakes
-    entries = {"a" => {"wake_at" => Store::UNTIL_WOKEN}}
+    entries = {"a" => {"wake_at" => Store::UNTIL_WOKEN, "snoozed_at" => NOW.to_i - 300, "last_state" => "working", "state_since" => NOW.to_i - 400}}
+    entries = Store.merge_entries(entries, [session(id: "a", state: "failed")], NOW)
     assert_equal %w[a], ids(sections([session(id: "a", state: "failed")], entries).needs_you)
+  end
+
+  def test_snoozing_an_already_blocked_session_sticks
+    entries = {"a" => {"last_state" => "blocked", "state_since" => NOW.to_i - 600}}
+    entries = Store.merge_entries(entries, [session(id: "a", state: "blocked")], NOW)
+    store_entries = entries.merge("a" => entries["a"].merge("wake_at" => NOW.to_i + 900, "snoozed_at" => NOW.to_i))
+    later = Store.merge_entries(store_entries, [session(id: "a", state: "blocked")], NOW + 60)
+    sec = sections([session(id: "a", state: "blocked")], later, NOW + 60)
+    assert_equal %w[a], ids(sec.snoozed)
+    assert_empty sec.needs_you
   end
 
   def test_wake_at_elapsed_wakes
@@ -137,7 +150,7 @@ class StoreRulesTest < Minitest::Test
   end
 
   def test_merge_clears_snooze_when_blocked
-    entries = {"a" => {"wake_at" => Store::UNTIL_WOKEN, "last_state" => "working"}}
+    entries = {"a" => {"wake_at" => Store::UNTIL_WOKEN, "snoozed_at" => NOW.to_i - 10, "last_state" => "working", "state_since" => NOW.to_i - 20}}
     e = Store.merge_entries(entries, [session(id: "a", state: "blocked")], NOW)
     refute e["a"].key?("wake_at")
   end

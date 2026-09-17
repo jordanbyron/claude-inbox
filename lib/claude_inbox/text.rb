@@ -1,0 +1,74 @@
+# frozen_string_literal: true
+
+require "unicode/display_width"
+
+module ClaudeInbox
+  # Width-aware string helpers. Never use String#[] on user-facing text:
+  # session names carry emoji and glyphs that break byte/char slicing.
+  module Text
+    ANSI = /\e\[[0-9;?]*[A-Za-z]/
+    ELLIPSIS = "…"
+
+    module_function
+
+    def strip_ansi(s) = s.gsub(ANSI, "")
+
+    def width(s) = Unicode::DisplayWidth.of(strip_ansi(s))
+
+    # Truncate plain (uncoloured) text to `w` columns, appending an ellipsis
+    # when anything was cut. Handles wide glyphs by stepping grapheme by grapheme.
+    def truncate(s, w)
+      return "" if w <= 0
+      return s if width(s) <= w
+      out = +""
+      used = 0
+      limit = w - width(ELLIPSIS)
+      s.each_grapheme_cluster do |g|
+        gw = Unicode::DisplayWidth.of(g)
+        break if used + gw > limit
+        out << g
+        used += gw
+      end
+      out << ELLIPSIS
+    end
+
+    # First `n` columns of plain text, no ellipsis.
+    def take(s, n)
+      out = +""
+      used = 0
+      s.each_grapheme_cluster do |g|
+        gw = Unicode::DisplayWidth.of(g)
+        break if used + gw > n
+        out << g
+        used += gw
+      end
+      out
+    end
+
+    # Right-pad (ANSI-aware) to exactly `w` columns. Truncates if too long.
+    def pad(s, w)
+      cur = width(s)
+      if cur > w
+        s = truncate(strip_ansi(s), w)
+        cur = width(s)
+      end
+      s + (" " * (w - cur))
+    end
+
+    def rpad(s, w)
+      cur = width(s)
+      return truncate(strip_ansi(s), w) if cur > w
+      (" " * (w - cur)) + s
+    end
+
+    # "45s", "12m", "3h", "2d"
+    def age(seconds)
+      s = seconds.to_i
+      return "0s" if s <= 0
+      return "#{s}s" if s < 60
+      return "#{s / 60}m" if s < 3600
+      return "#{s / 3600}h" if s < 86_400
+      "#{s / 86_400}d"
+    end
+  end
+end

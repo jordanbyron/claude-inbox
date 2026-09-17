@@ -30,6 +30,10 @@ module ClaudeInbox
       (status.success? && !out.empty?) ? out : nil
     end
 
+    # Hands the terminal to the child; caller must have restored cooked mode.
+    # Returns when the user detaches. Detaching never stops the session.
+    def attach(id) = system(@bin, "attach", id)
+
     def stop(id) = run(@bin, "stop", id)
 
     def rm(id) = run(@bin, "rm", id)
@@ -65,6 +69,10 @@ module ClaudeInbox
     def list(**) = parse(File.read(@path))
 
     def logs(_id) = @logs
+
+    # Stand-in child: prints, waits for a line, exits — enough to prove the
+    # terminal round-trips through cooked mode and back.
+    def attach(id) = system("sh", "-c", "printf 'fake attach to %s\\npress enter to detach: ' \"$1\"; read -r _", "attach", id)
 
     def stop(_id) = true
 

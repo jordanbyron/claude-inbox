@@ -1,0 +1,15 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require_relative "../lib/claude_inbox"
+require_relative "../lib/claude_inbox/app"
+
+opts = {}
+if (i = ARGV.index("--fixture"))
+  opts[:client] = ClaudeInbox::FixtureClient.new(ARGV[i + 1], logs: File.binread(File.join(__dir__, "..", "test", "fixtures", "logs_raw.txt")))
+  opts[:store] = ClaudeInbox::Store.new(path: nil)
+end
+opts[:color] = false if ARGV.include?("--no-color")
+
+ClaudeInbox::App.new(**opts).run
