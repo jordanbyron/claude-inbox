@@ -352,7 +352,8 @@ module ClaudeInbox
       when :alias then open_alias_editor
       when :link_pr then open_pr_editor
       when :open_pr then open_pr
-      when :stop then open_stop_confirm
+      when :stop then open_confirm(:stop)
+      when :delete then open_confirm(:delete)
       when :refresh then Thread.new { poll_once }
       when :toggle_peek then toggle_peek
       when :new_session then open_new_session
@@ -470,9 +471,9 @@ module ClaudeInbox
       @modal = {kind: :snooze, id: @selected}
     end
 
-    def open_stop_confirm
+    def open_confirm(kind)
       return unless require_actionable
-      @modal = {kind: :stop, id: @selected}
+      @modal = {kind: kind, id: @selected}
     end
 
     def open_alias_editor
@@ -529,12 +530,15 @@ module ClaudeInbox
           SNOOZE_MENU.map { |k, label, _| "  #{k}  #{label}" } + ["", "  esc  cancel"]
         when :stop
           ["  Stop session #{@modal[:id]}?", "", "  y  stop it", "  esc  cancel"]
+        when :delete
+          ["  Delete session #{@modal[:id]}?", "  Its worktree and conversation", "  go with it.",
+            "", "  y  delete it", "  esc  keep it"]
         when :alias
           ["  New alias:", "", "  > #{@modal[:buffer]}_", "", "  ⏎ save · esc cancel"]
         when :pr
           ["  Pull request URL (empty clears):", "", "  > #{@modal[:buffer]}_", "", "  ⏎ save · esc cancel"]
         end
-      title = {snooze: " Snooze ", stop: " Stop ", alias: " Alias ", pr: " Pull request "}[@modal[:kind]]
+      title = {snooze: " Snooze ", stop: " Stop ", delete: " Delete ", alias: " Alias ", pr: " Pull request "}[@modal[:kind]]
       TTY::Box.frame(content.join("\n"), title: {top_left: title}, padding: [0, 1], width: [width - 4, 44].min)
         .split("\n")
     end
@@ -563,19 +567,35 @@ module ClaudeInbox
         when :backspace, :ctrl_h then @modal[:buffer] = @modal[:buffer][0...-1]
         else @modal[:buffer] << key if key.is_a?(String) && key.match?(/\A[[:print:]]\z/)
         end
-      when :stop
+      when :stop, :delete
         if key == "y"
-          id = @modal[:id]
+          kind, id = @modal.values_at(:kind, :id)
           @modal = nil
-          Thread.new do
-            @client.stop(id)
-            poll_once
-          rescue => e
-            @queue << [:error, e.message]
-          end
-        elsif name == :escape || key == "n"
+          (kind == :stop) ? stop_session(id) : delete_session(id)
+        elsif name == :escape || key == "n" || key == "q"
           @modal = nil
         end
+      end
+    end
+
+    def stop_session(id)
+      Thread.new do
+        @client.stop(id)
+        poll_once
+      rescue => e
+        @queue << [:error, e.message]
+      end
+    end
+
+    def delete_session(id)
+      notice("deleting #{id}…")
+      Thread.new do
+        @client.rm(id)
+        @store.forget(id)
+        notice("deleted #{id}")
+        poll_once
+      rescue => e
+        @queue << [:error, e.message]
       end
     end
 
