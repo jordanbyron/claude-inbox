@@ -26,8 +26,8 @@ module ClaudeInbox
     # Raw terminal replay for a session, or nil when the daemon can't serve it
     # (finished sessions whose process is gone report "job not found").
     def logs(id)
-      out, _err, status = Open3.capture3(@bin, "logs", id)
-      (status.success? && !out.empty?) ? out : nil
+      r = Subprocess.capture(@bin, "logs", id)
+      (r.success? && !r.out.empty?) ? r.out : nil
     end
 
     # Poll interval for the agents-view watchdog below.
