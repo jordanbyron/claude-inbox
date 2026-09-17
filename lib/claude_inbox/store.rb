@@ -36,7 +36,9 @@ module ClaudeInbox
 
       def state_since = entry && entry["state_since"]
 
-      def selectable? = session.actionable?
+      def key = session.key
+
+      def selectable? = !key.nil?
     end
 
     # ----- pure rules -------------------------------------------------------
@@ -111,7 +113,7 @@ module ClaudeInbox
       sessions.each do |s|
         e = s.id && entries[s.id]
         section =
-          if s.interactive? then :working
+          if s.interactive? then s.needs_you? ? :needs_you : :working
           elsif snoozed?(s, e, now_i) then :snoozed
           elsif s.needs_you? then :needs_you
           elsif settled?(s, e, now_i) then :settled

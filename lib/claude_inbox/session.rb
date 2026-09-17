@@ -3,6 +3,11 @@
 module ClaudeInbox
   STATES = %w[working blocked done failed stopped].freeze
 
+  # Interactive sessions report only `status`; fold it into the same
+  # vocabulary background sessions use. An idle terminal is a finished turn,
+  # a waiting one needs you, a busy one is working.
+  INTERACTIVE_STATE = {"busy" => "working", "waiting" => "blocked", "idle" => "done"}.freeze
+
   # One entry from `claude agents --json`. Plain value object; no behaviour
   # beyond parsing and a few predicates.
   Session = Struct.new(
@@ -31,9 +36,14 @@ module ClaudeInbox
     # Only background sessions carry an id, and every action needs one.
     def actionable? = background? && !id.nil?
 
-    def needs_you? = %w[blocked failed].include?(state)
+    def effective_state = state || INTERACTIVE_STATE[status] || "done"
 
-    def finished? = %w[done stopped].include?(state)
+    # Selection handle: short id for background sessions, the UUID otherwise.
+    def key = id || session_id
+
+    def needs_you? = %w[blocked failed].include?(effective_state)
+
+    def finished? = %w[done stopped].include?(effective_state)
 
     def alive? = !pid.nil?
 

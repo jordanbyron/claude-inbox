@@ -18,10 +18,19 @@ describe Store do
       _(ids(sec.working)).must_equal %w[c]
     end
 
-    it "shows interactive rows in Working but never selects them" do
-      sec = sections([session(id: nil, kind: "interactive", state: nil, status: "busy")])
+    it "shows a busy terminal in Working, selectable but not actionable" do
+      sec = sections([session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "uuid")])
       _(sec.working.size).must_equal 1
-      _(sec.working.first).wont_be :selectable?
+      _(sec.working.first).must_be :selectable?
+      _(sec.working.first.session).wont_be :actionable?
+      _(sec.working.first.session.effective_state).must_equal "working"
+    end
+
+    it "never settles or snoozes a terminal, even when idle for ages" do
+      s = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "uuid", started_at: now - 86_400)
+      sec = sections([s], {}, now)
+      _(sec.working.map(&:key)).must_equal %w[uuid]
+      _(sec.settled).must_be_empty
     end
 
     it "keeps a freshly finished session in Working" do

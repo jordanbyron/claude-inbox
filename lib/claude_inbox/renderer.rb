@@ -13,7 +13,7 @@ module ClaudeInbox
     Item = Struct.new(:kind, :row, :section) do
       def id = row&.id
 
-      def key = (kind == :settled_toggle) ? :settled : id
+      def key = (kind == :settled_toggle) ? :settled : row&.key
     end
 
     Frame = Struct.new(:lines, :items, :top)
@@ -96,14 +96,14 @@ module ClaudeInbox
 
     def header_chips(sections, compact:)
       n = sections.needs_you.size
-      w = sections.working.count { |r| !r.session.interactive? }
-      i = sections.working.count { |r| r.session.interactive? }
+      w = sections.working.count { |r| r.session.effective_state == "working" }
+      i = sections.all.count { |r| r.session.interactive? }
       z = sections.snoozed.size
       d = sections.settled.size
       chips = []
       chips << @p.red.bold(compact ? "● #{n}" : "● #{n} need#{"s" if n == 1} you") if n > 0
       chips << @p.yellow(compact ? "✻ #{w}" : "✻ #{w} working") if w > 0
-      chips << @p.dim(compact ? "○ #{i}" : "○ #{i} interactive") if i > 0
+      chips << @p.dim(compact ? "○ #{i}" : "○ #{i} terminal#{"s" if i > 1}") if i > 0
       chips << @p.magenta(compact ? "z #{z}" : "z #{z} snoozed") if z > 0
       chips << @p.dim(compact ? "∙ #{d}" : "∙ #{d} settled") if d > 0
       chips << @p.dim("nothing running") if sections.all.empty?
@@ -181,11 +181,11 @@ module ClaudeInbox
 
     def row_lines(row, section, selected, width, now, tick)
       s = row.session
-      sel = row.selectable? && selected == row.id
+      sel = row.selectable? && selected == row.key
       marker = sel ? @p.cyan.bold("▶") : " "
       glyph = glyph_for(s, section, tick)
       project = @p.cyan(s.project)
-      project = @p.dim(s.project) if section == :settled || s.interactive?
+      project = @p.dim(s.project) if section == :settled
       meta = meta_for(row, section, now)
 
       # " " marker " " glyph " " label "  " meta "  " project
@@ -195,15 +195,15 @@ module ClaudeInbox
       label = style_label(label, row, section, sel)
       first = " #{marker} #{glyph} " + Text.pad(label, label_w) + "  " + meta + "  " + project
 
-      return [Text.pad(first, width)] unless %i[needs_you working].include?(section) && !s.interactive?
+      return [Text.pad(first, width)] unless %i[needs_you working].include?(section)
 
       detail = @p.dim("       ↳ #{short_path(s.cwd)}")
       [Text.pad(first, width), Text.pad(detail, width)]
     end
 
     def style_label(label, row, section, sel)
-      s = row.session
-      if s.interactive? || section == :settled then @p.dim(label)
+      row.session
+      if section == :settled then @p.dim(label)
       elsif row.alias_name then sel ? @p.bold.italic(label) : @p.italic(label)
       elsif sel then @p.bold(label)
       else label
@@ -211,13 +211,12 @@ module ClaudeInbox
     end
 
     def glyph_for(s, section, tick)
-      return @p.dim("○") if s.interactive?
       return @p.magenta("z") if section == :snoozed
       return @p.dim("∙") if section == :settled
-      case s.state
+      case s.effective_state
       when "blocked" then @p.red.bold("●")
       when "failed" then @p.red.bold("✗")
-      when "working" then (s.status == "waiting") ? @p.yellow("◐") : @p.yellow(SPINNER[tick % SPINNER.size])
+      when "working" then @p.yellow(SPINNER[tick % SPINNER.size])
       when "done" then @p.green("✓")
       when "stopped" then @p.dim("■")
       else @p.dim("?")
@@ -233,21 +232,23 @@ module ClaudeInbox
       when :settled
         @p.dim("#{s.state} · #{Text.age(now.to_i - row.state_since.to_i)}")
       else
-        return @p.dim("#{s.status || "interactive"} · #{Text.age(now - s.started_at)}") if s.interactive?
+        if s.interactive?
+          return state_badge(s) + @p.dim(" · your terminal · #{Text.age(now - s.started_at)}")
+        end
         age = row.state_since ? @p.dim(" · " + Text.age(now.to_i - row.state_since.to_i)) : ""
         state_badge(s) + age
       end
     end
 
     def state_badge(s)
-      case s.state
+      case s.effective_state
       when "blocked"
         detail = s.waiting_for ? ": #{s.waiting_for}" : ""
         @p.red.bold("needs you#{detail}")
       when "failed" then @p.red.bold("failed")
       when "working"
         (s.status == "waiting") ? @p.yellow("waiting#{": #{s.waiting_for}" if s.waiting_for}") : @p.yellow("working")
-      when "done" then @p.green("done") + (s.alive? ? @p.dim(" · #{s.status}") : "")
+      when "done" then @p.green("done") + ((s.alive? && !s.interactive?) ? @p.dim(" · #{s.status}") : "")
       when "stopped" then @p.dim("stopped")
       else @p.dim(s.state.to_s)
       end
@@ -265,7 +266,8 @@ module ClaudeInbox
       out = [@p.inverse(bar)]
       out << Text.pad(" " + @p.dim(subtitle.to_s), width) if subtitle
       body_h = height - out.size
-      lines.last(body_h).each { |l| out << Text.pad(" " + l, width) }
+      wrapped = lines.flat_map { |l| Text.wrap(l, width - 1) }
+      wrapped.last(body_h).each { |l| out << Text.pad(" " + l, width) }
       out
     end
 

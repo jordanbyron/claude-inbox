@@ -15,7 +15,10 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
 
 1. **Needs you** — `blocked` or `failed`.
 2. **Working** — `working`, plus recently finished sessions that have not settled yet,
-   plus interactive sessions (dimmed, not selectable: they have no id).
+   plus your own terminal sessions. A terminal reports only `status`, so it is
+   mapped: busy is working, idle is done, waiting needs you. Terminals never
+   settle and cannot be attached, peeked, stopped or snoozed from outside; you
+   can land on them, and Enter tells you why nothing happens.
 3. **Snoozed** — sorted by wake time; parked ("until I wake it") entries last.
 4. **Settled** — `done`/`stopped` and quiet for 10 minutes. Collapsed; Enter expands.
 
@@ -109,8 +112,8 @@ AgentsClient  →  Store  →  Renderer  →  App
   same pid, using its own executable path, so a PATH shim never sees it.
 - `CLAUDE_CODE_DISABLE_AGENT_VIEW=1` disables `agents`, `attach` and `logs` alike.
 - Interactive sessions (a `claude` you started in a terminal yourself) appear in
-  the JSON with no `id` and cannot be attached, peeked or stopped from outside.
-  They show dimmed and are skipped by navigation.
+  the JSON with no `id` and no `state`, only `status`, and cannot be attached,
+  peeked or stopped from outside.
 
 ## Development
 

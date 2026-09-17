@@ -24,6 +24,8 @@ describe ClaudeInbox::AgentsClient do
     _(s.id).must_be_nil
     _(s.state).must_be_nil
     _(s).wont_be :actionable?
+    _(s.key).must_equal "4a93393d-1c06-57da-9fb8-12f5b1535d95"
+    _(s.effective_state).must_equal "working"
     _(s.display_name).must_equal "claude-inbox-38"
   end
 

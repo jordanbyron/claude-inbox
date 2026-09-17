@@ -17,6 +17,12 @@ describe Text do
     _(Text.pad(s, 5)).must_equal s + "  "
   end
 
+  it "wraps on display width" do
+    _(Text.wrap("the quick brown fox", 9)).must_equal ["the quick", "brown fox"]
+    _(Text.wrap("abcdefghij", 4)).must_equal %w[abcd efgh ij]
+    _(Text.wrap("short", 10)).must_equal ["short"]
+  end
+
   it "humanises ages" do
     _(Text.age(45)).must_equal "45s"
     _(Text.age(12 * 60 + 5)).must_equal "12m"
@@ -49,7 +55,8 @@ describe ClaudeInbox::Renderer do
        ↳ ~/code/comma3                                                  
                                                                         
  ▎ WORKING ───────────────────────────────────────────────────────── 2  
-   ○ claude-inbox-38                             busy · 4m  claude-inbox
+   ⠋ claude-inbox-38          working · your terminal · 4m  claude-inbox
+       ↳ ~/code/claude-inbox                                            
    ✓ comma3x led flashing screen unresponsive   done · idle · 0s  comma3
        ↳ ~/code/comma3                                                  
                                                                         
@@ -60,19 +67,29 @@ describe ClaudeInbox::Renderer do
                                                                         
                                                                         
                                                                         
-                                                                        
  j/k move  ⏎ attach  s snooze  u wake  a alias  x stop  p peek  ⇥ secti…
     TXT
     _(f.lines).must_equal expected
   end
 
-  it "skips interactive rows in items and includes the settled toggle" do
-    _(frame.items.compact.map(&:key)).must_equal ["f23c8673", "823b882f", :settled]
+  it "selects interactive rows by session uuid and includes the settled toggle" do
+    _(frame.items.compact.map(&:key)).must_equal ["f23c8673", "4a93393d-1c06-57da-9fb8-12f5b1535d95", "823b882f", :settled]
+  end
+
+  it "renders an idle terminal as done and a waiting one as needing you" do
+    idle = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u1", name: "shell")
+    waiting = session(id: nil, kind: "interactive", state: nil, status: "waiting", waiting_for: "permission prompt", session_id: "u2", name: "shell2")
+    sec = Store.sectionize([idle, waiting], {}, now)
+    _(sec.needs_you.map(&:key)).must_equal %w[u2]
+    _(sec.working.map(&:key)).must_equal %w[u1]
+    text = renderer.frame(sec, width: 90, height: 12, now: now).lines.join("\n")
+    _(text).must_match(/✓ shell\s+done · your terminal/)
+    _(text).must_match(/● shell2\s+needs you: permission prompt · your terminal/)
   end
 
   it "lists settled rows when expanded" do
     f = renderer.frame(sections, width: 80, height: 30, now: now, settled_expanded: true)
-    _(f.items.compact.map(&:key)).must_equal ["f23c8673", "823b882f", "dcbc1d98", "b0b18338", "fbf5253a", "b03695b1"]
+    _(f.items.compact.map(&:key)).must_equal ["f23c8673", "4a93393d-1c06-57da-9fb8-12f5b1535d95", "823b882f", "dcbc1d98", "b0b18338", "fbf5253a", "b03695b1"]
     _(f.lines.join("\n")).must_match(/app store release strategy\s+done · 18d/)
   end
 

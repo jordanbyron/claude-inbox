@@ -61,6 +61,26 @@ module ClaudeInbox
       (" " * (w - cur)) + s
     end
 
+    # Greedy word wrap on display width. Words wider than `w` are split.
+    def wrap(s, w)
+      return [s] if w <= 0 || width(s) <= w
+      lines = []
+      line = +""
+      s.split(/(?<= )/).each do |word|
+        if width(line) + width(word.rstrip) > w && !line.empty?
+          lines << line.rstrip
+          line = +""
+        end
+        while width(word) > w
+          lines << take(word, w)
+          word = word[take(word, w).size..]
+        end
+        line << word
+      end
+      lines << line.rstrip unless line.empty?
+      lines
+    end
+
     # "45s", "12m", "3h", "2d"
     def age(seconds)
       s = seconds.to_i

@@ -171,7 +171,7 @@ module ClaudeInbox
       peek_lines = nil
       peek_title = nil
       if @peek_on && @selected.is_a?(String)
-        row = sections.all.find { |r| r.id == @selected }
+        row = sections.all.find { |r| r.key == @selected }
         peek_lines = peek_body(row)
         peek_lines = scrolled(peek_lines, height - 2)
         peek_title = row&.label || @selected
@@ -192,6 +192,7 @@ module ClaudeInbox
     end
 
     def status_text(now)
+      return @notice[0] if @notice && now < @notice[1]
       return "⚠ #{@error}" if @error
       return "polling…" unless @last_poll
       "⟳ #{Text.age(now - @last_poll)} ago"
@@ -208,8 +209,29 @@ module ClaudeInbox
     def ensure_selection(sections)
       keys = selectable_keys(sections)
       return if keys.include?(@selected)
-      @selected = keys.first
-      @peek.want(@selected) if @selected.is_a?(String)
+      select(keys.first)
+    end
+
+    def select(key)
+      @selected = key
+      @peek_offset = 0
+      @peek.want(key) if actionable_id?(key)
+    end
+
+    # True when the selection is a background session we can act on.
+    def actionable_id?(key)
+      key.is_a?(String) && @store.sessions.any? { |s| s.id == key }
+    end
+
+    def selected_session
+      @store.sessions.find { |s| s.key == @selected }
+    end
+
+    # Guard for attach/snooze/stop/alias: refuse politely on a terminal row.
+    def require_actionable
+      return true if actionable_id?(@selected)
+      notice("that's your own terminal — switch to that window") if selected_session&.interactive?
+      false
     end
 
     def selectable_keys(sections)
@@ -218,7 +240,7 @@ module ClaudeInbox
         if name == :settled && !@settled_expanded
           keys << :settled unless rows.empty?
         else
-          rows.each { |r| keys << r.id if r.selectable? }
+          rows.each { |r| keys << r.key if r.selectable? }
         end
       end
       keys
@@ -226,14 +248,25 @@ module ClaudeInbox
 
     def peek_body(row)
       return ["(nothing selected)"] unless row
+      return interactive_note(row.session) if row.session.interactive?
       @peek.cached(row.session.id) || ["(loading…)"]
     end
 
+    INTERACTIVE_NOTE = "This is a claude you opened in a terminal yourself. The daemon can't attach to it, read its output, or stop it from outside. Switch to that window."
+
+    def interactive_note(s)
+      [INTERACTIVE_NOTE, "", "pid #{s.pid} · #{s.cwd}", "session #{s.session_id}"]
+    end
+
+    def notice(msg)
+      @notice = [msg, Time.now + 4]
+    end
+
     def peek_subtitle(sections)
-      row = sections.all.find { |r| r.id == @selected }
+      row = sections.all.find { |r| r.key == @selected }
       return nil unless row
       s = row.session
-      parts = [s.state, s.status, s.waiting_for, s.id, s.started_at&.strftime("started %b %-d %H:%M")].compact
+      parts = [s.effective_state, s.status, s.waiting_for, s.id, s.started_at&.strftime("started %b %-d %H:%M")].compact
       parts.join(" · ")
     end
 
@@ -299,9 +332,7 @@ module ClaudeInbox
       return if @items.nil? || @items.empty?
       keys = selectable_keys(filtered(@store.sections))
       idx = keys.index(@selected) || 0
-      @selected = keys[(idx + delta).clamp(0, keys.size - 1)]
-      @peek_offset = 0
-      @peek.want(@selected) if @selected.is_a?(String)
+      select(keys[(idx + delta).clamp(0, keys.size - 1)])
     end
 
     # Tab / Shift-Tab: first selectable row of the next / previous section.
@@ -321,14 +352,12 @@ module ClaudeInbox
       order = Store::SECTIONS.select { |k| firsts.any? { |f| section_of(f, sections) == k } }
       idx = order.index(current) || -1
       target = order[(idx + dir) % order.size]
-      @selected = firsts.find { |f| section_of(f, sections) == target }
-      @peek_offset = 0
-      @peek.want(@selected) if @selected.is_a?(String)
+      select(firsts.find { |f| section_of(f, sections) == target })
     end
 
     def section_of(key, sections)
       return :settled if key == :settled
-      sections.each_section { |name, rows| return name if rows.any? { |r| r.id == key } }
+      sections.each_section { |name, rows| return name if rows.any? { |r| r.key == key } }
       nil
     end
 
@@ -349,20 +378,18 @@ module ClaudeInbox
     end
 
     def activate
-      case @selected
-      when :settled then @settled_expanded = true
-      when String then attach(@selected)
-      end
+      return @settled_expanded = true if @selected == :settled
+      attach(@selected) if require_actionable
     end
 
     def toggle_peek
       @peek_on = !@peek_on
-      @peek.want(@selected) if @peek_on && @selected.is_a?(String)
+      @peek.want(@selected) if @peek_on && actionable_id?(@selected)
       @painter.invalidate
     end
 
     def wake_selected
-      @store.wake(@selected) if @selected.is_a?(String)
+      @store.wake(@selected) if require_actionable
     end
 
     # ----- attach handoff ---------------------------------------------------
@@ -382,17 +409,17 @@ module ClaudeInbox
     # ----- modals -----------------------------------------------------------
 
     def open_snooze_menu
-      return unless @selected.is_a?(String)
+      return unless require_actionable
       @modal = {kind: :snooze, id: @selected}
     end
 
     def open_stop_confirm
-      return unless @selected.is_a?(String)
+      return unless require_actionable
       @modal = {kind: :stop, id: @selected}
     end
 
     def open_alias_editor
-      return unless @selected.is_a?(String)
+      return unless require_actionable
       current = @store.entry(@selected)&.dig("alias") || ""
       @modal = {kind: :alias, id: @selected, buffer: +current}
     end
