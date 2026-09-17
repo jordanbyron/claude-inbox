@@ -135,7 +135,7 @@ module ClaudeInbox
     end
 
     def default_text(f)
-      resolved = {model: defaults.model, effort: defaults.effort, permission_mode: defaults.permission_mode}[f.key]
+      resolved = defaults[f.key]
       resolved ? "#{resolved} (settings)" : "auto (cli default)"
     end
 
