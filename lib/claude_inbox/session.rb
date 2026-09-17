@@ -12,7 +12,7 @@ module ClaudeInbox
   # beyond parsing and a few predicates.
   Session = Struct.new(
     :id, :cwd, :kind, :started_at, :session_id, :name,
-    :state, :pid, :status, :waiting_for, :origin, :prs
+    :state, :pid, :status, :waiting_for, :origin, :prs, :job_state
   ) do
     def self.from_hash(h)
       new(
@@ -52,6 +52,10 @@ module ClaudeInbox
 
     # Selection handle: short id for background sessions, the UUID otherwise.
     def key = id || session_id
+
+    # "working" from the daemon means either the agent is thinking or it has
+    # stopped and is waiting on work it started. JobState tells them apart.
+    def waiting_on_work? = effective_state == "working" && job_state&.waiting_on_work? == true
 
     def needs_you? = %w[blocked failed].include?(effective_state)
 

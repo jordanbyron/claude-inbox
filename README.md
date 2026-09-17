@@ -35,6 +35,16 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
 A row with a pull request shows it after the state: `#885 open`, `#885 draft`,
 `#885 merged`, `#885 closed`. `o` opens it in the browser.
 
+`working` from the daemon covers two situations, and the row says which. A
+spinner and `working` mean the agent is thinking. A steady `◌` and `idle · 1
+shell` mean the agent has stopped and is only waiting on work it started — a
+`--watch` shell, a sub-agent — which is why a session with nothing left to do
+can sit there for an hour. Whatever the agent is up to, the open work is named
+next to the state: `working · 2 agents`, `idle · 1 shell`. The count comes from
+the session's own job file, which `claude agents --json` does not expose; the
+inbox still takes the state itself from the daemon, the only thing that knows
+whether a session is alive.
+
 ## Keys
 
 Keyboard only, vim flavoured. Arrows work too. The wheel moves the selection
