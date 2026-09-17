@@ -203,13 +203,17 @@ module ClaudeInbox
       sel = row.selectable? && selected == row.key
       marker = sel ? @p.cyan.bold("▶") : " "
       glyph = glyph_for(s, section, tick)
-      project = @p.cyan(s.project)
-      project = @p.dim(s.project) if section == :settled
       meta = meta_for(row, section, now)
 
       # " " marker " " glyph " " label "  " meta "  " project
-      fixed = 1 + 1 + 1 + 1 + 1 + 2 + Text.width(meta) + 2 + Text.width(project)
-      label_w = [width - fixed, 8].max
+      chrome = 1 + 1 + 1 + 1 + 1 + 2 + Text.width(meta) + 2
+      # Project is only cut once the label has given up all its space too,
+      # so the row can never exceed `width` and fall into Text.pad's blind
+      # tail-chop (which used to land mid-project-name with no ellipsis).
+      project_text = Text.truncate(s.project, [width - chrome, 0].max)
+      project = (section == :settled) ? @p.dim(project_text) : @p.cyan(project_text)
+
+      label_w = [width - chrome - Text.width(project_text), 0].max
       label = Text.truncate(row.label, label_w)
       label = style_label(label, row, section, sel)
       first = " #{marker} #{glyph} " + Text.pad(label, label_w) + "  " + meta + "  " + project
