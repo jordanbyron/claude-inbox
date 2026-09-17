@@ -67,7 +67,7 @@ describe ClaudeInbox::Renderer do
                                                                         
                                                                         
                                                                         
- j/k move  ⏎ attach  n new  P pin  s snooze  u wake  a alias  x stop  p…
+ j/k move  ⏎ attach  n new  t pin  s snooze  u wake  a alias  o PR  x s…
     TXT
     _(f.lines).must_equal expected
   end

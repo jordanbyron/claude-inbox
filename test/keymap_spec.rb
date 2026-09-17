@@ -25,7 +25,7 @@ describe ClaudeInbox::Keymap do
   it "drops a chord on an unknown second key" do
     km.press("g", "g")
     _(km.press("x", "x")).must_be_nil
-    _(km.press("x", "x")).must_equal :stop
+    _(km.press("x", "x")).must_equal :settle
   end
 
   it "expires a pending chord after the timeout" do
@@ -49,10 +49,13 @@ describe ClaudeInbox::Keymap do
     _(km.press("s", "s")).must_equal :snooze
     _(km.press("u", "u")).must_equal :wake
     _(km.press("a", "a")).must_equal :alias
-    _(km.press("x", "x")).must_equal :stop
+    _(km.press("x", "x")).must_equal :settle
+    _(km.press("X", "X")).must_equal :stop
     _(km.press("p", "p")).must_equal :toggle_peek
     _(km.press("n", "n")).must_equal :new_session
-    _(km.press("P", "P")).must_equal :toggle_pin
+    _(km.press("t", "t")).must_equal :toggle_pin
+    _(km.press("o", "o")).must_equal :open_pr
+    _(km.press("P", "P")).must_equal :link_pr
     _(km.press(:tab, "\t")).must_equal :next_section
     _(km.press(:back_tab, "\e[Z")).must_equal :prev_section
     _(km.press("/", "/")).must_equal :filter
@@ -73,6 +76,7 @@ describe ClaudeInbox::Keymap do
     _(ClaudeInbox::Keymap.command(" wq ")).must_equal :quit
     _(ClaudeInbox::Keymap.command("peek")).must_equal :toggle_peek
     _(ClaudeInbox::Keymap.command("new")).must_equal :new_session
+    _(ClaudeInbox::Keymap.command("pr")).must_equal :open_pr
     _(ClaudeInbox::Keymap.command("pin")).must_equal :toggle_pin
     _(ClaudeInbox::Keymap.command("nope")).must_be_nil
   end
