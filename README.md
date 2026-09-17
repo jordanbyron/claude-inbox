@@ -13,8 +13,9 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
 
 ## Sections
 
-1. **Needs you** — `blocked` or `failed`.
-2. **Working** — `working`, plus recently finished sessions that have not settled yet,
+1. **Pinned** — parked at the top by hand, regardless of state. `P` toggles it.
+2. **Needs you** — `blocked` or `failed`.
+3. **Working** — `working`, plus recently finished sessions that have not settled yet,
    plus interactive sessions. Those report only `status`, so it is mapped: busy
    is working, idle is done, waiting needs you. The JSON calls both a terminal
    you opened yourself and a Remote Control worker "interactive"; the client
@@ -23,8 +24,8 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
    like any other row. A terminal you are sitting in never settles. Neither
    can be attached, peeked or stopped from outside; you can land on them, and
    Enter tells you why nothing happens.
-3. **Snoozed** — sorted by wake time; parked ("until I wake it") entries last.
-4. **Settled** — `done`/`stopped` and quiet for 10 minutes. Collapsed; Enter expands.
+4. **Snoozed** — sorted by wake time; parked ("until I wake it") entries last.
+5. **Settled** — `done`/`stopped` and quiet for 10 minutes. Collapsed; Enter expands.
 
 ## Keys
 
@@ -42,6 +43,7 @@ Keyboard only, vim flavoured. Arrows work too.
 | `p` | toggle the read-only peek pane |
 | `J` `K` (`Ctrl-e` `Ctrl-y`) | scroll the peek pane |
 | `n` | new session: prompt, name, directory, model, effort, permissions, worktree |
+| `P` | pin / unpin (parks it in Pinned at the top, regardless of state) |
 | `s` | snooze: `1` 15m · `2` 1h · `3` tomorrow 9am · `4` until woken |
 | `u` | wake a snoozed session now |
 | `a` | set a local alias (never touches the real session name) |
@@ -91,7 +93,7 @@ after about an hour idle, which is longer than the settle window.
 ## State
 
 `~/.config/claude-inbox/state.json`, keyed by session id, atomic writes.
-Holds `wake_at`, `snoozed_at`, `alias`, `last_state`, `state_since`, `last_seen`.
+Holds `wake_at`, `snoozed_at`, `alias`, `pinned`, `pinned_at`, `last_state`, `state_since`, `last_seen`.
 Entries not seen in a poll for 7 days are pruned.
 
 ## Layout

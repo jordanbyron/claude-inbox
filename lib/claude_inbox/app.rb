@@ -334,6 +334,7 @@ module ClaudeInbox
       when :fold_toggle then @settled_expanded = !@settled_expanded
       when :snooze then open_snooze_menu
       when :wake then wake_selected
+      when :toggle_pin then toggle_pin_selected
       when :alias then open_alias_editor
       when :stop then open_stop_confirm
       when :refresh then Thread.new { poll_once }
@@ -409,6 +410,10 @@ module ClaudeInbox
 
     def wake_selected
       @store.wake(@selected) if require_storable
+    end
+
+    def toggle_pin_selected
+      @store.toggle_pin(@selected) if require_storable
     end
 
     # ----- attach handoff ---------------------------------------------------

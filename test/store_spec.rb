@@ -58,6 +58,43 @@ describe Store do
     end
   end
 
+  describe "pinning" do
+    it "parks a pinned session at the top regardless of state" do
+      entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i, "last_state" => "working"}}
+      sec = sections([session(id: "a")], entries)
+      _(ids(sec.pinned)).must_equal %w[a]
+      _(sec.working).must_be_empty
+    end
+
+    it "overrides needs_you, snoozed and settled" do
+      entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i, "last_state" => "blocked"}}
+      _(ids(sections([session(id: "a", state: "blocked")], entries).pinned)).must_equal %w[a]
+
+      entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i, "wake_at" => now.to_i + 900, "last_state" => "working"}}
+      _(ids(sections([session(id: "a")], entries).pinned)).must_equal %w[a]
+
+      entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i, "last_state" => "done", "state_since" => now.to_i - Store::SETTLE_AFTER - 1}}
+      _(ids(sections([session(id: "a", state: "done")], entries).pinned)).must_equal %w[a]
+    end
+
+    it "sorts Pinned with the most recently pinned first" do
+      entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i - 60}, "b" => {"pinned" => true, "pinned_at" => now.to_i}}
+      _(ids(sections(%w[a b].map { |i| session(id: i) }, entries).pinned)).must_equal %w[b a]
+    end
+
+    it "toggle_pin sets and clears pinned via the store" do
+      clock = -> { now }
+      Dir.mktmpdir do |dir|
+        store = Store.new(path: File.join(dir, "state.json"), clock: clock)
+        store.update([session(id: "a")])
+        store.toggle_pin("a")
+        _(store.sections.pinned.map(&:id)).must_equal %w[a]
+        store.toggle_pin("a")
+        _(store.sections.pinned).must_be_empty
+      end
+    end
+  end
+
   describe "settle rule" do
     it "settles done + quiet" do
       entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - Store::SETTLE_AFTER - 1}}

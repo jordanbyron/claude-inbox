@@ -19,6 +19,7 @@ module ClaudeInbox
     Frame = Struct.new(:lines, :items, :top)
 
     SECTION_TITLES = {
+      pinned: "PINNED",
       needs_you: "NEEDS YOU",
       working: "WORKING",
       snoozed: "SNOOZED",
@@ -28,7 +29,7 @@ module ClaudeInbox
     SPINNER = %w[⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏].freeze
 
     KEYS = [
-      ["j/k", "move"], ["⏎", "attach"], ["n", "new"], ["s", "snooze"], ["u", "wake"],
+      ["j/k", "move"], ["⏎", "attach"], ["n", "new"], ["P", "pin"], ["s", "snooze"], ["u", "wake"],
       ["a", "alias"], ["x", "stop"], ["p", "peek"], ["⇥", "section"],
       ["za", "fold"], ["/", "filter"], [":q", "quit"]
     ].freeze
@@ -95,6 +96,7 @@ module ClaudeInbox
     end
 
     def header_chips(sections, compact:)
+      pn = sections.pinned.size
       n = sections.needs_you.size
       w = sections.working.count { |r| r.session.effective_state == "working" }
       i = sections.all.count { |r| r.session.terminal? }
@@ -102,6 +104,7 @@ module ClaudeInbox
       z = sections.snoozed.size
       d = sections.settled.size
       chips = []
+      chips << @p.cyan.bold(compact ? "★ #{pn}" : "★ #{pn} pinned") if pn > 0
       chips << @p.red.bold(compact ? "● #{n}" : "● #{n} need#{"s" if n == 1} you") if n > 0
       chips << @p.yellow(compact ? "✻ #{w}" : "✻ #{w} working") if w > 0
       chips << @p.dim(compact ? "○ #{i}" : "○ #{i} terminal#{"s" if i > 1}") if i > 0
@@ -131,6 +134,7 @@ module ClaudeInbox
 
     def section_color(name)
       case name
+      when :pinned then ->(s) { @p.cyan(s) }
       when :needs_you then ->(s) { @p.red(s) }
       when :working then ->(s) { @p.yellow(s) }
       when :snoozed then ->(s) { @p.magenta(s) }
@@ -197,7 +201,7 @@ module ClaudeInbox
       label = style_label(label, row, section, sel)
       first = " #{marker} #{glyph} " + Text.pad(label, label_w) + "  " + meta + "  " + project
 
-      return [Text.pad(first, width)] unless %i[needs_you working].include?(section)
+      return [Text.pad(first, width)] unless %i[pinned needs_you working].include?(section)
 
       detail = @p.dim("       ↳ #{short_path(s.cwd)}")
       [Text.pad(first, width), Text.pad(detail, width)]

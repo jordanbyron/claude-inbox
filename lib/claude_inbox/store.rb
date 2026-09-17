@@ -14,9 +14,9 @@ module ClaudeInbox
     SETTLE_AFTER = 10 * 60      # seconds a done/stopped session stays quiet before settling
     PRUNE_AFTER = 7 * 24 * 3600 # forget entries not seen in a poll for this long
     UNTIL_WOKEN = "until_woken"
-    SECTIONS = %i[needs_you working snoozed settled].freeze
+    SECTIONS = %i[pinned needs_you working snoozed settled].freeze
 
-    Sections = Struct.new(:needs_you, :working, :snoozed, :settled) do
+    Sections = Struct.new(:pinned, :needs_you, :working, :snoozed, :settled) do
       def each_section = SECTIONS.each { |k| yield k, self[k] }
 
       def all = SECTIONS.flat_map { |k| self[k] }
@@ -35,6 +35,10 @@ module ClaudeInbox
       def parked? = wake_at == UNTIL_WOKEN
 
       def state_since = entry && entry["state_since"]
+
+      def pinned? = entry && entry["pinned"] == true
+
+      def pinned_at = entry && entry["pinned_at"]
 
       def key = session.key
 
@@ -106,14 +110,17 @@ module ClaudeInbox
     end
 
     # (sessions, entries, now) -> Sections of Rows. Interactive sessions land in
-    # Working (they're live) but are never selectable.
+    # Working (they're live) but are never selectable. A pin overrides every
+    # other rule except the "you're sitting in this terminal" one, so a pinned
+    # session always parks at the top regardless of its state.
     def self.sectionize(sessions, entries, now)
       now_i = now.to_i
-      sec = Sections.new(needs_you: [], working: [], snoozed: [], settled: [])
+      sec = Sections.new(pinned: [], needs_you: [], working: [], snoozed: [], settled: [])
       sessions.each do |s|
         e = s.key && entries[s.key]
         section =
           if s.terminal? then s.needs_you? ? :needs_you : :working # you're in it; never settle or hide it
+          elsif e && e["pinned"] then :pinned
           elsif snoozed?(s, e, now_i) then :snoozed
           elsif s.needs_you? then :needs_you
           elsif settled?(s, e, now_i) then :settled
@@ -122,6 +129,7 @@ module ClaudeInbox
           end
         sec[section] << Row.new(session: s, entry: e, section: section)
       end
+      sec.pinned.sort_by! { |r| -(r.pinned_at || 0) }
       sec.needs_you.sort_by! { |r| -(r.state_since || 0) }
       sec.working.sort_by! { |r| [r.session.finished? ? 1 : 0, -(r.session.started_at&.to_i || 0)] }
       sec.snoozed.sort_by! { |r| r.parked? ? [1, 0] : [0, r.wake_at.to_i] }
@@ -184,6 +192,19 @@ module ClaudeInbox
       edit(id) do |e|
         e.delete("wake_at")
         e.delete("snoozed_at")
+      end
+    end
+
+    def toggle_pin(id)
+      now = @clock.call
+      edit(id) do |e|
+        if e["pinned"]
+          e.delete("pinned")
+          e.delete("pinned_at")
+        else
+          e["pinned"] = true
+          e["pinned_at"] = now.to_i
+        end
       end
     end
 
