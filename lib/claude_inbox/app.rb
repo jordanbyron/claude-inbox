@@ -502,7 +502,10 @@ module ClaudeInbox
       @modal = {kind: :new, form: NewSessionForm.new(cwd: cwd, pastel: Pastel.new(enabled: @color))}
     end
 
-    def start_session(form)
+    # `attach:` hands the terminal over as soon as the session starts. Without
+    # it we stay in the inbox and poll, so the new row shows up right away
+    # rather than at the next tick.
+    def start_session(form, attach:)
       v = form.values
       notice("starting session…")
       Thread.new do
@@ -510,7 +513,7 @@ module ClaudeInbox
           permission_mode: v[:permission_mode], worktree: v[:worktree], name: v[:name])
         notice("started #{id}")
         @pending_select = id
-        @queue << [:attach, id]
+        attach ? @queue << [:attach, id] : poll_once
       rescue => e
         @queue << [:error, e.message]
       end
@@ -549,9 +552,12 @@ module ClaudeInbox
         form = @modal[:form]
         case form.press(name, key)
         when :cancel then @modal = nil
-        when :submit
+        when :start
           @modal = nil
-          start_session(form)
+          start_session(form, attach: false)
+        when :start_and_attach
+          @modal = nil
+          start_session(form, attach: true)
         end
       when :snooze
         if name == :escape || name == "q"

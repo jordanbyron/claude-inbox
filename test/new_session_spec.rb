@@ -22,7 +22,7 @@ describe ClaudeInbox::NewSessionForm do
 
   it "starts on the prompt and types into it, spaces included" do
     _(form.focused.key).must_equal :prompt
-    "fix the".each_char { |c| form.press(c == " " ? :space : c, c) }
+    "fix the".each_char { |c| form.press((c == " ") ? :space : c, c) }
     _(form.values[:prompt]).must_equal "fix the"
   end
 
@@ -58,7 +58,7 @@ describe ClaudeInbox::NewSessionForm do
     type("do it")
     6.times { form.press(:tab, "\t") }
     form.press(:space, " ")
-    _(form.press(:ctrl_s, "\x13")).must_equal :submit
+    _(form.press(:ctrl_s, "\x13")).must_equal :start
     v = form.values
     _(v[:worktree]).must_equal true
     _(v[:name]).must_be_nil
@@ -74,11 +74,17 @@ describe ClaudeInbox::NewSessionForm do
     _(form.values[:model]).must_equal "fable"
   end
 
+  it "starts and attaches on ^O, starts and stays put on ^S" do
+    type("do it")
+    _(form.press(:ctrl_o, "\x0f")).must_equal :start_and_attach
+    _(form.press(:ctrl_s, "\x13")).must_equal :start
+  end
+
   it "takes a multi-line prompt: enter breaks the line, ^S starts" do
     type("first")
     form.press(:return, "\r")
     type("second")
-    _(form.press(:ctrl_s, "\x13")).must_equal :submit
+    _(form.press(:ctrl_s, "\x13")).must_equal :start
     _(form.values[:prompt]).must_equal "first\nsecond"
     rows = form.screen(80, 24)
     box = rows.index { |r| r.include?("first") }
@@ -86,14 +92,17 @@ describe ClaudeInbox::NewSessionForm do
     _(rows.find { |r| r.include?("Name") }).wont_be_nil
   end
 
-  it "shows the last rows of a long prompt" do
-    10.times { |i| type("line#{i}"); form.press(:return, "\r") }
+  it "shows the last rows of a long prompt, counting the rest in the border" do
+    10.times { |i|
+      type("line#{i}")
+      form.press(:return, "\r")
+    }
     rows = form.screen(80, 20)
-    first = rows.index { |r| r.include?("more") }
-    _(rows[first]).must_include "line4"
-    _(rows[first + 5]).must_include "line9"
-    _(rows[first + 6]).must_include "▏"
-    _(rows[first + 7]).must_include "└"
+    top = rows.index { |r| r.include?("┌") }
+    _(rows[top]).must_include "↑ 4 more"
+    _(rows[top + 1]).must_include "line4"
+    _(rows[top + 6]).must_include "line9"
+    _(rows[top + 8]).must_include "└"
   end
 
   it "shows what the defaults resolve to" do
@@ -133,21 +142,42 @@ describe ClaudeInbox::NewSessionForm do
       form.press(:ctrl_u, "\x15")
       type("#{root}/b")
       form.press(:tab, "\t")
-      _(form.focused.value).must_equal "#{root}/banana/"
+      _(form.focused.value.to_s).must_equal "#{root}/banana/"
       form.press(:ctrl_u, "\x15")
       type("#{root}/a")
       form.press(:tab, "\t")
-      _(form.focused.value).must_equal "#{root}/ap"
+      _(form.focused.value.to_s).must_equal "#{root}/ap"
       _(form.footer).must_include "apple  apricot"
       form.press(:tab, "\t")
       _(form.focused.key).must_equal :cwd
       _(form.footer).must_include "apple  apricot"
       type("pl")
       form.press(:tab, "\t")
-      _(form.focused.value).must_equal "#{root}/apple/"
+      _(form.focused.value.to_s).must_equal "#{root}/apple/"
       form.press(:tab, "\t")
       _(form.focused.key).must_equal :model
     end
+  end
+
+  it "edits the prompt under the cursor, and still cycles choices with arrows" do
+    type("abd")
+    form.press(:left, "\e[D")
+    type("c")
+    _(form.values[:prompt]).must_equal "abcd"
+    form.press(:backspace, "\x7f")
+    form.press(:home, "\e[H")
+    type("A")
+    _(form.values[:prompt]).must_equal "Aabd"
+    3.times { form.press(:tab, "\t") }
+    form.press(:right, "\e[C")
+    _(form.values[:model]).must_equal "fable"
+  end
+
+  it "draws the cursor on the cell it sits on" do
+    f = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: true))
+    "ab".each_char { |c| f.press(c, c) }
+    f.press(:left, "\e[D")
+    _(f.screen(80, 24).join("\n")).must_include "a\e[7mb\e[0m"
   end
 
   it "cancels on escape" do
