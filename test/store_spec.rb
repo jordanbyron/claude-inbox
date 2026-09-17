@@ -82,6 +82,38 @@ describe Store do
       _(ids(sections([session(id: "a", state: "done", prs: [pr(nil)])], entries).settled)).must_equal %w[a]
       _(ids(sections([session(id: "a", state: "working", prs: [pr("MERGED")])], entries).active)).must_equal %w[a]
     end
+
+    # A session that opens a PR ends its turn `blocked` on "anything need
+    # changing before I flip it to ready?", never `done`. Merging answers it.
+    it "settles a blocked session the moment its PR is merged or closed" do
+      entries = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 5}}
+      %w[MERGED CLOSED].each do |st|
+        sec = sections([session(id: "a", state: "blocked", prs: [pr(st)])], entries)
+        _(ids(sec.settled)).must_equal %w[a]
+        _(sec.needs_you).must_be_empty
+      end
+    end
+
+    it "keeps a blocked session in Needs you while its PR is still open" do
+      entries = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 86_400}}
+      %w[OPEN DRAFT].each do |st|
+        _(ids(sections([session(id: "a", state: "blocked", prs: [pr(st)])], entries).needs_you)).must_equal %w[a]
+      end
+    end
+
+    it "settles a merged blocked session you had already attached to" do
+      entries = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 30, "acknowledged_at" => now.to_i - 10}}
+      sec = sections([session(id: "a", state: "blocked", prs: [pr("MERGED")])], entries)
+      _(ids(sec.settled)).must_equal %w[a]
+      _(sec.active).must_be_empty
+    end
+
+    it "keeps a failed session loud even once its PR merged" do
+      entries = {"a" => {"last_state" => "failed", "state_since" => now.to_i - 5}}
+      sec = sections([session(id: "a", state: "failed", prs: [pr("MERGED")])], entries)
+      _(ids(sec.needs_you)).must_equal %w[a]
+      _(sec.settled).must_be_empty
+    end
   end
 
   describe "pinning" do
