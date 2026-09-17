@@ -16,15 +16,15 @@ describe Store do
     it "puts blocked and failed in Needs you" do
       sec = sections([session(id: "a", state: "blocked"), session(id: "b", state: "failed"), session(id: "c")])
       _(ids(sec.needs_you).sort).must_equal %w[a b]
-      _(ids(sec.working)).must_equal %w[c]
+      _(ids(sec.active)).must_equal %w[c]
     end
 
-    it "shows a busy terminal in Working, selectable but not actionable" do
+    it "shows a busy terminal in Active, selectable but not actionable" do
       sec = sections([session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "uuid")])
-      _(sec.working.size).must_equal 1
-      _(sec.working.first).must_be :selectable?
-      _(sec.working.first.session).wont_be :actionable?
-      _(sec.working.first.session.effective_state).must_equal "working"
+      _(sec.active.size).must_equal 1
+      _(sec.active.first).must_be :selectable?
+      _(sec.active.first.session).wont_be :actionable?
+      _(sec.active.first.session.effective_state).must_equal "working"
     end
 
     it "settles an idle remote session once quiet, and lets it snooze" do
@@ -47,14 +47,14 @@ describe Store do
     it "never settles or snoozes a terminal, even when idle for ages" do
       s = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "uuid", started_at: now - 86_400)
       sec = sections([s], {}, now)
-      _(sec.working.map(&:key)).must_equal %w[uuid]
+      _(sec.active.map(&:key)).must_equal %w[uuid]
       _(sec.settled).must_be_empty
     end
 
-    it "keeps a freshly finished session in Working" do
+    it "keeps a freshly finished session in Active" do
       entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 60}}
       sec = sections([session(id: "a", state: "done")], entries)
-      _(ids(sec.working)).must_equal %w[a]
+      _(ids(sec.active)).must_equal %w[a]
       _(sec.settled).must_be_empty
     end
 
@@ -64,7 +64,7 @@ describe Store do
       entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 86_400}}
       %w[OPEN DRAFT].each do |st|
         sec = sections([session(id: "a", state: "done", prs: [pr(st)])], entries)
-        _(ids(sec.working)).must_equal %w[a]
+        _(ids(sec.active)).must_equal %w[a]
       end
     end
 
@@ -78,9 +78,9 @@ describe Store do
 
     it "waits for every PR, and falls back to the quiet window when no state is known" do
       entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - Store::SETTLE_AFTER - 1}}
-      _(ids(sections([session(id: "a", state: "done", prs: [pr("MERGED"), pr("OPEN")])], entries).working)).must_equal %w[a]
+      _(ids(sections([session(id: "a", state: "done", prs: [pr("MERGED"), pr("OPEN")])], entries).active)).must_equal %w[a]
       _(ids(sections([session(id: "a", state: "done", prs: [pr(nil)])], entries).settled)).must_equal %w[a]
-      _(ids(sections([session(id: "a", state: "working", prs: [pr("MERGED")])], entries).working)).must_equal %w[a]
+      _(ids(sections([session(id: "a", state: "working", prs: [pr("MERGED")])], entries).active)).must_equal %w[a]
     end
   end
 
@@ -89,7 +89,7 @@ describe Store do
       entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i, "last_state" => "working"}}
       sec = sections([session(id: "a")], entries)
       _(ids(sec.pinned)).must_equal %w[a]
-      _(sec.working).must_be_empty
+      _(sec.active).must_be_empty
     end
 
     it "overrides needs_you, snoozed and settled" do
@@ -148,7 +148,7 @@ describe Store do
     it "does not settle a first-seen finished session that is still alive" do
       s = session(id: "a", state: "done", pid: 123, status: "idle")
       entries = Store.merge_entries({}, [s], now)
-      _(ids(sections([s], entries).working)).must_equal %w[a]
+      _(ids(sections([s], entries).active)).must_equal %w[a]
     end
   end
 
@@ -157,7 +157,7 @@ describe Store do
       entries = {"a" => {"wake_at" => now.to_i + 900, "last_state" => "working"}}
       sec = sections([session(id: "a")], entries)
       _(ids(sec.snoozed)).must_equal %w[a]
-      _(sec.working).must_be_empty
+      _(sec.active).must_be_empty
     end
 
     it "wakes when the session becomes blocked after the snooze" do
@@ -186,7 +186,7 @@ describe Store do
 
     it "wakes when wake_at has elapsed" do
       entries = {"a" => {"wake_at" => now.to_i - 1, "last_state" => "working"}}
-      _(ids(sections([session(id: "a")], entries).working)).must_equal %w[a]
+      _(ids(sections([session(id: "a")], entries).active)).must_equal %w[a]
     end
 
     it "never wakes until_woken on its own" do
@@ -231,7 +231,7 @@ describe Store do
       entries = {"a" => {"settled_at" => now.to_i, "last_state" => "blocked", "state_since" => now.to_i - 60}}
       later = Store.merge_entries(entries, [session(id: "a", state: "working")], now + 30)
       _(later["a"]).wont_include "settled_at"
-      _(ids(sections([session(id: "a", state: "working")], later, now + 30).working)).must_equal %w[a]
+      _(ids(sections([session(id: "a", state: "working")], later, now + 30).active)).must_equal %w[a]
     end
 
     it "comes back when the session becomes blocked afterwards" do
@@ -255,10 +255,10 @@ describe Store do
   end
 
   describe "acknowledge rule" do
-    it "moves an acknowledged blocked session to Working, not Settled" do
+    it "moves an acknowledged blocked session to Active, not Settled" do
       entries = {"a" => {"acknowledged_at" => now.to_i, "last_state" => "blocked", "state_since" => now.to_i - 60}}
       sec = sections([session(id: "a", state: "blocked")], entries)
-      _(ids(sec.working)).must_equal %w[a]
+      _(ids(sec.active)).must_equal %w[a]
       _(sec.needs_you).must_be_empty
       _(sec.settled).must_be_empty
     end
@@ -277,7 +277,7 @@ describe Store do
         store.update([session(id: "a", state: "blocked")])
         store.acknowledge("a")
         _(store.entry("a")["acknowledged_at"]).must_equal now.to_i
-        _(store.sections.working.map(&:id)).must_equal %w[a]
+        _(store.sections.active.map(&:id)).must_equal %w[a]
       end
     end
   end
@@ -331,7 +331,7 @@ describe Store do
       at = Time.at(1_789_604_500)
       sec = Store.sectionize(sessions, Store.merge_entries({}, sessions, at), at)
       _(ids(sec.needs_you)).must_equal %w[f23c8673]
-      _(ids(sec.working)).must_equal [nil, "823b882f"]
+      _(ids(sec.active)).must_equal [nil, "823b882f"]
       _(sec.settled.size).must_equal 4
     end
   end
