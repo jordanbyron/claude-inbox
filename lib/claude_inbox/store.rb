@@ -14,6 +14,8 @@ module ClaudeInbox
     SETTLE_AFTER = 10 * 60      # seconds a done/stopped session stays quiet before settling
     PRUNE_AFTER = 7 * 24 * 3600 # forget entries not seen in a poll for this long
     UNTIL_WOKEN = "until_woken"
+    # States that hold a row open no matter what its pull requests did.
+    UNSETTLEABLE = %w[working failed].freeze
     SECTIONS = %i[pinned needs_you active snoozed settled].freeze
     # Sections long enough to be worth hiding behind a fold toggle.
     FOLDABLE_SECTIONS = %i[snoozed settled].freeze
@@ -121,15 +123,24 @@ module ClaudeInbox
       entry && entry["acknowledged_at"] && entry["state_since"].to_i <= entry["acknowledged_at"].to_i
     end
 
-    # Settle rule: done/stopped and quiet for SETTLE_AFTER. `failed` never settles.
+    # Settle rule: done/stopped and quiet for SETTLE_AFTER.
+    #
     # A session with a pull request follows the PR instead: it stays up while
-    # any PR is open and settles the moment every one is merged or closed.
-    # A PR whose state nobody knows yet (no gh, offline) is ignored.
+    # any PR is open and settles the moment every one is merged or closed. That
+    # holds however the session ended its turn, not just when it ran to `done`
+    # — opening a PR and asking "anything need changing?" leaves it `blocked`,
+    # and merging the PR answers the question, so the row has nothing left to
+    # say. A PR whose state nobody knows yet (no gh, offline) is ignored.
+    #
+    # Two states keep their row whatever the PR says: `working`, which is still
+    # going, and `failed`, which is a failure you should see even if the PR it
+    # had already opened went on to land.
     def self.settled?(session, entry, now_i)
       return true if hand_settled?(session, entry)
-      return false unless session.finished?
+      return false if UNSETTLEABLE.include?(session.effective_state)
       known = session.prs.select(&:known?)
       return known.all?(&:resolved?) if known.any?
+      return false unless session.finished?
       since = entry && entry["state_since"]
       return false unless since
       now_i - since.to_i > SETTLE_AFTER
@@ -149,8 +160,8 @@ module ClaudeInbox
           elsif e && e["pinned"] then :pinned
           elsif snoozed?(s, e, now_i) then :snoozed
           elsif hand_settled?(s, e) then :settled
+          elsif settled?(s, e, now_i) then :settled # a resolved PR outranks Needs You
           elsif s.needs_you? then acknowledged?(s, e) ? :active : :needs_you
-          elsif settled?(s, e, now_i) then :settled
           elsif s.finished? then :active
           else :active
           end
