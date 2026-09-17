@@ -13,9 +13,14 @@ module ClaudeInbox
   class Store
     SETTLE_AFTER = 10 * 60      # seconds a done/stopped session stays quiet before settling
     PRUNE_AFTER = 7 * 24 * 3600 # forget entries not seen in a poll for this long
+    REAP_AFTER = 14 * 24 * 3600 # seconds idle before a session is deleted outright
     UNTIL_WOKEN = "until_woken"
     # States that hold a row open no matter what its pull requests did.
     UNSETTLEABLE = %w[working failed].freeze
+    # States never reaped, however long they have been quiet. Shorter than
+    # UNSETTLEABLE on purpose: `failed` earns a permanent row because you
+    # should see it, but after REAP_AFTER of not seeing it, you never will.
+    UNREAPABLE = %w[working].freeze
     SECTIONS = %i[pinned needs_you active snoozed settled].freeze
     # Sections long enough to be worth hiding behind a fold toggle.
     FOLDABLE_SECTIONS = %i[snoozed settled].freeze
@@ -146,6 +151,30 @@ module ClaudeInbox
       now_i - since.to_i > SETTLE_AFTER
     end
 
+    # Reap rule: a background session quiet for REAP_AFTER goes to `claude
+    # rm`, which takes its transcript and its worktree with it.
+    #
+    # Not keyed on the Settled section, on purpose. Settling answers "should I
+    # still be looking at this?", and the PR rule holds a row in Active for as
+    # long as a pull request stays open — so an abandoned draft parks a session
+    # there for ever, and the deadest rows in the list are precisely the ones
+    # Settled never reaches. Idle time is the only clock here.
+    #
+    # Three things veto a reap, each an explicit "keep this": a pin, a snooze,
+    # and a live process. An interactive session has no id, so there is nothing
+    # to reap it with. A session with no entry is spared too: merge_entries
+    # writes one on the same poll, seeding `state_since` from `started_at`, so
+    # it comes back round in seconds with an idle time worth trusting instead
+    # of being reaped on a guess.
+    def self.reapable?(session, entry, now_i)
+      return false unless session.actionable?
+      return false if session.alive?
+      return false if UNREAPABLE.include?(session.effective_state)
+      return false if entry.nil? || entry["pinned"] || snoozed?(session, entry, now_i)
+      since = entry["state_since"]
+      !since.nil? && now_i - since.to_i > REAP_AFTER
+    end
+
     # (sessions, entries, now) -> Sections of Rows. Interactive sessions land in
     # Active (they're live) but are never selectable. A pin overrides every
     # other rule except the "you're sitting in this terminal" one, so a pinned
@@ -246,6 +275,17 @@ module ClaudeInbox
         e["settled_at"] = now.to_i
         e.delete("wake_at")
         e.delete("snoozed_at")
+      end
+    end
+
+    # Records a reap that `claude rm` refused, so the Reaper backs off instead
+    # of shelling out every four seconds for ever at a session whose worktree
+    # is never going to let go of its unpushed commits.
+    def mark_reap_failed(id, message)
+      now = @clock.call
+      edit(id) do |e|
+        e["reap_failed_at"] = now.to_i
+        e["reap_error"] = message.to_s.lines.first&.strip
       end
     end
 

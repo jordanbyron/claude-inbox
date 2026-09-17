@@ -34,10 +34,14 @@ module ClaudeInbox
       ["4", "until I wake it", :until_woken]
     ].freeze
 
-    def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new, out: $stdout, input: $stdin, color: true)
+    # The reaper defaults to off. It is the only thing here that deletes a
+    # session, so switching it on is `bin/claude-inbox`'s job and nothing
+    # reaches it by forgetting an argument.
+    def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new, reaper: Reaper.disabled, out: $stdout, input: $stdin, color: true)
       @client = client
       @store = store
       @pull_requests = pull_requests
+      @reaper = reaper
       @out = out
       @input = input
       @color = color
@@ -127,11 +131,25 @@ module ClaudeInbox
       end
     end
 
-    # PR lookups happen here, on the poller, so a slow `gh` never stalls a frame.
+    # PR lookups and the reap sweep both happen here, on the poller, so
+    # neither a slow `gh` nor a `claude rm` can stall a frame.
+    #
+    # Reaped rows are dropped before the queue and not after: `update` folds
+    # whatever it is handed back into the entry table, so a session still in
+    # this list would be recreated moments after `forget` cleared it and
+    # flicker back for a poll.
     def poll_once
-      @queue << [:sessions, @pull_requests.enrich(@client.list, @store.pr_overrides)]
+      sessions = @pull_requests.enrich(@client.list, @store.pr_overrides)
+      reaped = @reaper.sweep(sessions, Time.now)
+      @queue << [:sessions, sessions.reject { |s| reaped.include?(s.key) }]
+      notice_reaped(reaped) if reaped.any?
     rescue => e
       @queue << [:error, e.message]
+    end
+
+    def notice_reaped(keys)
+      word = (keys.size == 1) ? "session" : "sessions"
+      notice("reaped #{keys.size} #{word} idle over #{Store::REAP_AFTER / 86_400}d — see #{@reaper.log_path}")
     end
 
     def drain_queue
