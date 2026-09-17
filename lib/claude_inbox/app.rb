@@ -34,10 +34,12 @@ module ClaudeInbox
       ["4", "until I wake it", :until_woken]
     ].freeze
 
-    def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new, out: $stdout, input: $stdin, color: true)
+    def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
+      job_state: JobState.new, out: $stdout, input: $stdin, color: true)
       @client = client
       @store = store
       @pull_requests = pull_requests
+      @job_state = job_state
       @out = out
       @input = input
       @color = color
@@ -129,7 +131,8 @@ module ClaudeInbox
 
     # PR lookups happen here, on the poller, so a slow `gh` never stalls a frame.
     def poll_once
-      @queue << [:sessions, @pull_requests.enrich(@client.list, @store.pr_overrides)]
+      sessions = @pull_requests.enrich(@client.list, @store.pr_overrides)
+      @queue << [:sessions, @job_state.enrich(sessions)]
     rescue => e
       @queue << [:error, e.message]
     end

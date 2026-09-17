@@ -34,8 +34,16 @@ describe ClaudeInbox::App do
       client: client,
       store: store,
       pull_requests: ClaudeInbox::PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, gh: nil),
+      job_state: ClaudeInbox::JobState.new(jobs_dir: fixture_path("jobs")),
       out: out, input: StringIO.new, color: false
     )
+  end
+
+  it "fills in each session's colour from its job file on every poll" do
+    loaded_app(nil)
+    by_id = store.sessions.to_h { |s| [s.id, s.color] }
+    _(by_id["b0b18338"]).must_equal "orange"
+    _(by_id["b03695b1"]).must_be_nil
   end
 
   def loaded_app(selected)

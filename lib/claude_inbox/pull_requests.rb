@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require_relative "job_state"
 require_relative "subprocess"
 
 module ClaudeInbox
@@ -23,11 +24,11 @@ module ClaudeInbox
   # Finds the PRs a session is tied to and keeps their state fresh.
   #
   # Claude Code already does the hard part: the daemon scans each background
-  # session's transcript for links and writes them to
-  # ~/.claude/jobs/<id>/state.json as `children` (kind "pr"). `claude agents
-  # --json` does not expose that, so this reads the file. It is a link scan,
-  # so a session that merely mentions a PR gets it too. Interactive sessions
-  # have no job file; for those the store's `pr` override is the only source.
+  # session's transcript for links and writes them to the job's state file as
+  # `children` (kind "pr"). `claude agents --json` does not expose that, so
+  # JobState reads it. It is a link scan, so a session that merely mentions a
+  # PR gets it too. Interactive sessions have no job file; for those the
+  # store's `pr` override is the only source.
   #
   # State comes first from ~/.claude/gh-pr-status-cache.json (whatever Claude
   # Code last saw), then from `gh pr view` for PRs that are still open, at
@@ -40,7 +41,7 @@ module ClaudeInbox
 
     def initialize(jobs_dir: File.join(CLAUDE_DIR, "jobs"), cache_path: File.join(CLAUDE_DIR, "gh-pr-status-cache.json"),
       gh: "gh", clock: -> { Time.now })
-      @jobs_dir = jobs_dir
+      @jobs = JobState.new(jobs_dir: jobs_dir)
       @cache_path = cache_path
       @gh = gh
       @clock = clock
@@ -61,13 +62,7 @@ module ClaudeInbox
 
     # PR urls the daemon scanned out of a background session's transcript.
     def linked(id)
-      return [] unless id
-      path = File.join(@jobs_dir, id, "state.json")
-      return [] unless File.exist?(path)
-      children = JSON.parse(File.read(path))["children"] || []
-      children.select { |c| c["kind"] == "pr" && c["href"] }.map { |c| c["href"] }
-    rescue JSON::ParserError, SystemCallError
-      []
+      @jobs.children(id).select { |c| c["kind"] == "pr" && c["href"] }.map { |c| c["href"] }
     end
 
     # Best known state for a url, refreshed through gh when due.

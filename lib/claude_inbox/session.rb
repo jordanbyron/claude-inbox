@@ -12,7 +12,7 @@ module ClaudeInbox
   # beyond parsing and a few predicates.
   Session = Struct.new(
     :id, :cwd, :kind, :started_at, :session_id, :name,
-    :state, :pid, :status, :waiting_for, :origin, :prs
+    :state, :pid, :status, :waiting_for, :origin, :prs, :color
   ) do
     def self.from_hash(h)
       new(

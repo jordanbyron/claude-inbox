@@ -35,6 +35,9 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
 A row with a pull request shows it after the state: `#885 open`, `#885 draft`,
 `#885 merged`, `#885 closed`. `o` opens it in the browser.
 
+A session you gave a colour to with `/color` wears it on the label — see
+[Colours](#colours).
+
 ## Keys
 
 Keyboard only, vim flavoured. Arrows work too. The wheel moves the selection
@@ -138,7 +141,7 @@ is not known yet (no `gh`, offline) is ignored and the clock rule applies.
 Claude Code already links sessions to PRs. The daemon scans each background
 session's transcript for links and writes them to
 `~/.claude/jobs/<id>/state.json` as `children` (`kind: "pr"`); `claude agents
---json` does not expose that, so `PullRequests` reads the file. It is a link
+--json` does not expose that, so `JobState` reads the file. It is a link
 scan, so a session that only *reviews* a PR gets it too. Interactive sessions
 have no job file, so for them (or to correct a bad scan) `P` sets the link by
 hand; that lives in our own state file as `pr` and replaces the scanned list.
@@ -147,6 +150,26 @@ State is seeded from `~/.claude/gh-pr-status-cache.json`, whatever Claude Code
 last saw, then refreshed with `gh pr view` on the poller thread, at most once a
 minute per PR and never for one already merged or closed. Without `gh` the
 cached state is all you get.
+
+## Colours
+
+`/color` inside a session is the only way to set one; there is no key for it
+here, and nothing is stored on our side. The daemon writes it to the job file
+as `color`, `claude agents --json` leaves it out, so `JobState` reads it on
+every poll and a colour you change shows up on the next one.
+
+It lands on the label and nowhere else. The glyph, the state badge and the PR
+badge keep the colours their own state gives them, so no colour you pick can
+stop a blocked session looking blocked. Settled rows stay dim — that section is
+meant to be quiet, and a colour shouting out of a collapsed fold would undo it.
+
+The eight colours `/color` offers are mapped the way Claude Code's own tmux
+code maps them when it tints a teammate pane: `red`, `blue`, `green`, `yellow`,
+`purple` and `cyan` go to the terminal's own ansi colours, so they follow your
+theme; `orange` and `pink` have no ansi name and go through 256-colour indexes
+208 and 205. Anything else is left unpainted. Colours close with SGR 39
+(default foreground) rather than 0, so a label that is already bold or italic
+stays that way.
 
 ## State
 
@@ -157,13 +180,16 @@ Entries not seen in a poll for 7 days are pruned.
 ## Layout
 
 ```
-AgentsClient  →  PullRequests  →  Store  →  Renderer  →  App
- (shells out)    (jobs dir + gh)  (pure)    (strings)   (terminal + key loop)
+AgentsClient  →  PullRequests  →  JobState  →  Store  →  Renderer  →  App
+ (shells out)    (jobs dir + gh)  (jobs dir)   (pure)    (strings)   (terminal + key loop)
 ```
 
 - `AgentsClient` is the only thing that runs `claude`. `FixtureClient` swaps in a JSON file.
-- `PullRequests` fills in each session's `prs` from `~/.claude/jobs` and `gh`.
+- `JobState` reads `~/.claude/jobs/<id>/state.json`, the daemon's own file: the scanned
+  links `PullRequests` wants and the `/color` each session carries. Never cached.
+- `PullRequests` fills in each session's `prs` from `JobState` and `gh`.
   `--fixture` points it at `test/fixtures/jobs` with `gh` off.
+- `Palette` maps a session colour to an escape sequence and knows nothing else.
 - `Store` holds the last poll and the snooze table behind a mutex; rules are class methods.
 - `Renderer` turns sections into an array of fixed-width strings. `Painter` diffs frames
   and repaints only changed rows.
@@ -198,6 +224,12 @@ AgentsClient  →  PullRequests  →  Store  →  Renderer  →  App
   `worktreeBranch`, token count and the transcript path. `~/.claude/gh-pr-status-cache.json`
   is keyed by PR url and calls an open draft `DRAFT`; `gh pr view` reports
   `OPEN` plus `isDraft`.
+
+- The job file is also where `/color` ends up, as `color`. `claude agents --json`
+  does not carry it, so a colour is only ever visible by reading the file. The CLI
+  offers eight, and its own tmux code is the authority on what they mean to a
+  terminal: six are ansi names, `orange` and `pink` are 256-colour indexes 208 and
+  205. Interactive sessions have no job file and so never have a colour.
 
 ## Development
 
