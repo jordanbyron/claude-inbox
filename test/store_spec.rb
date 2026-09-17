@@ -184,6 +184,62 @@ describe Store do
     end
   end
 
+  describe "reap rule" do
+    def reapable?(s, entry) = Store.reapable?(s, entry, now.to_i)
+
+    def draft_pr = ClaudeInbox::PullRequest.new(number: 1, url: "https://github.com/o/r/pull/1", state: "DRAFT")
+
+    let(:quiet) { {"last_state" => "done", "state_since" => now.to_i - Store::REAP_AFTER - 1} }
+    let(:recent) { {"last_state" => "done", "state_since" => now.to_i - Store::REAP_AFTER + 60} }
+
+    it "reaps a finished session quiet for longer than REAP_AFTER" do
+      _(reapable?(session(id: "a", state: "done"), quiet)).must_equal true
+    end
+
+    it "leaves one that has been quiet for less" do
+      _(reapable?(session(id: "a", state: "done"), recent)).must_equal false
+    end
+
+    it "reaps on idle time alone, where settling waits on the pull request" do
+      s = session(id: "a", state: "done", prs: [draft_pr])
+      _(Store.settled?(s, quiet, now.to_i)).must_equal false
+      _(reapable?(s, quiet)).must_equal true
+    end
+
+    it "reaps a long-dead failure, which never settles" do
+      s = session(id: "a", state: "failed")
+      _(Store.settled?(s, quiet, now.to_i)).must_equal false
+      _(reapable?(s, quiet)).must_equal true
+    end
+
+    it "never reaps a working session" do
+      _(reapable?(session(id: "a", state: "working"), quiet)).must_equal false
+    end
+
+    it "never reaps one that still has a process" do
+      _(reapable?(session(id: "a", state: "done", pid: 4321), quiet)).must_equal false
+    end
+
+    it "never reaps a pin or a snooze, however long it has been parked" do
+      _(reapable?(session(id: "a", state: "done"), quiet.merge("pinned" => true))).must_equal false
+      _(reapable?(session(id: "a", state: "done"), quiet.merge("wake_at" => Store::UNTIL_WOKEN, "snoozed_at" => 1))).must_equal false
+    end
+
+    it "reaps once an elapsed snooze has woken it" do
+      woken = quiet.merge("wake_at" => now.to_i - 60, "snoozed_at" => now.to_i - 120)
+      _(reapable?(session(id: "a", state: "done"), woken)).must_equal true
+    end
+
+    it "never reaps a session there is no id to reap with" do
+      s = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9")
+      _(reapable?(s, quiet)).must_equal false
+    end
+
+    it "never reaps a session it has no entry for" do
+      _(reapable?(session(id: "a", state: "done"), nil)).must_equal false
+    end
+  end
+
   describe "snooze and wake" do
     it "hides a snoozed session in Snoozed" do
       entries = {"a" => {"wake_at" => now.to_i + 900, "last_state" => "working"}}

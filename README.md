@@ -108,7 +108,7 @@ client and returns directly with no trick needed.
 
 ## Rules
 
-All three rules are pure functions in `ClaudeInbox::Store` and are the only
+All four rules are pure functions in `ClaudeInbox::Store` and are the only
 place triage logic lives.
 
 **Wake.** A snoozed session returns when its timer elapses, when you press `u`,
@@ -133,6 +133,34 @@ Active while any of its PRs is open or a draft, however long it has been
 quiet, and settles the moment every one is merged or closed. A PR whose state
 is not known yet (no `gh`, offline) is ignored and the clock rule applies.
 
+**Reap.** A background session quiet for `REAP_AFTER` (14 days) is deleted
+outright on the next poll: `claude rm`, so the transcript and the worktree go
+with it, same as `Ctrl-x`. This is the one thing here that destroys anything
+without asking first, so read the rest of this before you leave it running.
+
+Reaping does *not* key on Settled, deliberately. Settling answers "should I
+still be looking at this?", and the PR rule keeps a row in Active for as long
+as a pull request stays open — so an abandoned draft parks a session there for
+ever and the deadest rows in the list are precisely the ones Settled never
+reaches. Idle time, measured from `state_since`, is the only clock.
+
+Four things are never reaped, whatever the clock says: a `working` session, one
+that still holds a process, a pin, and a snooze. `failed` *is* reaped, even
+though it never settles — it earns a permanent row because you ought to see it,
+and after a fortnight of not seeing it you never will. A pin or a parked
+snooze ("until I wake it") is the way to keep a session indefinitely; both are
+deliberate gestures, so both outrank the reaper.
+
+Unpushed work is safe without us doing anything. `claude rm` refuses a worktree
+holding commits that aren't pushed and offers a `--discard-unpushed` token to
+override it; nothing here ever passes that token, so a refusal is the end of
+it. Refusals are logged and retried at most once a day.
+
+Every reap appends a line to `~/.config/claude-inbox/reaped.log`, which is the
+last record a session existed once its transcript is gone. If that file can't
+be opened the sweep raises and nothing is deleted. `CLAUDE_INBOX_NO_REAP=1`
+turns the whole thing off, and `--fixture` runs never reap.
+
 ## Pull requests
 
 Claude Code already links sessions to PRs. The daemon scans each background
@@ -151,8 +179,12 @@ cached state is all you get.
 ## State
 
 `~/.config/claude-inbox/state.json`, keyed by session id, atomic writes.
-Holds `wake_at`, `snoozed_at`, `alias`, `pr`, `pinned`, `pinned_at`, `settled_at`, `acknowledged_at`, `last_state`, `state_since`, `last_seen`.
-Entries not seen in a poll for 7 days are pruned.
+Holds `wake_at`, `snoozed_at`, `alias`, `pr`, `pinned`, `pinned_at`, `settled_at`, `acknowledged_at`, `last_state`, `state_since`, `last_seen`,
+and `reap_failed_at` / `reap_error` for a session `claude rm` has refused.
+Entries not seen in a poll for 7 days are pruned. Pruning only reaches entries
+the daemon has *forgotten*, which is a different thing from the reaper: the
+daemon still lists sessions a month old, so those keep their entry and it is
+the 14-day reap that clears them.
 
 ## Layout
 
@@ -167,6 +199,9 @@ AgentsClient  →  PullRequests  →  Store  →  Renderer  →  App
 - `Store` holds the last poll and the snooze table behind a mutex; rules are class methods.
 - `Renderer` turns sections into an array of fixed-width strings. `Painter` diffs frames
   and repaints only changed rows.
+- `Reaper` runs `claude rm` over whatever `Store.reapable?` picks and appends a
+  line to the log for each one. One public method, `sweep`, called from the
+  poller so a slow `rm` never stalls a frame.
 - `App` owns the terminal, the poller thread and the peek thread, and is the only
   place that spawns a child.
 - `VtScreen` is a small cursor-addressed grid used to turn the `claude logs` replay
@@ -208,4 +243,5 @@ bundle exec standardrb
 bin/claude-inbox-probe [fixture.json]   # print sections, no TUI
 CLAUDE_INBOX_STDERR=/tmp/err.log bin/claude-inbox   # crash traces off the alt screen
 CLAUDE_INBOX_DEBUG=1 bin/claude-inbox               # slow-frame notes in /tmp/inbox-debug.log
+CLAUDE_INBOX_NO_REAP=1 bin/claude-inbox             # never delete an idle session
 ```
