@@ -15,12 +15,14 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
 ## Sections
 
 1. **Pinned** — parked at the top by hand, regardless of state. `P` toggles it.
-2. **Needs you** — `blocked` or `failed`.
-3. **Working** — `working`, plus recently finished sessions that have not settled yet,
-   plus interactive sessions. Those report only `status`, so it is mapped: busy
-   is working, idle is done, waiting needs you. The JSON calls both a terminal
-   you opened yourself and a Remote Control worker "interactive"; the client
-   tells them apart from the process tree (a remote worker runs with
+2. **Needs you** — `blocked` or `failed`, unless you've attached to it since (see
+   Acknowledge below).
+3. **Active** — `working`, plus recently finished sessions that have not settled
+   yet, plus interactive sessions, plus a needs-you session you've attached to
+   but that hasn't resolved. Interactive sessions report only `status`, so it is
+   mapped: busy is working, idle is done, waiting needs you. The JSON calls both
+   a terminal you opened yourself and a Remote Control worker "interactive"; the
+   client tells them apart from the process tree (a remote worker runs with
    `--sdk-url` under a `claude rc` parent). Remote sessions settle and snooze
    like any other row. A terminal you are sitting in never settles. Neither
    can be attached, peeked or stopped from outside; you can land on them, and
@@ -89,12 +91,17 @@ client and returns directly with no trick needed.
 
 ## Rules
 
-Both rules are pure functions in `ClaudeInbox::Store` and are the only place
-triage logic lives.
+All three rules are pure functions in `ClaudeInbox::Store` and are the only
+place triage logic lives.
 
 **Wake.** A snoozed session returns when its timer elapses, when you press `u`,
 or when it *becomes* blocked or failed after being snoozed. A session that was
 already blocked when you snoozed it stays snoozed; that is the point of snoozing.
+
+**Acknowledge.** Attaching to a needs-you session (`Enter`) marks its current
+state seen, moving it to Active instead of leaving it in Needs You. It comes
+back to Needs You the moment its state changes again — still blocked with a
+new prompt doesn't count, only an actual state change does, same as hand-settle.
 
 **Settle.** `done` or `stopped` and unchanged for `SETTLE_AFTER` (10 minutes),
 or settled by hand with `x`. A hand-settled session stays put when it
@@ -104,8 +111,8 @@ again, blocked, or failed. `u` brings it back at any time.
 process settles on the first poll, because the supervisor only reaps a process
 after about an hour idle, which is longer than the settle window.
 
-A session with a pull request follows the PR instead of the clock: it stays in
-Working while any of its PRs is open or a draft, however long it has been
+A session with a pull request follows the PR instead of the clock: it stays
+Active while any of its PRs is open or a draft, however long it has been
 quiet, and settles the moment every one is merged or closed. A PR whose state
 is not known yet (no `gh`, offline) is ignored and the clock rule applies.
 
@@ -127,7 +134,7 @@ cached state is all you get.
 ## State
 
 `~/.config/claude-inbox/state.json`, keyed by session id, atomic writes.
-Holds `wake_at`, `snoozed_at`, `alias`, `pr`, `pinned`, `pinned_at`, `settled_at`, `last_state`, `state_since`, `last_seen`.
+Holds `wake_at`, `snoozed_at`, `alias`, `pr`, `pinned`, `pinned_at`, `settled_at`, `acknowledged_at`, `last_state`, `state_since`, `last_seen`.
 Entries not seen in a poll for 7 days are pruned.
 
 ## Layout

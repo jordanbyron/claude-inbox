@@ -54,7 +54,7 @@ describe ClaudeInbox::Renderer do
  ▶ ● comma3x not booting                          needs you · 0s  comma3
        ↳ ~/code/comma3                                                  
                                                                         
- ▎ WORKING ───────────────────────────────────────────────────────── 2  
+ ▎ ACTIVE ────────────────────────────────────────────────────────── 2  
    ⠋ claude-inbox-38          working · your terminal · 0s  claude-inbox
        ↳ ~/code/claude-inbox                                            
    ✓ comma3x led flashing screen unresponsive   done · idle · 0s  comma3
@@ -89,7 +89,7 @@ describe ClaudeInbox::Renderer do
     waiting = session(id: nil, kind: "interactive", state: nil, status: "waiting", waiting_for: "permission prompt", session_id: "u2", name: "shell2")
     sec = Store.sectionize([idle, waiting], {}, now)
     _(sec.needs_you.map(&:key)).must_equal %w[u2]
-    _(sec.working.map(&:key)).must_equal %w[u1]
+    _(sec.active.map(&:key)).must_equal %w[u1]
     text = renderer.frame(sec, width: 90, height: 12, now: now).lines.join("\n")
     _(text).must_match(/✓ shell\s+done · your terminal/)
     _(text).must_match(/● shell2\s+needs you: permission prompt · your terminal/)

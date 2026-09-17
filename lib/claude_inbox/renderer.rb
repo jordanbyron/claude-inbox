@@ -21,7 +21,7 @@ module ClaudeInbox
     SECTION_TITLES = {
       pinned: "PINNED",
       needs_you: "NEEDS YOU",
-      working: "WORKING",
+      active: "ACTIVE",
       snoozed: "SNOOZED",
       settled: "SETTLED"
     }.freeze
@@ -108,7 +108,7 @@ module ClaudeInbox
     def header_chips(sections, compact:)
       pn = sections.pinned.size
       n = sections.needs_you.size
-      w = sections.working.count { |r| r.session.effective_state == "working" }
+      w = sections.active.count { |r| r.session.effective_state == "working" }
       i = sections.all.count { |r| r.session.terminal? }
       m = sections.all.count { |r| r.session.remote? }
       z = sections.snoozed.size
@@ -146,7 +146,7 @@ module ClaudeInbox
       case name
       when :pinned then ->(s) { @p.cyan(s) }
       when :needs_you then ->(s) { @p.red(s) }
-      when :working then ->(s) { @p.yellow(s) }
+      when :active then ->(s) { @p.yellow(s) }
       when :snoozed then ->(s) { @p.magenta(s) }
       else ->(s) { @p.dim(s) }
       end
@@ -211,7 +211,7 @@ module ClaudeInbox
       label = style_label(label, row, section, sel)
       first = " #{marker} #{glyph} " + Text.pad(label, label_w) + "  " + meta + "  " + project
 
-      return [Text.pad(first, width)] unless %i[pinned needs_you working].include?(section)
+      return [Text.pad(first, width)] unless %i[pinned needs_you active].include?(section)
 
       detail = @p.dim("       ↳ #{short_path(s.cwd)}")
       [Text.pad(first, width), Text.pad(detail, width)]

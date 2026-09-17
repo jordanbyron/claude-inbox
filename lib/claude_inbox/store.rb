@@ -14,9 +14,9 @@ module ClaudeInbox
     SETTLE_AFTER = 10 * 60      # seconds a done/stopped session stays quiet before settling
     PRUNE_AFTER = 7 * 24 * 3600 # forget entries not seen in a poll for this long
     UNTIL_WOKEN = "until_woken"
-    SECTIONS = %i[pinned needs_you working snoozed settled].freeze
+    SECTIONS = %i[pinned needs_you active snoozed settled].freeze
 
-    Sections = Struct.new(:pinned, :needs_you, :working, :snoozed, :settled) do
+    Sections = Struct.new(:pinned, :needs_you, :active, :snoozed, :settled) do
       def each_section = SECTIONS.each { |k| yield k, self[k] }
 
       def all = SECTIONS.flat_map { |k| self[k] }
@@ -70,6 +70,7 @@ module ClaudeInbox
         e.delete("wake_at") if woken?(s, e, now_i)
         e.delete("snoozed_at") unless e["wake_at"]
         e.delete("settled_at") if e["settled_at"] && !hand_settled?(s, e)
+        e.delete("acknowledged_at") if e["acknowledged_at"] && !acknowledged?(s, e)
       end
       out
     end
@@ -78,7 +79,7 @@ module ClaudeInbox
     # the supervisor has reaped (no pid) has been quiet for at least the
     # supervisor's ~1h idle timeout, which is longer than SETTLE_AFTER. Seed
     # its state_since from started_at so it settles on the first poll instead
-    # of squatting in Working for SETTLE_AFTER.
+    # of squatting in Active for SETTLE_AFTER.
     def self.first_seen_since(session, now_i)
       if session.finished? && !session.alive? && session.started_at
         session.started_at.to_i
@@ -110,6 +111,14 @@ module ClaudeInbox
       session.finished? || entry["state_since"].to_i <= entry["settled_at"].to_i
     end
 
+    # Acknowledge rule: attaching to a session marks its current state seen, so
+    # it drops out of Needs You without being archived to Settled. It comes
+    # back the moment the state changes again — same "state_since" test as
+    # hand-settle, just routed to Active instead of Settled.
+    def self.acknowledged?(session, entry)
+      entry && entry["acknowledged_at"] && entry["state_since"].to_i <= entry["acknowledged_at"].to_i
+    end
+
     # Settle rule: done/stopped and quiet for SETTLE_AFTER. `failed` never settles.
     # A session with a pull request follows the PR instead: it stays up while
     # any PR is open and settles the moment every one is merged or closed.
@@ -125,29 +134,29 @@ module ClaudeInbox
     end
 
     # (sessions, entries, now) -> Sections of Rows. Interactive sessions land in
-    # Working (they're live) but are never selectable. A pin overrides every
+    # Active (they're live) but are never selectable. A pin overrides every
     # other rule except the "you're sitting in this terminal" one, so a pinned
     # session always parks at the top regardless of its state.
     def self.sectionize(sessions, entries, now)
       now_i = now.to_i
-      sec = Sections.new(pinned: [], needs_you: [], working: [], snoozed: [], settled: [])
+      sec = Sections.new(pinned: [], needs_you: [], active: [], snoozed: [], settled: [])
       sessions.each do |s|
         e = s.key && entries[s.key]
         section =
-          if s.terminal? then s.needs_you? ? :needs_you : :working # you're in it; never settle or hide it
+          if s.terminal? then s.needs_you? ? :needs_you : :active # you're in it; never settle or hide it
           elsif e && e["pinned"] then :pinned
           elsif snoozed?(s, e, now_i) then :snoozed
           elsif hand_settled?(s, e) then :settled
-          elsif s.needs_you? then :needs_you
+          elsif s.needs_you? then acknowledged?(s, e) ? :active : :needs_you
           elsif settled?(s, e, now_i) then :settled
-          elsif s.finished? then :working
-          else :working
+          elsif s.finished? then :active
+          else :active
           end
         sec[section] << Row.new(session: s, entry: e, section: section)
       end
       sec.pinned.sort_by! { |r| -(r.pinned_at || 0) }
       sec.needs_you.sort_by! { |r| -(r.state_since || 0) }
-      sec.working.sort_by! { |r| [r.session.finished? ? 1 : 0, -(r.session.started_at&.to_i || 0)] }
+      sec.active.sort_by! { |r| [r.session.finished? ? 1 : 0, -(r.session.started_at&.to_i || 0)] }
       sec.snoozed.sort_by! { |r| r.parked? ? [1, 0] : [0, r.wake_at.to_i] }
       sec.settled.sort_by! { |r| -(r.state_since || 0) }
       sec
@@ -211,6 +220,11 @@ module ClaudeInbox
         e.delete("snoozed_at")
         e.delete("settled_at")
       end
+    end
+
+    def acknowledge(id)
+      now = @clock.call
+      edit(id) { |e| e["acknowledged_at"] = now.to_i }
     end
 
     def settle(id)
