@@ -225,7 +225,6 @@ module ClaudeInbox
     end
 
     def style_label(label, row, section, sel)
-      row.session
       if section == :settled then @p.dim(label)
       elsif row.alias_name then sel ? @p.bold.italic(label) : @p.italic(label)
       elsif sel then @p.bold(label)
