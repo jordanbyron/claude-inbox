@@ -1,0 +1,67 @@
+[
+  {
+    "id": "b03695b1",
+    "cwd": "/Users/byron/code/parks_genie",
+    "kind": "background",
+    "startedAt": 1788009502222,
+    "sessionId": "b03695b1-b1b9-4539-8191-9271bb0e6ad6",
+    "name": "app store release strategy",
+    "state": "done"
+  },
+  {
+    "id": "fbf5253a",
+    "cwd": "/Users/byron/code/parks_genie",
+    "kind": "background",
+    "startedAt": 1788094581957,
+    "sessionId": "fbf5253a-33e9-42af-b77a-e268ad3f6017",
+    "name": "github milestone review",
+    "state": "done"
+  },
+  {
+    "id": "b0b18338",
+    "cwd": "/Users/byron/code/parks_genie",
+    "kind": "background",
+    "startedAt": 1788699572908,
+    "sessionId": "b0b18338-2d97-45e3-bc2e-2b0d3b3bf898",
+    "name": "sensor token resilience test",
+    "state": "done"
+  },
+  {
+    "id": "dcbc1d98",
+    "cwd": "/Users/byron/code/parks_genie",
+    "kind": "background",
+    "startedAt": 1788805045410,
+    "sessionId": "dcbc1d98-5c16-486a-9876-27880ceea037",
+    "name": "trailforks skill handoff",
+    "state": "done"
+  },
+  {
+    "id": "f23c8673",
+    "cwd": "/Users/byron/code/comma3",
+    "kind": "background",
+    "startedAt": 1789305609296,
+    "sessionId": "f23c8673-7420-48d0-91eb-9c95c9b5aa3b",
+    "name": "comma3x not booting",
+    "state": "blocked"
+  },
+  {
+    "pid": 98455,
+    "id": "823b882f",
+    "cwd": "/Users/byron/code/comma3",
+    "kind": "background",
+    "startedAt": 1789500667399,
+    "sessionId": "823b882f-171f-4b66-b779-48a245dd21bc",
+    "name": "comma3x led flashing screen unresponsive",
+    "status": "idle",
+    "state": "done"
+  },
+  {
+    "pid": 57405,
+    "cwd": "/Users/byron/code/claude-inbox",
+    "kind": "interactive",
+    "startedAt": 1789604220680,
+    "sessionId": "4a93393d-1c06-57da-9fb8-12f5b1535d95",
+    "name": "claude-inbox-38",
+    "status": "busy"
+  }
+]

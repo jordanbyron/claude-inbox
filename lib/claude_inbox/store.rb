@@ -1,0 +1,218 @@
+# frozen_string_literal: true
+
+require "json"
+require "fileutils"
+require "tmpdir"
+
+module ClaudeInbox
+  # Snapshot of the last poll plus the per-session snooze table.
+  #
+  # All triage rules live in the pure class methods `merge_entries` and
+  # `sectionize`; the instance is a thin mutex-guarded holder around them
+  # with a JSON file behind it.
+  class Store
+    SETTLE_AFTER = 10 * 60      # seconds a done/stopped session stays quiet before settling
+    PRUNE_AFTER = 7 * 24 * 3600 # forget entries not seen in a poll for this long
+    UNTIL_WOKEN = "until_woken"
+    SECTIONS = %i[needs_you working snoozed settled].freeze
+
+    Sections = Struct.new(:needs_you, :working, :snoozed, :settled) do
+      def each_section = SECTIONS.each { |k| yield k, self[k] }
+
+      def all = SECTIONS.flat_map { |k| self[k] }
+    end
+
+    # A session paired with its store entry and computed presentation bits.
+    Row = Struct.new(:session, :entry, :section) do
+      def id = session.id
+
+      def alias_name = entry && entry["alias"]
+
+      def label = alias_name || session.display_name
+
+      def wake_at = entry && entry["wake_at"]
+
+      def parked? = wake_at == UNTIL_WOKEN
+
+      def state_since = entry && entry["state_since"]
+
+      def selectable? = session.actionable?
+    end
+
+    # ----- pure rules -------------------------------------------------------
+
+    # Fold a fresh poll into the entry table. Returns a new table.
+    #   * bumps `state_since` only when `state` actually changed
+    #   * records `last_seen`
+    #   * clears an elapsed or overridden snooze (wake rule)
+    #   * prunes entries not seen for PRUNE_AFTER
+    def self.merge_entries(entries, sessions, now)
+      now_i = now.to_i
+      out = {}
+      entries.each do |id, e|
+        next if e["last_seen"] && now_i - e["last_seen"] > PRUNE_AFTER
+        out[id] = e.dup
+      end
+      sessions.each do |s|
+        next unless s.actionable?
+        e = out[s.id] ||= {"last_state" => s.state, "state_since" => first_seen_since(s, now_i)}
+        if e["last_state"] != s.state
+          e["last_state"] = s.state
+          e["state_since"] = now_i
+        end
+        e["last_seen"] = now_i
+        e.delete("wake_at") if woken?(s, e, now_i)
+        e.delete("snoozed_at") unless e["wake_at"]
+      end
+      out
+    end
+
+    # A session we have never seen that is already finished and whose process
+    # the supervisor has reaped (no pid) has been quiet for at least the
+    # supervisor's ~1h idle timeout, which is longer than SETTLE_AFTER. Seed
+    # its state_since from started_at so it settles on the first poll instead
+    # of squatting in Working for SETTLE_AFTER.
+    def self.first_seen_since(session, now_i)
+      if session.finished? && !session.alive? && session.started_at
+        session.started_at.to_i
+      else
+        now_i
+      end
+    end
+
+    # Wake rule: snoozed session comes back when it needs you or the timer ran out.
+    def self.woken?(session, entry, now_i)
+      wake_at = entry["wake_at"]
+      return false if wake_at.nil?
+      return true if session.needs_you?
+      return false if wake_at == UNTIL_WOKEN
+      wake_at.to_i <= now_i
+    end
+
+    def self.snoozed?(session, entry, now_i)
+      entry && entry["wake_at"] && !woken?(session, entry, now_i)
+    end
+
+    # Settle rule: done/stopped and quiet for SETTLE_AFTER. `failed` never settles.
+    def self.settled?(session, entry, now_i)
+      return false unless session.finished?
+      since = entry && entry["state_since"]
+      return false unless since
+      now_i - since.to_i > SETTLE_AFTER
+    end
+
+    # (sessions, entries, now) -> Sections of Rows. Interactive sessions land in
+    # Working (they're live) but are never selectable.
+    def self.sectionize(sessions, entries, now)
+      now_i = now.to_i
+      sec = Sections.new(needs_you: [], working: [], snoozed: [], settled: [])
+      sessions.each do |s|
+        e = s.id && entries[s.id]
+        section =
+          if s.interactive? then :working
+          elsif snoozed?(s, e, now_i) then :snoozed
+          elsif s.needs_you? then :needs_you
+          elsif settled?(s, e, now_i) then :settled
+          elsif s.finished? then :working
+          else :working
+          end
+        sec[section] << Row.new(session: s, entry: e, section: section)
+      end
+      sec.needs_you.sort_by! { |r| -(r.state_since || 0) }
+      sec.working.sort_by! { |r| [r.session.finished? ? 1 : 0, -(r.session.started_at&.to_i || 0)] }
+      sec.snoozed.sort_by! { |r| r.parked? ? [1, 0] : [0, r.wake_at.to_i] }
+      sec.settled.sort_by! { |r| -(r.state_since || 0) }
+      sec
+    end
+
+    # Snooze targets, evaluated at `now`. Returns epoch seconds or UNTIL_WOKEN.
+    def self.snooze_until(choice, now)
+      case choice
+      when :m15 then now.to_i + 15 * 60
+      when :h1 then now.to_i + 3600
+      when :tomorrow_9am
+        t = Time.at(now.to_i)
+        t9 = Time.new(t.year, t.month, t.day, 9, 0, 0, t.utc_offset)
+        t9 += 86_400 if t9 <= t
+        t9.to_i
+      when :until_woken then UNTIL_WOKEN
+      else raise ArgumentError, "unknown snooze #{choice.inspect}"
+      end
+    end
+
+    # ----- stateful holder --------------------------------------------------
+
+    DEFAULT_PATH = File.join(Dir.home, ".config", "claude-inbox", "state.json")
+
+    attr_reader :path
+
+    def initialize(path: DEFAULT_PATH, clock: -> { Time.now })
+      @path = path
+      @clock = clock
+      @mutex = Mutex.new
+      @sessions = []
+      @entries = load
+    end
+
+    def update(sessions)
+      @mutex.synchronize do
+        @sessions = sessions
+        @entries = self.class.merge_entries(@entries, sessions, @clock.call)
+        save
+      end
+    end
+
+    def sections(now = @clock.call)
+      @mutex.synchronize { self.class.sectionize(@sessions, @entries, now) }
+    end
+
+    def sessions = @mutex.synchronize { @sessions.dup }
+
+    def snooze(id, choice)
+      now = @clock.call
+      edit(id) do |e|
+        e["wake_at"] = self.class.snooze_until(choice, now)
+        e["snoozed_at"] = now.to_i
+      end
+    end
+
+    def wake(id)
+      edit(id) do |e|
+        e.delete("wake_at")
+        e.delete("snoozed_at")
+      end
+    end
+
+    def set_alias(id, name)
+      edit(id) { |e| name.to_s.empty? ? e.delete("alias") : e["alias"] = name }
+    end
+
+    def entry(id) = @mutex.synchronize { @entries[id]&.dup }
+
+    private
+
+    def edit(id)
+      @mutex.synchronize do
+        e = (@entries[id] ||= {"state_since" => @clock.call.to_i})
+        yield e
+        save
+      end
+    end
+
+    def load
+      return {} unless @path && File.exist?(@path)
+      data = JSON.parse(File.read(@path))
+      data["sessions"] || {}
+    rescue JSON::ParserError
+      {}
+    end
+
+    def save
+      return unless @path
+      FileUtils.mkdir_p(File.dirname(@path))
+      tmp = File.join(File.dirname(@path), ".state.#{Process.pid}.tmp")
+      File.write(tmp, JSON.pretty_generate({"version" => 1, "sessions" => @entries}))
+      File.rename(tmp, @path)
+    end
+  end
+end

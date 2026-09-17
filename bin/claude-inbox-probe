@@ -1,0 +1,21 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# M0: print parsed sections with no TUI. Pass a fixture path to skip the daemon.
+require "bundler/setup"
+require_relative "../lib/claude_inbox"
+
+client = ARGV[0] ? ClaudeInbox::FixtureClient.new(ARGV[0]) : ClaudeInbox::AgentsClient.new
+sessions = client.list
+store = ClaudeInbox::Store.new(path: nil)
+store.update(sessions)
+
+now = Time.now
+store.sections(now).each_section do |name, rows|
+  puts "== #{name} (#{rows.size})"
+  rows.each do |r|
+    s = r.session
+    age = s.started_at ? "#{((now - s.started_at) / 60).round}m" : "?"
+    puts format("  %-9s %-8s %-8s %-6s %-40s %s", s.id || "-", s.state || s.kind, s.status || "-", age, r.label[0, 40], s.project)
+  end
+end
