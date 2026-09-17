@@ -10,6 +10,7 @@ require_relative "store"
 require_relative "renderer"
 require_relative "peek"
 require_relative "keymap"
+require_relative "new_session_form"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
@@ -31,6 +32,7 @@ module ClaudeInbox
       @store = store
       @out = out
       @input = input
+      @color = color
       @renderer = Renderer.new(color: color)
       @painter = Painter.new(out)
       @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
@@ -208,6 +210,11 @@ module ClaudeInbox
 
     def ensure_selection(sections)
       keys = selectable_keys(sections)
+      if @pending_select && keys.include?(@pending_select)
+        select(@pending_select)
+        @pending_select = nil
+        return
+      end
       return if keys.include?(@selected)
       select(keys.first)
     end
@@ -331,6 +338,7 @@ module ClaudeInbox
       when :stop then open_stop_confirm
       when :refresh then Thread.new { poll_once }
       when :toggle_peek then toggle_peek
+      when :new_session then open_new_session
       when :filter then start_filter
       when :command then @command = +""
       when :escape then clear_filter
@@ -435,8 +443,31 @@ module ClaudeInbox
       @modal = {kind: :alias, id: @selected, buffer: +current}
     end
 
+    def open_new_session
+      cwd = selected_session&.cwd || Dir.pwd
+      @modal = {kind: :new, form: NewSessionForm.new(cwd: cwd, pastel: Pastel.new(enabled: @color))}
+    end
+
+    def start_session(form)
+      v = form.values
+      notice("starting session…")
+      Thread.new do
+        id = @client.spawn(prompt: v[:prompt], cwd: v[:cwd], model: v[:model], effort: v[:effort],
+          permission_mode: v[:permission_mode], worktree: v[:worktree], name: v[:name])
+        notice("started #{id}")
+        @pending_select = id
+        poll_once
+      rescue => e
+        @queue << [:error, e.message]
+      end
+    end
+
     def modal_lines(width)
       return nil unless @modal
+      if @modal[:kind] == :new
+        box_w = [width - 4, 76].min
+        return TTY::Box.frame(@modal[:form].lines(box_w - 4).join("\n"), title: {top_left: " New session "}, padding: [0, 1], width: box_w).split("\n")
+      end
       content =
         case @modal[:kind]
         when :snooze
@@ -453,6 +484,14 @@ module ClaudeInbox
 
     def handle_modal_key(name, key)
       case @modal[:kind]
+      when :new
+        form = @modal[:form]
+        case form.press(name, key)
+        when :cancel then @modal = nil
+        when :submit
+          @modal = nil
+          start_session(form)
+        end
       when :snooze
         if name == :escape || name == "q"
           @modal = nil

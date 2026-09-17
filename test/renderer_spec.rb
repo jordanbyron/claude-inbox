@@ -67,7 +67,7 @@ describe ClaudeInbox::Renderer do
                                                                         
                                                                         
                                                                         
- j/k move  ⏎ attach  s snooze  u wake  a alias  x stop  p peek  ⇥ secti…
+ j/k move  ⏎ attach  n new  s snooze  u wake  a alias  x stop  p peek  …
     TXT
     _(f.lines).must_equal expected
   end

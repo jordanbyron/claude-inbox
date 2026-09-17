@@ -41,6 +41,7 @@ Keyboard only, vim flavoured. Arrows work too.
 | `za` `zo` `zc` | toggle / open / close the Settled fold |
 | `p` | toggle the read-only peek pane |
 | `J` `K` (`Ctrl-e` `Ctrl-y`) | scroll the peek pane |
+| `n` | new session: prompt, name, directory, model, effort, permissions, worktree |
 | `s` | snooze: `1` 15m · `2` 1h · `3` tomorrow 9am · `4` until woken |
 | `u` | wake a snoozed session now |
 | `a` | set a local alias (never touches the real session name) |
@@ -53,6 +54,14 @@ Keyboard only, vim flavoured. Arrows work too.
 Bindings live in `ClaudeInbox::Keymap`, a pure resolver with chord support
 that is unit tested on its own. A fast `Esc` followed by `:` is split back
 into two keys, since tty-reader would otherwise glue them together.
+
+### New session
+
+`n` opens a form. `Tab` / `Shift+Tab` move between fields, text fields take
+typing, choice fields cycle with `h` `l` or the arrows, `Enter` starts it,
+`Esc` cancels. The directory defaults to the selected row's. It runs
+`claude --bg "<prompt>"` with only the flags you changed from default, in
+that directory, and selects the new row once it shows up in the next poll.
 
 ### Why `←` comes back here and not to native agent view
 
@@ -102,6 +111,10 @@ AgentsClient  →  Store  →  Renderer  →  App
   into readable lines for the peek pane.
 
 ## Things learned from the real CLI (2.1.273)
+
+- Terminal.app puts the tty's active process in the tab title, so a poller that
+  forks `claude` every few seconds makes the title flicker. Every helper
+  subprocess here is started with `setsid` so it has no controlling tty.
 
 - `claude agents --json --all` matches the documented shape exactly. A `done`
   session can still carry a `pid` and `status: idle`.

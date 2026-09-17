@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
-require "open3"
+require_relative "subprocess"
 
 module ClaudeInbox
   # The only place that shells out to `claude`. Returns plain Ruby values.
@@ -18,9 +18,9 @@ module ClaudeInbox
       args = [@bin, "agents", "--json"]
       args << "--all" if all
       args += ["--cwd", cwd] if cwd
-      out, err, status = Open3.capture3(*args)
-      raise Error, "claude agents failed: #{err.strip}" unless status.success?
-      classify_origins(parse(out))
+      r = Subprocess.capture(*args)
+      raise Error, "claude agents failed: #{r.err.strip}" unless r.success?
+      classify_origins(parse(r.out))
     end
 
     # Raw terminal replay for a session, or nil when the daemon can't serve it
@@ -57,9 +57,29 @@ module ClaudeInbox
 
     def respawn(id) = run(@bin, "respawn", id)
 
-    def daemon_alive?
-      _out, _err, status = Open3.capture3(@bin, "daemon", "status")
-      status.success?
+    def daemon_alive? = Subprocess.capture(@bin, "daemon", "status").success?
+
+    MODELS = %w[default fable opus sonnet haiku].freeze
+    EFFORTS = %w[default low medium high xhigh max].freeze
+    PERMISSION_MODES = %w[default acceptEdits auto plan bypassPermissions].freeze
+
+    # Start a background session. Returns its short id.
+    def spawn(prompt:, cwd:, **opts)
+      argv = self.class.spawn_args(@bin, prompt: prompt, **opts)
+      r = Subprocess.capture(*argv, chdir: cwd)
+      raise Error, "claude --bg failed: #{(r.err + r.out).strip}" unless r.success?
+      r.out[/\b[0-9a-f]{8}\b/] || r.out.strip
+    end
+
+    # Pure so it can be tested: "default" means leave the flag off.
+    def self.spawn_args(bin, prompt:, model: nil, effort: nil, permission_mode: nil, worktree: false, name: nil)
+      argv = [bin, "--bg", prompt]
+      argv += ["--model", model] if model && model != "default"
+      argv += ["--effort", effort] if effort && effort != "default"
+      argv += ["--permission-mode", permission_mode] if permission_mode && permission_mode != "default"
+      argv += ["--name", name] if name && !name.strip.empty?
+      argv << "--worktree" if worktree
+      argv
     end
 
     def parse(json)
@@ -78,16 +98,16 @@ module ClaudeInbox
     end
 
     def remote_pids(pids)
-      out, _err, status = Open3.capture3("ps", "-o", "pid=,ppid=,command=", "-p", pids.join(","))
-      return [] unless status.success?
-      rows = out.lines.map { |l|
+      r = Subprocess.capture("ps", "-o", "pid=,ppid=,command=", "-p", pids.join(","))
+      return [] unless r.success?
+      rows = r.out.lines.map { |l|
         pid, ppid, *cmd = l.split
         [pid.to_i, ppid.to_i, cmd.join(" ")]
       }
       by_sdk = rows.select { |_, _, cmd| cmd.include?("--sdk-url") }.map(&:first)
       parents = rows.map { |_, ppid, _| ppid }.uniq
-      pout, _perr, pstatus = Open3.capture3("ps", "-o", "pid=,command=", "-p", parents.join(","))
-      rc_parents = pstatus.success? ? pout.lines.select { |l| l.split[1..].join(" ").match?(/\bclaude rc\b/) }.map { |l| l.split.first.to_i } : []
+      pr = Subprocess.capture("ps", "-o", "pid=,command=", "-p", parents.join(","))
+      rc_parents = pr.success? ? pr.out.lines.select { |l| l.split[1..].join(" ").match?(/\bclaude rc\b/) }.map { |l| l.split.first.to_i } : []
       by_rc = rows.select { |_, ppid, _| rc_parents.include?(ppid) }.map(&:first)
       (by_sdk + by_rc).uniq
     rescue Errno::ENOENT
@@ -99,7 +119,7 @@ module ClaudeInbox
     def kill_when_agents_view(pid)
       loop do
         sleep WATCH_INTERVAL
-        cmd = `ps -o command= -p #{pid.to_i} 2>/dev/null`
+        cmd = Subprocess.capture("ps", "-o", "command=", "-p", pid.to_s).out
         break if cmd.empty?
         next unless cmd.split[1] == "agents"
         File.write("/tmp/inbox-debug.log", "#{Time.now} watchdog saw #{cmd.inspect}\n", mode: "a") if ENV["CLAUDE_INBOX_DEBUG"]
@@ -113,8 +133,8 @@ module ClaudeInbox
     end
 
     def run(*argv)
-      _out, err, status = Open3.capture3(*argv)
-      raise Error, "#{argv[1]} failed: #{err.strip}" unless status.success?
+      r = Subprocess.capture(*argv)
+      raise Error, "#{argv[1]} failed: #{r.err.strip}" unless r.success?
       true
     end
   end
@@ -141,6 +161,11 @@ module ClaudeInbox
     def attach(id) = system("sh", "-c", "printf 'fake attach to %s\\npress enter to detach: ' \"$1\"; read -r _", "attach", id)
 
     def stop(_id) = true
+
+    def spawn(prompt:, cwd:, **)
+      sleep 0.5
+      "deadbeef"
+    end
 
     def rm(_id) = true
 

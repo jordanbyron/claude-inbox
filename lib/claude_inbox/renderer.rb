@@ -28,7 +28,7 @@ module ClaudeInbox
     SPINNER = %w[⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏].freeze
 
     KEYS = [
-      ["j/k", "move"], ["⏎", "attach"], ["s", "snooze"], ["u", "wake"],
+      ["j/k", "move"], ["⏎", "attach"], ["n", "new"], ["s", "snooze"], ["u", "wake"],
       ["a", "alias"], ["x", "stop"], ["p", "peek"], ["⇥", "section"],
       ["za", "fold"], ["/", "filter"], [":q", "quit"]
     ].freeze
