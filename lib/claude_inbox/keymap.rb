@@ -45,7 +45,7 @@ module ClaudeInbox
       "pr" => :open_pr, "pin" => :toggle_pin
     }.freeze
 
-    HELP = "j/k move · gg/G top/bottom · ^d/^u page · ⏎/l attach · t pin · s snooze · u wake · a alias · x settle · o open PR · P link PR · X stop · ^x^x delete · n new · p peek · tab section · za fold · / filter · :q quit"
+    HELP = "j/k move · gg/G top/bottom · ^d/^u page · ⏎/l attach · t pin · s snooze · u wake · a alias · x settle · o open PR · P link PR · X stop · ^x delete · n new · p peek · tab section · za fold · / filter · :q quit"
 
     attr_reader :pending
 

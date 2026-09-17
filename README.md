@@ -60,7 +60,7 @@ alternate scroll mode (`\e[?1007h`) — Apple Terminal does not.
 | `o` | open the session's pull request in the browser |
 | `P` | link a pull request by hand (empty clears; the scanned links return) |
 | `X` | stop the session (`y` to confirm) |
-| `Ctrl-x` `Ctrl-x` | delete the session for good — conversation and worktree with it (first press asks, second does it; `esc` keeps it) |
+| `Ctrl-x` | delete the session for good — conversation and worktree with it (`y` to confirm) |
 | `/` | filter by name or cwd; `Enter` keeps it, `Esc` clears |
 | `:q` | quit (`:peek`, `:refresh`, `:pr`, `:pin` also exist) |
 | `R` | poll now |
@@ -70,13 +70,12 @@ Bindings live in `ClaudeInbox::Keymap`, a pure resolver with chord support
 that is unit tested on its own. A fast `Esc` followed by `:` is split back
 into two keys, since tty-reader would otherwise glue them together.
 
-`X` and `Ctrl-x` `Ctrl-x` are not the same key twice over. `X` runs `claude
-stop`: the process ends, the conversation is kept, and `Enter` resumes it
-later. `Ctrl-x` `Ctrl-x` runs `claude rm`, the same thing `Ctrl-x` twice does
-in `claude agents` — the session, its transcript and its worktree all go, and
-so does our own state entry for it, rather than sitting out the seven-day
-prune. Nothing resumes afterwards, which is why only a second `Ctrl-x`
-confirms it and `y` does not.
+`X` and `Ctrl-x` both ask before they act, and both take `y`, but they are not
+the same thing. `X` runs `claude stop`: the process ends, the conversation is
+kept, and `Enter` resumes it later. `Ctrl-x` runs `claude rm` — the session,
+its transcript and its worktree all go, and so does our own state entry for
+it, rather than sitting out the seven-day prune. Nothing resumes afterwards,
+so read the box before answering.
 
 ### New session
 

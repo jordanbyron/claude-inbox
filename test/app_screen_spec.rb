@@ -13,8 +13,15 @@ describe ClaudeInbox::App do
     Class.new(ClaudeInbox::FixtureClient) {
       def removed = (@removed ||= [])
 
+      def stopped = (@stopped ||= [])
+
       def rm(id)
         removed << id
+        true
+      end
+
+      def stop(id)
+        stopped << id
         true
       end
     }.new(fixture_path("agents.json"))
@@ -64,35 +71,28 @@ describe ClaudeInbox::App do
     _(left.index(ClaudeInbox::App::WHEEL_KEYS_OFF)).must_be :<, left.index(ClaudeInbox::App::ALT_OFF)
   end
 
-  describe "ctrl-x ctrl-x deletes a session" do
-    it "asks on the first press and deletes on the second" do
+  describe "ctrl-x deletes a session" do
+    it "asks first and deletes once confirmed" do
       a = loaded_app("f23c8673")
 
       a.send(:handle_key, CTRL_X)
       _(a.send(:modal_lines, 60).join("\n")).must_include "Delete session f23c8673?"
       _(client.removed).must_be_empty
 
-      a.send(:handle_key, CTRL_X)
+      a.send(:handle_key, "y")
       _(wait_for { client.removed == %w[f23c8673] }).must_equal true
       _(wait_for { store.entry("f23c8673").nil? }).must_equal true
     end
 
     it "keeps the session when the confirm is dismissed" do
-      a = loaded_app("f23c8673")
-      a.send(:handle_key, CTRL_X)
-      a.send(:handle_key, "\e")
+      ["\e", "n", "q"].each do |dismiss|
+        a = loaded_app("f23c8673")
+        a.send(:handle_key, CTRL_X)
+        a.send(:handle_key, dismiss)
 
-      _(a.send(:modal_lines, 60)).must_be_nil
-      _(client.removed).must_be_empty
-    end
-
-    it "does not take y for an answer, the way the stop confirm does" do
-      a = loaded_app("f23c8673")
-      a.send(:handle_key, CTRL_X)
-      a.send(:handle_key, "y")
-
-      _(a.send(:modal_lines, 60).join("\n")).must_include "Delete session"
-      _(client.removed).must_be_empty
+        _(a.send(:modal_lines, 60)).must_be_nil
+        _(client.removed).must_be_empty
+      end
     end
 
     it "refuses on a terminal row instead of arming a confirm it can't honour" do
@@ -101,6 +101,20 @@ describe ClaudeInbox::App do
 
       _(a.send(:modal_lines, 60)).must_be_nil
       _(a.instance_variable_get(:@notice)[0]).must_include "terminal"
+    end
+
+    # Waiting for the stop to land is what makes "nothing was deleted" mean
+    # anything: the action runs on a thread, so asserting it straight away
+    # passes no matter which way the key was routed.
+    it "still stops rather than deletes on X, sharing the one confirm" do
+      a = loaded_app("f23c8673")
+      a.send(:handle_key, "X")
+      _(a.send(:modal_lines, 60).join("\n")).must_include "Stop session f23c8673?"
+
+      a.send(:handle_key, "y")
+      _(wait_for { client.stopped == %w[f23c8673] }).must_equal true
+      _(client.removed).must_be_empty
+      _(store.entry("f23c8673")).wont_be_nil
     end
   end
 end
