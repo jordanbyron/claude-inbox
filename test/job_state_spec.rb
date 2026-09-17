@@ -72,7 +72,7 @@ describe JobState do
     _(stalled.in_flight_label).must_be_nil
   end
 
-  it "reads the colour /color wrote into the job file" do
+  it "reads the color /color wrote into the job file" do
     _(JobState.read("b0b18338", jobs_dir: fixture_path("jobs")).color).must_equal "orange"
     _(JobState.read("b03695b1", jobs_dir: fixture_path("jobs")).color).must_be_nil
     _(JobState.new({}).color).must_be_nil

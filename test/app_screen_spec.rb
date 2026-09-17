@@ -39,7 +39,7 @@ describe ClaudeInbox::App do
     )
   end
 
-  it "fills in each session's colour from its job file on every poll" do
+  it "fills in each session's color from its job file on every poll" do
     loaded_app(nil)
     by_id = store.sessions.to_h { |s| [s.id, s.color] }
     _(by_id["b0b18338"]).must_equal "orange"

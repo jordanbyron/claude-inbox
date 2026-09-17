@@ -12,10 +12,10 @@ module ClaudeInbox
   # The file tells them apart: `tempo` is the agent's own pulse, `fan` names
   # each outstanding piece of work, and `detail` is the session's own status
   # line. It also carries the PR links the daemon scanned out of the
-  # transcript, which PullRequests reads through here, and the colour `/color`
+  # transcript, which PullRequests reads through here, and the color `/color`
   # set on the session, which `claude agents --json` drops.
   #
-  # Never cached. A colour changes the moment you type `/color`, so every poll
+  # Never cached. A color changes the moment you type `/color`, so every poll
   # asks the file again.
   #
   # The file says what a session is *doing*, never whether it is *alive*: the

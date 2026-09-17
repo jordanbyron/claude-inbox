@@ -50,8 +50,8 @@ the session's own job file, which `claude agents --json` does not expose; the
 inbox still takes the state itself from the daemon, the only thing that knows
 whether a session is alive.
 
-A session you gave a colour to with `/color` wears it on the label — see
-[Colours](#colours).
+A session you gave a color to with `/color` wears it on the label — see
+[Colors](#colors).
 
 ## Keys
 
@@ -300,7 +300,7 @@ AgentsClient  →  PullRequests  →  JobState  →  Store  →  Renderer  →  
 - `claude agents --json --all` matches the documented shape exactly. A `done`
   session can still carry a `pid` and `status: idle`.
 - `claude logs <id>` is **not** plain text. It is a replay of the session's terminal
-  output: cursor positioning, erase-line, colour. Words are frequently separated by
+  output: cursor positioning, erase-line, color. Words are frequently separated by
   cursor motion rather than spaces, so stripping escapes yields run-together garbage.
   Feeding it through a screen grid produces readable text.
 - `claude logs` fails with "job not found" for a finished session whose process the
@@ -325,10 +325,10 @@ AgentsClient  →  PullRequests  →  JobState  →  Store  →  Renderer  →  
   `OPEN` plus `isDraft`.
 
 - The job file is also where `/color` ends up, as `color`. `claude agents --json`
-  does not carry it, so a colour is only ever visible by reading the file. The CLI
+  does not carry it, so a color is only ever visible by reading the file. The CLI
   offers eight, and its own tmux code is the authority on what they mean to a
-  terminal: six are ansi names, `orange` and `pink` are 256-colour indexes 208 and
-  205. Interactive sessions have no job file and so never have a colour.
+  terminal: six are ansi names, `orange` and `pink` are 256-color indexes 208 and
+  205. Interactive sessions have no job file and so never have a color.
 
 ## Development
 

@@ -15,7 +15,7 @@ module ClaudeInbox
 
     def width(s) = Unicode::DisplayWidth.of(strip_ansi(s))
 
-    # Truncate plain (uncoloured) text to `w` columns, appending an ellipsis
+    # Truncate plain (uncolored) text to `w` columns, appending an ellipsis
     # when anything was cut. Handles wide glyphs by stepping grapheme by grapheme.
     def truncate(s, w)
       return "" if w <= 0

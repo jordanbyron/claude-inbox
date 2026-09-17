@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 module ClaudeInbox
-  # The eight colours `/color` offers, mapped to the terminal the same way
+  # The eight colors `/color` offers, mapped to the terminal the same way
   # Claude Code's own tmux code maps them when it tints a teammate pane:
   # six are plain ansi, and orange and pink have no ansi name so they go
-  # through a 256-colour index.
+  # through a 256-color index.
   #
   # Closing with 39 (default foreground) rather than 0 (reset everything)
   # matters: the label is often already bold or italic and a full reset

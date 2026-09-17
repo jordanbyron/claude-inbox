@@ -285,8 +285,8 @@ module ClaudeInbox
     end
 
     # The label is the one part of a row you own: `/color` tints it, and
-    # nothing else on the line. Glyph, badge and PR keep the state's colours,
-    # so no colour you pick can make a blocked session stop looking blocked.
+    # nothing else on the line. Glyph, badge and PR keep the state's colors,
+    # so no color you pick can make a blocked session stop looking blocked.
     # Settled stays dim — the section is meant to be quiet.
     def style_label(label, row, section, sel)
       return @p.dim(label) if section == :settled
@@ -333,7 +333,7 @@ module ClaudeInbox
       pr ? base + @p.dim(" · ") + pr : base
     end
 
-    # "#885 open" in GitHub's colours: green open, dim draft, purple merged,
+    # "#885 open" in GitHub's colors: green open, dim draft, purple merged,
     # red closed. Only the first PR is shown; the peek subtitle lists them all.
     def pr_badge(s, section)
       pr = s.pr

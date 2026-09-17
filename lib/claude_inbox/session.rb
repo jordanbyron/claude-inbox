@@ -71,7 +71,7 @@ module ClaudeInbox
     # stopped and is waiting on work it started. JobState tells them apart.
     def waiting_on_work? = effective_state == "working" && job_state&.waiting_on_work? == true
 
-    # The colour `/color` gave the session. Interactive sessions have no job
+    # The color `/color` gave the session. Interactive sessions have no job
     # file and so never carry one.
     def color = job_state&.color
 
