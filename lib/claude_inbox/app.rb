@@ -138,6 +138,7 @@ module ClaudeInbox
           @error = nil
         when :error then @error = rest[0]
         when :peek then @dirty = true
+        when :attach then attach(rest[0])
         end
       end
     rescue ThreadError
@@ -484,7 +485,7 @@ module ClaudeInbox
           permission_mode: v[:permission_mode], worktree: v[:worktree], name: v[:name])
         notice("started #{id}")
         @pending_select = id
-        poll_once
+        @queue << [:attach, id]
       rescue => e
         @queue << [:error, e.message]
       end
