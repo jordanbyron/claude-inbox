@@ -37,6 +37,12 @@ describe ClaudeInbox::AgentsClient do
     _(sessions.find(&:interactive?)).must_be :terminal?
   end
 
+  it "drops sub-agent rows entirely instead of listing them" do
+    c = ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), subagent_pids: [57405])
+    _(c.list.size).must_equal sessions.size - 1
+    _(c.list.any? { |s| s.pid == 57405 }).must_equal false
+  end
+
   it "keeps a session whose pid vanished" do
     s = sessions.find { |x| x.id == "b03695b1" }
     _(s).wont_be :alive?

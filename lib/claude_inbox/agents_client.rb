@@ -86,32 +86,60 @@ module ClaudeInbox
       JSON.parse(json).map { |h| Session.from_hash(h) }
     end
 
-    # The JSON reports Remote Control workers as `interactive`, same as a
-    # terminal you opened yourself. The process tree tells them apart: a
-    # remote worker runs with --sdk-url under a `claude rc` parent.
+    # The JSON reports Remote Control workers and local sub-agents as
+    # `interactive`, same as a terminal you opened yourself. The process tree
+    # tells them apart: a remote worker runs with --sdk-url, or is parented
+    # by `claude rc`; a local sub-agent is parented by another `claude`
+    # process instead of a shell. Sub-agents are dropped here rather than
+    # merely flagged: attach lands on their parent, so there is nothing
+    # useful to show or act on directly.
     def classify_origins(sessions)
       pids = sessions.select { |s| s.interactive? && s.pid }.map(&:pid)
       return sessions if pids.empty?
-      remote = remote_pids(pids)
-      sessions.each { |s| s.origin = remote.include?(s.pid) ? :remote : :terminal if s.interactive? }
-      sessions
+      remote, sub = origins_by_pid(pids)
+      sessions.each { |s| s.origin = origin_for(s.pid, remote, sub) if s.interactive? }
+      sessions.reject(&:subagent?)
     end
 
-    def remote_pids(pids)
+    def origin_for(pid, remote, sub)
+      return :remote if remote.include?(pid)
+      return :subagent if sub.include?(pid)
+      :terminal
+    end
+
+    # pids => [remote_pids, subagent_pids], both subsets of `pids`.
+    def origins_by_pid(pids)
+      rows = ps_rows(pids)
+      return [[], []] if rows.empty?
+      by_sdk = rows.select { |_, _, cmd| cmd.include?("--sdk-url") }.map(&:first)
+      parent_cmd = ps_commands(rows.map { |_, ppid, _| ppid }.uniq)
+      rc_ppids = parent_cmd.select { |_, cmd| cmd.match?(/\bclaude rc\b/) }.keys
+      claude_ppids = parent_cmd.select { |_, cmd| cmd.match?(/(^|\/)claude\b/) }.keys - rc_ppids
+      remote = (by_sdk + rows.select { |_, ppid, _| rc_ppids.include?(ppid) }.map(&:first)).uniq
+      sub = rows.select { |_, ppid, _| claude_ppids.include?(ppid) }.map(&:first) - remote
+      [remote, sub]
+    rescue Errno::ENOENT
+      [[], []]
+    end
+
+    def ps_rows(pids)
       r = Subprocess.capture("ps", "-o", "pid=,ppid=,command=", "-p", pids.join(","))
       return [] unless r.success?
-      rows = r.out.lines.map { |l|
+      r.out.lines.map { |l|
         pid, ppid, *cmd = l.split
         [pid.to_i, ppid.to_i, cmd.join(" ")]
       }
-      by_sdk = rows.select { |_, _, cmd| cmd.include?("--sdk-url") }.map(&:first)
-      parents = rows.map { |_, ppid, _| ppid }.uniq
-      pr = Subprocess.capture("ps", "-o", "pid=,command=", "-p", parents.join(","))
-      rc_parents = pr.success? ? pr.out.lines.select { |l| l.split[1..].join(" ").match?(/\bclaude rc\b/) }.map { |l| l.split.first.to_i } : []
-      by_rc = rows.select { |_, ppid, _| rc_parents.include?(ppid) }.map(&:first)
-      (by_sdk + by_rc).uniq
-    rescue Errno::ENOENT
-      []
+    end
+
+    # pid => command, for the given parent pids.
+    def ps_commands(ppids)
+      return {} if ppids.empty?
+      r = Subprocess.capture("ps", "-o", "pid=,command=", "-p", ppids.join(","))
+      return {} unless r.success?
+      r.out.lines.to_h { |l|
+        pid, *cmd = l.split
+        [pid.to_i, cmd.join(" ")]
+      }
     end
 
     private
@@ -141,17 +169,21 @@ module ClaudeInbox
 
   # Reads a committed JSON fixture instead of the daemon.
   class FixtureClient < AgentsClient
-    def initialize(path, logs: nil, remote_pids: [])
+    def initialize(path, logs: nil, remote_pids: [], subagent_pids: [])
       super()
       @path = path
       @logs = logs
       @remote_pids = remote_pids
+      @subagent_pids = subagent_pids
     end
 
-    # Fixture rows carry no process tree; treat every interactive row as remote
-    # when `remote_pids` is given, otherwise as a terminal.
+    # Fixture rows carry no process tree; classify each interactive row from
+    # the pid lists the test hands in, otherwise as a terminal, then drop
+    # sub-agents same as the real client does.
     def list(**)
-      parse(File.read(@path)).each { |s| s.origin = @remote_pids.include?(s.pid) ? :remote : :terminal if s.interactive? }
+      sessions = parse(File.read(@path))
+      sessions.each { |s| s.origin = origin_for(s.pid, @remote_pids, @subagent_pids) if s.interactive? }
+      sessions.reject(&:subagent?)
     end
 
     def logs(_id) = @logs
