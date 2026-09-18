@@ -297,6 +297,8 @@ AgentsClient  →  JobState  →  PullRequests  →  Poller  →  Store  →  Re
   has gone up. `--fixture` points it at `test/fixtures/jobs` with `gh` off.
 - `Palette` maps a session color to an escape sequence and knows nothing else.
 - `Store` holds the last poll and the snooze table behind a mutex; rules are class methods.
+  `Store::Sections` is one poll sorted into sections and knows where the cursor can land:
+  the `/` filter, the fold-or-rows rule and which section a key is in live there.
 - `Renderer` turns sections into an array of fixed-width strings. `Painter` diffs frames
   and repaints only changed rows.
 - `Reaper` runs `claude rm` over whatever `Store.reapable?` picks and appends a
