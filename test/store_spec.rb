@@ -347,6 +347,16 @@ describe Store do
         _(store.entry("a")).wont_include "settled_at"
       end
     end
+
+    it "takes hold again after a wake, even with no state change in between" do
+      Dir.mktmpdir do |dir|
+        store = Store.new(path: File.join(dir, "state.json"), clock: -> { now })
+        store.update([session(id: "a", state: "blocked")])
+        store.wake("a")
+        store.settle("a")
+        _(store.sections.settled.map(&:id)).must_equal %w[a]
+      end
+    end
   end
 
   describe "revive rule" do
