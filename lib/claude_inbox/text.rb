@@ -36,6 +36,20 @@ module ClaudeInbox
       out
     end
 
+    # Plain text with its first `n` columns removed.
+    def drop(s, n)
+      used = 0
+      out = +""
+      s.each_grapheme_cluster do |g|
+        if used >= n
+          out << g
+        else
+          used += Unicode::DisplayWidth.of(g)
+        end
+      end
+      out
+    end
+
     # Right-pad (ANSI-aware) to exactly `w` columns. Truncates if too long.
     def pad(s, w)
       cur = width(s)
