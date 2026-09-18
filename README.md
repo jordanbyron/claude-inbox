@@ -14,22 +14,22 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
 
 ## Sections
 
-1. **Pinned** — parked at the top by hand, regardless of state. `P` toggles it.
-2. **Needs you** — `blocked` or `failed`, unless you've attached to it since (see
+1. **Pinned.** Parked at the top by hand, regardless of state. `P` toggles it.
+2. **Needs you.** `blocked` or `failed`, unless you've attached to it since (see
    Acknowledge below).
-3. **Active** — `working`, plus recently finished sessions that have not settled
+3. **Active.** `working`, plus recently finished sessions that have not settled
    yet, plus interactive sessions, plus a needs-you session you've attached to
-   but that hasn't resolved. Interactive sessions report only `status`, so it is
-   mapped: busy is working, idle is done, waiting needs you. The JSON calls both
-   a terminal you opened yourself and a Remote Control worker "interactive"; the
-   client tells them apart from the process tree (a remote worker runs with
+   but that hasn't resolved. Interactive sessions report only `status`, so it
+   gets mapped: busy is working, idle is done, waiting needs you. The JSON calls
+   both a terminal you opened yourself and a Remote Control worker "interactive";
+   the client tells them apart from the process tree (a remote worker runs with
    `--sdk-url` under a `claude rc` parent). Remote sessions settle and snooze
    like any other row. A terminal you are sitting in never settles. Neither
    can be attached, peeked or stopped from outside; you can land on them, and
    Enter tells you why nothing happens.
-4. **Snoozed** — sorted by wake time; parked ("until I wake it") entries last.
+4. **Snoozed.** Sorted by wake time, parked ("until I wake it") entries last.
    Collapsed; Enter expands.
-5. **Settled** — `done`/`stopped` and quiet for 10 minutes, or whose pull
+5. **Settled.** `done`/`stopped` and quiet for 10 minutes, or whose pull
    request is merged or closed. Collapsed; Enter expands.
 
 A row with a pull request shows it after the state: `#885 open`, `#885 draft`,
@@ -37,8 +37,8 @@ A row with a pull request shows it after the state: `#885 open`, `#885 draft`,
 
 `working` from the daemon covers two situations, and the row says which. A
 spinner and `working` mean the agent is thinking. A steady `◌` and `idle · 1
-shell` mean the agent has stopped and is only waiting on work it started — a
-`--watch` shell, a sub-agent — which is why a session with nothing left to do
+shell` mean the agent has stopped and is only waiting on work it started, such as
+a `--watch` shell or a sub-agent. That is why a session with nothing left to do
 can sit there for an hour. Whatever the agent is up to, the open work is named
 next to the state: `working · 2 agents`, `idle · 1 shell`. The count comes from
 the session's own job file, which `claude agents --json` does not expose; the
@@ -49,7 +49,7 @@ whether a session is alive.
 
 Keyboard only, vim flavoured. Arrows work too. The wheel moves the selection
 rather than uncovering the scrollback behind us, in terminals that support
-alternate scroll mode (`\e[?1007h`) — Apple Terminal does not.
+alternate scroll mode (`\e[?1007h`). Apple Terminal does not.
 
 | Key | Action |
 |---|---|
@@ -62,7 +62,7 @@ alternate scroll mode (`\e[?1007h`) — Apple Terminal does not.
 | `za` `zo` `zc` | toggle / open / close the Snoozed or Settled fold under the cursor |
 | `p` | toggle the read-only peek pane |
 | `J` `K` (`Ctrl-e` `Ctrl-y`) | scroll the peek pane |
-| `n` | new session (full screen): multi-line prompt (`Enter` breaks a line, `Ctrl-S` starts it, `Ctrl-O` starts and opens it), name, directory (`Tab` completes), model, effort, permissions, worktree — "default" choices show what your settings resolve to |
+| `n` | new session (full screen): multi-line prompt (`Enter` breaks a line, `Ctrl-S` starts it, `Ctrl-O` starts and opens it), name, directory (`Tab` completes), model, effort, permissions, worktree; "default" choices show what your settings resolve to |
 | `t` | pin / unpin (parks it in Pinned at the top, regardless of state) |
 | `s` | snooze: `1` 15m · `2` 1h · `3` tomorrow 9am · `4` until woken |
 | `u` | wake a snoozed session now, or bring back one you settled |
@@ -71,7 +71,7 @@ alternate scroll mode (`\e[?1007h`) — Apple Terminal does not.
 | `o` | open the session's pull request in the browser |
 | `P` | link a pull request by hand (empty clears; the scanned links return) |
 | `X` | stop the session (`y` to confirm) |
-| `Ctrl-x` | delete the session for good — conversation and worktree with it (`y` to confirm) |
+| `Ctrl-x` | delete the session for good, conversation and worktree with it (`y` to confirm) |
 | `/` | filter by name or cwd; `Enter` keeps it, `Esc` clears |
 | `:q` | quit (`:peek`, `:refresh`, `:pr`, `:pin` also exist) |
 | `R` | poll now |
@@ -83,7 +83,7 @@ into two keys, since tty-reader would otherwise glue them together.
 
 `X` and `Ctrl-x` both ask before they act, and both take `y`, but they are not
 the same thing. `X` runs `claude stop`: the process ends, the conversation is
-kept, and `Enter` resumes it later. `Ctrl-x` runs `claude rm` — the session,
+kept, and `Enter` resumes it later. `Ctrl-x` runs `claude rm`. The session,
 its transcript and its worktree all go, and so does our own state entry for
 it, rather than sitting out the seven-day prune. Nothing resumes afterwards,
 so read the box before answering.
@@ -142,7 +142,7 @@ already blocked when you snoozed it stays snoozed; that is the point of snoozing
 
 **Acknowledge.** Attaching to a needs-you session (`Enter`) marks its current
 state seen, moving it to Active instead of leaving it in Needs You. It comes
-back to Needs You the moment its state changes again — still blocked with a
+back to Needs You the moment its state changes again. Still blocked with a
 new prompt doesn't count, only an actual state change does, same as hand-settle.
 
 **Settle.** `done` or `stopped` and unchanged for `SETTLE_AFTER` (10 minutes),
@@ -165,13 +165,13 @@ without asking first, so read the rest of this before you leave it running.
 
 Reaping does *not* key on Settled, deliberately. Settling answers "should I
 still be looking at this?", and the PR rule keeps a row in Active for as long
-as a pull request stays open — so an abandoned draft parks a session there for
+as a pull request stays open, so an abandoned draft parks a session there for
 ever and the deadest rows in the list are precisely the ones Settled never
 reaches. Idle time, measured from `state_since`, is the only clock.
 
 Four things are never reaped, whatever the clock says: a `working` session, one
 that still holds a process, a pin, and a snooze. `failed` *is* reaped, even
-though it never settles — it earns a permanent row because you ought to see it,
+though it never settles. It earns a permanent row because you ought to see it,
 and after a fortnight of not seeing it you never will. A pin or a parked
 snooze ("until I wake it") is the way to keep a session indefinitely; both are
 deliberate gestures, so both outrank the reaper.
