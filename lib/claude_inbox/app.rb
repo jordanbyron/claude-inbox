@@ -308,14 +308,12 @@ module ClaudeInbox
       @peek.want(key) if actionable_id?(key)
     end
 
-    # True when the selection is a background session we can act on.
-    def actionable_id?(key)
-      key.is_a?(String) && @store.sessions.any? { |s| s.id == key }
-    end
+    def session_for(key) = @store.sessions.find { |s| s.key == key }
 
-    def selected_session
-      @store.sessions.find { |s| s.key == @selected }
-    end
+    def selected_session = session_for(@selected)
+
+    # True when the selection is a background session we can act on.
+    def actionable_id?(key) = session_for(key)&.actionable?
 
     # Guard for attach/stop: refuse politely on a terminal or remote row.
     def require_actionable
