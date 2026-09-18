@@ -14,6 +14,13 @@ module ClaudeInbox
     :id, :cwd, :kind, :started_at, :session_id, :name,
     :state, :pid, :status, :waiting_for, :origin, :prs, :job_state
   ) do
+    # An unfilled session answers [] for prs rather than nil, so nobody has
+    # to know whether PullRequests has been past yet.
+    def initialize(*args, **kwargs)
+      super
+      self.prs ||= []
+    end
+
     def self.from_hash(h)
       new(
         id: h["id"],
@@ -74,9 +81,7 @@ module ClaudeInbox
 
     def project = cwd ? File.basename(cwd) : ""
 
-    # Pull requests tied to this session; PullRequests fills these in.
-    def prs = self[:prs] || []
-
+    # First of the pull requests tied to this session; PullRequests fills them in.
     def pr = prs.first
   end
 end

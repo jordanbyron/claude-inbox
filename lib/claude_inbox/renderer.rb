@@ -28,6 +28,22 @@ module ClaudeInbox
 
     SPINNER = %w[⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏].freeze
 
+    # The first poll usually lands inside a second. Past LOADING_QUIET the
+    # wait is long enough to feel like a hang, so it gets some company; past
+    # LOADING_HINT_AFTER it is long enough to be one.
+    LOADING_QUIET = 1.5
+    LOADING_HINT_AFTER = 10
+    QUIPS = [
+      "asking the daemon nicely…",
+      "counting agents…",
+      "reticulating splines…",
+      "herding sessions…",
+      "checking behind the couch…",
+      "reading the process tree…",
+      "polishing the spinner…",
+      "still here…"
+    ].freeze
+
     KEYS = [
       ["j/k", "move"], ["⏎", "attach"], ["n", "new"], ["t", "pin"], ["s", "snooze"], ["u", "wake"],
       ["a", "alias"], ["o", "PR"], ["x", "stop"], ["p", "peek"], ["⇥", "section"],
@@ -44,14 +60,20 @@ module ClaudeInbox
     #       peek (Array<String> | nil), peek_title, modal (Array<String> | nil),
     #       status (String), now (Time), filter (String | nil), command,
     #       tick (Integer, drives the spinner),
+    #       loading (Float seconds waited for the first poll, nil once it has landed),
     #       screen ({lines:, footer:} takes over everything below the header)
     def frame(sections, width:, height:, now:, **opts)
       return full_screen(sections, width, height, now, opts) if opts[:screen]
       selected = opts[:selected]
       list_w = width_for_list(width, opts[:peek])
-      body, items = body_lines(sections, list_w, selected, opts, now)
-
       view_h = height - 2 # header + footer
+      body, items =
+        if opts[:loading]
+          [loading_state(list_w, view_h, opts[:loading], opts[:tick].to_i), []]
+        else
+          body_lines(sections, list_w, selected, opts, now)
+        end
+
       top = clamp_top(opts[:top] || 0, body.size, view_h, items, selected)
       visible = body[top, view_h] || []
       visible_items = items[top, view_h] || []
@@ -66,7 +88,7 @@ module ClaudeInbox
         end
       end
 
-      lines = [header(sections, width, opts[:status], now)] + visible.map { |l| Text.pad(l, width) } + [footer(width, opts)]
+      lines = [header(sections, width, opts[:status], now, loading: opts[:loading])] + visible.map { |l| Text.pad(l, width) } + [footer(width, opts)]
       lines = overlay(lines, opts[:modal], width) if opts[:modal]
       Frame.new(lines, [nil] + visible_items + [nil], top)
     end
@@ -95,11 +117,11 @@ module ClaudeInbox
 
     # ----- chrome -------------------------------------------------------------
 
-    def header(sections, width, status, now)
+    def header(sections, width, status, now, loading: nil)
       brand = " " + @p.cyan.bold("▌ claude-inbox")
       right = status ? @p.dim(status) + " " : ""
       room = width - Text.width(brand) - Text.width(right) - 3
-      chips = header_chips(sections, compact: false)
+      chips = loading ? "" : header_chips(sections, compact: false)
       chips = header_chips(sections, compact: true) if Text.width(chips) > room
       chips = "" if Text.width(chips) > room
       Text.pad(brand + "   " + chips, width - Text.width(right)) + right
@@ -180,6 +202,42 @@ module ClaudeInbox
         end
       end
       [lines, items]
+    end
+
+    # Nothing to list yet and no way to know whether that means nothing is
+    # running, so neither the empty state nor the chips. A short wait gets
+    # a blank body; a long one gets a spinner, a dot pacing its tray and a
+    # rotating excuse, with the elapsed time so a hang looks like one.
+    def loading_state(width, height, waited, tick)
+      return [] if waited < LOADING_QUIET
+      block = [
+        centered(@p.cyan.bold(SPINNER[tick % SPINNER.size]), width),
+        "",
+        centered(tray(tick), width),
+        "",
+        centered(QUIPS[(tick / 6) % QUIPS.size], width),
+        centered(@p.dim("waiting on claude agents · #{waited.floor}s"), width)
+      ]
+      if waited >= LOADING_HINT_AFTER
+        block << "" << centered(@p.dim("slow? ") + @p.cyan("claude daemon status") + @p.dim(" says whether the daemon is up"), width)
+      end
+      [""] * [(height - block.size) / 2, 0].max + block
+    end
+
+    TRAY_SLOTS = 9
+
+    # A dot bouncing between the ends of a tray, one slot per tick.
+    def tray(tick)
+      span = TRAY_SLOTS - 1
+      i = tick % (span * 2)
+      pos = (i <= span) ? i : span * 2 - i
+      cells = Array.new(TRAY_SLOTS) { |j| (j == pos) ? @p.cyan.bold("●") : @p.dim("·") }
+      @p.dim("▌") + " " + cells.join(" ") + " " + @p.dim("▐")
+    end
+
+    def centered(s, width)
+      left = [(width - Text.width(s)) / 2, 0].max
+      Text.pad(" " * left + s, width)
     end
 
     def empty_state(width)
