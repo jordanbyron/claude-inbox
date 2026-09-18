@@ -47,6 +47,9 @@ module ClaudeInbox
 
       def pinned_at = entry && entry["pinned_at"]
 
+      # When `claude rm` last refused this session, so the Reaper backs off.
+      def reap_failed_at = entry && entry["reap_failed_at"]
+
       def key = session.key
 
       def selectable? = !key.nil?
@@ -315,14 +318,26 @@ module ClaudeInbox
       edit(id) { |e| name.to_s.empty? ? e.delete("alias") : e["alias"] = name }
     end
 
+    # The local alias, if one is set; nil means the session's own name shows.
+    def alias_for(id) = @mutex.synchronize { @entries.dig(id, "alias") }
+
     # Hand-set PR link; empty clears it and the scanned links show again.
     def set_pr(id, url)
       edit(id) { |e| url.to_s.empty? ? e.delete("pr") : e["pr"] = url }
     end
 
+    # The hand-set link, if any; nil means the scanned links are in force.
+    def pr_for(id) = @mutex.synchronize { @entries.dig(id, "pr") }
+
     # session key => url, for PullRequests#enrich.
     def pr_overrides = @mutex.synchronize { @entries.select { |_, e| e["pr"] }.transform_values { |e| e["pr"] } }
 
+    # Pairs a session with its entry for the rules and the Reaper, which read
+    # it through the Row's accessors rather than by key.
+    def row(session) = Row.new(session: session, entry: session.key && entry(session.key), section: nil)
+
+    # The raw entry, for the specs. Nothing in lib/ reads it: callers go
+    # through a Row or the readers above, so the key names stay in this file.
     def entry(id) = @mutex.synchronize { @entries[id]&.dup }
 
     # Forgets a session at once instead of waiting out PRUNE_AFTER, for one
