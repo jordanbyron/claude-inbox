@@ -5,8 +5,7 @@ require_relative "../lib/claude_inbox/images"
 require "tmpdir"
 
 describe ClaudeInbox::Images do
-  Result = ClaudeInbox::Subprocess::Result
-  OK = Struct.new(:success?)
+  def result(out, ok) = ClaudeInbox::Subprocess::Result.new(out, "", Struct.new(:success?).new(ok))
 
   def touch(dir, name, mtime: Time.now)
     File.join(dir, name).tap { |f|
@@ -43,7 +42,7 @@ describe ClaudeInbox::Images do
         calls = []
         run = ->(*argv) {
           calls << argv
-          Result.new("", "", OK.new(true))
+          result("", true)
         }
         clip = ClaudeInbox::Images.from_clipboard(dir: dir, now: now, run: run)
         _(clip.image).must_equal File.join(dir, now.strftime("%Y%m%d-%H%M%S-%L.png"))
@@ -57,11 +56,11 @@ describe ClaudeInbox::Images do
 
     it "falls back to the clipboard's text, or nothing" do
       Dir.mktmpdir do |dir|
-        run = ->(cmd, *) { (cmd == "pbpaste") ? Result.new("hi\n", "", OK.new(true)) : Result.new("", "no PNG", OK.new(false)) }
+        run = ->(cmd, *) { (cmd == "pbpaste") ? result("hi\n", true) : result("", false) }
         clip = ClaudeInbox::Images.from_clipboard(dir: dir, run: run)
         _(clip.image).must_be_nil
         _(clip.text).must_equal "hi\n"
-        empty = ->(*) { Result.new("", "", OK.new(false)) }
+        empty = ->(*) { result("", false) }
         _(ClaudeInbox::Images.from_clipboard(dir: dir, run: empty).to_a).must_equal [nil, nil]
       end
     end
