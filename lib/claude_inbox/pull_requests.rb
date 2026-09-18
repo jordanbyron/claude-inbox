@@ -136,17 +136,11 @@ module ClaudeInbox
 
     # Same shape as Claude Code's cache, so `seed` reads both alike.
     def resolved
-      @resolved ||= read_json(@resolved_path)
+      @resolved ||= Records.read(@resolved_path)
     end
 
     def claude_cache
-      @claude_cache ||= read_json(@cache_path)
-    end
-
-    def read_json(path)
-      (path && File.exist?(path)) ? JSON.parse(File.read(path)) : {}
-    rescue JSON::ParserError
-      {}
+      @claude_cache ||= Records.read(@cache_path)
     end
 
     # Under @mutex.
