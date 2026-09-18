@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 require "json"
-require "fileutils"
 require "tmpdir"
+require_relative "records"
 
 module ClaudeInbox
   # Snapshot of the last poll plus the per-session snooze table.
@@ -346,10 +346,7 @@ module ClaudeInbox
 
     def save
       return unless @path
-      FileUtils.mkdir_p(File.dirname(@path))
-      tmp = File.join(File.dirname(@path), ".state.#{Process.pid}.tmp")
-      File.write(tmp, JSON.pretty_generate({"version" => 1, "sessions" => @entries}))
-      File.rename(tmp, @path)
+      Records.save(@path, {"version" => 1, "sessions" => @entries})
     end
   end
 end
