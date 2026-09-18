@@ -347,7 +347,7 @@ module ClaudeInbox
       keys
     end
 
-    def folded?(name) = Store::FOLDABLE_SECTIONS.include?(name) && !@expanded[name]
+    def folded?(name) = Store.folded?(name, @expanded)
 
     def peek_body(row)
       return ["(nothing selected)"] unless row
