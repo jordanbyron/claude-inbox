@@ -613,8 +613,7 @@ module ClaudeInbox
       v = form.values
       notice("starting session…")
       in_background do
-        id = @client.spawn(prompt: v[:prompt], cwd: v[:cwd], model: v[:model], effort: v[:effort],
-          permission_mode: v[:permission_mode], worktree: v[:worktree], name: v[:name])
+        id = @client.spawn(**v)
         notice("started #{id}")
         @pending_select = id
         attach ? @queue << [:attach, id] : poll_once
