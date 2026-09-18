@@ -1,16 +1,20 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+# Resolve symlinks so `ln -s .../bin/claude-inbox ~/bin/` works from any cwd:
+# Bundler finds the Gemfile from this file, not from where it was invoked.
+root = File.expand_path("../..", File.realpath(__FILE__))
+ENV["BUNDLE_GEMFILE"] ||= File.join(root, "Gemfile")
 require "bundler/setup"
-require_relative "../lib/claude_inbox"
-require_relative "../lib/claude_inbox/app"
+require File.join(root, "lib", "claude_inbox")
+require File.join(root, "lib", "claude_inbox", "app")
 
 # Crash traces go here instead of the alt screen when set.
 $stderr.reopen(ENV["CLAUDE_INBOX_STDERR"], "a") if ENV["CLAUDE_INBOX_STDERR"]
 
 opts = {}
 if (i = ARGV.index("--fixture"))
-  fixtures = File.join(__dir__, "..", "test", "fixtures")
+  fixtures = File.join(root, "test", "fixtures")
   opts[:client] = ClaudeInbox::FixtureClient.new(ARGV[i + 1], logs: File.binread(File.join(fixtures, "logs_raw.txt")))
   opts[:store] = ClaudeInbox::Store.new(path: nil)
   opts[:jobs_dir] = File.join(fixtures, "jobs")
