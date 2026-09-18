@@ -7,14 +7,21 @@ module ClaudeInbox
   # arithmetic live here, so callers never index into the text themselves:
   # they hand over keypresses and ask for something to draw.
   #
-  # Positions count grapheme clusters, not bytes or characters — prompts and
-  # session names carry emoji, and character indexes cut them in half.
+  # Positions count cells, not bytes or characters. A cell is a grapheme
+  # cluster — prompts and session names carry emoji, and character indexes
+  # cut them in half — or a Chip, an attached image that shows as one
+  # `[Image #1]` token and moves and deletes as one unit, the way Claude
+  # Code's own prompt treats a pasted image.
   #
   #   b = TextBuffer.new("ab")
   #   b.press(:left, "\e[D")
   #   b.press("X", "X")
   #   b.to_s                    # => "aXb"
   class TextBuffer
+    Chip = Struct.new(:n, :path) do
+      def to_s = "[Image ##{n}]"
+    end
+
     def initialize(text = "")
       @g = text.grapheme_clusters
       @cursor = @g.size
@@ -27,6 +34,10 @@ module ClaudeInbox
     # Grapheme offset of the cursor. Rendering goes through #row / #view;
     # this is here for callers that need to reason about position (tests).
     attr_reader :cursor
+
+    def chips = @g.grep(Chip)
+
+    def expand = @g.map { |c| c.is_a?(Chip) ? yield(c) : c }.join
 
     # Swaps the whole text out and parks the cursor at the end — what
     # completion wants after it extends a path.
@@ -49,6 +60,15 @@ module ClaudeInbox
       g = text.grapheme_clusters
       @g.insert(@cursor, *g)
       @cursor += g.size
+    end
+
+    # Numbered after the chips already in the text, so a second image is
+    # `[Image #2]` even after the first was deleted, as Claude Code does.
+    def attach(path)
+      chip = Chip.new(@next_chip = (@next_chip || 0) + 1, path)
+      @g.insert(@cursor, chip)
+      @cursor += 1
+      chip
     end
 
     # Handles one keypress — readline's editing keys, plus printable text —
@@ -79,52 +99,87 @@ module ClaudeInbox
     def row(width, cursor: nil)
       return Text.truncate(to_s, width) unless cursor
       first = 0
-      first += 1 while Text.width(@g[first...@cursor].join) > width - 1
-      paint(Text.take(@g[first..].join, width), @cursor - first, cursor)
+      first += 1 while width_of(@g[first...@cursor]) > width - 1
+      cells = []
+      @g[first..].each do |c|
+        break if width_of(cells) + width_of([c]) > width
+        cells << c
+      end
+      paint(cells, @cursor - first, cursor)
     end
 
     # The visible slice of a multi-line editor: word-wrapped to `width`, at
     # most `height` rows, plus how many rows are hidden above them. Shows the
     # end of the text, which is where typing happens; walk the cursor up out
-    # of that window and the window follows it instead.
-    def view(width, height, cursor: nil)
+    # of that window and the window follows it instead. `chip` paints each
+    # attached image's token; without it they read as plain text.
+    def view(width, height, cursor: nil, chip: nil)
       rows = wrapped(width)
       at = cursor_row(rows)
       first = [rows.size - height, 0].max
       first = at if at < first
       slice = rows[first, height]
-      lines = slice.map(&:first)
+      lines = slice.map { |cells, _| paint(cells, nil, nil, chip) }
       if cursor
-        text, start = slice[at - first]
-        lines[at - first] = paint(text, @cursor - start, cursor)
+        cells, start = slice[at - first]
+        lines[at - first] = paint(cells, @cursor - start, cursor, chip)
       end
       [lines, first]
     end
 
     private
 
-    # Splits `text` at `offset` and marks the cell the cursor sits on, using
-    # a space when that is one past the end.
-    def paint(text, offset, cursor)
-      g = text.grapheme_clusters
-      g[0...offset].join + cursor.call(g[offset] || " ") + (g[(offset + 1)..] || []).join
+    def width_of(cells) = cells.sum { |c| Text.width(c.to_s) }
+
+    def paint(cells, offset, cursor, chip = nil)
+      out = cells.each_with_index.map do |c, i|
+        s = c.to_s
+        s = chip.call(s) if chip && c.is_a?(Chip)
+        (i == offset) ? cursor.call(s) : s
+      end
+      out << cursor.call(" ") if offset && offset >= cells.size
+      out.join
     end
 
-    # One entry per display row: [text, grapheme offset of its first cell].
-    # A cursor at the end of a row that is already full has no cell of its
+    # One entry per display row: [cells, offset of its first cell]. A
+    # cursor at the end of a row that is already full has no cell of its
     # own, so it gets a row of its own — what a terminal does when text
     # reaches the right margin.
     def wrapped(width)
       rows = logical_lines.flat_map do |line, start|
         at = start
-        (line.empty? ? [""] : Text.segments(line, width)).map do |seg|
+        (line.empty? ? [[]] : segments(line, width)).map do |seg|
           row = [seg, at]
-          at += seg.grapheme_clusters.size
+          at += seg.size
           row
         end
       end
-      rows << ["", @g.size] if @cursor == @g.size && Text.width(rows.last.first) >= width
+      rows << [[], @g.size] if @cursor == @g.size && width_of(rows.last.first) >= width
       rows
+    end
+
+    # Text.segments on cells: a chip is one cell however wide its label, so
+    # the wrap has to measure cells rather than a joined string.
+    def segments(cells, width)
+      return [cells] if width_of(cells) <= width
+      words = cells.slice_when { |c, _| c == " " }.to_a
+      lines = []
+      line = []
+      words.each do |word|
+        if !line.empty? && width_of(line) + width_of(word.reverse.drop_while { |c| c == " " }) > width
+          lines << line
+          line = []
+        end
+        while width_of(word) > width
+          cut = word.size - 1
+          cut -= 1 while cut > 0 && width_of(word[0...cut]) > width
+          lines << word[0...cut]
+          word = word[cut..]
+        end
+        line += word
+      end
+      lines << line unless line.empty?
+      lines
     end
 
     # The newline itself belongs to the line it ends, so a cursor sitting on
@@ -135,11 +190,11 @@ module ClaudeInbox
       line = []
       @g.each_with_index do |g, i|
         next line << g unless g == "\n"
-        out << [line.join, start]
+        out << [line, start]
         line = []
         start = i + 1
       end
-      out << [line.join, start]
+      out << [line, start]
     end
 
     def cursor_row(rows) = rows.rindex { |_, start| start <= @cursor } || 0

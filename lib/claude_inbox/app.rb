@@ -13,6 +13,7 @@ require_relative "peek"
 require_relative "keymap"
 require_relative "mouse"
 require_relative "new_session_form"
+require_relative "paste"
 require_relative "pull_requests"
 
 module ClaudeInbox
@@ -35,6 +36,11 @@ module ClaudeInbox
     # fall back to WHEEL_KEYS_ON's translation, or their own scrollback.
     MOUSE_ON = "\e[?1000h\e[?1006h"
     MOUSE_OFF = "\e[?1006l\e[?1000l"
+    # Bracketed paste: what is pasted arrives fenced off from what is typed
+    # (Paste), and a pasted image, which has no text, arrives as an empty
+    # fence rather than not at all.
+    PASTE_ON = "\e[?2004h"
+    PASTE_OFF = "\e[?2004l"
 
     SNOOZE_MENU = [
       ["1", "15 minutes", :m15],
@@ -68,6 +74,7 @@ module ClaudeInbox
       @peek_on = false
       @peek_offset = 0
       @keymap = Keymap.new
+      @paste = Paste.new
       @tick = 0
       @modal = nil
       @filter = nil
@@ -103,7 +110,7 @@ module ClaudeInbox
     end
 
     def enter_screen
-      @out.print ALT_ON, WHEEL_KEYS_ON, MOUSE_ON, TTY::Cursor.hide, TTY::Cursor.clear_screen
+      @out.print ALT_ON, WHEEL_KEYS_ON, MOUSE_ON, PASTE_ON, TTY::Cursor.hide, TTY::Cursor.clear_screen
       @out.flush
       @input.raw! if @input.respond_to?(:raw!) && @input.tty?
       @restored = false
@@ -115,7 +122,7 @@ module ClaudeInbox
       return if @restored
       @restored = true
       @input.cooked! if @input.respond_to?(:cooked!) && @input.tty?
-      @out.print TTY::Cursor.show, MOUSE_OFF, WHEEL_KEYS_OFF, ALT_OFF
+      @out.print TTY::Cursor.show, PASTE_OFF, MOUSE_OFF, WHEEL_KEYS_OFF, ALT_OFF
       @out.flush
     rescue
       nil
@@ -230,10 +237,20 @@ module ClaudeInbox
       end
     end
 
-    def handle_input(key)
-      events = Mouse.events(key)
-      return events.each { |e| handle_mouse(e) } if events.any?
-      split_keys(key).each { |k| handle_key(k) }
+    def handle_input(raw)
+      @paste.feed(raw).each do |kind, text|
+        next handle_paste(text) if kind == :paste
+        events = Mouse.events(text)
+        next events.each { |e| handle_mouse(e) } if events.any?
+        split_keys(text).each { |k| handle_key(k) }
+      end
+    end
+
+    # The form takes a paste whole, images included; the one-line editors
+    # take it as typing, so a pasted PR URL lands where it should.
+    def handle_paste(text)
+      return @modal[:form].paste(text) if @modal && @modal[:kind] == :new
+      text.each_char { |c| handle_key(c) }
     end
 
     def render

@@ -97,3 +97,52 @@ describe ClaudeInbox::TextBuffer do
     _(rows).must_equal ["abcd", "[ ]"]
   end
 end
+
+describe ClaudeInbox::TextBuffer, "with an image attached" do
+  let(:mark) { ->(cell) { "[#{cell}]" } }
+  let(:chip) { ->(cell) { "<#{cell}>" } }
+
+  def type(b, str) = str.each_char { |c| b.press(c, c) }
+
+  it "shows the image as a numbered token and hands its path back" do
+    b = ClaudeInbox::TextBuffer.new("see ")
+    b.attach("/tmp/a.png")
+    type(b, " and ")
+    b.attach("/tmp/b.png")
+    _(b.to_s).must_equal "see [Image #1] and [Image #2]"
+    _(b.chips.map(&:path)).must_equal ["/tmp/a.png", "/tmp/b.png"]
+    _(b.expand { |c| "@#{c.path}" }).must_equal "see @/tmp/a.png and @/tmp/b.png"
+  end
+
+  it "moves over and deletes the token as one cell" do
+    b = ClaudeInbox::TextBuffer.new("a")
+    b.attach("/tmp/a.png")
+    type(b, "b")
+    2.times { b.press(:left, "\e[D") }
+    _(b.cursor).must_equal 1
+    b.press(:delete, "\e[3~")
+    _(b.to_s).must_equal "ab"
+    b.attach("/tmp/c.png")
+    _(b.to_s).must_equal "a[Image #2]b"
+    b.press(:backspace, "\x7f")
+    _(b.to_s).must_equal "ab"
+  end
+
+  it "keeps numbering past a deleted image" do
+    b = ClaudeInbox::TextBuffer.new
+    b.attach("/tmp/a.png")
+    b.press(:backspace, "\x7f")
+    b.attach("/tmp/b.png")
+    _(b.to_s).must_equal "[Image #2]"
+  end
+
+  it "wraps the token whole and paints it, the cursor over all of it" do
+    b = ClaudeInbox::TextBuffer.new("look ")
+    b.attach("/tmp/a.png")
+    b.press(:left, "\e[D")
+    rows, = b.view(12, 3, cursor: mark, chip: chip)
+    _(rows).must_equal ["look ", "[<[Image #1]>]"]
+    rows, = b.view(12, 3, chip: chip)
+    _(rows).must_equal ["look ", "<[Image #1]>"]
+  end
+end

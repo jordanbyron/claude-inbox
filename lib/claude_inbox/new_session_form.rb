@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "agents_client"
+require_relative "images"
 require_relative "settings"
 require_relative "slash_commands"
 require_relative "text"
@@ -21,9 +22,10 @@ module ClaudeInbox
 
     MENU_ROWS = 6
 
-    def initialize(cwd:, pastel:, home: Dir.home)
+    def initialize(cwd:, pastel:, home: Dir.home, clipboard: Images.method(:from_clipboard))
       @p = pastel
       @home = home
+      @clipboard = clipboard
       @fields = [
         Field.new(:prompt, "Prompt", :multiline, TextBuffer.new),
         Field.new(:name, "Name", :text, TextBuffer.new),
@@ -53,6 +55,7 @@ module ClaudeInbox
       when :escape then return :cancel
       when :ctrl_s then return submit(attach: false)
       when :ctrl_o then return submit(attach: true)
+      when :ctrl_v then paste_clipboard
       when :tab then complete_dir || move(1)
       when :down then move(1)
       when :back_tab, :up then move(-1)
@@ -64,6 +67,23 @@ module ClaudeInbox
       edited = before && command_query && command_query != before
       @pick = 0 if edited
       @dismissed = nil if edited
+      :changed
+    end
+
+    # A bracketed paste. Empty is how a terminal pastes an image: there is
+    # no text to send, so the clipboard is read directly, the way Claude
+    # Code does on Cmd-V. A dropped file arrives as its path, and an image
+    # becomes a chip in the prompt rather than text.
+    def paste(text)
+      @error = nil
+      text = text.gsub(/\r\n?/, "\n")
+      if text.empty?
+        paste_clipboard
+      elsif focused.key == :prompt && (path = Images.dropped(text))
+        focused.value.attach(path)
+      else
+        insert(text)
+      end
       :changed
     end
 
@@ -83,7 +103,7 @@ module ClaudeInbox
 
     def values
       @fields.to_h { |f| [f.key, f.value.to_s] }.tap do |v|
-        v[:prompt] = v[:prompt].strip
+        v[:prompt] = @fields[0].value.expand { |chip| AgentsClient.mention(chip.path) }.strip
         v[:worktree] = v[:worktree] == "yes"
         v[:name] = nil if v[:name].strip.empty?
         v[:cwd] = File.expand_path(v[:cwd].strip.empty? ? "." : v[:cwd].strip)
@@ -135,7 +155,7 @@ module ClaudeInbox
       end
       keys =
         case focused.kind
-        when :multiline then [["⏎", "newline"]]
+        when :multiline then [["⏎", "newline"], ["^V", "image"]]
         when :choice then [["← → h l", "change"], ["⏎", "next"]]
         else [["⏎", "next"]]
         end
@@ -145,6 +165,23 @@ module ClaudeInbox
     end
 
     private
+
+    def paste_clipboard
+      clip = @clipboard.call
+      if clip.image
+        return @error = "images go in the prompt" unless focused.key == :prompt
+        focused.value.attach(clip.image)
+      elsif clip.text
+        insert(clip.text)
+      else
+        @error = "nothing on the clipboard"
+      end
+    end
+
+    def insert(text)
+      return unless editable?
+      focused.value.insert((focused.kind == :multiline) ? text : text.tr("\n", " "))
+    end
 
     def menu_press(name)
       case name
@@ -220,7 +257,7 @@ module ClaudeInbox
     def prompt_box(f, w, h)
       on = f.equal?(focused)
       edge = on ? ->(s) { @p.cyan(s) } : ->(s) { @p.dim(s) }
-      rows, hidden = f.value.view(w - 4, h, cursor: (caret if on))
+      rows, hidden = f.value.view(w - 4, h, cursor: (caret if on), chip: ->(s) { @p.cyan.bold(s) })
       rows = [@p.dim("What should this session do?")] if f.value.empty? && !on
       rows += [""] * (h - rows.size)
       [top_edge(edge, w, hidden)] +

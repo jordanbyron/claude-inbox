@@ -13,6 +13,10 @@ describe ClaudeInbox::AgentsClient do
     a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "fix it", model: "opus", effort: "high", permission_mode: "acceptEdits", worktree: true, name: "flaky")
     _(a).must_equal ["claude", "--bg", "fix it", "--model", "opus", "--effort", "high", "--permission-mode", "acceptEdits", "--name", "flaky", "--worktree"]
   end
+
+  it "mentions a file the way the CLI's own prompt does, spaces escaped" do
+    _(ClaudeInbox::AgentsClient.mention("/tmp/Screen Shot.png")).must_equal "@/tmp/Screen\\ Shot.png"
+  end
 end
 
 describe ClaudeInbox::NewSessionForm do
@@ -78,6 +82,61 @@ describe ClaudeInbox::NewSessionForm do
     type("do it")
     _(form.press(:ctrl_o, "\x0f")).must_equal :start_and_attach
     _(form.press(:ctrl_s, "\x13")).must_equal :start
+  end
+
+  describe "images" do
+    let(:clip) { ClaudeInbox::Images::Clipboard.new(nil, nil) }
+    let(:form) { ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), clipboard: -> { clip }) }
+
+    it "attaches the clipboard's image on an empty paste, as a token in the prompt" do
+      clip.image = "/tmp/shot.png"
+      type("match ")
+      _(form.paste("")).must_equal :changed
+      _(form.values[:prompt]).must_equal "match @/tmp/shot.png"
+      rows = form.screen(80, 24)
+      _(rows.find { |r| r.include?("match") }).must_include "[Image #1]"
+    end
+
+    it "attaches it on ^V too, for terminals without bracketed paste" do
+      clip.image = "/tmp/shot.png"
+      form.press(:ctrl_v, "\x16")
+      _(form.values[:prompt]).must_equal "@/tmp/shot.png"
+    end
+
+    it "pastes text from the clipboard when that is what is there" do
+      clip.text = "fix it"
+      form.press(:ctrl_v, "\x16")
+      _(form.values[:prompt]).must_equal "fix it"
+      clip.text = nil
+      form.press(:ctrl_v, "\x16")
+      _(form.footer).must_include "nothing on the clipboard"
+    end
+
+    it "keeps an image out of the one-line fields" do
+      clip.image = "/tmp/shot.png"
+      form.press(:tab, "\t")
+      form.paste("")
+      _(form.footer).must_include "images go in the prompt"
+      _(form.values[:name]).must_be_nil
+    end
+
+    it "attaches a dropped image file and keeps any other drop as text" do
+      Dir.mktmpdir do |dir|
+        File.write("#{dir}/a b.png", "x")
+        type("see ")
+        form.paste("#{dir}/a\\ b.png ")
+        form.paste(" not #{dir}/nope.txt")
+        _(form.values[:prompt]).must_equal "see @#{dir}/a\\ b.png not #{dir}/nope.txt"
+      end
+    end
+
+    it "pastes multi-line text into the prompt, and flattens it into a one-line field" do
+      form.paste("one\r\ntwo\rthree")
+      _(form.values[:prompt]).must_equal "one\ntwo\nthree"
+      form.press(:tab, "\t")
+      form.paste("my\nname")
+      _(form.values[:name]).must_equal "my name"
+    end
   end
 
   it "takes a multi-line prompt: enter breaks the line, ^S starts" do
