@@ -458,6 +458,14 @@ describe Store do
     end
   end
 
+  describe ".folded?" do
+    it "folds a foldable section until it is expanded" do
+      _(Store.folded?(:settled, {})).must_equal true
+      _(Store.folded?(:settled, {settled: true})).must_equal false
+      _(Store.folded?(:active, {})).must_equal false
+    end
+  end
+
   describe ".snooze_until" do
     let(:evening) { Time.new(2026, 9, 16, 20, 30, 0) }
 

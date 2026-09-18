@@ -189,7 +189,7 @@ module ClaudeInbox
         next if rows.empty?
         lines << "" << section_title(name, rows.size, width)
         items << nil << nil
-        if Store::FOLDABLE_SECTIONS.include?(name) && !expanded[name]
+        if Store.folded?(name, expanded)
           lines << fold_toggle_line(name, rows.size, selected, width)
           items << Item.new(:fold_toggle, nil, name)
           next

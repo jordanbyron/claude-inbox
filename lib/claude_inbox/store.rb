@@ -22,6 +22,9 @@ module ClaudeInbox
     # Sections long enough to be worth hiding behind a fold toggle.
     FOLDABLE_SECTIONS = %i[snoozed settled].freeze
 
+    # App and Renderer must agree on this, or j/k lands on rows the frame never painted.
+    def self.folded?(name, expanded) = FOLDABLE_SECTIONS.include?(name) && !expanded[name]
+
     Sections = Struct.new(:pinned, :needs_you, :active, :snoozed, :settled) do
       def each_section = SECTIONS.each { |k| yield k, self[k] }
 
