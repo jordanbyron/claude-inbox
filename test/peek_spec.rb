@@ -1,31 +1,32 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "../lib/claude_inbox/logs"
 require_relative "../lib/claude_inbox/peek"
 
 describe ClaudeInbox::Peek do
   let(:queue) { Queue.new }
-  let(:logs) { (1..10).map { |i| "line #{i}" }.join("\r\n") }
-  let(:client) { ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), logs: logs) }
+  let(:replay) { (1..10).map { |i| "line #{i}" }.join("\r\n") }
+  let(:client) { ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), logs: replay) }
   let(:now) { Time.at(1_789_400_000) }
   let(:clock) { -> { now + @elapsed } }
-  let(:peek) { ClaudeInbox::Peek.new(client, queue, clock: clock) }
+  let(:logs) { ClaudeInbox::Logs.new(client, queue, clock: clock) }
+  let(:peek) { ClaudeInbox::Peek.new(logs) }
 
   before { @elapsed = 0 }
-  after { peek.stop }
+  after { logs.stop }
 
   def row(**attrs) = ClaudeInbox::Store::Row.new(session: session(**attrs), entry: nil, section: :active)
 
   def pr(state) = ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: state)
 
-  # Selecting and opening the pane together cover both the debounced ask
-  # and the pane's own view; the worker answers on the queue once it has
-  # been through `claude logs`.
+  # Selecting and opening the pane asks Logs for the lines; the worker
+  # answers on the queue once it has been through `claude logs`.
   def fetch(r)
     peek.select(r.key, r.session)
     peek.toggle
-    @elapsed += ClaudeInbox::Peek::DEBOUNCE
-    peek.tick
+    @elapsed += ClaudeInbox::Logs::DEBOUNCE
+    logs.tick
     queue.pop
   end
 
@@ -72,8 +73,8 @@ describe ClaudeInbox::Peek do
     peek.toggle
     _(peek.view(r, 10).lines).must_equal ["(loading…)"]
 
-    @elapsed += ClaudeInbox::Peek::DEBOUNCE
-    peek.tick
+    @elapsed += ClaudeInbox::Logs::DEBOUNCE
+    logs.tick
     _(queue.pop).must_equal [:peek, "abc12345", (1..10).map { |i| "line #{i}" }]
     _(peek.view(r, 10).lines).must_equal (1..10).map { |i| "line #{i}" }
   end
@@ -81,7 +82,7 @@ describe ClaudeInbox::Peek do
   it "waits out the debounce before asking" do
     r = row
     peek.select(r.key, r.session)
-    peek.tick
+    logs.tick
     _(queue).must_be_empty
   end
 

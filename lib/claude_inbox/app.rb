@@ -9,6 +9,7 @@ require_relative "agents_client"
 require_relative "debug"
 require_relative "store"
 require_relative "renderer"
+require_relative "logs"
 require_relative "peek"
 require_relative "keymap"
 require_relative "mouse"
@@ -87,11 +88,12 @@ module ClaudeInbox
       install_traps
       enter_screen
       @poller.start
-      @peek = Peek.new(@client, @queue)
+      @logs = Logs.new(@client, @queue)
+      @peek = Peek.new(@logs)
       main_loop
     ensure
       @poller.stop
-      @peek&.stop
+      @logs&.stop
       restore_screen
     end
 
@@ -173,7 +175,7 @@ module ClaudeInbox
     def main_loop
       until @quit
         drain_queue
-        @peek.tick
+        @logs.tick
         if @resize
           @resize = false
           @size = nil

@@ -54,10 +54,10 @@ describe ClaudeInbox::App do
     end
   end
 
-  # `run` is what normally starts the pane's fetch thread; a rendered frame
-  # asks the pane what to paint, so tests that render need one.
+  # `run` is what normally builds the pane and the logs thread behind it; a
+  # rendered frame asks the pane what to paint, so tests that render need one.
   def with_peek(a)
-    a.instance_variable_set(:@peek, ClaudeInbox::Peek.new(client, Queue.new))
+    a.instance_variable_set(:@peek, ClaudeInbox::Peek.new(ClaudeInbox::Logs.new(client, Queue.new)))
     a
   end
 
