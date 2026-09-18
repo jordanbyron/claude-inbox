@@ -579,13 +579,13 @@ module ClaudeInbox
 
     def open_alias_editor
       return unless require_storable
-      current = @store.entry(@selected)&.dig("alias") || ""
+      current = @store.alias_for(@selected) || ""
       @modal = {kind: :alias, id: @selected, buffer: +current}
     end
 
     def open_pr_editor
       return unless require_storable
-      current = @store.entry(@selected)&.dig("pr") || selected_session&.pr&.url || ""
+      current = @store.pr_for(@selected) || selected_session&.pr&.url || ""
       @modal = {kind: :pr, id: @selected, buffer: +current}
     end
 

@@ -45,9 +45,9 @@ module ClaudeInbox
     def sweep(sessions, now)
       return [] unless @enabled
       now_i = now.to_i
-      due = sessions.filter_map { |s| entry_if_due(s, now_i) }
+      due = sessions.filter_map { |s| row_if_due(s, now_i) }
       return [] if due.empty?
-      with_log { |log| due.filter_map { |session, entry| reap(session, entry, log, now_i) } }
+      with_log { |log| due.filter_map { |row| reap(row, log, now_i) } }
     end
 
     # Keys `sweep` would go after right now, without touching any of them.
@@ -56,42 +56,42 @@ module ClaudeInbox
     def due(sessions, now)
       return [] unless @enabled
       now_i = now.to_i
-      sessions.filter_map { |s| entry_if_due(s, now_i)&.first&.key }
+      sessions.filter_map { |s| row_if_due(s, now_i)&.key }
     end
 
     private
 
-    def entry_if_due(session, now_i)
-      entry = session.key && @store.entry(session.key)
-      return nil unless Store.reapable?(session, entry, now_i)
-      backing_off?(entry, now_i) ? nil : [session, entry]
+    def row_if_due(session, now_i)
+      row = @store.row(session)
+      return nil unless Store.reapable?(session, row.entry, now_i)
+      backing_off?(row, now_i) ? nil : row
     end
 
-    def backing_off?(entry, now_i)
-      at = entry["reap_failed_at"]
+    def backing_off?(row, now_i)
+      at = row.reap_failed_at
       !at.nil? && now_i - at.to_i < RETRY_AFTER
     end
 
-    def reap(session, entry, log, now_i)
-      @client.rm(session.id)
-      write(log, session, entry, now_i, "reaped")
-      @store.forget(session.key)
-      session.key
+    def reap(row, log, now_i)
+      @client.rm(row.session.id)
+      write(log, row, now_i, "reaped")
+      @store.forget(row.key)
+      row.key
     rescue AgentsClient::Error => e
       reason = e.message.lines.first.to_s.strip
-      @store.mark_reap_failed(session.key, reason)
-      write(log, session, entry, now_i, "kept — #{reason}")
+      @store.mark_reap_failed(row.key, reason)
+      write(log, row, now_i, "kept — #{reason}")
       nil
     end
 
-    def write(log, session, entry, now_i, outcome)
-      idle_days = (now_i - entry["state_since"].to_i) / 86_400
+    def write(log, row, now_i, outcome)
+      idle_days = (now_i - row.state_since.to_i) / 86_400
       log.puts([
         Time.at(now_i).utc.strftime("%FT%TZ"),
-        session.id,
+        row.session.id,
         "idle #{idle_days}d",
-        session.display_name.inspect,
-        session.cwd,
+        row.session.display_name.inspect,
+        row.session.cwd,
         outcome
       ].join("  "))
     end

@@ -487,6 +487,52 @@ describe Store do
     end
   end
 
+  describe "alias and pull request overrides" do
+    let(:store) { Store.new(path: nil, clock: -> { now }).tap { |st| st.update([session(id: "a")]) } }
+
+    it "reads back what set_alias and set_pr wrote, and nil once cleared" do
+      _(store.alias_for("a")).must_be_nil
+      _(store.pr_for("a")).must_be_nil
+
+      store.set_alias("a", "flaky test fix")
+      store.set_pr("a", "https://github.com/o/r/pull/7")
+      _(store.alias_for("a")).must_equal "flaky test fix"
+      _(store.pr_for("a")).must_equal "https://github.com/o/r/pull/7"
+
+      store.set_alias("a", "")
+      store.set_pr("a", "")
+      _(store.alias_for("a")).must_be_nil
+      _(store.pr_for("a")).must_be_nil
+    end
+
+    it "answers nil for a session it has never seen" do
+      _(store.alias_for("nope")).must_be_nil
+      _(store.pr_for("nope")).must_be_nil
+    end
+  end
+
+  describe "row" do
+    it "pairs a session with its entry, and carries the last refused reap" do
+      store = Store.new(path: nil, clock: -> { now })
+      s = session(id: "a")
+      store.update([s])
+
+      _(store.row(s).reap_failed_at).must_be_nil
+      store.mark_reap_failed("a", "rm failed: worktree has unpushed commits\nmore")
+      row = store.row(s)
+      _(row.session).must_equal s
+      _(row.reap_failed_at).must_equal now.to_i
+      _(row.state_since).must_equal now.to_i
+    end
+
+    it "has no entry for a session with nothing to key on" do
+      store = Store.new(path: nil, clock: -> { now })
+      row = store.row(session(id: nil, session_id: nil, kind: "interactive"))
+      _(row.entry).must_be_nil
+      _(row.reap_failed_at).must_be_nil
+    end
+  end
+
   describe "forget" do
     it "drops the entry and the row without waiting for the prune window" do
       store = Store.new(path: nil, clock: -> { now })

@@ -210,6 +210,21 @@ describe ClaudeInbox::App do
     end
   end
 
+  describe "alias and pull request editors" do
+    it "seed their buffer from the store, so reopening shows what was saved" do
+      a = loaded_app("f23c8673")
+      store.set_alias("f23c8673", "auth spike")
+      store.set_pr("f23c8673", "https://github.com/o/r/pull/7")
+
+      a.send(:perform, :alias)
+      _(a.instance_variable_get(:@modal)[:buffer]).must_equal "auth spike"
+      a.send(:handle_key, "\e")
+
+      a.send(:perform, :link_pr)
+      _(a.instance_variable_get(:@modal)[:buffer]).must_equal "https://github.com/o/r/pull/7"
+    end
+  end
+
   describe "the reaper" do
     it "is off unless something arms it, so a poll on its own deletes nothing" do
       loaded_app(nil)
