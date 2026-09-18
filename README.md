@@ -296,6 +296,6 @@ bin/ci                       # full signoff: lint, gem audit, tests (see CONTRIB
 bundle exec rake test        # minitest/spec, test/**/*_spec.rb
 bundle exec standardrb
 CLAUDE_INBOX_STDERR=/tmp/err.log bin/claude-inbox   # crash traces off the alt screen
-CLAUDE_INBOX_DEBUG=1 bin/claude-inbox               # slow-frame notes in /tmp/inbox-debug.log
+DEBUG=1 bin/claude-inbox                            # slow-frame notes in /tmp/inbox-debug.log
 CLAUDE_INBOX_NO_REAP=1 bin/claude-inbox             # never delete an idle session
 ```
