@@ -67,51 +67,11 @@ describe ClaudeInbox::App do
     yield
   end
 
-  # StringIO#string hands back the live buffer, so copy before clearing it.
-  def taken = out.string.dup.tap {
-    out.truncate(0)
-    out.rewind
-  }
-
   # A row's screen line, found the same way the paint did it: by scanning
   # the row->item map render just built, rather than assuming a layout.
   def row_for(a, key)
     idx = a.instance_variable_get(:@row_items).index { |item| item&.key == key }
     idx + 1
-  end
-
-  it "takes the wheel for the duration of the alt screen and hands it back" do
-    app.send(:enter_screen)
-    entered = taken
-    _(entered).must_include ClaudeInbox::App::ALT_ON
-    _(entered).must_include ClaudeInbox::App::WHEEL_KEYS_ON
-
-    app.send(:restore_screen)
-    left = taken
-    _(left).must_include ClaudeInbox::App::WHEEL_KEYS_OFF
-    # The mode belongs to the alt screen, so it has to go first.
-    _(left.index(ClaudeInbox::App::WHEEL_KEYS_OFF)).must_be :<, left.index(ClaudeInbox::App::ALT_OFF)
-  end
-
-  it "takes over the mouse for the duration of the alt screen and hands it back" do
-    app.send(:enter_screen)
-    entered = taken
-    _(entered).must_include ClaudeInbox::App::MOUSE_ON
-
-    app.send(:restore_screen)
-    left = taken
-    _(left).must_include ClaudeInbox::App::MOUSE_OFF
-    _(left.index(ClaudeInbox::App::MOUSE_OFF)).must_be :<, left.index(ClaudeInbox::App::ALT_OFF)
-  end
-
-  it "asks for bracketed paste for the duration of the alt screen and hands it back" do
-    app.send(:enter_screen)
-    _(taken).must_include ClaudeInbox::App::PASTE_ON
-
-    app.send(:restore_screen)
-    left = taken
-    _(left).must_include ClaudeInbox::App::PASTE_OFF
-    _(left.index(ClaudeInbox::App::PASTE_OFF)).must_be :<, left.index(ClaudeInbox::App::ALT_OFF)
   end
 
   it "hands a paste to the new-session form whole, and types it into the filter" do

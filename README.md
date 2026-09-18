@@ -309,7 +309,10 @@ AgentsClient  →  JobState  →  PullRequests  →  Poller  →  Store  →  Re
   seconds and on demand, runs it through `JobState`, `PullRequests` and the
   `Reaper` in the order above, and hands each result to `App` over a queue.
   `App` pauses it while `claude attach` has the terminal.
-- `App` owns the terminal, the poller thread and the logs thread, and is the
+- `Terminal` is the screen: the alt screen with its mouse and wheel modes, raw
+  mode, the cached size and the `Painter` that diffs frames onto it. `release`
+  lends it to `claude attach` and takes it back.
+- `App` owns the key loop, the poller thread and the logs thread, and is the
   only place that spawns a child.
 - `Peek` is the peek pane: whether it is open, how far back it is scrolled and
   what to paint for the selected row. `Logs` is where the lines come from: the

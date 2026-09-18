@@ -1,14 +1,12 @@
 # frozen_string_literal: true
 
-require "io/console"
-require "tty-cursor"
 require "tty-reader"
-require "tty-screen"
 require "tty-box"
 require_relative "agents_client"
 require_relative "debug"
 require_relative "store"
 require_relative "renderer"
+require_relative "terminal"
 require_relative "logs"
 require_relative "peek"
 require_relative "keymap"
@@ -22,27 +20,6 @@ module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
   # child process that takes over the terminal.
   class App
-    ALT_ON = "\e[?1049h"
-    ALT_OFF = "\e[?1049l"
-    # Alternate scroll mode: while the alt screen is up the terminal turns
-    # wheel ticks into cursor keys, so a scroll moves the selection instead of
-    # dragging the scrollback we are covering into view. Terminals that don't
-    # know the mode ignore it and keep scrolling their own history.
-    WHEEL_KEYS_ON = "\e[?1007h"
-    WHEEL_KEYS_OFF = "\e[?1007l"
-    # Real mouse reporting: button events plus the SGR encoding, so clicks
-    # and wheel ticks arrive as escape sequences we parse ourselves (Mouse)
-    # instead of the terminal only ever translating the wheel to arrow
-    # keys. Terminals that don't understand either mode just ignore it and
-    # fall back to WHEEL_KEYS_ON's translation, or their own scrollback.
-    MOUSE_ON = "\e[?1000h\e[?1006h"
-    MOUSE_OFF = "\e[?1006l\e[?1000l"
-    # Bracketed paste: what is pasted arrives fenced off from what is typed
-    # (Paste), and a pasted image, which has no text, arrives as an empty
-    # fence rather than not at all.
-    PASTE_ON = "\e[?2004h"
-    PASTE_OFF = "\e[?2004l"
-
     SNOOZE_MENU = [
       ["1", "15 minutes", :m15],
       ["2", "1 hour", :h1],
@@ -57,11 +34,9 @@ module ClaudeInbox
       reaper: Reaper.disabled, out: $stdout, input: $stdin, color: true)
       @client = client
       @store = store
-      @out = out
-      @input = input
+      @terminal = Terminal.new(out, input)
       @color = color
       @renderer = Renderer.new(color: color)
-      @painter = Painter.new(out)
       @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
       @queue = Queue.new
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests, jobs_dir: jobs_dir,
@@ -80,13 +55,12 @@ module ClaudeInbox
       @last_poll = nil
       @quit = false
       @resize = false
-      @restored = true
     end
 
     def run
       @booted_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       install_traps
-      enter_screen
+      @terminal.enter
       @poller.start
       @logs = Logs.new(@client, @queue)
       @peek = Peek.new(@logs)
@@ -94,51 +68,15 @@ module ClaudeInbox
     ensure
       @poller.stop
       @logs&.stop
-      restore_screen
+      @terminal.restore
     end
 
     private
 
-    # ----- terminal ---------------------------------------------------------
-
     def install_traps
-      at_exit { restore_screen }
+      at_exit { @terminal.restore }
       %w[INT TERM].each { |sig| trap(sig) { @quit = true } }
       trap("WINCH") { @resize = true } if Signal.list.key?("WINCH")
-    end
-
-    def enter_screen
-      @out.print ALT_ON, WHEEL_KEYS_ON, MOUSE_ON, PASTE_ON, TTY::Cursor.hide, TTY::Cursor.clear_screen
-      @out.flush
-      @input.raw! if @input.respond_to?(:raw!) && @input.tty?
-      @restored = false
-      @size = nil
-      @painter.invalidate
-    end
-
-    def restore_screen
-      return if @restored
-      @restored = true
-      @input.cooked! if @input.respond_to?(:cooked!) && @input.tty?
-      @out.print TTY::Cursor.show, PASTE_OFF, MOUSE_OFF, WHEEL_KEYS_OFF, ALT_OFF
-      @out.flush
-    rescue
-      nil
-    end
-
-    # Cached: querying the terminal can fall back to spawning `tput`, which
-    # is far too slow to do on every frame. Refreshed on WINCH and re-entry.
-    def size
-      @size ||= measure_size
-    end
-
-    def measure_size
-      rows, cols = begin
-        (@out.respond_to?(:winsize) && @out.tty?) ? @out.winsize : TTY::Screen.size
-      rescue
-        TTY::Screen.size
-      end
-      [[cols, 40].max, [rows, 8].max]
     end
 
     # ----- threads ----------------------------------------------------------
@@ -178,8 +116,7 @@ module ClaudeInbox
         @logs.tick
         if @resize
           @resize = false
-          @size = nil
-          @painter.invalidate
+          @terminal.resized
         end
         render
         key = @reader.read_keypress(echo: false, raw: false, nonblock: true)
@@ -207,7 +144,7 @@ module ClaudeInbox
       t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       now = Time.now
       sections = filtered(@store.sections(now))
-      width, height = size
+      width, height = @terminal.size
       ensure_selection(sections)
       peek = @peek.view(sections.row(@selected), height)
       @tick += 1
@@ -223,7 +160,7 @@ module ClaudeInbox
       @row_items = frame.items
       @list_width = frame.list_width
       @top = frame.top
-      @painter.paint(frame.lines)
+      @terminal.paint(frame.lines)
       dt = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
       Debug.log("render #{(dt * 1000).round}ms") if dt > 0.05
     end
@@ -381,7 +318,7 @@ module ClaudeInbox
       end
     end
 
-    def page = [size[1] - 2, 1].max
+    def page = [@terminal.size[1] - 2, 1].max
 
     def move(delta)
       return if @items.nil? || @items.empty?
@@ -419,7 +356,7 @@ module ClaudeInbox
       if @peek.open? then @peek.close
       elsif (name = current_fold_section) && @expanded[name] then @expanded[name] = false
       end
-      @painter.invalidate
+      @terminal.invalidate
     end
 
     def activate
@@ -429,7 +366,7 @@ module ClaudeInbox
 
     def toggle_peek
       @peek.toggle
-      @painter.invalidate
+      @terminal.invalidate
     end
 
     def wake_selected
@@ -446,17 +383,11 @@ module ClaudeInbox
       notice("settled — u brings it back")
     end
 
-    # ----- attach handoff ---------------------------------------------------
-
     def attach(id)
       @store.acknowledge(id)
       @poller.pause
-      restore_screen
-      @out.print TTY::Cursor.clear_screen
-      @out.flush
-      @client.attach(id)
+      @terminal.release { @client.attach(id) }
     ensure
-      enter_screen
       @poller.resume
       @poller.soon
     end
