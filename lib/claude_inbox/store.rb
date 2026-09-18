@@ -11,7 +11,6 @@ module ClaudeInbox
   # `sectionize`; the instance is a thin mutex-guarded holder around them
   # with a JSON file behind it.
   class Store
-    SETTLE_AFTER = 10 * 60      # seconds a done/stopped session stays quiet before settling
     PRUNE_AFTER = 7 * 24 * 3600 # forget entries not seen in a poll for this long
     REAP_AFTER = 14 * 24 * 3600 # seconds idle before a session is deleted outright
     UNTIL_WOKEN = "until_woken"
@@ -80,15 +79,15 @@ module ClaudeInbox
         e.delete("snoozed_at") unless e["wake_at"]
         e.delete("settled_at") if e["settled_at"] && !hand_settled?(s, e)
         e.delete("acknowledged_at") if e["acknowledged_at"] && !acknowledged?(s, e)
+        e.delete("revived_at") if e["revived_at"] && !revived?(s, e)
       end
       out
     end
 
     # A session we have never seen that is already finished and whose process
-    # the supervisor has reaped (no pid) has been quiet for at least the
-    # supervisor's ~1h idle timeout, which is longer than SETTLE_AFTER. Seed
-    # its state_since from started_at so it settles on the first poll instead
-    # of squatting in Active for SETTLE_AFTER.
+    # the supervisor has reaped (no pid) has been quiet since it finished, not
+    # since this poll. Seed its state_since from started_at so REAP_AFTER's
+    # idle clock is accurate from the start instead of running from "now".
     def self.first_seen_since(session, now_i)
       if session.finished? && !session.alive? && session.started_at
         session.started_at.to_i
@@ -128,27 +127,30 @@ module ClaudeInbox
       entry && entry["acknowledged_at"] && entry["state_since"].to_i <= entry["acknowledged_at"].to_i
     end
 
-    # Settle rule: done/stopped and quiet for SETTLE_AFTER.
+    # Revive rule: `u` forces a settled row back to wherever its raw state
+    # puts it, overriding hand-settle and the resolved-PR rule alike. Same
+    # "state_since" test as the other two, so it holds until the state
+    # actually changes again rather than just for the next poll.
+    def self.revived?(session, entry)
+      entry && entry["revived_at"] && entry["state_since"].to_i <= entry["revived_at"].to_i
+    end
+
+    # Settle rule: hand-settled (`x`), or every pull request resolved. That
+    # holds however the session ended its turn, not just when it ran to
+    # `done` — opening a PR and asking "anything need changing?" leaves it
+    # `blocked`, and merging the PR answers the question, so the row has
+    # nothing left to say. A PR whose state nobody knows yet (no gh, offline)
+    # is ignored. A session with no pull request at all never settles on its
+    # own; only `x` parks it.
     #
-    # A session with a pull request follows the PR instead: it stays up while
-    # any PR is open and settles the moment every one is merged or closed. That
-    # holds however the session ended its turn, not just when it ran to `done`
-    # — opening a PR and asking "anything need changing?" leaves it `blocked`,
-    # and merging the PR answers the question, so the row has nothing left to
-    # say. A PR whose state nobody knows yet (no gh, offline) is ignored.
-    #
-    # Two states keep their row whatever the PR says: `working`, which is still
-    # going, and `failed`, which is a failure you should see even if the PR it
-    # had already opened went on to land.
-    def self.settled?(session, entry, now_i)
+    # `working` and `failed` never settle this way: `working` is still going,
+    # and `failed` is a failure you should see even if the PR it had already
+    # opened went on to land.
+    def self.settled?(session, entry)
       return true if hand_settled?(session, entry)
       return false if UNSETTLEABLE.include?(session.effective_state)
       known = session.prs.select(&:known?)
-      return known.all?(&:resolved?) if known.any?
-      return false unless session.finished?
-      since = entry && entry["state_since"]
-      return false unless since
-      now_i - since.to_i > SETTLE_AFTER
+      known.any? && known.all?(&:resolved?)
     end
 
     # Reap rule: a background session quiet for REAP_AFTER goes to `claude
@@ -184,12 +186,13 @@ module ClaudeInbox
       sec = Sections.new(pinned: [], needs_you: [], active: [], snoozed: [], settled: [])
       sessions.each do |s|
         e = s.key && entries[s.key]
+        revived = revived?(s, e)
         section =
           if s.terminal? then s.needs_you? ? :needs_you : :active # you're in it; never settle or hide it
           elsif e && e["pinned"] then :pinned
           elsif snoozed?(s, e, now_i) then :snoozed
-          elsif hand_settled?(s, e) then :settled
-          elsif settled?(s, e, now_i) then :settled # a resolved PR outranks Needs You
+          elsif !revived && hand_settled?(s, e) then :settled
+          elsif !revived && settled?(s, e) then :settled # a resolved PR outranks Needs You
           elsif s.needs_you? then acknowledged?(s, e) ? :active : :needs_you
           elsif s.finished? then :active
           else :active
@@ -255,12 +258,15 @@ module ClaudeInbox
       end
     end
 
-    # Also lifts a hand-settle, so `u` undoes `x` as well as `s`.
+    # Also lifts a hand-settle, and forces back any row settled by the PR
+    # rule too, so `u` undoes `x` and `s` and a resolved PR alike.
     def wake(id)
+      now = @clock.call
       edit(id) do |e|
         e.delete("wake_at")
         e.delete("snoozed_at")
         e.delete("settled_at")
+        e["revived_at"] = now.to_i
       end
     end
 

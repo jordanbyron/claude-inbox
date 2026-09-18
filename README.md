@@ -34,8 +34,8 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
    Enter tells you why nothing happens.
 4. **Snoozed.** Sorted by wake time, parked ("until I wake it") entries last.
    Collapsed; Enter expands.
-5. **Settled.** `done`/`stopped` and quiet for 10 minutes, or whose pull
-   request is merged or closed. Collapsed; Enter expands.
+5. **Settled.** Parked with `x`, or whose pull request is merged or closed.
+   Collapsed; Enter expands.
 
 A row with a pull request shows it after the state: `#885 open`, `#885 draft`,
 `#885 merged`, `#885 closed`. `o` opens it in the browser.
@@ -153,24 +153,26 @@ place triage logic lives.
 **Wake.** A snoozed session returns when its timer elapses, when you press `u`,
 or when it *becomes* blocked or failed after being snoozed. A session that was
 already blocked when you snoozed it stays snoozed; that is the point of snoozing.
+`u` also brings back a settled row, whether it settled by hand or because its
+pull request resolved, and puts it wherever its raw state belongs — Active or
+Needs You. It stays there until the state actually changes again.
 
 **Acknowledge.** Attaching to a needs-you session (`Enter`) marks its current
 state seen, moving it to Active instead of leaving it in Needs You. It comes
 back to Needs You the moment its state changes again. Still blocked with a
 new prompt doesn't count, only an actual state change does, same as hand-settle.
 
-**Settle.** `done` or `stopped` and unchanged for `SETTLE_AFTER` (10 minutes),
-or settled by hand with `x`. A hand-settled session stays put when it
-finishes, and returns as soon as it changes state in any other way: working
-again, blocked, or failed. `u` brings it back at any time.
-`failed` never settles. A never-before-seen finished session with no live
-process settles on the first poll, because the supervisor only reaps a process
-after about an hour idle, which is longer than the settle window.
+**Settle.** Settled by hand with `x`, or because every pull request it has is
+merged or closed. A hand-settled session stays put when it finishes, and
+returns as soon as it changes state in any other way: working again, blocked,
+or failed. `failed` never settles. A session with no pull request at all
+never settles on its own, however long it has been quiet — `x` is the only
+way in.
 
-A session with a pull request follows the PR instead of the clock: it stays
-Active while any of its PRs is open or a draft, however long it has been
-quiet, and settles the moment every one is merged or closed. A PR whose state
-is not known yet (no `gh`, offline) is ignored and the clock rule applies.
+A session with a pull request follows the PR instead: it stays Active while
+any of its PRs is open or a draft, however long it has been quiet, and
+settles the moment every one is merged or closed. A PR whose state is not
+known yet (no `gh`, offline) is ignored, so the session stays Active too.
 
 **Reap.** A background session quiet for `REAP_AFTER` (14 days) is deleted
 outright on the next poll: `claude rm`, so the transcript and the worktree go
@@ -251,7 +253,7 @@ stays that way.
 ## State
 
 `~/.config/claude-inbox/state.json`, keyed by session id, atomic writes.
-Holds `wake_at`, `snoozed_at`, `alias`, `pr`, `pinned`, `pinned_at`, `settled_at`, `acknowledged_at`, `last_state`, `state_since`, `last_seen`,
+Holds `wake_at`, `snoozed_at`, `alias`, `pr`, `pinned`, `pinned_at`, `settled_at`, `acknowledged_at`, `revived_at`, `last_state`, `state_since`, `last_seen`,
 and `reap_failed_at` / `reap_error` for a session `claude rm` has refused.
 Entries not seen in a poll for 7 days are pruned. Pruning only reaches entries
 the daemon has *forgotten*, which is a different thing from the reaper: the

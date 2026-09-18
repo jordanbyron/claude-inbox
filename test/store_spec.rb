@@ -12,6 +12,8 @@ describe Store do
 
   def ids(rows) = rows.map(&:id)
 
+  def pr(state) = ClaudeInbox::PullRequest.new(number: 1, url: "https://github.com/o/r/pull/1", state: state)
+
   describe "sectioning" do
     it "puts blocked and failed in Needs you" do
       sec = sections([session(id: "a", state: "blocked"), session(id: "b", state: "failed"), session(id: "c")])
@@ -27,9 +29,9 @@ describe Store do
       _(sec.active.first.session.effective_state).must_equal "working"
     end
 
-    it "settles an idle remote session once quiet, and lets it snooze" do
-      r = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9", origin: :remote, started_at: now - 3600)
-      entries = {"u9" => {"last_state" => "done", "state_since" => now.to_i - Store::SETTLE_AFTER - 1}}
+    it "settles an idle remote session with a resolved PR, and lets it snooze" do
+      r = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9", origin: :remote, started_at: now - 3600, prs: [pr("MERGED")])
+      entries = {"u9" => {"last_state" => "done", "state_since" => now.to_i - 5}}
       _(sections([r], entries).settled.map(&:key)).must_equal %w[u9]
       snoozed = {"u9" => {"wake_at" => now.to_i + 900, "last_state" => "done", "state_since" => now.to_i - 3600}}
       _(sections([r], snoozed).snoozed.map(&:key)).must_equal %w[u9]
@@ -58,7 +60,12 @@ describe Store do
       _(sec.settled).must_be_empty
     end
 
-    def pr(state) = ClaudeInbox::PullRequest.new(number: 1, url: "https://github.com/o/r/pull/1", state: state)
+    it "never settles a finished session with no pull request, however long it has been quiet" do
+      entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 86_400}}
+      sec = sections([session(id: "a", state: "done")], entries)
+      _(ids(sec.active)).must_equal %w[a]
+      _(sec.settled).must_be_empty
+    end
 
     it "keeps a finished session up while its PR is open, however long it has been quiet" do
       entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 86_400}}
@@ -76,10 +83,10 @@ describe Store do
       end
     end
 
-    it "waits for every PR, and falls back to the quiet window when no state is known" do
-      entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - Store::SETTLE_AFTER - 1}}
+    it "waits for every known PR, and never settles on an unknown PR state" do
+      entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 5}}
       _(ids(sections([session(id: "a", state: "done", prs: [pr("MERGED"), pr("OPEN")])], entries).active)).must_equal %w[a]
-      _(ids(sections([session(id: "a", state: "done", prs: [pr(nil)])], entries).settled)).must_equal %w[a]
+      _(ids(sections([session(id: "a", state: "done", prs: [pr(nil)])], entries).active)).must_equal %w[a]
       _(ids(sections([session(id: "a", state: "working", prs: [pr("MERGED")])], entries).active)).must_equal %w[a]
     end
 
@@ -131,7 +138,7 @@ describe Store do
       entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i, "wake_at" => now.to_i + 900, "last_state" => "working"}}
       _(ids(sections([session(id: "a")], entries).pinned)).must_equal %w[a]
 
-      entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i, "last_state" => "done", "state_since" => now.to_i - Store::SETTLE_AFTER - 1}}
+      entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i, "settled_at" => now.to_i, "last_state" => "done", "state_since" => now.to_i - 60}}
       _(ids(sections([session(id: "a", state: "done")], entries).pinned)).must_equal %w[a]
     end
 
@@ -154,14 +161,14 @@ describe Store do
   end
 
   describe "settle rule" do
-    it "settles done + quiet" do
-      entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - Store::SETTLE_AFTER - 1}}
+    it "settles a done session by hand" do
+      entries = {"a" => {"settled_at" => now.to_i, "last_state" => "done", "state_since" => now.to_i - 60}}
       _(ids(sections([session(id: "a", state: "done")], entries).settled)).must_equal %w[a]
     end
 
-    it "settles stopped + quiet" do
+    it "settles a stopped session with a resolved PR" do
       entries = {"a" => {"last_state" => "stopped", "state_since" => now.to_i - 3600}}
-      _(ids(sections([session(id: "a", state: "stopped")], entries).settled)).must_equal %w[a]
+      _(ids(sections([session(id: "a", state: "stopped", prs: [pr("MERGED")])], entries).settled)).must_equal %w[a]
     end
 
     it "never settles failed" do
@@ -171,16 +178,16 @@ describe Store do
       _(ids(sec.needs_you)).must_equal %w[a]
     end
 
-    it "settles a first-seen finished session whose process was reaped" do
+    it "seeds state_since from started_at for a first-seen finished session whose process was reaped" do
       s = session(id: "a", state: "done", pid: nil, started_at: now - 86_400)
       entries = Store.merge_entries({}, [s], now)
-      _(ids(sections([s], entries).settled)).must_equal %w[a]
+      _(entries["a"]["state_since"]).must_equal (now - 86_400).to_i
     end
 
-    it "does not settle a first-seen finished session that is still alive" do
+    it "seeds state_since from now for a first-seen finished session that is still alive" do
       s = session(id: "a", state: "done", pid: 123, status: "idle")
       entries = Store.merge_entries({}, [s], now)
-      _(ids(sections([s], entries).active)).must_equal %w[a]
+      _(entries["a"]["state_since"]).must_equal now.to_i
     end
   end
 
@@ -202,13 +209,13 @@ describe Store do
 
     it "reaps on idle time alone, where settling waits on the pull request" do
       s = session(id: "a", state: "done", prs: [draft_pr])
-      _(Store.settled?(s, quiet, now.to_i)).must_equal false
+      _(Store.settled?(s, quiet)).must_equal false
       _(reapable?(s, quiet)).must_equal true
     end
 
     it "reaps a long-dead failure, which never settles" do
       s = session(id: "a", state: "failed")
-      _(Store.settled?(s, quiet, now.to_i)).must_equal false
+      _(Store.settled?(s, quiet)).must_equal false
       _(reapable?(s, quiet)).must_equal true
     end
 
@@ -289,9 +296,9 @@ describe Store do
       _(ids(sections(%w[a b c].map { |i| session(id: i) }, entries).snoozed)).must_equal %w[c b a]
     end
 
-    it "lets snooze win over settle while the timer is live" do
+    it "lets snooze win over settle even with a resolved PR" do
       entries = {"a" => {"wake_at" => now.to_i + 900, "last_state" => "done", "state_since" => now.to_i - 3600}}
-      _(ids(sections([session(id: "a", state: "done")], entries).snoozed)).must_equal %w[a]
+      _(ids(sections([session(id: "a", state: "done", prs: [pr("MERGED")])], entries).snoozed)).must_equal %w[a]
     end
   end
 
@@ -338,6 +345,44 @@ describe Store do
         _(store.entry("a")["settled_at"]).must_equal now.to_i
         store.wake("a")
         _(store.entry("a")).wont_include "settled_at"
+      end
+    end
+  end
+
+  describe "revive rule" do
+    it "brings back a session settled by a resolved PR" do
+      entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 5, "revived_at" => now.to_i}}
+      sec = sections([session(id: "a", state: "done", prs: [pr("MERGED")])], entries)
+      _(ids(sec.active)).must_equal %w[a]
+      _(sec.settled).must_be_empty
+    end
+
+    it "brings back a hand-settled session that would otherwise stay settled" do
+      entries = {"a" => {"settled_at" => now.to_i, "last_state" => "done", "state_since" => now.to_i - 60, "revived_at" => now.to_i + 1}}
+      sec = sections([session(id: "a", state: "done")], entries)
+      _(ids(sec.active)).must_equal %w[a]
+      _(sec.settled).must_be_empty
+    end
+
+    it "routes a revived needs-you session to Needs You, not Active" do
+      entries = {"a" => {"settled_at" => now.to_i, "last_state" => "blocked", "state_since" => now.to_i - 60, "revived_at" => now.to_i + 1}}
+      sec = sections([session(id: "a", state: "blocked")], entries)
+      _(ids(sec.needs_you)).must_equal %w[a]
+    end
+
+    it "clears once the state actually changes again" do
+      entries = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 60, "revived_at" => now.to_i}}
+      later = Store.merge_entries(entries, [session(id: "a", state: "working")], now + 30)
+      _(later["a"]).wont_include "revived_at"
+    end
+
+    it "wake un-settles a resolved-PR session via the store" do
+      Dir.mktmpdir do |dir|
+        store = Store.new(path: File.join(dir, "state.json"), clock: -> { now })
+        store.update([session(id: "a", state: "done", prs: [pr("MERGED")])])
+        _(store.sections.settled.map(&:id)).must_equal %w[a]
+        store.wake("a")
+        _(store.sections.active.map(&:id)).must_equal %w[a]
       end
     end
   end
@@ -419,8 +464,8 @@ describe Store do
       at = Time.at(1_789_604_500)
       sec = Store.sectionize(sessions, Store.merge_entries({}, sessions, at), at)
       _(ids(sec.needs_you)).must_equal %w[f23c8673]
-      _(ids(sec.active)).must_equal [nil, "823b882f"]
-      _(sec.settled.size).must_equal 4
+      _(ids(sec.active)).must_equal [nil, "823b882f", "dcbc1d98", "b0b18338", "fbf5253a", "b03695b1"]
+      _(sec.settled).must_be_empty
     end
   end
 

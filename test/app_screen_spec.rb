@@ -128,6 +128,7 @@ describe ClaudeInbox::App do
 
     it "expands a folded section when its toggle line is clicked" do
       a = with_peek(loaded_app(nil))
+      store.settle("b03695b1")
       a.send(:render)
       row = row_for(a, :settled)
 
