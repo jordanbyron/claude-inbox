@@ -5,6 +5,8 @@ Inbox-style triage on top of Claude Code's background sessions. A companion to
 `claude agents --json` and adds **snooze**, **auto-settle** and the session's
 **pull request**.
 
+![claude-inbox with one working session, one snoozed and the settled section folded](docs/screenshot.png)
+
 ```
 bin/claude-inbox                       # live
 bin/claude-inbox --fixture test/fixtures/agents.json   # no daemon needed
