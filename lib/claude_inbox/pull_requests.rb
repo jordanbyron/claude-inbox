@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "json"
-require_relative "job_state"
 require_relative "records"
 require_relative "subprocess"
 
@@ -26,7 +25,8 @@ module ClaudeInbox
   #
   # Claude Code already does the hard part: the daemon scans each background
   # session's transcript for links and writes them to the session's job state
-  # file, which JobState reads. `claude agents --json` does not expose them.
+  # file, which JobState reads onto `job_state` before `enrich` runs.
+  # `claude agents --json` does not expose them.
   # It is a link scan, so a session that merely mentions a PR gets it too.
   # Interactive sessions have no job file; for those the store's `pr` override
   # is the only source.
@@ -49,9 +49,8 @@ module ClaudeInbox
     CLAUDE_DIR = File.join(Dir.home, ".claude")
     RESOLVED_PATH = File.join(Dir.home, ".config", "claude-inbox", "prs.json")
 
-    def initialize(jobs_dir: JobState::DEFAULT_DIR, cache_path: File.join(CLAUDE_DIR, "gh-pr-status-cache.json"),
-      resolved_path: RESOLVED_PATH, gh: "gh", clock: -> { Time.now })
-      @jobs_dir = jobs_dir
+    def initialize(cache_path: File.join(CLAUDE_DIR, "gh-pr-status-cache.json"), resolved_path: RESOLVED_PATH,
+      gh: "gh", clock: -> { Time.now })
       @cache_path = cache_path
       @resolved_path = resolved_path
       @gh = gh
@@ -62,11 +61,13 @@ module ClaudeInbox
     end
 
     # Fills in `prs` on every session from what is already known, asking
-    # nobody. `overrides` maps session key => url for links set by hand; an
-    # override replaces the scanned list.
+    # nobody. The scanned links come off `job_state`, so JobState.enrich runs
+    # first; a session without one (interactive, or forgotten) has no links.
+    # `overrides` maps session key => url for links set by hand; an override
+    # replaces the scanned list.
     def enrich(sessions, overrides = {})
       sessions.each do |s|
-        urls = overrides[s.key] ? [overrides[s.key]] : linked(s.id)
+        urls = overrides[s.key] ? [overrides[s.key]] : (s.job_state&.pr_urls || [])
         s.prs = urls.map { |u| known(u) }
       end
       sessions
@@ -86,9 +87,6 @@ module ClaudeInbox
       end
       changed
     end
-
-    # PR urls the daemon scanned out of a background session's transcript.
-    def linked(id) = JobState.read(id, jobs_dir: @jobs_dir)&.pr_urls || []
 
     # Best known state for a url without asking gh.
     def known(url)

@@ -33,7 +33,7 @@ describe ClaudeInbox::App do
     ClaudeInbox::App.new(
       client: client,
       store: store,
-      pull_requests: ClaudeInbox::PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, resolved_path: nil, gh: nil),
+      pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil),
       jobs_dir: fixture_path("jobs"),
       out: out, input: StringIO.new, color: false
     )
@@ -231,7 +231,7 @@ describe ClaudeInbox::App do
       }.new
       a = ClaudeInbox::App.new(
         client: client, store: store, reaper: reaper,
-        pull_requests: ClaudeInbox::PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, resolved_path: nil, gh: nil),
+        pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil),
         jobs_dir: fixture_path("jobs"),
         out: out, input: StringIO.new, color: false
       )
@@ -252,7 +252,7 @@ describe ClaudeInbox::App do
       }.new
       a = ClaudeInbox::App.new(
         client: client, store: store, reaper: reaper,
-        pull_requests: ClaudeInbox::PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, resolved_path: nil, gh: nil),
+        pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil),
         jobs_dir: fixture_path("jobs"),
         out: out, input: StringIO.new, color: false
       )

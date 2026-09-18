@@ -172,7 +172,7 @@ module ClaudeInbox
     # only if one moved.
     def poll_once
       now = Time.now
-      sessions = JobState.enrich(@pull_requests.enrich(@client.list, @store.pr_overrides), jobs_dir: @jobs_dir)
+      sessions = @pull_requests.enrich(JobState.enrich(@client.list, jobs_dir: @jobs_dir), @store.pr_overrides)
       doomed = @reaper.due(sessions, now)
       publish(sessions, doomed)
       reaped = @reaper.sweep(sessions, now)
