@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require_relative "debug"
 require_relative "subprocess"
 
 module ClaudeInbox
@@ -172,7 +173,7 @@ module ClaudeInbox
         cmd = Subprocess.capture("ps", "-o", "command=", "-p", pid.to_s).out
         break if cmd.empty?
         next unless cmd.split[1] == "agents"
-        File.write("/tmp/inbox-debug.log", "#{Time.now} watchdog saw #{cmd.inspect}\n", mode: "a") if ENV["CLAUDE_INBOX_DEBUG"]
+        Debug.log("watchdog saw #{cmd.inspect}")
         Process.kill("TERM", pid)
         sleep 1
         Process.kill("KILL", pid)

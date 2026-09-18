@@ -6,6 +6,7 @@ require "tty-reader"
 require "tty-screen"
 require "tty-box"
 require_relative "agents_client"
+require_relative "debug"
 require_relative "store"
 require_relative "renderer"
 require_relative "peek"
@@ -220,12 +221,6 @@ module ClaudeInbox
       end
     end
 
-    # CLAUDE_INBOX_DEBUG=1 appends slow-frame notes to /tmp/inbox-debug.log.
-    def debug(msg)
-      return unless ENV["CLAUDE_INBOX_DEBUG"]
-      File.write("/tmp/inbox-debug.log", "#{Time.now.strftime("%H:%M:%S.%L")} #{msg}\n", mode: "a")
-    end
-
     def render
       t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       now = Time.now
@@ -253,7 +248,7 @@ module ClaudeInbox
       @top = frame.top
       @painter.paint(frame.lines)
       dt = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
-      debug("render #{(dt * 1000).round}ms") if dt > 0.05
+      Debug.log("render #{(dt * 1000).round}ms") if dt > 0.05
     end
 
     # Seconds spent waiting for the first poll; nil once one has landed, or
