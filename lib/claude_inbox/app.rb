@@ -15,12 +15,12 @@ require_relative "mouse"
 require_relative "new_session_form"
 require_relative "paste"
 require_relative "pull_requests"
+require_relative "poller"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
   # child process that takes over the terminal.
   class App
-    POLL_INTERVAL = 4
     ALT_ON = "\e[?1049h"
     ALT_OFF = "\e[?1049l"
     # Alternate scroll mode: while the alt screen is up the terminal turns
@@ -56,9 +56,6 @@ module ClaudeInbox
       reaper: Reaper.disabled, out: $stdout, input: $stdin, color: true)
       @client = client
       @store = store
-      @pull_requests = pull_requests
-      @jobs_dir = jobs_dir
-      @reaper = reaper
       @out = out
       @input = input
       @color = color
@@ -66,6 +63,8 @@ module ClaudeInbox
       @painter = Painter.new(out)
       @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
       @queue = Queue.new
+      @poller = Poller.new(client: client, store: store, pull_requests: pull_requests, jobs_dir: jobs_dir,
+        reaper: reaper, queue: @queue)
       @selected = nil
       @row_items = []
       @list_width = nil
@@ -82,7 +81,6 @@ module ClaudeInbox
       @last_poll = nil
       @quit = false
       @resize = false
-      @paused = false
       @restored = true
     end
 
@@ -90,11 +88,11 @@ module ClaudeInbox
       @booted_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       install_traps
       enter_screen
-      @poller = Thread.new { poll_loop }
+      @poller.start
       @peek = Peek.new(@client, @queue)
       main_loop
     ensure
-      @poller&.kill
+      @poller.stop
       @peek&.stop
       restore_screen
     end
@@ -145,13 +143,6 @@ module ClaudeInbox
 
     # ----- threads ----------------------------------------------------------
 
-    def poll_loop
-      loop do
-        poll_once unless @paused
-        sleep POLL_INTERVAL
-      end
-    end
-
     # Runs a block off the main thread; a failure lands in the status line
     # rather than killing the thread silently.
     def in_background
@@ -160,48 +151,6 @@ module ClaudeInbox
       rescue => e
         @queue << [:error, e.message]
       end
-    end
-
-    # PR lookups and the reap sweep both happen here, on the poller, so
-    # neither a slow `gh` nor a `claude rm` can stall a frame. Neither is
-    # allowed ahead of the list either: the rows go up as soon as `claude
-    # agents` answers, and the slow calls follow. A dozen serial `gh pr
-    # view`s, or a couple of `claude rm`s clearing worktrees, is the
-    # difference between the inbox appearing at once and five seconds later.
-    #
-    # Reaped rows are dropped before the queue and not after: `update` folds
-    # whatever it is handed back into the entry table, so a session still in
-    # this list would be recreated moments after `forget` cleared it and
-    # flicker back for a poll. So the reaper says what it is about to take
-    # (a pure lookup) and those rows are held back from the first hand-over;
-    # only a refused reap brings one back. Rows are handed over as copies so
-    # the gh refresh can write PR states into its own set and publish again
-    # only if one moved.
-    def poll_once
-      now = Time.now
-      sessions = @pull_requests.enrich(JobState.enrich(@client.list, jobs_dir: @jobs_dir), @store.pr_overrides)
-      doomed = @reaper.due(sessions, now)
-      publish(sessions, doomed)
-      reaped = @reaper.sweep(sessions, now)
-      live = publish(sessions, reaped) if reaped != doomed
-      live ||= sessions.reject { |s| doomed.include?(s.key) }
-      notice_reaped(reaped) if reaped.any?
-      @queue << [:sessions, live] if @pull_requests.refresh(live)
-    rescue => e
-      @queue << [:error, e.message]
-    end
-
-    # Hands the sessions minus `without` to the main thread; returns the
-    # list it kept.
-    def publish(sessions, without)
-      live = sessions.reject { |s| without.include?(s.key) }
-      @queue << [:sessions, live.map(&:dup)]
-      live
-    end
-
-    def notice_reaped(keys)
-      word = (keys.size == 1) ? "session" : "sessions"
-      notice("reaped #{keys.size} #{word} idle over #{Store::REAP_AFTER / 86_400}d — see #{@reaper.log_path}")
     end
 
     def drain_queue
@@ -213,6 +162,7 @@ module ClaudeInbox
           @last_poll = Time.now
           @error = nil
         when :error then @error = rest[0]
+        when :notice then notice(rest[0])
         when :attach then attach(rest[0])
         end
       end
@@ -472,7 +422,7 @@ module ClaudeInbox
       when :open_pr then open_pr
       when :stop then open_confirm(:stop)
       when :delete then open_confirm(:delete)
-      when :refresh then Thread.new { poll_once }
+      when :refresh then @poller.soon
       when :toggle_peek then toggle_peek
       when :new_session then open_new_session
       when :filter then start_filter
@@ -571,15 +521,15 @@ module ClaudeInbox
 
     def attach(id)
       @store.acknowledge(id)
-      @paused = true
+      @poller.pause
       restore_screen
       @out.print TTY::Cursor.clear_screen
       @out.flush
       @client.attach(id)
     ensure
       enter_screen
-      @paused = false
-      Thread.new { poll_once }
+      @poller.resume
+      @poller.soon
     end
 
     # ----- modals -----------------------------------------------------------
@@ -630,7 +580,7 @@ module ClaudeInbox
         id = @client.spawn(**v)
         notice("started #{id}")
         @pending_select = id
-        attach ? @queue << [:attach, id] : poll_once
+        attach ? @queue << [:attach, id] : @poller.once
       end
     end
 
@@ -702,7 +652,7 @@ module ClaudeInbox
     def stop_session(id)
       in_background do
         @client.stop(id)
-        poll_once
+        @poller.once
       end
     end
 
@@ -712,7 +662,7 @@ module ClaudeInbox
         @client.rm(id)
         @store.forget(id)
         notice("deleted #{id}")
-        poll_once
+        @poller.once
       end
     end
 
@@ -722,7 +672,7 @@ module ClaudeInbox
         @store.set_alias(@modal[:id], value)
       elsif value.empty? || PullRequests.valid_url?(value)
         @store.set_pr(@modal[:id], value)
-        Thread.new { poll_once }
+        @poller.soon
       else
         return notice("that's not a github.com pull request url")
       end

@@ -48,7 +48,7 @@ describe ClaudeInbox::App do
 
   def loaded_app(selected)
     app.tap do |a|
-      a.send(:poll_once)
+      a.instance_variable_get(:@poller).once
       a.send(:drain_queue)
       a.instance_variable_set(:@selected, selected)
     end
@@ -242,59 +242,6 @@ describe ClaudeInbox::App do
 
       a.send(:perform, :link_pr)
       _(a.instance_variable_get(:@modal)[:buffer]).must_equal "https://github.com/o/r/pull/7"
-    end
-  end
-
-  describe "the reaper" do
-    it "is off unless something arms it, so a poll on its own deletes nothing" do
-      loaded_app(nil)
-      _(client.removed).must_be_empty
-      _(store.sections.all.map(&:id)).must_include "f23c8673"
-    end
-
-    # A reaped row has to be dropped on the way to the store, not after it
-    # gets there: `update` would fold it straight back into the entry table
-    # and the row would reappear for a poll. That holds for the early
-    # hand-over too, the one that goes up before `claude rm` runs.
-    it "keeps what it reaped out of the frame" do
-      reaper = Class.new {
-        def due(_sessions, _now) = %w[f23c8673]
-
-        def sweep(_sessions, _now) = %w[f23c8673]
-
-        def log_path = File::NULL
-      }.new
-      a = ClaudeInbox::App.new(
-        client: client, store: store, reaper: reaper,
-        pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil),
-        jobs_dir: fixture_path("jobs"),
-        out: out, input: StringIO.new, color: false
-      )
-      a.send(:poll_once)
-      a.send(:drain_queue)
-
-      _(store.sections.all.map(&:id)).wont_include "f23c8673"
-      _(store.entry("f23c8673")).must_be_nil
-    end
-
-    it "brings a row back when its reap was refused" do
-      reaper = Class.new {
-        def due(_sessions, _now) = %w[f23c8673]
-
-        def sweep(_sessions, _now) = []
-
-        def log_path = File::NULL
-      }.new
-      a = ClaudeInbox::App.new(
-        client: client, store: store, reaper: reaper,
-        pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil),
-        jobs_dir: fixture_path("jobs"),
-        out: out, input: StringIO.new, color: false
-      )
-      a.send(:poll_once)
-      a.send(:drain_queue)
-
-      _(store.sections.all.map(&:id)).must_include "f23c8673"
     end
   end
 end

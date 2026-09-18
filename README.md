@@ -284,8 +284,8 @@ the 14-day reap that clears them.
 ## Layout
 
 ```
-AgentsClient  →  JobState  →  PullRequests  →  Store  →  Renderer  →  App
- (shells out)    (jobs dir)   (job_state + gh)  (pure)    (strings)   (terminal + key loop)
+AgentsClient  →  JobState  →  PullRequests  →  Poller  →  Store  →  Renderer  →  App
+ (shells out)    (jobs dir)   (job_state + gh)  (thread)   (pure)    (strings)   (terminal + key loop)
 ```
 
 - `AgentsClient` is the only thing that runs `claude`. `FixtureClient` swaps in a JSON file.
@@ -303,7 +303,11 @@ AgentsClient  →  JobState  →  PullRequests  →  Store  →  Renderer  →  
   line to the log for each one. `due` names them without touching anything;
   `sweep` does the deleting. Both run on the poller, and the list goes up
   between them, so a slow `rm` stalls neither a frame nor the first one.
-- `App` owns the terminal, the poller thread and the peek thread, and is the only
+- `Poller` is the thread that asks `AgentsClient` for the list, every four
+  seconds and on demand, runs it through `JobState`, `PullRequests` and the
+  `Reaper` in the order above, and hands each result to `App` over a queue.
+  `App` pauses it while `claude attach` has the terminal.
+- `App` owns the terminal, the poller and the peek thread, and is the only
   place that spawns a child.
 - `VtScreen` is a small cursor-addressed grid used to turn the `claude logs` replay
   into readable lines for the peek pane.
