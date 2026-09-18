@@ -265,4 +265,11 @@ describe ClaudeInbox::Painter do
     _(out.string).wont_include "a"
     _(out.string).must_include "\e[2;1H"
   end
+
+  it "never erases to end of line after a row" do
+    out = StringIO.new
+    ClaudeInbox::Painter.new(out).paint(%w[a b], force: true)
+    _(out.string).wont_include "\e[K"
+    _(out.string).wont_include "\e[0K"
+  end
 end
