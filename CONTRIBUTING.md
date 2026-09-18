@@ -7,7 +7,7 @@ bundle install
 gh extension install basecamp/gh-signoff
 ```
 
-Optionally, for `gh signoff <tab>` completion, add to `~/.zshrc`:
+If you want tab completion for `gh signoff`, add this to `~/.zshrc`:
 
 ```sh
 eval "$(gh signoff completion)"
@@ -15,11 +15,12 @@ eval "$(gh signoff completion)"
 
 ## Local CI and signoff
 
-CI runs on your machine instead of GitHub Actions, following
-[37signals' `gh-signoff`](https://github.com/basecamp/gh-signoff) approach — see
-DHH's [_We're moving continuous integration back to developer
+There is no GitHub Actions workflow. CI runs on your machine and reports back
+with [gh-signoff](https://github.com/basecamp/gh-signoff), the 37signals setup
+DHH describes in [_We're moving continuous integration back to developer
 machines_](https://gist.github.com/dhh/c5051aae633ff91bc4ce30528e4f0b60). The
-laptop is faster than a hosted runner and doesn't bill by the minute.
+whole suite takes about four seconds here, which is less time than a hosted
+runner needs to boot.
 
 1. Push your branch and open the PR as usual.
 2. Run `bin/ci`. It runs, in order:
@@ -27,12 +28,14 @@ laptop is faster than a hosted runner and doesn't bill by the minute.
    - `standardrb` (rubocop, with the Standard ruleset)
    - `bundle-audit` (known CVEs in `Gemfile.lock`)
    - `rake test` (minitest/spec, `test/**/*_spec.rb`)
-3. If every step passes **and** HEAD is already on the remote, `bin/ci` runs
-   `gh signoff` for you, setting a green `signoff` commit status on the PR.
+3. If every step passes and HEAD is already on the remote, `bin/ci` runs
+   `gh signoff`, which sets a green `signoff` status on the PR.
 4. Merge.
 
-If HEAD isn't pushed yet, `bin/ci` says so and skips the signoff rather than
-failing — mid-work runs stay quiet. Push, then run `gh signoff` by hand.
+If HEAD isn't pushed yet, `bin/ci` skips the signoff and says so instead of
+failing, so running it mid-work is fine. Push, then run `gh signoff` yourself.
+A dirty working tree also blocks signoff; gh-signoff refuses to vouch for
+commits that don't match what you tested.
 
 Individual steps, while iterating:
 
@@ -54,4 +57,4 @@ Useful commands:
 ### Making signoff a required check
 
 `gh signoff install` adds `signoff` to `main`'s required status checks, so
-GitHub won't merge a PR without it. Run it once per repo; it needs admin access.
+GitHub won't merge a PR without it. Run it once per repo. It needs admin access.
