@@ -66,6 +66,11 @@ module ClaudeInbox
       r.out[/\b[0-9a-f]{8}\b/] || r.out.strip
     end
 
+    # How a prompt attaches a file: the same @ mention the CLI's own prompt
+    # takes, which reads an image as an image. Spaces are escaped the way
+    # its path completion escapes them; a quoted path is not recognized.
+    def self.mention(path) = "@" + path.gsub(" ", "\\ ")
+
     # Pure so it can be tested: "default" means leave the flag off.
     def self.spawn_args(bin, prompt:, model: nil, effort: nil, permission_mode: nil, worktree: false, name: nil)
       argv = [bin, "--bg", prompt]

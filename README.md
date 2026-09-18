@@ -78,7 +78,7 @@ its own history and clicking a row does nothing.
 | `za` `zo` `zc` | toggle / open / close the Snoozed or Settled fold under the cursor |
 | `p` | toggle the read-only peek pane |
 | `J` `K` (`Ctrl-e` `Ctrl-y`) | scroll the peek pane |
-| `n` | new session (full screen): multi-line prompt (`Enter` breaks a line, `Ctrl-S` starts it, `Ctrl-O` starts and opens it), name, directory (`Tab` completes), model, effort, permissions, worktree; "default" choices show what your settings resolve to |
+| `n` | new session (full screen): multi-line prompt (`Enter` breaks a line, `Cmd-V` or `Ctrl-V` pastes an image, `Ctrl-S` starts it, `Ctrl-O` starts and opens it), name, directory (`Tab` completes), model, effort, permissions, worktree; "default" choices show what your settings resolve to |
 | `t` | pin / unpin (parks it in Pinned at the top, regardless of state) |
 | `s` | snooze: `1` 15m · `2` 1h · `3` tomorrow 9am · `4` until woken |
 | `u` | wake a snoozed session now, or bring back one you settled |
@@ -120,6 +120,25 @@ the second start needs a letter of its own.
 
 The directory defaults to the selected row's. It runs `claude --bg "<prompt>"`
 with only the flags you changed from default, in that directory.
+
+Images work as they do at Claude Code's own prompt. Paste one with `Cmd-V`
+(or `Ctrl-V` in a terminal that doesn't do bracketed paste), or drop a file
+onto the window, and it lands at the cursor as an `[Image #1]` token that
+moves and deletes as one character, so the prompt can point at it: "make the
+button look like [Image #1]". On macOS, `Cmd-Ctrl-Shift-4` copies a region of
+the screen; `n` and `Cmd-V` put it in the prompt. A pasted image is saved
+under `~/.config/claude-inbox/images/` (cleared after 14 days, as sessions
+are); a dropped file is referenced where it is. When the session starts, each
+token becomes an `@path` mention, which `claude` reads as an image the way it
+does at its own prompt. A dropped file that isn't an image, and pasted text,
+stay text, newlines included.
+
+Why the terminal can paste an image at all: with bracketed paste on, a paste
+arrives fenced between `\e[200~` and `\e[201~`, and an image, having no text
+form, arrives as an empty fence. That empty fence is the signal to read the
+clipboard, which is how Claude Code does it too. A dropped file arrives the
+same way, as its shell-escaped path. Reading the clipboard goes through
+`osascript`, so it is macOS only; elsewhere the paste is reported empty.
 
 Slash commands work as they do at Claude Code's own prompt: a prompt that
 starts with one, `/unslop README.md`, is expanded by `claude` into the skill

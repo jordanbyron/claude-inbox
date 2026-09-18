@@ -97,6 +97,26 @@ describe ClaudeInbox::App do
     _(left.index(ClaudeInbox::App::MOUSE_OFF)).must_be :<, left.index(ClaudeInbox::App::ALT_OFF)
   end
 
+  it "asks for bracketed paste for the duration of the alt screen and hands it back" do
+    app.send(:enter_screen)
+    _(taken).must_include ClaudeInbox::App::PASTE_ON
+
+    app.send(:restore_screen)
+    left = taken
+    _(left).must_include ClaudeInbox::App::PASTE_OFF
+    _(left.index(ClaudeInbox::App::PASTE_OFF)).must_be :<, left.index(ClaudeInbox::App::ALT_OFF)
+  end
+
+  it "hands a paste to the new-session form whole, and types it into the filter" do
+    app.send(:handle_input, "/")
+    app.send(:handle_input, "\e[200~thi\e[201~")
+    _(app.instance_variable_get(:@filter)).must_equal "thi"
+    app.send(:handle_input, "\e")
+    app.send(:handle_input, "n")
+    app.send(:handle_input, "\e[200~one\ntwo\e[201~")
+    _(app.instance_variable_get(:@modal)[:form].values[:prompt]).must_equal "one\ntwo"
+  end
+
   describe "clicking a row" do
     def with_peek(a)
       a.instance_variable_set(:@peek, ClaudeInbox::Peek.new(client, Queue.new))
