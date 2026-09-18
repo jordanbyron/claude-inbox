@@ -131,6 +131,9 @@ module ClaudeInbox
       end
     end
 
+    # `ps` flattens quoting, so a prompt that mentions a flag reads the same
+    # as the flag itself. Nobody types `claude "what does -p do"` into a
+    # terminal often enough to matter; the false positive is accepted.
     def self.headless?(cmd) = cmd.split.drop(1).any? { |arg| HEADLESS_FLAGS.include?(arg) }
 
     def origins_by_pid(pids)
@@ -188,18 +191,16 @@ module ClaudeInbox
 
   # Reads a committed JSON fixture instead of the daemon.
   class FixtureClient < AgentsClient
-    def initialize(path, logs: nil, remote_pids: [], subagent_pids: [], headless_pids: [])
+    def initialize(path, logs: nil, origins: {})
       super()
       @path = path
       @logs = logs
-      @origins = remote_pids.to_h { |p| [p, :remote] }
-        .merge(subagent_pids.to_h { |p| [p, :subagent] })
-        .merge(headless_pids.to_h { |p| [p, :headless] })
+      @origins = origins
     end
 
-    # Fixture rows carry no process tree; classify each interactive row from
-    # the pid lists the test hands in, otherwise as a terminal, then drop the
-    # unattended ones same as the real client does.
+    # Fixture rows carry no process tree; tag each interactive row from the
+    # pid => origin map the test hands in, otherwise as a terminal, then drop
+    # the unattended ones same as the real client does.
     def list(**)
       assign_origins(parse(File.read(@path)), @origins)
     end

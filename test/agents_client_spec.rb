@@ -30,7 +30,7 @@ describe ClaudeInbox::AgentsClient do
   end
 
   it "classifies fixture interactive rows as remote when told their pids" do
-    c = ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), remote_pids: [57405])
+    c = ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), origins: {57405 => :remote})
     s = c.list.find(&:interactive?)
     _(s).must_be :remote?
     _(s).wont_be :terminal?
@@ -38,13 +38,13 @@ describe ClaudeInbox::AgentsClient do
   end
 
   it "drops sub-agent rows entirely instead of listing them" do
-    c = ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), subagent_pids: [57405])
+    c = ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), origins: {57405 => :subagent})
     _(c.list.size).must_equal sessions.size - 1
     _(c.list.any? { |s| s.pid == 57405 }).must_equal false
   end
 
   it "drops headless rows too" do
-    c = ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), headless_pids: [57405])
+    c = ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), origins: {57405 => :headless})
     _(c.list.size).must_equal sessions.size - 1
     _(c.list.any? { |s| s.pid == 57405 }).must_equal false
   end
@@ -79,11 +79,10 @@ describe ClaudeInbox::AgentsClient do
       _(origins([[38482, 38480, "claude --input-format stream-json"]], shell_parent)).must_equal({38482 => :headless})
     end
 
-    it "does not take a prompt that mentions a flag for the flag itself" do
-      rows = [[100, 200, "claude"]]
-      _(origins(rows, {200 => "-zsh"})).must_equal({100 => :terminal})
+    it "reads the flag out of the arguments, not the program name" do
       _(ClaudeInbox::AgentsClient.headless?("claude")).must_equal false
-      _(ClaudeInbox::AgentsClient.headless?("claude -p x")).must_equal true
+      _(ClaudeInbox::AgentsClient.headless?("/Users/x/.local/bin/claude -p x")).must_equal true
+      _(ClaudeInbox::AgentsClient.headless?("claude-p")).must_equal false
     end
   end
 
