@@ -263,15 +263,15 @@ the 14-day reap that clears them.
 ## Layout
 
 ```
-AgentsClient  →  PullRequests  →  JobState  →  Store  →  Renderer  →  App
- (shells out)    (jobs dir + gh)  (jobs dir)   (pure)    (strings)   (terminal + key loop)
+AgentsClient  →  JobState  →  PullRequests  →  Store  →  Renderer  →  App
+ (shells out)    (jobs dir)   (job_state + gh)  (pure)    (strings)   (terminal + key loop)
 ```
 
 - `AgentsClient` is the only thing that runs `claude`. `FixtureClient` swaps in a JSON file.
 - `JobState` reads `~/.claude/jobs/<id>/state.json`, the daemon's own file: the scanned
   links `PullRequests` wants, the open work behind a `working` state, and the `/color`
   each session carries. Never cached.
-- `PullRequests` fills in each session's `prs` from `JobState` and `gh`.
+- `PullRequests` fills in each session's `prs` from its `job_state` and `gh`.
   `enrich` never asks gh; `refresh` is the slow half and runs after the list
   has gone up. `--fixture` points it at `test/fixtures/jobs` with `gh` off.
 - `Palette` maps a session color to an escape sequence and knows nothing else.

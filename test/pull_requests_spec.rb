@@ -8,13 +8,7 @@ PullRequest = ClaudeInbox::PullRequest
 
 describe PullRequests do
   let(:now) { Time.at(1_789_600_000) }
-  let(:prs) { PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: nil, clock: -> { now }) }
-
-  it "reads the PRs the daemon scanned out of a job, skipping issues" do
-    _(prs.linked("b03695b1").map { |u| u[/\d+\z/] }).must_equal %w[856 866]
-    _(prs.linked("nope")).must_be_empty
-    _(prs.linked(nil)).must_be_empty
-  end
+  let(:prs) { PullRequests.new(cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: nil, clock: -> { now }) }
 
   it "seeds state from Claude Code's own cache" do
     pr = prs.status("https://github.com/jordanbyron/parks_genie/pull/885")
@@ -33,6 +27,7 @@ describe PullRequests do
   it "enriches sessions, letting an override replace the scanned list" do
     a = session(id: "b03695b1")
     b = session(id: "b0b18338")
+    ClaudeInbox::JobState.enrich([a, b], jobs_dir: fixture_path("jobs"))
     prs.enrich([a, b], {"b0b18338" => "https://github.com/o/r/pull/1"})
     _(a.prs.map(&:number)).must_equal [856, 866]
     _(b.prs.map(&:number)).must_equal [1]
@@ -54,7 +49,7 @@ describe PullRequests do
 
   it "asks gh only for unresolved PRs and only once per refresh window" do
     calls = []
-    client = PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: "gh", clock: -> { now })
+    client = PullRequests.new(cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: "gh", clock: -> { now })
     client.define_singleton_method(:fetch) do |url|
       calls << url
       PullRequest.new(number: 885, url: url, state: "MERGED")
@@ -70,13 +65,14 @@ describe PullRequests do
   # that asks: the first frame waits on it.
   it "enriches without asking gh, and refresh is the slow half" do
     calls = []
-    client = PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: "gh", clock: -> { now })
+    client = PullRequests.new(cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: "gh", clock: -> { now })
     client.define_singleton_method(:fetch) do |url|
       calls << url
       PullRequest.new(number: url[/\d+\z/].to_i, url: url, state: "OPEN")
     end
     a = session(id: "b03695b1")                        # 856 and 866, both resolved in the cache
     b = session(id: "b0b18338")                        # nothing scanned; linked by hand below
+    ClaudeInbox::JobState.enrich([a, b], jobs_dir: fixture_path("jobs"))
     client.enrich([a, b], {"b0b18338" => "https://github.com/o/r/pull/1"})
     _(calls).must_be_empty
     _(a.prs.map(&:state)).must_equal %w[MERGED CLOSED]
@@ -92,7 +88,7 @@ describe PullRequests do
     Dir.mktmpdir do |dir|
       path = File.join(dir, "prs.json")
       url = "https://github.com/o/r/pull/7"
-      first = PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, resolved_path: path, gh: "gh", clock: -> { now })
+      first = PullRequests.new(cache_path: nil, resolved_path: path, gh: "gh", clock: -> { now })
       asked = 0
       first.define_singleton_method(:fetch) do |u|
         asked += 1
@@ -102,7 +98,7 @@ describe PullRequests do
       _(asked).must_equal 1
       _(JSON.parse(File.read(path))[url]["state"]).must_equal "MERGED"
 
-      second = PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, resolved_path: path, gh: "gh", clock: -> { now })
+      second = PullRequests.new(cache_path: nil, resolved_path: path, gh: "gh", clock: -> { now })
       second.define_singleton_method(:fetch) { |_| flunk "asked gh about a PR already known to be merged" }
       pr = second.status(url)
       _(pr).must_be :merged?
@@ -113,7 +109,7 @@ describe PullRequests do
   it "does not write anything a fetch left open" do
     Dir.mktmpdir do |dir|
       path = File.join(dir, "prs.json")
-      client = PullRequests.new(jobs_dir: fixture_path("jobs"), cache_path: nil, resolved_path: path, gh: "gh", clock: -> { now })
+      client = PullRequests.new(cache_path: nil, resolved_path: path, gh: "gh", clock: -> { now })
       client.define_singleton_method(:fetch) { |u| PullRequest.new(number: 1, url: u, state: "OPEN") }
       client.status("https://github.com/o/r/pull/1")
       _(File.exist?(path)).must_equal false
