@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 require "json"
-require "fileutils"
 require_relative "job_state"
+require_relative "json_file"
 require_relative "subprocess"
 
 module ClaudeInbox
@@ -149,14 +149,11 @@ module ClaudeInbox
       {}
     end
 
-    # Under @mutex. Atomic write, same as Store.
+    # Under @mutex.
     def remember(pr)
       resolved[pr.url] = {"number" => pr.number, "state" => pr.state, "title" => pr.title}
       return unless @resolved_path
-      FileUtils.mkdir_p(File.dirname(@resolved_path))
-      tmp = File.join(File.dirname(@resolved_path), ".prs.#{Process.pid}.tmp")
-      File.write(tmp, JSON.pretty_generate(resolved))
-      File.rename(tmp, @resolved_path)
+      JsonFile.write(@resolved_path, resolved)
     end
 
     def fetch(url)
