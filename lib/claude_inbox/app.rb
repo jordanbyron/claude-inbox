@@ -70,8 +70,6 @@ module ClaudeInbox
       @list_width = nil
       @top = 0
       @expanded = Hash.new(false)
-      @peek_on = false
-      @peek_offset = 0
       @keymap = Keymap.new
       @paste = Paste.new
       @tick = 0
@@ -209,19 +207,12 @@ module ClaudeInbox
       sections = filtered(@store.sections(now))
       width, height = size
       ensure_selection(sections)
-      peek_lines = nil
-      peek_title = nil
-      if @peek_on && @selected.is_a?(String)
-        row = sections.row(@selected)
-        peek_lines = peek_body(row)
-        peek_lines = scrolled(peek_lines, height - 2)
-        peek_title = row&.label || @selected
-      end
+      peek = @peek.view(sections.row(@selected), height)
       @tick += 1
       frame = @renderer.frame(
         sections, width: width, height: height, now: now,
         selected: @selected, top: @top, expanded: @expanded,
-        peek: peek_lines, peek_title: peek_title, peek_subtitle: peek_subtitle(sections),
+        peek: peek&.lines, peek_title: peek&.title, peek_subtitle: peek&.subtitle,
         modal: modal_lines(width), screen: screen_lines(width, height), status: status_text(now),
         filter: @filter, filter_editing: @filter_editing, command: @command, tick: @tick / 2,
         loading: loading_for
@@ -265,8 +256,7 @@ module ClaudeInbox
 
     def select(key)
       @selected = key
-      @peek_offset = 0
-      @peek.want(key) if actionable_id?(key)
+      @peek.select(key, selected_session)
     end
 
     def session_for(key) = @store.sessions.find { |s| s.key == key }
@@ -293,30 +283,8 @@ module ClaudeInbox
       false
     end
 
-    def peek_body(row)
-      return ["(nothing selected)"] unless row
-      return interactive_note(row.session) if row.session.interactive?
-      @peek.cached(row.session.id) || ["(loading…)"]
-    end
-
-    TERMINAL_NOTE = "This is a claude you opened in a terminal yourself. The daemon can't attach to it, read its output, or stop it from outside. Switch to that window."
-    REMOTE_NOTE = "This is a Remote Control session driven from claude.ai/code. The daemon can't attach to it or read its output from here. Open it in the web or mobile app instead."
-
-    def interactive_note(s)
-      [s.remote? ? REMOTE_NOTE : TERMINAL_NOTE, "", "pid #{s.pid} · #{s.cwd}", "session #{s.session_id}"]
-    end
-
     def notice(msg)
       @notice = [msg, Time.now + 4]
-    end
-
-    def peek_subtitle(sections)
-      row = sections.row(@selected)
-      return nil unless row
-      s = row.session
-      parts = [s.effective_state, s.status, s.waiting_for, s.id, s.started_at&.strftime("started %b %-d %H:%M")].compact
-      parts += s.prs.map { |pr| "#{pr.short} #{pr.state&.downcase || "?"}" }
-      parts.join(" · ")
     end
 
     # ----- keys -------------------------------------------------------------
@@ -386,8 +354,8 @@ module ClaudeInbox
       when :page_up then move(-page)
       when :next_section then jump_section(1)
       when :prev_section then jump_section(-1)
-      when :peek_down then @peek_offset = [@peek_offset - 1, 0].max
-      when :peek_up then @peek_offset += 1
+      when :peek_down then @peek.scroll(-1)
+      when :peek_up then @peek.scroll(1)
       when :activate then activate
       when :collapse then collapse
       when :fold_open then set_expanded(true)
@@ -446,18 +414,10 @@ module ClaudeInbox
 
     # vim-ish "h": close whatever is open, innermost first.
     def collapse
-      if @peek_on then @peek_on = false
+      if @peek.open? then @peek.close
       elsif (name = current_fold_section) && @expanded[name] then @expanded[name] = false
       end
       @painter.invalidate
-    end
-
-    # Peek lines are shown tail-first; offset scrolls back into history.
-    def scrolled(lines, view_h)
-      return lines if @peek_offset.zero?
-      max_off = [lines.size - view_h, 0].max
-      @peek_offset = [@peek_offset, max_off].min
-      lines[0, lines.size - @peek_offset]
     end
 
     def activate
@@ -466,8 +426,7 @@ module ClaudeInbox
     end
 
     def toggle_peek
-      @peek_on = !@peek_on
-      @peek.want(@selected) if @peek_on && actionable_id?(@selected)
+      @peek.toggle
       @painter.invalidate
     end
 
