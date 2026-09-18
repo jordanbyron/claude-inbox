@@ -2,10 +2,14 @@
 # frozen_string_literal: true
 
 # M0: print parsed sections with no TUI. Pass a fixture path to skip the daemon.
+# Resolve symlinks so `ln -s .../bin/claude-inbox ~/bin/` works from any cwd:
+# Bundler finds the Gemfile from this file, not from where it was invoked.
+root = File.expand_path("..", File.dirname(File.realpath(__FILE__)))
+ENV["BUNDLE_GEMFILE"] ||= File.join(root, "Gemfile")
 require "bundler/setup"
-require_relative "../lib/claude_inbox"
+require File.join(root, "lib", "claude_inbox")
 
-fixtures = File.expand_path("../test/fixtures", __dir__)
+fixtures = File.join(root, "test", "fixtures")
 client = ARGV[0] ? ClaudeInbox::FixtureClient.new(ARGV[0]) : ClaudeInbox::AgentsClient.new
 jobs_dir = ARGV[0] ? File.join(fixtures, "jobs") : ClaudeInbox::JobState::DEFAULT_DIR
 prs = ARGV[0] ? ClaudeInbox::PullRequests.new(jobs_dir: jobs_dir, cache_path: File.join(fixtures, "gh-pr-status-cache.json"), gh: nil) : ClaudeInbox::PullRequests.new
