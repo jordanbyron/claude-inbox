@@ -105,17 +105,20 @@ the second start needs a letter of its own.
 The directory defaults to the selected row's. It runs `claude --bg "<prompt>"`
 with only the flags you changed from default, in that directory.
 
-A prompt that starts with `/` is a slash command, the same as at Claude
-Code's own prompt: `claude` expands `/unslop README.md` into the skill with
-its arguments before the session starts. Typing the `/` opens a menu of what
-the CLI would offer under it — project and personal skills and commands,
-plugin skills as `plugin:name`, claude.ai's synced skills as
+Slash commands work as they do at Claude Code's own prompt: a prompt that
+starts with one, `/unslop README.md`, is expanded by `claude` into the skill
+with its arguments before the session starts; one further into the text is
+left for the agent to read and act on. Typing `/` at the start of any word
+opens a menu of what the CLI would offer — project and personal skills and
+commands, plugin skills as `plugin:name`, claude.ai's synced skills as
 `anthropic-skills:name` — narrowed as you type, each with the description
 from its front matter. `↑` `↓` choose, `Tab` or `Enter` drop the command in
 with a space after it, `Esc` closes the menu (a second `Esc` cancels the
-form). Only the first word of the prompt counts, so a path later on never
-opens it. Built-ins such as `/init` live inside the CLI and are not listed;
-typing one still works. Project commands follow the Directory field.
+form). A `/` inside a word, as in `a/b`, opens nothing, and the menu only
+appears while something matches, so a path like `/Users/…` is left alone
+after its first letters. Built-ins such as `/init` live inside the CLI and
+are not listed; typing one still works. Project commands follow the
+Directory field.
 
 ### Why `←` comes back here and not to native agent view
 

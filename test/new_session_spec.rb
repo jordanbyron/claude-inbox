@@ -228,8 +228,9 @@ describe ClaudeInbox::NewSessionForm do
         type(f, "the readme")
         _(f.press(:return, "\r")).must_equal :changed
         type(f, "/dep")
-        _(f.menu).must_be_nil
-        _(f.values[:prompt]).must_equal "/unslop the readme\n/dep"
+        _(f.menu.map(&:name)).must_equal %w[deploy]
+        f.press(:return, "\r")
+        _(f.values[:prompt]).must_equal "/unslop the readme\n/deploy"
       end
     end
 
@@ -263,9 +264,15 @@ describe ClaudeInbox::NewSessionForm do
       end
     end
 
-    it "only offers commands for the first word of the prompt" do
+    it "offers commands for a slash word anywhere in the prompt, but not mid-word" do
       with_commands do |f|
-        type(f, "fix /uns")
+        type(f, "first do")
+        f.press(:return, "\r")
+        type(f, "then /uns")
+        _(f.menu.map(&:name)).must_equal %w[unslop unsplit]
+        f.press(:tab, "\t")
+        _(f.values[:prompt]).must_equal "first do\nthen /unslop"
+        type(f, "a/b")
         _(f.menu).must_be_nil
         f.press(:ctrl_u, "\x15")
         type(f, "/unslop x")

@@ -67,11 +67,9 @@ module ClaudeInbox
       :changed
     end
 
-    # Anchored to the prompt's first word so a `/` in a path further along
-    # never opens the menu.
     def command_query
       return nil unless focused.key == :prompt
-      focused.value.head[/\A\/(\S*)\z/, 1]
+      focused.value.head[/(?:\A|\s)\/(\S*)\z/, 1]
     end
 
     def menu
@@ -160,7 +158,7 @@ module ClaudeInbox
     end
 
     def accept(cmd)
-      focused.value.replace_head("#{cmd} ")
+      focused.value.replace_before(command_query.grapheme_clusters.size + 1, "#{cmd} ")
       @pick = 0
     end
 
