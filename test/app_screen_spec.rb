@@ -175,7 +175,7 @@ describe ClaudeInbox::App do
   it "moves the selection on a wheel tick, the same way j/k would" do
     a = loaded_app("f23c8673")
     a.send(:render)
-    keys = a.send(:selectable_keys, a.send(:filtered, store.sections))
+    keys = a.send(:filtered, store.sections).selectable_keys({})
     idx = keys.index("f23c8673")
 
     a.send(:handle_input, "\e[<65;1;1M")

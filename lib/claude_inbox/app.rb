@@ -212,7 +212,7 @@ module ClaudeInbox
       peek_lines = nil
       peek_title = nil
       if @peek_on && @selected.is_a?(String)
-        row = sections.all.find { |r| r.key == @selected }
+        row = sections.row(@selected)
         peek_lines = peek_body(row)
         peek_lines = scrolled(peek_lines, height - 2)
         peek_title = row&.label || @selected
@@ -250,16 +250,10 @@ module ClaudeInbox
       "⟳ #{Text.age(now - @last_poll)} ago"
     end
 
-    def filtered(sections)
-      return sections unless @filter && !@filter.empty?
-      q = @filter.downcase
-      Store::Sections.new(**Store::SECTIONS.to_h { |k|
-        [k, sections[k].select { |r| r.label.downcase.include?(q) || r.session.cwd.to_s.downcase.include?(q) }]
-      })
-    end
+    def filtered(sections = @store.sections) = sections.matching(@filter)
 
     def ensure_selection(sections)
-      keys = selectable_keys(sections)
+      keys = sections.selectable_keys(@expanded)
       if @pending_select && keys.include?(@pending_select)
         select(@pending_select)
         @pending_select = nil
@@ -299,20 +293,6 @@ module ClaudeInbox
       false
     end
 
-    def selectable_keys(sections)
-      keys = []
-      sections.each_section do |name, rows|
-        if folded?(name)
-          keys << name unless rows.empty?
-        else
-          rows.each { |r| keys << r.key if r.selectable? }
-        end
-      end
-      keys
-    end
-
-    def folded?(name) = Store.folded?(name, @expanded)
-
     def peek_body(row)
       return ["(nothing selected)"] unless row
       return interactive_note(row.session) if row.session.interactive?
@@ -331,7 +311,7 @@ module ClaudeInbox
     end
 
     def peek_subtitle(sections)
-      row = sections.all.find { |r| r.key == @selected }
+      row = sections.row(@selected)
       return nil unless row
       s = row.session
       parts = [s.effective_state, s.status, s.waiting_for, s.id, s.started_at&.strftime("started %b %-d %H:%M")].compact
@@ -435,40 +415,28 @@ module ClaudeInbox
 
     def move(delta)
       return if @items.nil? || @items.empty?
-      keys = selectable_keys(filtered(@store.sections))
+      keys = filtered.selectable_keys(@expanded)
       idx = keys.index(@selected) || 0
       select(keys[(idx + delta).clamp(0, keys.size - 1)])
     end
 
     # Tab / Shift-Tab: first selectable row of the next / previous section.
     def jump_section(dir)
-      sections = filtered(@store.sections)
-      firsts = []
-      sections.each_section do |name, rows|
-        if folded?(name)
-          firsts << name unless rows.empty?
-        else
-          first = rows.find(&:selectable?)
-          firsts << first.id if first
-        end
-      end
+      sections = filtered
+      # A row's id rather than its key, kept as it was: a section headed by an
+      # interactive row (no id) contributes nil here and Tab passes it over.
+      firsts = sections.heads(@expanded).map { |name, row| row ? row.id : name }
       return if firsts.empty?
-      current = section_of(@selected, sections)
-      order = Store::SECTIONS.select { |k| firsts.any? { |f| section_of(f, sections) == k } }
+      current = sections.section_of(@selected)
+      order = Store::SECTIONS.select { |k| firsts.any? { |f| sections.section_of(f) == k } }
       idx = order.index(current) || -1
       target = order[(idx + dir) % order.size]
-      select(firsts.find { |f| section_of(f, sections) == target })
-    end
-
-    def section_of(key, sections)
-      return key if Store::FOLDABLE_SECTIONS.include?(key)
-      sections.each_section { |name, rows| return name if rows.any? { |r| r.key == key } }
-      nil
+      select(firsts.find { |f| sections.section_of(f) == target })
     end
 
     # The foldable section the cursor is currently on or inside, if any.
     def current_fold_section
-      name = section_of(@selected, filtered(@store.sections))
+      name = filtered.section_of(@selected)
       name if Store::FOLDABLE_SECTIONS.include?(name)
     end
 
