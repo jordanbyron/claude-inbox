@@ -11,6 +11,7 @@ require_relative "store"
 require_relative "renderer"
 require_relative "peek"
 require_relative "keymap"
+require_relative "mouse"
 require_relative "new_session_form"
 require_relative "pull_requests"
 
@@ -27,6 +28,13 @@ module ClaudeInbox
     # know the mode ignore it and keep scrolling their own history.
     WHEEL_KEYS_ON = "\e[?1007h"
     WHEEL_KEYS_OFF = "\e[?1007l"
+    # Real mouse reporting: button events plus the SGR encoding, so clicks
+    # and wheel ticks arrive as escape sequences we parse ourselves (Mouse)
+    # instead of the terminal only ever translating the wheel to arrow
+    # keys. Terminals that don't understand either mode just ignore it and
+    # fall back to WHEEL_KEYS_ON's translation, or their own scrollback.
+    MOUSE_ON = "\e[?1000h\e[?1006h"
+    MOUSE_OFF = "\e[?1006l\e[?1000l"
 
     SNOOZE_MENU = [
       ["1", "15 minutes", :m15],
@@ -53,6 +61,8 @@ module ClaudeInbox
       @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
       @queue = Queue.new
       @selected = nil
+      @row_items = []
+      @list_width = nil
       @top = 0
       @expanded = Hash.new(false)
       @peek_on = false
@@ -93,7 +103,7 @@ module ClaudeInbox
     end
 
     def enter_screen
-      @out.print ALT_ON, WHEEL_KEYS_ON, TTY::Cursor.hide, TTY::Cursor.clear_screen
+      @out.print ALT_ON, WHEEL_KEYS_ON, MOUSE_ON, TTY::Cursor.hide, TTY::Cursor.clear_screen
       @out.flush
       @input.raw! if @input.respond_to?(:raw!) && @input.tty?
       @restored = false
@@ -105,7 +115,7 @@ module ClaudeInbox
       return if @restored
       @restored = true
       @input.cooked! if @input.respond_to?(:cooked!) && @input.tty?
-      @out.print TTY::Cursor.show, WHEEL_KEYS_OFF, ALT_OFF
+      @out.print TTY::Cursor.show, MOUSE_OFF, WHEEL_KEYS_OFF, ALT_OFF
       @out.flush
     rescue
       nil
@@ -217,8 +227,14 @@ module ClaudeInbox
         end
         render
         key = @reader.read_keypress(echo: false, raw: false, nonblock: true)
-        split_keys(key).each { |k| handle_key(k) } if key
+        handle_input(key) if key
       end
+    end
+
+    def handle_input(key)
+      events = Mouse.events(key)
+      return events.each { |e| handle_mouse(e) } if events.any?
+      split_keys(key).each { |k| handle_key(k) }
     end
 
     def render
@@ -245,6 +261,8 @@ module ClaudeInbox
         loading: loading_for
       )
       @items = frame.items.compact
+      @row_items = frame.items
+      @list_width = frame.list_width
       @top = frame.top
       @painter.paint(frame.lines)
       dt = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
@@ -379,6 +397,36 @@ module ClaudeInbox
 
       action = @keymap.press(name, key)
       perform(action) if action
+    end
+
+    # A modal or an open filter/command line already claims every keypress
+    # ahead of the normal action table (see handle_key); mouse input defers
+    # to the same rule rather than reaching past whatever has focus.
+    def handle_mouse(event)
+      return if @modal || @filter_editing || @command
+      case event.kind
+      when :click then click_row(event.row, event.col)
+      when :scroll_up then perform(:up)
+      when :scroll_down then perform(:down)
+      end
+    end
+
+    # Clicking a row selects it and attaches, same as landing on it with
+    # j/k and pressing Enter — activate already knows how to expand a fold
+    # or refuse a terminal/remote row, so this doesn't repeat that.
+    def click_row(row, col)
+      return if @list_width && col > @list_width
+      item = row_item_at(row)
+      return unless item
+      select(item.key)
+      activate
+    end
+
+    # The wrapped detail line under a two-line row ("↳ ~/code/x") carries
+    # no item of its own; a click there resolves to the row above it.
+    def row_item_at(row)
+      idx = row - 1
+      @row_items[idx] || (@row_items[idx - 1] if idx > 0 && @row_items[idx - 1]&.kind == :row)
     end
 
     def perform(action)

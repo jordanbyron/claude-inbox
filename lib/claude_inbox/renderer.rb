@@ -16,7 +16,7 @@ module ClaudeInbox
       def key = (kind == :fold_toggle) ? section : row&.key
     end
 
-    Frame = Struct.new(:lines, :items, :top)
+    Frame = Struct.new(:lines, :items, :top, :list_width)
 
     SECTION_TITLES = {
       pinned: "PINNED",
@@ -90,7 +90,7 @@ module ClaudeInbox
 
       lines = [header(sections, width, opts[:status], now, loading: opts[:loading])] + visible.map { |l| Text.pad(l, width) } + [footer(width, opts)]
       lines = overlay(lines, opts[:modal], width) if opts[:modal]
-      Frame.new(lines, [nil] + visible_items + [nil], top)
+      Frame.new(lines, [nil] + visible_items + [nil], top, list_w)
     end
 
     private
@@ -112,7 +112,7 @@ module ClaudeInbox
       body = opts[:screen][:lines].first(view_h)
       body += [""] * (view_h - body.size)
       lines = [header(sections, width, opts[:status], now)] + body.map { |l| Text.pad(l, width) } + [Text.pad(" " + opts[:screen][:footer], width)]
-      Frame.new(lines, [nil] * (view_h + 2), opts[:top] || 0)
+      Frame.new(lines, [nil] * (view_h + 2), opts[:top] || 0, width)
     end
 
     # ----- chrome -------------------------------------------------------------
