@@ -206,6 +206,19 @@ last saw, then refreshed with `gh pr view` on the poller thread, at most once a
 minute per PR and never for one already merged or closed. Without `gh` the
 cached state is all you get.
 
+`gh pr view` is a network round trip, so each poll publishes the list first,
+with whatever states are already known, and asks gh afterwards; the rows come
+round again only if an answer moved one. That is why the inbox is up in well
+under a second rather than after a dozen serial `gh` calls. Once gh has said a
+PR is merged or closed the answer is kept in `~/.config/claude-inbox/prs.json`,
+in the same shape as Claude Code's cache, because that cache only covers PRs
+its own sessions opened and a link scan picks up plenty of others — without
+the file every launch would ask about every merged PR again.
+
+Until the first poll lands the body is blank rather than claiming "nothing
+running"; past a second and a half it gets a spinner and a rotating excuse
+with the elapsed time, and past ten seconds a hint to check the daemon.
+
 ## State
 
 `~/.config/claude-inbox/state.json`, keyed by session id, atomic writes.
@@ -225,13 +238,15 @@ AgentsClient  →  PullRequests  →  Store  →  Renderer  →  App
 
 - `AgentsClient` is the only thing that runs `claude`. `FixtureClient` swaps in a JSON file.
 - `PullRequests` fills in each session's `prs` from `~/.claude/jobs` and `gh`.
-  `--fixture` points it at `test/fixtures/jobs` with `gh` off.
+  `enrich` never asks gh; `refresh` is the slow half and runs after the list
+  has gone up. `--fixture` points it at `test/fixtures/jobs` with `gh` off.
 - `Store` holds the last poll and the snooze table behind a mutex; rules are class methods.
 - `Renderer` turns sections into an array of fixed-width strings. `Painter` diffs frames
   and repaints only changed rows.
 - `Reaper` runs `claude rm` over whatever `Store.reapable?` picks and appends a
-  line to the log for each one. One public method, `sweep`, called from the
-  poller so a slow `rm` never stalls a frame.
+  line to the log for each one. `due` names them without touching anything;
+  `sweep` does the deleting. Both run on the poller, and the list goes up
+  between them, so a slow `rm` stalls neither a frame nor the first one.
 - `App` owns the terminal, the poller thread and the peek thread, and is the only
   place that spawns a child.
 - `VtScreen` is a small cursor-addressed grid used to turn the `claude logs` replay

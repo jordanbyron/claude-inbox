@@ -69,6 +69,7 @@ module ClaudeInbox
     end
 
     def run
+      @booted_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       install_traps
       enter_screen
       @poller = Thread.new { poll_loop }
@@ -144,19 +145,40 @@ module ClaudeInbox
     end
 
     # PR lookups and the reap sweep both happen here, on the poller, so
-    # neither a slow `gh` nor a `claude rm` can stall a frame.
+    # neither a slow `gh` nor a `claude rm` can stall a frame. Neither is
+    # allowed ahead of the list either: the rows go up as soon as `claude
+    # agents` answers, and the slow calls follow. A dozen serial `gh pr
+    # view`s, or a couple of `claude rm`s clearing worktrees, is the
+    # difference between the inbox appearing at once and five seconds later.
     #
     # Reaped rows are dropped before the queue and not after: `update` folds
     # whatever it is handed back into the entry table, so a session still in
     # this list would be recreated moments after `forget` cleared it and
-    # flicker back for a poll.
+    # flicker back for a poll. So the reaper says what it is about to take
+    # (a pure lookup) and those rows are held back from the first hand-over;
+    # only a refused reap brings one back. Rows are handed over as copies so
+    # the gh refresh can write PR states into its own set and publish again
+    # only if one moved.
     def poll_once
+      now = Time.now
       sessions = JobState.enrich(@pull_requests.enrich(@client.list, @store.pr_overrides), jobs_dir: @jobs_dir)
-      reaped = @reaper.sweep(sessions, Time.now)
-      @queue << [:sessions, sessions.reject { |s| reaped.include?(s.key) }]
+      doomed = @reaper.due(sessions, now)
+      publish(sessions, doomed)
+      reaped = @reaper.sweep(sessions, now)
+      live = publish(sessions, reaped) if reaped != doomed
+      live ||= sessions.reject { |s| doomed.include?(s.key) }
       notice_reaped(reaped) if reaped.any?
+      @queue << [:sessions, live] if @pull_requests.refresh(live)
     rescue => e
       @queue << [:error, e.message]
+    end
+
+    # Hands the sessions minus `without` to the main thread; returns the
+    # list it kept.
+    def publish(sessions, without)
+      live = sessions.reject { |s| without.include?(s.key) }
+      @queue << [:sessions, live.map(&:dup)]
+      live
     end
 
     def notice_reaped(keys)
@@ -224,13 +246,22 @@ module ClaudeInbox
         selected: @selected, top: @top, expanded: @expanded,
         peek: peek_lines, peek_title: peek_title, peek_subtitle: peek_subtitle(sections),
         modal: modal_lines(width), screen: screen_lines(width, height), status: status_text(now),
-        filter: @filter, filter_editing: @filter_editing, command: @command, tick: @tick / 2
+        filter: @filter, filter_editing: @filter_editing, command: @command, tick: @tick / 2,
+        loading: loading_for
       )
       @items = frame.items.compact
       @top = frame.top
       @painter.paint(frame.lines)
       dt = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
       debug("render #{(dt * 1000).round}ms") if dt > 0.05
+    end
+
+    # Seconds spent waiting for the first poll; nil once one has landed, or
+    # failed — a failure has its own line in the header and the empty state
+    # already says how to retry.
+    def loading_for
+      return nil if @last_poll || @error || !@booted_at
+      Process.clock_gettime(Process::CLOCK_MONOTONIC) - @booted_at
     end
 
     def status_text(now)
