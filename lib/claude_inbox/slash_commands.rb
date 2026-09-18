@@ -48,7 +48,7 @@ module ClaudeInbox
         meta = frontmatter(path)
         next if meta["user-invocable"] == "false"
         name = File.basename(File.dirname(path))
-        Command.new([prefix, name].compact.join(":"), meta["description"].to_s, source)
+        Command.new(qualify(prefix, name), meta["description"].to_s, source)
       end
     end
 
@@ -56,9 +56,12 @@ module ClaudeInbox
     def commands(dir, source, prefix: nil)
       Dir.glob(File.join(dir, "**", "*.md")).sort.map do |path|
         name = File.basename(path, ".md")
-        Command.new([prefix, name].compact.join(":"), frontmatter(path)["description"].to_s, source)
+        Command.new(qualify(prefix, name), frontmatter(path)["description"].to_s, source)
       end
     end
+
+    # "name", or "plugin:name" when it comes from a plugin.
+    def qualify(prefix, name) = [prefix, name].compact.join(":")
 
     # `installed_plugins.json` maps "name@marketplace" to where the plugin
     # was unpacked: one entry, or a list of them, one per install scope.
