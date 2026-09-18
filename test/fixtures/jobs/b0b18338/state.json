@@ -1,5 +1,6 @@
 {
   "state": "done",
+  "color": "orange",
   "children": [
     {"id": "885", "href": "https://github.com/jordanbyron/parks_genie/pull/885", "kind": "pr"}
   ]

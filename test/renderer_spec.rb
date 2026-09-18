@@ -209,6 +209,48 @@ describe ClaudeInbox::Renderer do
   end
 end
 
+describe "renderer session colors" do
+  let(:now) { Time.at(1_789_604_500) }
+  let(:renderer) { ClaudeInbox::Renderer.new(color: true, home: "/Users/byron") }
+  let(:orange) { "\e[38;5;208m" }
+
+  def colored(name, **attrs)
+    session(id: "z", name: "tinted", job_state: ClaudeInbox::JobState.new("color" => name), **attrs)
+  end
+
+  def line_for(session, entries = {}, **opts)
+    sec = Store.sectionize([session], Store.merge_entries(entries, [session], now), now)
+    renderer.frame(sec, width: 80, height: 14, now: now, **opts).lines.find { |l| l.include?(session.name) }
+  end
+
+  it "paints the label of a session /color gave a color" do
+    _(line_for(colored("orange"))).must_include "#{orange}tinted"
+  end
+
+  it "leaves a session with no color exactly as it was" do
+    _(line_for(session(id: "z", name: "plain"))).wont_include "\e[38;5;"
+  end
+
+  it "keeps the glyph in the state's color while the label takes the session's" do
+    line = line_for(colored("green", state: "blocked"))
+    _(line).must_include "\e[31;1m●"
+    _(line).must_include "\e[31;1mneeds you"
+    _(line).must_include "\e[32mtinted\e[39m"
+  end
+
+  it "dims a settled row instead of coloring it" do
+    s = colored("orange", state: "done")
+    line = line_for(s, {"z" => {"settled_at" => now.to_i}}, expanded: {settled: true})
+    _(line).wont_include orange
+    _(line).must_include "\e[2m"
+  end
+
+  it "still pads a colored row to exactly the frame width" do
+    sec = Store.sectionize([colored("pink")], {}, now)
+    renderer.frame(sec, width: 64, height: 12, now: now).lines.each { |l| _(Text.width(l)).must_equal 64 }
+  end
+end
+
 describe ClaudeInbox::Painter do
   it "paints only changed lines" do
     out = StringIO.new

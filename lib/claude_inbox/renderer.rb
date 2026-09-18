@@ -3,6 +3,7 @@
 require "pastel"
 require "tty-cursor"
 require_relative "text"
+require_relative "palette"
 require_relative "store"
 
 module ClaudeInbox
@@ -52,6 +53,7 @@ module ClaudeInbox
 
     def initialize(color: true, min_left: 44, home: Dir.home)
       @p = Pastel.new(enabled: color)
+      @palette = Palette.new(enabled: color)
       @min_left = min_left
       @home = home
     end
@@ -282,12 +284,18 @@ module ClaudeInbox
       [Text.pad(first, width), Text.pad(detail, width)]
     end
 
+    # The label is the one part of a row you own: `/color` tints it, and
+    # nothing else on the line. Glyph, badge and PR keep the state's colors,
+    # so no color you pick can make a blocked session stop looking blocked.
+    # Settled stays dim — the section is meant to be quiet.
     def style_label(label, row, section, sel)
-      if section == :settled then @p.dim(label)
-      elsif row.alias_name then sel ? @p.bold.italic(label) : @p.italic(label)
-      elsif sel then @p.bold(label)
-      else label
-      end
+      return @p.dim(label) if section == :settled
+      styled =
+        if row.alias_name then sel ? @p.bold.italic(label) : @p.italic(label)
+        elsif sel then @p.bold(label)
+        else label
+        end
+      @palette.paint(styled, row.session.color)
     end
 
     def glyph_for(s, section, tick)
@@ -325,7 +333,7 @@ module ClaudeInbox
       pr ? base + @p.dim(" · ") + pr : base
     end
 
-    # "#885 open" in GitHub's colours: green open, dim draft, purple merged,
+    # "#885 open" in GitHub's colors: green open, dim draft, purple merged,
     # red closed. Only the first PR is shown; the peek subtitle lists them all.
     def pr_badge(s, section)
       pr = s.pr

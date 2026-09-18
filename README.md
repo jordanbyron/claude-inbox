@@ -50,6 +50,9 @@ the session's own job file, which `claude agents --json` does not expose; the
 inbox still takes the state itself from the daemon, the only thing that knows
 whether a session is alive.
 
+A session you gave a color to with `/color` wears it on the label — see
+[Colors](#colors).
+
 ## Keys
 
 Keyboard-first, vim flavoured, but the mouse works too. Arrows work as well
@@ -202,7 +205,7 @@ turns the whole thing off, and `--fixture` runs never reap.
 Claude Code already links sessions to PRs. The daemon scans each background
 session's transcript for links and writes them to
 `~/.claude/jobs/<id>/state.json` as `children` (`kind: "pr"`); `claude agents
---json` does not expose that, so `PullRequests` reads the file. It is a link
+--json` does not expose that, so `JobState` reads the file. It is a link
 scan, so a session that only *reviews* a PR gets it too. Interactive sessions
 have no job file, so for them (or to correct a bad scan) `P` sets the link by
 hand; that lives in our own state file as `pr` and replaces the scanned list.
@@ -225,6 +228,26 @@ Until the first poll lands the body is blank rather than claiming "nothing
 running"; past a second and a half it gets a spinner and a rotating excuse
 with the elapsed time, and past ten seconds a hint to check the daemon.
 
+## Colors
+
+`/color` inside a session is the only way to set one; there is no key for it
+here, and nothing is stored on our side. The daemon writes it to the job file
+as `color`, `claude agents --json` leaves it out, so `JobState` reads it on
+every poll and a color you change shows up on the next one.
+
+It lands on the label and nowhere else. The glyph, the state badge and the PR
+badge keep the colors their own state gives them, so no color you pick can
+stop a blocked session looking blocked. Settled rows stay dim — that section is
+meant to be quiet, and a color shouting out of a collapsed fold would undo it.
+
+The eight colors `/color` offers are mapped the way Claude Code's own tmux
+code maps them when it tints a teammate pane: `red`, `blue`, `green`, `yellow`,
+`purple` and `cyan` go to the terminal's own ansi colors, so they follow your
+theme; `orange` and `pink` have no ansi name and go through 256-color indexes
+208 and 205. Anything else is left unpainted. Colors close with SGR 39
+(default foreground) rather than 0, so a label that is already bold or italic
+stays that way.
+
 ## State
 
 `~/.config/claude-inbox/state.json`, keyed by session id, atomic writes.
@@ -238,14 +261,18 @@ the 14-day reap that clears them.
 ## Layout
 
 ```
-AgentsClient  →  PullRequests  →  Store  →  Renderer  →  App
- (shells out)    (jobs dir + gh)  (pure)    (strings)   (terminal + key loop)
+AgentsClient  →  PullRequests  →  JobState  →  Store  →  Renderer  →  App
+ (shells out)    (jobs dir + gh)  (jobs dir)   (pure)    (strings)   (terminal + key loop)
 ```
 
 - `AgentsClient` is the only thing that runs `claude`. `FixtureClient` swaps in a JSON file.
-- `PullRequests` fills in each session's `prs` from `~/.claude/jobs` and `gh`.
+- `JobState` reads `~/.claude/jobs/<id>/state.json`, the daemon's own file: the scanned
+  links `PullRequests` wants, the open work behind a `working` state, and the `/color`
+  each session carries. Never cached.
+- `PullRequests` fills in each session's `prs` from `JobState` and `gh`.
   `enrich` never asks gh; `refresh` is the slow half and runs after the list
   has gone up. `--fixture` points it at `test/fixtures/jobs` with `gh` off.
+- `Palette` maps a session color to an escape sequence and knows nothing else.
 - `Store` holds the last poll and the snooze table behind a mutex; rules are class methods.
 - `Renderer` turns sections into an array of fixed-width strings. `Painter` diffs frames
   and repaints only changed rows.
@@ -273,7 +300,7 @@ AgentsClient  →  PullRequests  →  Store  →  Renderer  →  App
 - `claude agents --json --all` matches the documented shape exactly. A `done`
   session can still carry a `pid` and `status: idle`.
 - `claude logs <id>` is **not** plain text. It is a replay of the session's terminal
-  output: cursor positioning, erase-line, colour. Words are frequently separated by
+  output: cursor positioning, erase-line, color. Words are frequently separated by
   cursor motion rather than spaces, so stripping escapes yields run-together garbage.
   Feeding it through a screen grid produces readable text.
 - `claude logs` fails with "job not found" for a finished session whose process the
@@ -296,6 +323,12 @@ AgentsClient  →  PullRequests  →  Store  →  Renderer  →  App
   `worktreeBranch`, token count and the transcript path. `~/.claude/gh-pr-status-cache.json`
   is keyed by PR url and calls an open draft `DRAFT`; `gh pr view` reports
   `OPEN` plus `isDraft`.
+
+- The job file is also where `/color` ends up, as `color`. `claude agents --json`
+  does not carry it, so a color is only ever visible by reading the file. The CLI
+  offers eight, and its own tmux code is the authority on what they mean to a
+  terminal: six are ansi names, `orange` and `pink` are 256-color indexes 208 and
+  205. Interactive sessions have no job file and so never have a color.
 
 ## Development
 

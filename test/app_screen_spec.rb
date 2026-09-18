@@ -39,6 +39,13 @@ describe ClaudeInbox::App do
     )
   end
 
+  it "fills in each session's color from its job file on every poll" do
+    loaded_app(nil)
+    by_id = store.sessions.to_h { |s| [s.id, s.color] }
+    _(by_id["b0b18338"]).must_equal "orange"
+    _(by_id["b03695b1"]).must_be_nil
+  end
+
   def loaded_app(selected)
     app.tap do |a|
       a.send(:poll_once)
