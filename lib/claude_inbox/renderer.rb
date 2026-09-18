@@ -392,21 +392,8 @@ module ClaudeInbox
         next if y >= out.size
         base = Text.strip_ansi(out[y])
         prefix = Text.pad(Text.take(base, left), left)
-        suffix = drop_columns(base, left + block_w)
+        suffix = Text.drop(base, left + block_w)
         out[y] = Text.pad(@p.dim(prefix) + Text.pad(bl, block_w) + @p.dim(suffix), width)
-      end
-      out
-    end
-
-    def drop_columns(s, n)
-      used = 0
-      out = +""
-      s.each_grapheme_cluster do |g|
-        if used >= n
-          out << g
-        else
-          used += Unicode::DisplayWidth.of(g)
-        end
       end
       out
     end

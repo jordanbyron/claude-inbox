@@ -11,6 +11,11 @@ describe Text do
     _(Text.truncate("abc", 3)).must_equal "abc"
   end
 
+  it "drops leading columns by display width" do
+    _(Text.drop("ab🎉cd", 2)).must_equal "🎉cd"
+    _(Text.drop("ab🎉cd", 3)).must_equal "cd"
+  end
+
   it "pads ignoring ANSI" do
     s = "\e[31mred\e[0m"
     _(Text.width(s + "  ")).must_equal 5
