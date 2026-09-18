@@ -407,7 +407,9 @@ module ClaudeInbox
     end
   end
 
-  # Diffs successive frames and writes only changed rows.
+  # Diffs successive frames and writes only changed rows. No erase-to-end-of-
+  # line after a row: in the terminal's last column the cursor stays put
+  # (pending wrap), so EL would eat the glyph just drawn.
   class Painter
     def initialize(out, cursor: TTY::Cursor)
       @out = out
@@ -420,7 +422,7 @@ module ClaudeInbox
       buf << @cursor.clear_screen if force
       lines.each_with_index do |line, i|
         next if !force && @prev[i] == line
-        buf << @cursor.move_to(0, i) << line << @cursor.clear_line_after
+        buf << @cursor.move_to(0, i) << line
       end
       if @prev.size > lines.size
         (lines.size...@prev.size).each { |i| buf << @cursor.move_to(0, i) << @cursor.clear_line }
