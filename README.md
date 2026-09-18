@@ -52,9 +52,15 @@ whether a session is alive.
 
 ## Keys
 
-Keyboard only, vim flavoured. Arrows work too. The wheel moves the selection
-rather than uncovering the scrollback behind us, in terminals that support
-alternate scroll mode (`\e[?1007h`). Apple Terminal does not.
+Keyboard-first, vim flavoured, but the mouse works too. Arrows work as well
+as `j`/`k`. Clicking a row does what landing on it and pressing `Enter`
+would: selects it and attaches (or expands a fold, or refuses on a terminal
+row you can't be attached to from here). The wheel moves the selection
+rather than uncovering the scrollback behind us, in terminals that report
+mouse events (`\e[?1000h` + `\e[?1006h`, the same mode clicks use) or that at
+least support alternate scroll mode (`\e[?1007h`, wheel-as-arrows only, no
+clicks). Apple Terminal supports neither escape, so there the wheel scrolls
+its own history and clicking a row does nothing.
 
 | Key | Action |
 |---|---|
@@ -254,6 +260,9 @@ AgentsClient  →  PullRequests  →  Store  →  Renderer  →  App
 - `SlashCommands` reads the skills and commands `claude` would offer from the
   same directories it reads them, front matter included, for the new-session
   prompt's menu. Pure filesystem; it never runs `claude`.
+- `Mouse` turns the SGR escape sequences the terminal sends for clicks and
+  wheel ticks into `Event`s; `App` maps a click's row back to whatever
+  `Renderer` painted there.
 
 ## Things learned from the real CLI (2.1.273)
 
