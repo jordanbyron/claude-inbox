@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 require "tty-reader"
-require "tty-box"
 require_relative "agents_client"
 require_relative "debug"
+require_relative "dialog"
 require_relative "store"
 require_relative "renderer"
 require_relative "terminal"
@@ -20,13 +20,6 @@ module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
   # child process that takes over the terminal.
   class App
-    SNOOZE_MENU = [
-      ["1", "15 minutes", :m15],
-      ["2", "1 hour", :h1],
-      ["3", "tomorrow 9am", :tomorrow_9am],
-      ["4", "until I wake it", :until_woken]
-    ].freeze
-
     # The reaper defaults to off. It is the only thing here that deletes a
     # session, so switching it on is `bin/claude-inbox`'s job and nothing
     # reaches it by forgetting an argument.
@@ -136,7 +129,7 @@ module ClaudeInbox
     # The form takes a paste whole, images included; the one-line editors
     # take it as typing, so a pasted PR URL lands where it should.
     def handle_paste(text)
-      return @modal[:form].paste(text) if @modal && @modal[:kind] == :new
+      return @modal.paste(text) if @modal.is_a?(NewSessionForm)
       text.each_char { |c| handle_key(c) }
     end
 
@@ -396,24 +389,24 @@ module ClaudeInbox
 
     def open_snooze_menu
       return unless require_storable
-      @modal = {kind: :snooze, id: @selected}
+      @modal = Dialog::Snooze.new(@selected)
     end
 
     def open_confirm(kind)
       return unless require_actionable
-      @modal = {kind: kind, id: @selected}
+      @modal = Dialog::Confirm.new(kind, @selected)
     end
 
     def open_alias_editor
       return unless require_storable
       current = @store.alias_for(@selected) || ""
-      @modal = {kind: :alias, id: @selected, buffer: +current}
+      @modal = Dialog::Prompt.new(:alias, @selected, current)
     end
 
     def open_pr_editor
       return unless require_storable
       current = @store.pr_for(@selected) || selected_session&.pr&.url || ""
-      @modal = {kind: :pr, id: @selected, buffer: +current}
+      @modal = Dialog::Prompt.new(:pr, @selected, current)
     end
 
     # Hands the first PR to the OS browser opener.
@@ -427,7 +420,7 @@ module ClaudeInbox
 
     def open_new_session
       cwd = selected_session&.cwd || Dir.pwd
-      @modal = {kind: :new, form: NewSessionForm.new(cwd: cwd, pastel: Pastel.new(enabled: @color))}
+      @modal = NewSessionForm.new(cwd: cwd, pastel: Pastel.new(enabled: @color))
     end
 
     # `attach:` hands the terminal over as soon as the session starts. Without
@@ -444,68 +437,41 @@ module ClaudeInbox
       end
     end
 
+    # The new-session form takes the whole body; a Dialog is a box over it.
     def screen_lines(width, height)
-      return nil unless @modal && @modal[:kind] == :new
-      form = @modal[:form]
-      {lines: form.screen(width, height - 2), footer: form.footer}
+      return nil unless @modal.is_a?(NewSessionForm)
+      {lines: @modal.screen(width, height - 2), footer: @modal.footer}
     end
 
     def modal_lines(width)
-      return nil unless @modal && @modal[:kind] != :new
-      content =
-        case @modal[:kind]
-        when :snooze
-          SNOOZE_MENU.map { |k, label, _| "  #{k}  #{label}" } + ["", "  esc  cancel"]
-        when :stop
-          ["  Stop session #{@modal[:id]}?", "", "  y  stop it", "  esc  cancel"]
-        when :delete
-          ["  Delete session #{@modal[:id]}?", "  Its worktree and conversation", "  go with it.",
-            "", "  y  delete it", "  esc  keep it"]
-        when :alias
-          ["  New alias:", "", "  > #{@modal[:buffer]}_", "", "  ⏎ save · esc cancel"]
-        when :pr
-          ["  Pull request URL (empty clears):", "", "  > #{@modal[:buffer]}_", "", "  ⏎ save · esc cancel"]
-        end
-      title = {snooze: " Snooze ", stop: " Stop ", delete: " Delete ", alias: " Alias ", pr: " Pull request "}[@modal[:kind]]
-      TTY::Box.frame(content.join("\n"), title: {top_left: title}, padding: [0, 1], width: [width - 4, 44].min)
-        .split("\n")
+      @modal.frame(width) if @modal.is_a?(Dialog)
     end
 
     def handle_modal_key(name, key)
-      case @modal[:kind]
-      when :new
-        form = @modal[:form]
-        case form.press(name, key)
-        when :cancel then @modal = nil
-        when :start
-          @modal = nil
-          start_session(form, attach: false)
-        when :start_and_attach
-          @modal = nil
-          start_session(form, attach: true)
-        end
+      return handle_form_key(name, key) if @modal.is_a?(NewSessionForm)
+      case @modal.press(name, key)
+      when :cancel then @modal = nil
       when :snooze
-        if name == :escape || name == "q"
-          @modal = nil
-        elsif (entry = SNOOZE_MENU.find { |k, _, _| k == key })
-          @store.snooze(@modal[:id], entry[2])
-          @modal = nil
-        end
-      when :alias, :pr
-        case name
-        when :escape then @modal = nil
-        when :return, :enter then save_text_modal
-        when :backspace, :ctrl_h then @modal[:buffer] = @modal[:buffer][0...-1]
-        else @modal[:buffer] << key if key.is_a?(String) && key.match?(/\A[[:print:]]\z/)
-        end
-      when :stop, :delete
-        if key == "y"
-          kind, id = @modal.values_at(:kind, :id)
-          @modal = nil
-          (kind == :stop) ? stop_session(id) : delete_session(id)
-        elsif name == :escape || key == "n" || key == "q"
-          @modal = nil
-        end
+        @store.snooze(@modal.id, @modal.choice)
+        @modal = nil
+      when :confirm
+        kind, id = @modal.kind, @modal.id
+        @modal = nil
+        (kind == :stop) ? stop_session(id) : delete_session(id)
+      when :save then save_prompt
+      end
+    end
+
+    def handle_form_key(name, key)
+      form = @modal
+      case form.press(name, key)
+      when :cancel then @modal = nil
+      when :start
+        @modal = nil
+        start_session(form, attach: false)
+      when :start_and_attach
+        @modal = nil
+        start_session(form, attach: true)
       end
     end
 
@@ -526,12 +492,12 @@ module ClaudeInbox
       end
     end
 
-    def save_text_modal
-      value = @modal[:buffer].strip
-      if @modal[:kind] == :alias
-        @store.set_alias(@modal[:id], value)
+    def save_prompt
+      value = @modal.value.strip
+      if @modal.kind == :alias
+        @store.set_alias(@modal.id, value)
       elsif value.empty? || PullRequests.valid_url?(value)
-        @store.set_pr(@modal[:id], value)
+        @store.set_pr(@modal.id, value)
         @poller.soon
       else
         return notice("that's not a github.com pull request url")

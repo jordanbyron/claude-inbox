@@ -323,6 +323,9 @@ AgentsClient  →  JobState  →  PullRequests  →  Poller  →  Store  →  Re
 - `SlashCommands` reads the skills and commands `claude` would offer from the
   same directories it reads them, front matter included, for the new-session
   prompt's menu. Pure filesystem; it never runs `claude`.
+- `Dialog` is a box over the list that claims every key until it answers:
+  the snooze menu, the stop and delete confirms, the alias and pull request
+  prompts. Pure, like `NewSessionForm`; `App` acts on the answer.
 - `Mouse` turns the SGR escape sequences the terminal sends for clicks and
   wheel ticks into `Event`s; `App` maps a click's row back to whatever
   `Renderer` painted there.

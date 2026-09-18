@@ -81,7 +81,7 @@ describe ClaudeInbox::App do
     app.send(:handle_input, "\e")
     app.send(:handle_input, "n")
     app.send(:handle_input, "\e[200~one\ntwo\e[201~")
-    _(app.instance_variable_get(:@modal)[:form].values[:prompt]).must_equal "one\ntwo"
+    _(app.instance_variable_get(:@modal).values[:prompt]).must_equal "one\ntwo"
   end
 
   describe "clicking a row" do
@@ -199,11 +199,11 @@ describe ClaudeInbox::App do
       store.set_pr("f23c8673", "https://github.com/o/r/pull/7")
 
       a.send(:perform, :alias)
-      _(a.instance_variable_get(:@modal)[:buffer]).must_equal "auth spike"
+      _(a.instance_variable_get(:@modal).value).must_equal "auth spike"
       a.send(:handle_key, "\e")
 
       a.send(:perform, :link_pr)
-      _(a.instance_variable_get(:@modal)[:buffer]).must_equal "https://github.com/o/r/pull/7"
+      _(a.instance_variable_get(:@modal).value).must_equal "https://github.com/o/r/pull/7"
     end
   end
 end
