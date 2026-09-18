@@ -275,12 +275,16 @@ module ClaudeInbox
       edit(id) { |e| e["acknowledged_at"] = now.to_i }
     end
 
+    # Also lifts a prior revive, so `x` after `u` takes hold again even
+    # without a state change in between: otherwise revived_at would still
+    # outrank the fresh settle in `sectionize`.
     def settle(id)
       now = @clock.call
       edit(id) do |e|
         e["settled_at"] = now.to_i
         e.delete("wake_at")
         e.delete("snoozed_at")
+        e.delete("revived_at")
       end
     end
 
