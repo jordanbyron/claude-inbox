@@ -60,12 +60,6 @@ module ClaudeInbox
       s + (" " * (w - cur))
     end
 
-    def rpad(s, w)
-      cur = width(s)
-      return truncate(strip_ansi(s), w) if cur > w
-      (" " * (w - cur)) + s
-    end
-
     # Greedy word wrap on display width. Words wider than `w` are split.
     def wrap(s, w) = segments(s, w).map(&:rstrip)
 

@@ -56,10 +56,6 @@ module ClaudeInbox
 
     def rm(id) = run(@bin, "rm", id)
 
-    def respawn(id) = run(@bin, "respawn", id)
-
-    def daemon_alive? = Subprocess.capture(@bin, "daemon", "status").success?
-
     MODELS = %w[default fable opus sonnet haiku].freeze
     EFFORTS = %w[default low medium high xhigh max].freeze
     PERMISSION_MODES = %w[default acceptEdits auto plan bypassPermissions].freeze
@@ -220,9 +216,5 @@ module ClaudeInbox
     end
 
     def rm(_id) = true
-
-    def respawn(_id) = true
-
-    def daemon_alive? = true
   end
 end
