@@ -144,7 +144,7 @@ module ClaudeInbox
       chips << @p.dim(compact ? "○ #{i}" : "○ #{i} terminal#{"s" if i > 1}") if i > 0
       chips << @p.blue(compact ? "⇅ #{m}" : "⇅ #{m} remote") if m > 0
       chips << @p.magenta(compact ? "z #{z}" : "z #{z} snoozed") if z > 0
-      chips << @p.dim(compact ? "∙ #{d}" : "∙ #{d} settled") if d > 0
+      chips << @p.dim(compact ? "◦ #{d}" : "◦ #{d} settled") if d > 0
       chips << @p.dim("nothing running") if sections.all.empty?
       chips.join(compact ? "  " : @p.dim("  ·  "))
     end
@@ -298,7 +298,7 @@ module ClaudeInbox
 
     def glyph_for(s, section, tick)
       return @p.magenta("z") if section == :snoozed
-      return @p.dim("∙") if section == :settled
+      return @p.dim("◦") if section == :settled
       case s.effective_state
       when "blocked" then @p.red.bold("●")
       when "failed" then @p.red.bold("✗")

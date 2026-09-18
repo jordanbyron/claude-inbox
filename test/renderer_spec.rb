@@ -166,6 +166,14 @@ describe ClaudeInbox::Renderer do
     _(renderer.frame(sections, width: 60, height: 10, now: now).lines.first).must_include "● 1  ✻ 1"
   end
 
+  it "keeps the header's settled chip distinct from the chip separator" do
+    entries = {"823b882f" => {"settled_at" => now.to_i, "last_state" => "done", "state_since" => now.to_i - 5}}
+    sec = Store.sectionize(sessions, Store.merge_entries(entries, sessions, now), now)
+    header = renderer.frame(sec, width: 140, height: 10, now: now).lines.first
+    _(header).must_match(/·  ◦ \d+ settled/)
+    _(header).wont_match(/·\s+·/)
+  end
+
   it "spins the working glyph with the tick" do
     sec = Store.sectionize([session(id: "w", state: "working")], {}, now)
     a = renderer.frame(sec, width: 60, height: 10, now: now, tick: 0).lines[3]
