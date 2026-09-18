@@ -7,9 +7,16 @@ module ClaudeInbox
   # The inbox's own records — the snooze table, the resolved PRs — kept
   # under ~/.config/claude-inbox between launches. Saved atomically (a temp
   # file beside the target, renamed over it) so a poll mid-write never
-  # reads half a record.
+  # reads half a record. Reading a missing or unparsable record yields {}
+  # so callers start from empty instead of failing.
   module Records
     module_function
+
+    def read(path)
+      (path && File.exist?(path)) ? JSON.parse(File.read(path)) : {}
+    rescue JSON::ParserError
+      {}
+    end
 
     def save(path, data)
       FileUtils.mkdir_p(File.dirname(path))

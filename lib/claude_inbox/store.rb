@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "json"
 require "tmpdir"
 require_relative "records"
 
@@ -347,11 +346,7 @@ module ClaudeInbox
     end
 
     def load
-      return {} unless @path && File.exist?(@path)
-      data = JSON.parse(File.read(@path))
-      data["sessions"] || {}
-    rescue JSON::ParserError
-      {}
+      Records.read(@path)["sessions"] || {}
     end
 
     def save
