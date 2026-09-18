@@ -52,33 +52,35 @@ describe ClaudeInbox::Renderer do
 
   it "matches the snapshot" do
     f = renderer.frame(sections, width: 72, height: 20, now: now, selected: "f23c8673")
-    expected = <<-TXT.lines.map(&:chomp)
- ▌ claude-inbox   ● 1  ✻ 1  ○ 1  ∙ 4                                    
-                                                                        
- ▎ NEEDS YOU ─────────────────────────────────────────────────────── 1  
+    expected = <<-TXT.lines.map { |l| l.chomp.ljust(72) }
+ ▌ claude-inbox   ● 1 needs you  ·  ✻ 1 working  ·  ○ 1 terminal
+
+ ▎ NEEDS YOU ─────────────────────────────────────────────────────── 1
  ▶ ● comma3x not booting                          needs you · 0s  comma3
-       ↳ ~/code/comma3                                                  
-                                                                        
- ▎ ACTIVE ────────────────────────────────────────────────────────── 2  
+       ↳ ~/code/comma3
+
+ ▎ ACTIVE ────────────────────────────────────────────────────────── 6
    ⠋ claude-inbox-38          working · your terminal · 0s  claude-inbox
-       ↳ ~/code/claude-inbox                                            
+       ↳ ~/code/claude-inbox
    ✓ comma3x led flashing screen unresponsive   done · idle · 0s  comma3
-       ↳ ~/code/comma3                                                  
-                                                                        
- ▎ SETTLED ───────────────────────────────────────────────────────── 4  
-   … 4 settled                                                          
-                                                                        
-                                                                        
-                                                                        
-                                                                        
-                                                                        
+       ↳ ~/code/comma3
+   ✓ trailforks skill handoff                     done · 9d  parks_genie
+       ↳ ~/code/parks_genie
+   ✓ sensor token resilience test                done · 10d  parks_genie
+       ↳ ~/code/parks_genie
+   ✓ github milestone review                     done · 17d  parks_genie
+       ↳ ~/code/parks_genie
+   ✓ app store release strategy                  done · 18d  parks_genie
+       ↳ ~/code/parks_genie
  j/k move  ⏎ attach  n new  t pin  s snooze  u wake  a alias  o PR  x s…
     TXT
     _(f.lines).must_equal expected
   end
 
-  it "selects interactive rows by session uuid and includes the settled toggle" do
-    _(frame.items.compact.map(&:key)).must_equal ["f23c8673", "4a93393d-1c06-57da-9fb8-12f5b1535d95", "823b882f", :settled]
+  it "selects interactive rows by session uuid, with no PR-less session settling on its own" do
+    _(frame.items.compact.map(&:key)).must_equal(
+      %w[f23c8673 4a93393d-1c06-57da-9fb8-12f5b1535d95 823b882f dcbc1d98 b0b18338 fbf5253a b03695b1]
+    )
   end
 
   it "badges remote sessions and counts them in the header" do
