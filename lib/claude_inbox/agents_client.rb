@@ -15,10 +15,8 @@ module ClaudeInbox
     end
 
     # => Array<Session>
-    def list(all: true, cwd: nil)
-      args = [@bin, "agents", "--json"]
-      args << "--all" if all
-      args += ["--cwd", cwd] if cwd
+    def list
+      args = [@bin, "agents", "--json", "--all"]
       r = Subprocess.capture(*args)
       raise Error, "claude agents failed: #{r.err.strip}" unless r.success?
       classify_origins(parse(r.out))
@@ -202,7 +200,7 @@ module ClaudeInbox
     # Fixture rows carry no process tree; tag each interactive row from the
     # pid => origin map the test hands in, otherwise as a terminal, then drop
     # the unattended ones same as the real client does.
-    def list(**)
+    def list
       assign_origins(parse(File.read(@path)), @origins)
     end
 
