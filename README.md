@@ -277,6 +277,7 @@ AgentsClient  →  PullRequests  →  Store  →  Renderer  →  App
 
 ```
 bundle install
+bin/ci                       # full signoff: lint, gem audit, tests (see CONTRIBUTING.md)
 bundle exec rake test        # minitest/spec, test/**/*_spec.rb
 bundle exec standardrb
 CLAUDE_INBOX_STDERR=/tmp/err.log bin/claude-inbox   # crash traces off the alt screen
