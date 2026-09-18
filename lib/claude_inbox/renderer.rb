@@ -407,11 +407,9 @@ module ClaudeInbox
     end
   end
 
-  # Diffs successive frames and writes only changed rows. Rows are written
-  # bare, with no erase-to-end-of-line after them: every line the Renderer
-  # hands over is already exactly the frame width, and a row whose last glyph
-  # sits in the terminal's last column leaves the cursor parked *on* that
-  # column (VT "pending wrap"), where EL would erase the glyph just drawn.
+  # Diffs successive frames and writes only changed rows. No erase-to-end-of-
+  # line after a row: in the terminal's last column the cursor stays put
+  # (pending wrap), so EL would eat the glyph just drawn.
   class Painter
     def initialize(out, cursor: TTY::Cursor)
       @out = out
