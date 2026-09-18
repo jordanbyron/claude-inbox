@@ -15,4 +15,5 @@ group :development, :test do
   gem "minitest"
   gem "rake"
   gem "standard"
+  gem "bundler-audit", require: false
 end
