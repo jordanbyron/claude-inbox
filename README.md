@@ -21,9 +21,14 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
    yet, plus interactive sessions, plus a needs-you session you've attached to
    but that hasn't resolved. Interactive sessions report only `status`, so it
    gets mapped: busy is working, idle is done, waiting needs you. The JSON calls
-   both a terminal you opened yourself and a Remote Control worker "interactive";
+   a terminal you opened yourself, a Remote Control worker, a sub-agent and a
+   headless `claude -p` run all "interactive", each named after its directory;
    the client tells them apart from the process tree (a remote worker runs with
-   `--sdk-url` under a `claude rc` parent). Remote sessions settle and snooze
+   `--sdk-url` under a `claude rc` parent, a sub-agent has a `claude` for a
+   parent, and a headless run gives itself away with `-p` or the SDK's stream
+   flags, since the shell that spawned it hides the session behind it).
+   Sub-agents and headless runs are dropped: nobody is sitting in them and
+   attach lands on whatever asked for them. Remote sessions settle and snooze
    like any other row. A terminal you are sitting in never settles. Neither
    can be attached, peeked or stopped from outside; you can land on them, and
    Enter tells you why nothing happens.
