@@ -206,7 +206,6 @@ module ClaudeInbox
           @last_poll = Time.now
           @error = nil
         when :error then @error = rest[0]
-        when :peek then @dirty = true
         when :attach then attach(rest[0])
         end
       end

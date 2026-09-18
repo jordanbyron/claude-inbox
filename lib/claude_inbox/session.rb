@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 module ClaudeInbox
-  STATES = %w[working blocked done failed stopped].freeze
-
   # Interactive sessions report only `status`; fold it into the same
   # vocabulary background sessions use. An idle terminal is a finished turn,
   # a waiting one needs you, a busy one is working.

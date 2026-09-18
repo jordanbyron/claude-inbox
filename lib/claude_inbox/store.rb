@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "tmpdir"
 require_relative "records"
 
 module ClaudeInbox
@@ -42,8 +41,6 @@ module ClaudeInbox
       def parked? = wake_at == UNTIL_WOKEN
 
       def state_since = entry && entry["state_since"]
-
-      def pinned? = entry && entry["pinned"] == true
 
       def pinned_at = entry && entry["pinned_at"]
 
