@@ -2,7 +2,7 @@
 
 require "json"
 require "tmpdir"
-require_relative "json_file"
+require_relative "records"
 
 module ClaudeInbox
   # Snapshot of the last poll plus the per-session snooze table.
@@ -346,7 +346,7 @@ module ClaudeInbox
 
     def save
       return unless @path
-      JsonFile.write(@path, {"version" => 1, "sessions" => @entries})
+      Records.save(@path, {"version" => 1, "sessions" => @entries})
     end
   end
 end

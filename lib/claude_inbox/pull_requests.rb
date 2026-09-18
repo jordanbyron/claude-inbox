@@ -2,7 +2,7 @@
 
 require "json"
 require_relative "job_state"
-require_relative "json_file"
+require_relative "records"
 require_relative "subprocess"
 
 module ClaudeInbox
@@ -153,7 +153,7 @@ module ClaudeInbox
     def remember(pr)
       resolved[pr.url] = {"number" => pr.number, "state" => pr.state, "title" => pr.title}
       return unless @resolved_path
-      JsonFile.write(@resolved_path, resolved)
+      Records.save(@resolved_path, resolved)
     end
 
     def fetch(url)
