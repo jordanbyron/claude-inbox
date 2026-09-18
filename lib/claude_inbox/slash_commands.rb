@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "json"
+require_relative "settings"
 
 module ClaudeInbox
   # The slash commands `claude` would offer at its own prompt, read from the
@@ -66,7 +66,7 @@ module ClaudeInbox
     # `installed_plugins.json` maps "name@marketplace" to where the plugin
     # was unpacked: one entry, or a list of them, one per install scope.
     def plugins(home)
-      installed = read_json(File.join(home, ".claude", "plugins", "installed_plugins.json"))
+      installed = Settings.read(File.join(home, ".claude", "plugins", "installed_plugins.json"))
       (installed["plugins"] || {}).flat_map do |key, entries|
         plugin = key.split("@").first
         Array(entries).filter_map { |e| e["installPath"] if e.is_a?(Hash) }.uniq.flat_map do |root|
@@ -111,12 +111,6 @@ module ClaudeInbox
       quoted = s.size >= 2 && ((s.start_with?('"') && s.end_with?('"')) || (s.start_with?("'") && s.end_with?("'")))
       s = s[1..-2] if quoted
       s.gsub("''", "'")
-    end
-
-    def read_json(path)
-      JSON.parse(File.read(path))
-    rescue Errno::ENOENT, Errno::EACCES, JSON::ParserError
-      {}
     end
   end
 end
