@@ -40,7 +40,6 @@ module ClaudeInbox
 
     # Lines you can type after ":".
     COMMANDS = {
-      "q" => :quit, "quit" => :quit, "q!" => :quit, "wq" => :quit,
       "peek" => :toggle_peek, "refresh" => :refresh, "new" => :new_session, "n" => :new_session,
       "pr" => :open_pr, "pin" => :toggle_pin
     }.freeze

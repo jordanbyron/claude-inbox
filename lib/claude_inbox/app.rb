@@ -227,7 +227,7 @@ module ClaudeInbox
     end
 
     # tty-reader glues ESC to whatever arrives within 100ms, so a fast
-    # "esc :q" comes in as one unknown key "\e:q". Vim hands make that
+    # "esc :pr" comes in as one unknown key "\e:pr". Vim hands make that
     # constantly. Unknown ESC-prefixed strings become ESC + the rest.
     def split_keys(key)
       return [key] if key.size <= 1 || @reader.console.keys.key?(key)

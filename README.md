@@ -99,7 +99,7 @@ its own history and clicking a row does nothing.
 | `X` | stop the session (`y` to confirm) |
 | `Ctrl-x` | delete the session for good, conversation and worktree with it (`y` to confirm) |
 | `/` | filter by name or cwd; `Enter` keeps it, `Esc` clears |
-| `:q` | quit (`:peek`, `:refresh`, `:pr`, `:pin` also exist) |
+| `:` | command line: `:peek`, `:refresh`, `:pr`, `:pin`, `:new`/`:n` |
 | `R` | poll now |
 | `q` | quit |
 

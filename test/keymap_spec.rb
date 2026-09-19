@@ -73,12 +73,11 @@ describe ClaudeInbox::Keymap do
   end
 
   it "understands ex commands" do
-    _(ClaudeInbox::Keymap.command("q")).must_equal :quit
-    _(ClaudeInbox::Keymap.command(" wq ")).must_equal :quit
     _(ClaudeInbox::Keymap.command("peek")).must_equal :toggle_peek
     _(ClaudeInbox::Keymap.command("new")).must_equal :new_session
     _(ClaudeInbox::Keymap.command("pr")).must_equal :open_pr
     _(ClaudeInbox::Keymap.command("pin")).must_equal :toggle_pin
+    _(ClaudeInbox::Keymap.command("q")).must_be_nil
     _(ClaudeInbox::Keymap.command("nope")).must_be_nil
   end
 end

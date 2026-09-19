@@ -49,7 +49,7 @@ module ClaudeInbox
     KEYS = [
       ["j/k", "move"], ["⏎", "attach"], ["n", "new"], ["t", "pin"], ["s", "snooze"], ["u", "wake"],
       ["a", "alias"], ["o", "PR"], ["x", "settle"], ["p", "peek"], ["⇥", "section"],
-      ["za", "fold"], ["/", "filter"], [":q", "quit"]
+      ["za", "fold"], ["/", "filter"], ["q", "quit"]
     ].freeze
 
     def initialize(color: true, min_left: 44, home: Dir.home)
