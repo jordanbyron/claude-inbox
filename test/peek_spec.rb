@@ -92,7 +92,7 @@ describe ClaudeInbox::Peek do
     _(peek.view(r, 6).lines).must_equal (1..8).map { |i| "line #{i}" }
 
     peek.scroll(100)
-    _(peek.view(r, 6).lines).must_equal (1..4).map { |i| "line #{i}" }
+    _(peek.view(r, 6).lines).must_equal (1..5).map { |i| "line #{i}" }
 
     peek.scroll(-100)
     _(peek.view(r, 6).lines).must_equal (1..10).map { |i| "line #{i}" }

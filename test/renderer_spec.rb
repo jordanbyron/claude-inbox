@@ -59,7 +59,6 @@ describe ClaudeInbox::Renderer do
   it "matches the snapshot" do
     f = renderer.frame(sections, width: 72, height: 20, now: now, selected: "f23c8673")
     expected = <<-TXT.lines.map { |l| l.chomp.ljust(72) }
- ▌ claude-inbox   ● 1 needs you  ·  ✻ 1 working  ·  ○ 1 terminal
 
  ▎ NEEDS YOU ─────────────────────────────────────────────────────── 1
  ▶ ● comma3x not booting                         needs you · 0s  comma3 
@@ -78,7 +77,8 @@ describe ClaudeInbox::Renderer do
        ↳ ~/code/parks_genie
    ✓ app store release strategy                 done · 18d  parks_genie 
        ↳ ~/code/parks_genie
- j/k move  ⏎ attach  n new  t pin  s snooze  u wake  a alias  o PR  x s…
+
+ ▌ claude-inbox   ● 1  ✻ 1  ○ 1                                  ? keys
     TXT
     _(f.lines).must_equal expected
   end
@@ -153,7 +153,7 @@ describe ClaudeInbox::Renderer do
     sec = Store.sectionize([session(id: "z", name: "🎉" * 60)], {}, now)
     f = renderer.frame(sec, width: 60, height: 10, now: now)
     f.lines.each { |l| _(Text.width(l)).must_equal 60 }
-    _(f.lines[3]).must_include "…"
+    _(f.lines[2]).must_include "…"
   end
 
   it "scrolls to keep the selection visible" do
@@ -177,23 +177,23 @@ describe ClaudeInbox::Renderer do
     _(f.lines[5]).wont_include "…"
   end
 
-  it "falls back to compact header chips when narrow, full when wide" do
-    _(renderer.frame(sections, width: 100, height: 10, now: now).lines.first).must_include "1 needs you"
-    _(renderer.frame(sections, width: 60, height: 10, now: now).lines.first).must_include "● 1  ✻ 1"
+  it "falls back to compact status bar chips when narrow, full when wide" do
+    _(renderer.frame(sections, width: 100, height: 10, now: now).lines.last).must_include "1 needs you"
+    _(renderer.frame(sections, width: 60, height: 10, now: now).lines.last).must_include "● 1  ✻ 1"
   end
 
-  it "keeps the header's settled chip distinct from the chip separator" do
+  it "keeps the status bar's settled chip distinct from the chip separator" do
     entries = {"823b882f" => {"settled_at" => now.to_i, "last_state" => "done", "state_since" => now.to_i - 5}}
     sec = Store.sectionize(sessions, Store.merge_entries(entries, sessions, now), now)
-    header = renderer.frame(sec, width: 140, height: 10, now: now).lines.first
-    _(header).must_match(/·  ◦ \d+ settled/)
-    _(header).wont_match(/·\s+·/)
+    bar = renderer.frame(sec, width: 140, height: 10, now: now).lines.last
+    _(bar).must_match(/·  ◦ \d+ settled/)
+    _(bar).wont_match(/·\s+·/)
   end
 
   it "spins the working glyph with the tick" do
     sec = Store.sectionize([session(id: "w", state: "working")], {}, now)
-    a = renderer.frame(sec, width: 60, height: 10, now: now, tick: 0).lines[3]
-    b = renderer.frame(sec, width: 60, height: 10, now: now, tick: 1).lines[3]
+    a = renderer.frame(sec, width: 60, height: 10, now: now, tick: 0).lines[2]
+    b = renderer.frame(sec, width: 60, height: 10, now: now, tick: 1).lines[2]
     _(a).wont_equal b
     _(a).must_include ClaudeInbox::Renderer::SPINNER[0]
   end
@@ -230,8 +230,14 @@ describe ClaudeInbox::Renderer do
     _(stuck).must_include "claude daemon status"
   end
 
-  it "shows the command line in the footer" do
+  it "shows the command line in the status bar" do
     _(frame(command: "q").lines.last).must_match(/^ :q▏\s+$/)
+  end
+
+  it "ends the status bar with the ? hint, and a notice before it when there is one" do
+    _(frame.lines.last).must_match(/\? keys $/)
+    _(frame(status: "⚠ daemon down").lines.last).must_match(/⚠ daemon down  ·  \? keys $/)
+    _(frame(status: "⚠ daemon down").lines.last).must_include "● 1"
   end
 end
 

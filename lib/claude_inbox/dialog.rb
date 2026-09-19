@@ -100,5 +100,44 @@ module ClaudeInbox
         end
       end
     end
+
+    # The short form of README's key table: chords and Ctrl variants are
+    # left out when the base key says enough.
+    class Help < Dialog
+      KEYS = [
+        ["j k", "move"], ["gg G", "first / last"],
+        ["^d ^u", "half page"], ["⇥ ⇧⇥", "section"],
+        ["⏎ l", "attach / expand"], ["h", "close peek/fold"],
+        ["za zo zc", "fold"], ["p", "peek pane"],
+        ["J K", "scroll peek"], ["n", "new session"],
+        ["t", "pin"], ["s", "snooze"],
+        ["u", "wake"], ["x", "settle"],
+        ["a", "alias"], ["o", "open PR"],
+        ["P", "link PR"], ["X", "stop"],
+        ["^x", "delete"], ["/", "filter"],
+        ["R", "poll now"], [":", "command"],
+        ["q", "quit"], ["?", "this"]
+      ].freeze
+
+      COLUMN = 26
+
+      def initialize = super(:help, nil)
+
+      def title = " Keys "
+
+      def lines
+        KEYS.each_slice(2).map { |cells| cells.map { |k, d| "  #{k.ljust(9)}#{d}".ljust(COLUMN) }.join.rstrip }
+      end
+
+      def frame(width)
+        TTY::Box.frame(lines.join("\n"), title: {top_left: title}, padding: [0, 1], width: [width - 4, COLUMN * 2 + 4].min)
+          .split("\n")
+      end
+
+      def press(name, key)
+        return :cancel if name == :escape || key == "q" || key == "?"
+        nil
+      end
+    end
   end
 end

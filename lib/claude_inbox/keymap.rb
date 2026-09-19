@@ -30,7 +30,7 @@ module ClaudeInbox
       "R" => :refresh, "p" => :toggle_peek, "n" => :new_session,
       :tab => :next_section, :back_tab => :prev_section,
       "/" => :filter, ":" => :command, :escape => :escape,
-      "q" => :quit, :ctrl_c => :quit
+      "?" => :help, "q" => :quit, :ctrl_c => :quit
     }.freeze
 
     CHORDS = {
@@ -42,7 +42,7 @@ module ClaudeInbox
     COMMANDS = {
       "q" => :quit, "quit" => :quit, "q!" => :quit, "wq" => :quit,
       "peek" => :toggle_peek, "refresh" => :refresh, "new" => :new_session, "n" => :new_session,
-      "pr" => :open_pr, "pin" => :toggle_pin
+      "pr" => :open_pr, "pin" => :toggle_pin, "help" => :help, "keys" => :help
     }.freeze
 
     attr_reader :pending

@@ -44,12 +44,6 @@ module ClaudeInbox
       "still here…"
     ].freeze
 
-    KEYS = [
-      ["j/k", "move"], ["⏎", "attach"], ["n", "new"], ["t", "pin"], ["s", "snooze"], ["u", "wake"],
-      ["a", "alias"], ["o", "PR"], ["x", "settle"], ["p", "peek"], ["⇥", "section"],
-      ["za", "fold"], ["/", "filter"], [":q", "quit"]
-    ].freeze
-
     def initialize(color: true, min_left: 44, home: Dir.home)
       @p = Pastel.new(enabled: color)
       @theme = Theme.new(enabled: color)
@@ -60,15 +54,16 @@ module ClaudeInbox
 
     # opts: selected (id | :snoozed | :settled | nil), expanded ({snoozed:, settled:} => bool), top (scroll),
     #       peek (Array<String> | nil), peek_title, modal (Array<String> | nil),
-    #       status (String), now (Time), filter (String | nil), command,
+    #       status (String | nil, a notice or error for the status bar's right end),
+    #       now (Time), filter (String | nil), command,
     #       tick (Integer, drives the spinner),
     #       loading (Float seconds waited for the first poll, nil once it has landed),
-    #       screen ({lines:, footer:} takes over everything below the header)
+    #       screen ({lines:, footer:} takes over everything above the status bar)
     def frame(sections, width:, height:, now:, **opts)
-      return full_screen(sections, width, height, now, opts) if opts[:screen]
+      return full_screen(width, height, opts) if opts[:screen]
       selected = opts[:selected]
       list_w = width_for_list(width, opts[:peek])
-      view_h = height - 2 # header + footer
+      view_h = height - 1
       body, items =
         if opts[:loading]
           [loading_state(list_w, view_h, opts[:loading], opts[:tick].to_i), []]
@@ -90,9 +85,9 @@ module ClaudeInbox
         end
       end
 
-      lines = [header(sections, width, opts[:status], now, loading: opts[:loading])] + visible.map { |l| Text.pad(l, width) } + [footer(width, opts)]
+      lines = visible.map { |l| Text.pad(l, width) } + [status_bar(sections, width, opts)]
       lines = overlay(lines, opts[:modal], width) if opts[:modal]
-      Frame.new(lines, [nil] + visible_items + [nil], top, list_w)
+      Frame.new(lines, visible_items + [nil], top, list_w)
     end
 
     private
@@ -109,27 +104,36 @@ module ClaudeInbox
       top.clamp(0, [size - view_h, 0].max)
     end
 
-    def full_screen(sections, width, height, now, opts)
-      view_h = height - 2
+    def full_screen(width, height, opts)
+      view_h = height - 1
       body = opts[:screen][:lines].first(view_h)
       body += [""] * (view_h - body.size)
-      lines = [header(sections, width, opts[:status], now)] + body.map { |l| Text.pad(l, width) } + [Text.pad(" " + opts[:screen][:footer], width)]
-      Frame.new(lines, [nil] * (view_h + 2), opts[:top] || 0, width)
+      lines = body.map { |l| Text.pad(l, width) } + [Text.pad(" " + opts[:screen][:footer], width)]
+      Frame.new(lines, [nil] * (view_h + 1), opts[:top] || 0, width)
     end
 
     # ----- chrome -------------------------------------------------------------
 
-    def header(sections, width, status, now, loading: nil)
+    def status_bar(sections, width, opts)
+      return command_line(width, opts) if opts[:command] || opts[:filter]
       brand = " " + @theme.cyan_bold("▌ claude-inbox")
-      right = status ? @p.dim(status) + " " : ""
-      room = width - Text.width(brand) - Text.width(right) - 3
-      chips = loading ? "" : header_chips(sections, compact: false)
-      chips = header_chips(sections, compact: true) if Text.width(chips) > room
+      right = [opts[:status] && @p.dim(opts[:status]), @theme.cyan_bold("?") + @p.dim(" keys")].compact.join(@p.dim("  ·  ")) + " "
+      room = width - Text.width(brand) - Text.width(right) - 5
+      chips = opts[:loading] ? "" : chips(sections, compact: false)
+      chips = chips(sections, compact: true) if Text.width(chips) > room
       chips = "" if Text.width(chips) > room
       Text.pad(brand + "   " + chips, width - Text.width(right)) + right
     end
 
-    def header_chips(sections, compact:)
+    def command_line(width, opts)
+      text =
+        if opts[:command] then " " + @theme.cyan_bold(":") + opts[:command] + @p.dim("▏")
+        else " " + @theme.cyan_bold("/") + opts[:filter] + (opts[:filter_editing] ? @p.dim("▏") : @p.dim("  esc clears"))
+        end
+      Text.pad(text, width)
+    end
+
+    def chips(sections, compact:)
       pn = sections.pinned.size
       n = sections.needs_you.size
       w = sections.active.count { |r| r.session.effective_state == "working" && !r.session.waiting_on_work? }
@@ -149,15 +153,6 @@ module ClaudeInbox
       chips << @p.dim(compact ? "◦ #{d}" : "◦ #{d} settled") if d > 0
       chips << @p.dim("nothing running") if sections.all.empty?
       chips.join(compact ? "  " : @p.dim("  ·  "))
-    end
-
-    def footer(width, opts)
-      text =
-        if opts[:command] then " " + @theme.cyan_bold(":") + opts[:command] + @p.dim("▏")
-        elsif opts[:filter] then " " + @theme.cyan_bold("/") + opts[:filter] + (opts[:filter_editing] ? @p.dim("▏") : @p.dim("  esc clears"))
-        else " " + KEYS.map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
-        end
-      Text.pad(text, width)
     end
 
     def section_title(name, count, width)

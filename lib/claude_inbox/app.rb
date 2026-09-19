@@ -44,7 +44,6 @@ module ClaudeInbox
       @tick = 0
       @modal = nil
       @filter = nil
-      @status = "starting…"
       @last_poll = nil
       @quit = false
       @resize = false
@@ -160,7 +159,7 @@ module ClaudeInbox
     end
 
     # Seconds spent waiting for the first poll; nil once one has landed, or
-    # failed — a failure has its own line in the header and the empty state
+    # failed — a failure shows in the status bar and the empty state
     # already says how to retry.
     def loading_for
       return nil if @last_poll || @error || !@booted_at
@@ -169,9 +168,7 @@ module ClaudeInbox
 
     def status_text(now)
       return @notice[0] if @notice && now < @notice[1]
-      return "⚠ #{@error}" if @error
-      return "polling…" unless @last_poll
-      "⟳ #{Text.age(now - @last_poll)} ago"
+      "⚠ #{@error}" if @error
     end
 
     def filtered(sections = @store.sections) = sections.matching(@filter)
@@ -308,11 +305,12 @@ module ClaudeInbox
       when :new_session then open_new_session
       when :filter then start_filter
       when :command then @command = +""
+      when :help then @modal = Dialog::Help.new
       when :escape then clear_filter
       end
     end
 
-    def page = [@terminal.size[1] - 2, 1].max
+    def page = [@terminal.size[1] - 1, 1].max
 
     def move(delta)
       return if @items.nil? || @items.empty?
@@ -440,7 +438,7 @@ module ClaudeInbox
     # The new-session form takes the whole body; a Dialog is a box over it.
     def screen_lines(width, height)
       return nil unless @modal.is_a?(NewSessionForm)
-      {lines: @modal.screen(width, height - 2), footer: @modal.footer}
+      {lines: @modal.screen(width, height - 1), footer: @modal.footer}
     end
 
     def modal_lines(width)

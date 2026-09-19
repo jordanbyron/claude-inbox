@@ -95,9 +95,15 @@ its own history and clicking a row does nothing.
 | `X` | stop the session (`y` to confirm) |
 | `Ctrl-x` | delete the session for good, conversation and worktree with it (`y` to confirm) |
 | `/` | filter by name or cwd; `Enter` keeps it, `Esc` clears |
-| `:q` | quit (`:peek`, `:refresh`, `:pr`, `:pin` also exist) |
+| `:q` | quit (`:peek`, `:refresh`, `:pr`, `:pin`, `:keys` also exist) |
 | `R` | poll now |
+| `?` | this table, in short: the keys as a box over the list (`?`, `q` or `Esc` closes it) |
 | `q` | quit |
+
+The one line of chrome is the status bar at the bottom: a count per section
+(`● 1 needs you · z 1 snoozed`, shrunk to `● 1  z 1` when the terminal is
+narrow), then any notice or daemon error, then `? keys`. While you type a `:`
+command or a `/` filter, that takes over the line, as in vim.
 
 Bindings live in `ClaudeInbox::Keymap`, a pure resolver with chord support
 that is unit tested on its own. A fast `Esc` followed by `:` is split back

@@ -50,6 +50,7 @@ describe ClaudeInbox::Keymap do
     _(km.press("u", "u")).must_equal :wake
     _(km.press("a", "a")).must_equal :alias
     _(km.press("x", "x")).must_equal :settle
+    _(km.press("?", "?")).must_equal :help
     _(km.press("X", "X")).must_equal :stop
     _(km.press(:ctrl_x, "\x18")).must_equal :delete
     _(km.press("p", "p")).must_equal :toggle_peek
@@ -79,6 +80,7 @@ describe ClaudeInbox::Keymap do
     _(ClaudeInbox::Keymap.command("new")).must_equal :new_session
     _(ClaudeInbox::Keymap.command("pr")).must_equal :open_pr
     _(ClaudeInbox::Keymap.command("pin")).must_equal :toggle_pin
+    _(ClaudeInbox::Keymap.command("keys")).must_equal :help
     _(ClaudeInbox::Keymap.command("nope")).must_be_nil
   end
 end

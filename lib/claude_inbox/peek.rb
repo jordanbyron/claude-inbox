@@ -47,7 +47,7 @@ module ClaudeInbox
     # selected. Answers nil when there is no pane to paint.
     def view(row, height)
       return nil unless @open && @selected.is_a?(String)
-      View.new(scrolled(body(row), height - 2), row&.label || @selected, subtitle(row))
+      View.new(scrolled(body(row), height - 1), row&.label || @selected, subtitle(row))
     end
 
     private

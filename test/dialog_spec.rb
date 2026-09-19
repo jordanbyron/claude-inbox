@@ -39,6 +39,24 @@ describe ClaudeInbox::Dialog do
     end
   end
 
+  describe "help" do
+    let(:dialog) { ClaudeInbox::Dialog::Help.new }
+
+    it "lists every key two to a line and closes on ?, q or esc" do
+      box = dialog.frame(80).join("\n")
+      ClaudeInbox::Dialog::Help::KEYS.each { |k, d| _(box).must_match(/#{Regexp.escape(k)}\s+#{Regexp.escape(d)}/) }
+      _(dialog.lines.size).must_equal (ClaudeInbox::Dialog::Help::KEYS.size + 1) / 2
+      _(dialog.press("j", "j")).must_be_nil
+      _(dialog.press("?", "?")).must_equal :cancel
+      _(dialog.press("q", "q")).must_equal :cancel
+      _(dialog.press(:escape, "\e")).must_equal :cancel
+    end
+
+    it "keeps every pair on its own line rather than letting the box wrap" do
+      _(dialog.frame(80).size).must_equal dialog.lines.size + 2
+    end
+  end
+
   describe "prompt" do
     let(:dialog) { ClaudeInbox::Dialog::Prompt.new(:alias, "abc12345", "auth") }
 
