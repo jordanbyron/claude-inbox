@@ -16,9 +16,12 @@ shared checkout: other sessions commit there concurrently.
 ## Conventions
 
 - Tests are minitest/spec (`describe` / `it` / `_(x).must_equal`) in
-  `test/*_spec.rb`, one spec file per class.
+  `test/**/*_spec.rb`, one spec file per class.
 - The UI is keyboard-only with vim bindings; a new action needs a key in
   `Keymap::BINDINGS` and a row in the README key table.
 - Commit subjects are `type: what changed` (`fix:`, `feat:`, `refactor:`,
   `docs:`); the body says why, in prose.
-- Comments explain a decision or a daemon quirk, not what the next line does.
+- A comment records a decision, a constraint or a daemon quirk the code
+  cannot show, in a line or two. Code that needs a comment to be read is
+  code to rewrite until it doesn't. A class comment says what the class is
+  for; how it works is the code's job.
