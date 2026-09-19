@@ -73,11 +73,32 @@ describe ClaudeInbox::App do
   it "hands a paste to the new-session form whole, and types it into the filter" do
     app.send(:handle_input, "/")
     app.send(:handle_input, "\e[200~thi\e[201~")
-    _(app.instance_variable_get(:@filter)).must_equal "thi"
+    _(app.instance_variable_get(:@filter).to_s).must_equal "thi"
     app.send(:handle_input, "\e")
     app.send(:handle_input, "n")
     app.send(:handle_input, "\e[200~one\ntwo\e[201~")
     _(app.instance_variable_get(:@modal).values[:prompt]).must_equal "one\ntwo"
+  end
+
+  it "edits the filter and command lines in the middle" do
+    app.send(:handle_input, "/")
+    app.send(:handle_input, "ac")
+    app.send(:handle_input, "\e[D")
+    app.send(:handle_input, "b")
+    _(app.instance_variable_get(:@filter).to_s).must_equal "abc"
+    app.send(:handle_input, "\r")
+    app.send(:handle_input, ":")
+    app.send(:handle_input, "x")
+    app.send(:handle_input, "\x01")
+    app.send(:handle_input, "q")
+    _(app.instance_variable_get(:@command).to_s).must_equal "qx"
+    app.send(:handle_input, "\x05")
+    app.send(:handle_input, "\x7f")
+    app.send(:handle_input, "\x7f")
+    _(app.instance_variable_get(:@command).to_s).must_equal ""
+    app.send(:handle_input, "\x7f")
+    _(app.instance_variable_get(:@command)).must_be_nil
+    _(app.instance_variable_get(:@filter).to_s).must_equal "abc"
   end
 
   describe "clicking a row" do

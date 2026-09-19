@@ -117,7 +117,8 @@ so read the box before answering.
 `h` `l` or the arrows. Text fields are a real editor: `←` `→` move the cursor,
 `Ctrl-A` / `Ctrl-E` jump to the ends, `Backspace` and `Delete` cut either side
 of it, `Ctrl-W` takes the word before it and `Ctrl-U` / `Ctrl-K` everything
-before / after it.
+before / after it. The `/` filter, `:` command and alias / PR prompt lines
+are the same editor.
 
 `Ctrl-S` starts the session and drops you back in the inbox; `Ctrl-O` starts it
 and hands the terminal straight over. Either way the new row is selected once

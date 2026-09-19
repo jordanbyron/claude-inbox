@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "tty-box"
+require_relative "text_buffer"
 
 module ClaudeInbox
   # A small box over the list that claims every key until it answers. Like
@@ -16,8 +17,9 @@ module ClaudeInbox
       @id = id
     end
 
-    def frame(width)
-      TTY::Box.frame(lines.join("\n"), title: {top_left: title}, padding: [0, 1], width: [width - 4, 44].min)
+    def frame(width, caret = nil)
+      box = [width - 4, 44].min
+      TTY::Box.frame(lines(box - 4, caret).join("\n"), title: {top_left: title}, padding: [0, 1], width: box)
         .split("\n")
     end
 
@@ -36,7 +38,7 @@ module ClaudeInbox
 
       def title = " Snooze "
 
-      def lines = MENU.map { |k, label, _| "  #{k}  #{label}" } + ["", "  esc  cancel"]
+      def lines(_width, _caret) = MENU.map { |k, label, _| "  #{k}  #{label}" } + ["", "  esc  cancel"]
 
       def press(name, key)
         return :cancel if name == :escape || key == "q"
@@ -54,7 +56,7 @@ module ClaudeInbox
 
       def title = TITLES.fetch(kind)
 
-      def lines
+      def lines(_width, _caret)
         case kind
         when :stop then ["  Stop session #{id}?", "", "  y  stop it", "  esc  cancel"]
         when :delete
@@ -76,26 +78,25 @@ module ClaudeInbox
       TITLES = {alias: " Alias ", pr: " Pull request "}.freeze
       QUESTIONS = {alias: "  New alias:", pr: "  Pull request URL (empty clears):"}.freeze
 
-      attr_reader :value
-
       def initialize(kind, id, value)
         super(kind, id)
-        @value = +value
+        @buffer = TextBuffer.new(value)
       end
+
+      def value = @buffer.to_s
 
       def title = TITLES.fetch(kind)
 
-      def lines = [QUESTIONS.fetch(kind), "", "  > #{value}_", "", "  ⏎ save · esc cancel"]
+      def lines(width, caret)
+        [QUESTIONS.fetch(kind), "", "  > " + @buffer.row(width - 4, cursor: caret), "", "  ⏎ save · esc cancel"]
+      end
 
       def press(name, key)
         case name
         when :escape then :cancel
         when :return, :enter then :save
-        when :backspace, :ctrl_h
-          @value = @value[0...-1]
-          nil
         else
-          @value << key if key.is_a?(String) && key.match?(/\A[[:print:]]\z/)
+          @buffer.press(name, key)
           nil
         end
       end

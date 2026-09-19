@@ -231,7 +231,7 @@ describe ClaudeInbox::Renderer do
   end
 
   it "shows the command line in the footer" do
-    _(frame(command: "q").lines.last).must_match(/^ :q▏\s+$/)
+    _(frame(command: ClaudeInbox::TextBuffer.new("q")).lines.last).must_match(/\A :q +\z/)
   end
 end
 
