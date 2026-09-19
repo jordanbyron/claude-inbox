@@ -238,13 +238,13 @@ describe "renderer session colors" do
   end
 
   it "leaves a session with no color exactly as it was" do
-    _(line_for(session(id: "z", name: "plain"))).wont_include "\e[38;5;"
+    _(line_for(session(id: "z", name: "plain"))).wont_match(/\e\[38;5;(208|205)mplain/)
   end
 
   it "keeps the glyph in the state's color while the label takes the session's" do
     line = line_for(colored("green", state: "blocked"))
-    _(line).must_include "\e[31;1m●"
-    _(line).must_include "\e[31;1mneeds you"
+    _(line).must_include "\e[38;5;204;1m●"
+    _(line).must_include "\e[38;5;204;1mneeds you"
     _(line).must_include "\e[32mtinted\e[39m"
   end
 

@@ -4,6 +4,7 @@ require "pastel"
 require "tty-cursor"
 require_relative "text"
 require_relative "palette"
+require_relative "theme"
 require_relative "store"
 
 module ClaudeInbox
@@ -51,6 +52,7 @@ module ClaudeInbox
 
     def initialize(color: true, min_left: 44, home: Dir.home)
       @p = Pastel.new(enabled: color)
+      @theme = Theme.new(enabled: color)
       @palette = Palette.new(enabled: color)
       @min_left = min_left
       @home = home
@@ -118,7 +120,7 @@ module ClaudeInbox
     # ----- chrome -------------------------------------------------------------
 
     def header(sections, width, status, now, loading: nil)
-      brand = " " + @p.cyan.bold("▌ claude-inbox")
+      brand = " " + @theme.cyan_bold("▌ claude-inbox")
       right = status ? @p.dim(status) + " " : ""
       room = width - Text.width(brand) - Text.width(right) - 3
       chips = loading ? "" : header_chips(sections, compact: false)
@@ -137,13 +139,13 @@ module ClaudeInbox
       z = sections.snoozed.size
       d = sections.settled.size
       chips = []
-      chips << @p.cyan.bold(compact ? "★ #{pn}" : "★ #{pn} pinned") if pn > 0
-      chips << @p.red.bold(compact ? "● #{n}" : "● #{n} need#{"s" if n == 1} you") if n > 0
-      chips << @p.yellow(compact ? "✻ #{w}" : "✻ #{w} working") if w > 0
-      chips << @p.yellow(compact ? "◌ #{q}" : "◌ #{q} idle") if q > 0
+      chips << @theme.cyan_bold(compact ? "★ #{pn}" : "★ #{pn} pinned") if pn > 0
+      chips << @theme.red_bold(compact ? "● #{n}" : "● #{n} need#{"s" if n == 1} you") if n > 0
+      chips << @theme.yellow(compact ? "✻ #{w}" : "✻ #{w} working") if w > 0
+      chips << @theme.yellow(compact ? "◌ #{q}" : "◌ #{q} idle") if q > 0
       chips << @p.dim(compact ? "○ #{i}" : "○ #{i} terminal#{"s" if i > 1}") if i > 0
-      chips << @p.blue(compact ? "⇅ #{m}" : "⇅ #{m} remote") if m > 0
-      chips << @p.magenta(compact ? "z #{z}" : "z #{z} snoozed") if z > 0
+      chips << @theme.blue(compact ? "⇅ #{m}" : "⇅ #{m} remote") if m > 0
+      chips << @theme.purple(compact ? "z #{z}" : "z #{z} snoozed") if z > 0
       chips << @p.dim(compact ? "◦ #{d}" : "◦ #{d} settled") if d > 0
       chips << @p.dim("nothing running") if sections.all.empty?
       chips.join(compact ? "  " : @p.dim("  ·  "))
@@ -151,9 +153,9 @@ module ClaudeInbox
 
     def footer(width, opts)
       text =
-        if opts[:command] then " " + @p.cyan.bold(":") + opts[:command] + @p.dim("▏")
-        elsif opts[:filter] then " " + @p.cyan.bold("/") + opts[:filter] + (opts[:filter_editing] ? @p.dim("▏") : @p.dim("  esc clears"))
-        else " " + KEYS.map { |k, d| @p.cyan.bold(k) + " " + @p.dim(d) }.join("  ")
+        if opts[:command] then " " + @theme.cyan_bold(":") + opts[:command] + @p.dim("▏")
+        elsif opts[:filter] then " " + @theme.cyan_bold("/") + opts[:filter] + (opts[:filter_editing] ? @p.dim("▏") : @p.dim("  esc clears"))
+        else " " + KEYS.map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
         end
       Text.pad(text, width)
     end
@@ -168,10 +170,10 @@ module ClaudeInbox
 
     def section_color(name)
       case name
-      when :pinned then ->(s) { @p.cyan(s) }
-      when :needs_you then ->(s) { @p.red(s) }
-      when :active then ->(s) { @p.yellow(s) }
-      when :snoozed then ->(s) { @p.magenta(s) }
+      when :pinned then ->(s) { @theme.cyan(s) }
+      when :needs_you then ->(s) { @theme.red(s) }
+      when :active then ->(s) { @theme.yellow(s) }
+      when :snoozed then ->(s) { @theme.purple(s) }
       else ->(s) { @p.dim(s) }
       end
     end
@@ -211,7 +213,7 @@ module ClaudeInbox
     def loading_state(width, height, waited, tick)
       return [] if waited < LOADING_QUIET
       block = [
-        centered(@p.cyan.bold(SPINNER[tick % SPINNER.size]), width),
+        centered(@theme.cyan_bold(SPINNER[tick % SPINNER.size]), width),
         "",
         centered(tray(tick), width),
         "",
@@ -219,7 +221,7 @@ module ClaudeInbox
         centered(@p.dim("waiting on claude agents · #{waited.floor}s"), width)
       ]
       if waited >= LOADING_HINT_AFTER
-        block << "" << centered(@p.dim("slow? ") + @p.cyan("claude daemon status") + @p.dim(" says whether the daemon is up"), width)
+        block << "" << centered(@p.dim("slow? ") + @theme.cyan("claude daemon status") + @p.dim(" says whether the daemon is up"), width)
       end
       [""] * [(height - block.size) / 2, 0].max + block
     end
@@ -231,7 +233,7 @@ module ClaudeInbox
       span = TRAY_SLOTS - 1
       i = tick % (span * 2)
       pos = (i <= span) ? i : span * 2 - i
-      cells = Array.new(TRAY_SLOTS) { |j| (j == pos) ? @p.cyan.bold("●") : @p.dim("·") }
+      cells = Array.new(TRAY_SLOTS) { |j| (j == pos) ? @theme.cyan_bold("●") : @p.dim("·") }
       @p.dim("▌") + " " + cells.join(" ") + " " + @p.dim("▐")
     end
 
@@ -244,14 +246,14 @@ module ClaudeInbox
       [
         "", "",
         Text.pad("   " + @p.bold("Nothing running."), width),
-        Text.pad("   " + @p.dim("Start one from any terminal with ") + @p.cyan("claude --bg \"task\""), width),
-        Text.pad("   " + @p.dim("or press ") + @p.cyan("R") + @p.dim(" to poll again."), width)
+        Text.pad("   " + @p.dim("Start one from any terminal with ") + @theme.cyan("claude --bg \"task\""), width),
+        Text.pad("   " + @p.dim("or press ") + @theme.cyan("R") + @p.dim(" to poll again."), width)
       ]
     end
 
     def fold_toggle_line(name, count, selected, width)
       sel = selected == name
-      marker = sel ? @p.cyan.bold("▶") : " "
+      marker = sel ? @theme.cyan_bold("▶") : " "
       text = @p.dim("… #{count} #{SECTION_TITLES[name].downcase}") + (sel ? @p.dim("   ⏎ or zo to expand") : "")
       Text.pad(" #{marker} " + text, width)
     end
@@ -259,7 +261,7 @@ module ClaudeInbox
     def row_lines(row, section, selected, width, now, tick)
       s = row.session
       sel = row.selectable? && selected == row.key
-      marker = sel ? @p.cyan.bold("▶") : " "
+      marker = sel ? @theme.cyan_bold("▶") : " "
       glyph = glyph_for(s, section, tick)
       meta = meta_for(row, section, now)
 
@@ -269,7 +271,7 @@ module ClaudeInbox
       # so the row can never exceed `width` and fall into Text.pad's blind
       # tail-chop (which used to land mid-project-name with no ellipsis).
       project_text = Text.truncate(s.project, [width - chrome, 0].max)
-      project = (section == :settled) ? @p.dim(project_text) : @p.cyan(project_text)
+      project = (section == :settled) ? @p.dim(project_text) : @theme.cyan(project_text)
 
       label_w = [width - chrome - Text.width(project_text), 0].max
       label = Text.truncate(row.label, label_w)
@@ -297,13 +299,13 @@ module ClaudeInbox
     end
 
     def glyph_for(s, section, tick)
-      return @p.magenta("z") if section == :snoozed
+      return @theme.purple("z") if section == :snoozed
       return @p.dim("◦") if section == :settled
       case s.effective_state
-      when "blocked" then @p.red.bold("●")
-      when "failed" then @p.red.bold("✗")
-      when "working" then s.waiting_on_work? ? @p.yellow("◌") : @p.yellow(SPINNER[tick % SPINNER.size])
-      when "done" then @p.green("✓")
+      when "blocked" then @theme.red_bold("●")
+      when "failed" then @theme.red_bold("✗")
+      when "working" then s.waiting_on_work? ? @theme.yellow("◌") : @theme.yellow(SPINNER[tick % SPINNER.size])
+      when "done" then @theme.green("✓")
       when "stopped" then @p.dim("■")
       else @p.dim("?")
       end
@@ -314,7 +316,7 @@ module ClaudeInbox
       base =
         case section
         when :snoozed
-          row.parked? ? @p.magenta("parked") : @p.magenta("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
+          row.parked? ? @theme.purple("parked") : @theme.purple("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
         when :settled
           @p.dim("#{s.state} · #{Text.age(now.to_i - row.state_since.to_i)}")
         else
@@ -338,10 +340,10 @@ module ClaudeInbox
       return nil unless pr
       return @p.dim("#{pr.short} #{pr.state&.downcase}".strip) if section == :settled
       case pr.state
-      when "OPEN" then @p.green("#{pr.short} open")
+      when "OPEN" then @theme.green("#{pr.short} open")
       when "DRAFT" then @p.dim("#{pr.short} draft")
-      when "MERGED" then @p.magenta("#{pr.short} merged")
-      when "CLOSED" then @p.red("#{pr.short} closed")
+      when "MERGED" then @theme.purple("#{pr.short} merged")
+      when "CLOSED" then @theme.red("#{pr.short} closed")
       else @p.dim(pr.short)
       end
     end
@@ -350,10 +352,10 @@ module ClaudeInbox
       case s.effective_state
       when "blocked"
         detail = s.waiting_for ? ": #{s.waiting_for}" : ""
-        @p.red.bold("needs you#{detail}")
-      when "failed" then @p.red.bold("failed")
+        @theme.red_bold("needs you#{detail}")
+      when "failed" then @theme.red_bold("failed")
       when "working" then working_badge(s)
-      when "done" then @p.green("done") + ((s.alive? && !s.interactive?) ? @p.dim(" · #{s.status}") : "")
+      when "done" then @theme.green("done") + ((s.alive? && !s.interactive?) ? @p.dim(" · #{s.status}") : "")
       when "stopped" then @p.dim("stopped")
       else @p.dim(s.state.to_s)
       end
@@ -363,9 +365,9 @@ module ClaudeInbox
     # only the work it kicked off is still open — with that work named either
     # way, since "working · 2 agents" is the answer to "working on what?".
     def working_badge(s)
-      return @p.yellow("waiting#{": #{s.waiting_for}" if s.waiting_for}") if s.status == "waiting"
+      return @theme.yellow("waiting#{": #{s.waiting_for}" if s.waiting_for}") if s.status == "waiting"
       label = s.job_state&.in_flight_label
-      @p.yellow(s.waiting_on_work? ? "idle" : "working") + (label ? @p.dim(" · #{label}") : "")
+      @theme.yellow(s.waiting_on_work? ? "idle" : "working") + (label ? @p.dim(" · #{label}") : "")
     end
 
     def short_path(path)
