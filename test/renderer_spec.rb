@@ -42,7 +42,9 @@ describe ClaudeInbox::Renderer do
   let(:sections) { Store.sectionize(sessions, Store.merge_entries({}, sessions, now), now) }
   let(:renderer) { ClaudeInbox::Renderer.new(color: false, home: "/Users/byron") }
 
-  def frame(**o) = renderer.frame(sections, width: 80, height: 24, now: now, **o)
+  def view(width: 80, height: 24, **o) = ClaudeInbox::Renderer::View.new(width: width, height: height, now: now, **o)
+
+  def frame(sec = sections, **o) = renderer.frame(sec, view(**o))
 
   it "makes every line exactly width wide" do
     f = frame(selected: "f23c8673")
@@ -57,7 +59,7 @@ describe ClaudeInbox::Renderer do
   end
 
   it "matches the snapshot" do
-    f = renderer.frame(sections, width: 72, height: 20, now: now, selected: "f23c8673")
+    f = frame(sections, width: 72, height: 20, selected: "f23c8673")
     expected = <<-TXT.lines.map { |l| l.chomp.ljust(72) }
  ▌ claude-inbox   ● 1 needs you  ·  ✻ 1 working  ·  ○ 1 terminal
 
@@ -94,7 +96,7 @@ describe ClaudeInbox::Renderer do
     blocked = session(id: "aaa11111", state: "blocked", job_state: job, cwd: "/Users/byron/code/x")
     quiet = session(id: "bbb22222", state: "working", job_state: nil, cwd: "/Users/byron/code/y")
     sec = Store.sectionize([blocked, quiet], {}, now)
-    lines = renderer.frame(sec, width: 60, height: 12, now: now).lines
+    lines = frame(sec, width: 60, height: 12).lines
     _(lines).must_include "       ↳ confirm: merge once green? xxxxxxxxxxxxxxxxxxxxxx…".ljust(60)
     _(lines).must_include "       ↳ ~/code/y".ljust(60)
   end
@@ -102,7 +104,7 @@ describe ClaudeInbox::Renderer do
   it "badges remote sessions and counts them in the header" do
     r = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9", name: "web", origin: :remote)
     sec = Store.sectionize([r], {}, now)
-    text = renderer.frame(sec, width: 90, height: 12, now: now).lines.join("\n")
+    text = frame(sec, width: 90, height: 12).lines.join("\n")
     _(text).must_match(/✓ web\s+done · remote/)
     _(text).must_include "⇅ 1 remote"
   end
@@ -114,7 +116,7 @@ describe ClaudeInbox::Renderer do
       "fan" => [{"kind" => "local_bash"}])
     rows = [session(id: "t1", name: "thinking", job_state: thinking), session(id: "t2", name: "watching", job_state: waiting)]
     sec = Store.sectionize(rows, Store.merge_entries({}, rows, now), now)
-    text = renderer.frame(sec, width: 90, height: 12, now: now, tick: 0).lines.join("\n")
+    text = frame(sec, width: 90, height: 12, tick: 0).lines.join("\n")
     _(text).must_match(/⠋ thinking\s+working · 2 agents/)
     _(text).must_match(/◌ watching\s+idle · 1 shell/)
     _(text).must_match(/✻ 1 working.*◌ 1 idle/)
@@ -126,13 +128,13 @@ describe ClaudeInbox::Renderer do
     sec = Store.sectionize([idle, waiting], {}, now)
     _(sec.needs_you.map(&:key)).must_equal %w[u2]
     _(sec.active.map(&:key)).must_equal %w[u1]
-    text = renderer.frame(sec, width: 90, height: 12, now: now).lines.join("\n")
+    text = frame(sec, width: 90, height: 12).lines.join("\n")
     _(text).must_match(/✓ shell\s+done · your terminal/)
     _(text).must_match(/● shell2\s+needs you: permission prompt · your terminal/)
   end
 
   it "lists settled rows when expanded" do
-    f = renderer.frame(sections, width: 80, height: 30, now: now, expanded: {settled: true})
+    f = frame(sections, width: 80, height: 30, expanded: {settled: true})
     _(f.items.compact.map(&:key)).must_equal ["f23c8673", "4a93393d-1c06-57da-9fb8-12f5b1535d95", "823b882f", "dcbc1d98", "b0b18338", "fbf5253a", "b03695b1"]
     _(f.lines.join("\n")).must_match(/app store release strategy\s+done · 18d/)
   end
@@ -141,66 +143,66 @@ describe ClaudeInbox::Renderer do
     entries = {"823b882f" => {"wake_at" => now.to_i + 900, "snoozed_at" => now.to_i}}
     snoozed_sections = Store.sectionize(sessions, Store.merge_entries(entries, sessions, now), now)
 
-    folded = renderer.frame(snoozed_sections, width: 80, height: 30, now: now)
+    folded = frame(snoozed_sections, width: 80, height: 30)
     _(folded.items.compact.map(&:key)).must_include :snoozed
     _(folded.lines.join("\n")).must_match(/… 1 snoozed/)
 
-    expanded = renderer.frame(snoozed_sections, width: 80, height: 30, now: now, expanded: {snoozed: true})
+    expanded = frame(snoozed_sections, width: 80, height: 30, expanded: {snoozed: true})
     _(expanded.items.compact.map(&:key)).must_include "823b882f"
   end
 
   it "truncates long emoji names instead of slicing" do
     sec = Store.sectionize([session(id: "z", name: "🎉" * 60)], {}, now)
-    f = renderer.frame(sec, width: 60, height: 10, now: now)
+    f = frame(sec, width: 60, height: 10)
     f.lines.each { |l| _(Text.width(l)).must_equal 60 }
     _(f.lines[3]).must_include "…"
   end
 
   it "scrolls to keep the selection visible" do
     sess = (1..30).map { |i| session(id: "s#{i}", name: "n#{i}", started_at: now - i) }
-    f = renderer.frame(Store.sectionize(sess, {}, now), width: 60, height: 12, now: now, selected: "s30", top: 0)
+    f = frame(Store.sectionize(sess, {}, now), width: 60, height: 12, selected: "s30", top: 0)
     _(f.items.compact.map(&:key)).must_include "s30"
     _(f.top).must_be :>, 0
   end
 
   it "splits the frame for the peek pane" do
-    f = renderer.frame(sections, width: 100, height: 12, now: now, selected: "f23c8673", peek: ["line one", "line two"], peek_title: "t")
+    f = frame(sections, width: 100, height: 12, selected: "f23c8673", peek: ClaudeInbox::Peek::View.new(["line one", "line two"], "t"))
     f.lines.each { |l| _(Text.width(l)).must_equal 100 }
     _(f.lines[1]).must_match(/│/)
     _(f.lines.join("\n")).must_include "line two"
   end
 
   it "overlays a modal in the centre without ellipses" do
-    f = renderer.frame(sections, width: 60, height: 12, now: now, modal: ["┌──┐", "│hi│", "└──┘"])
+    f = frame(sections, width: 60, height: 12, modal: ["┌──┐", "│hi│", "└──┘"])
     f.lines.each { |l| _(Text.width(l)).must_equal 60 }
     _(f.lines[5]).must_include "│hi│"
     _(f.lines[5]).wont_include "…"
   end
 
   it "falls back to compact header chips when narrow, full when wide" do
-    _(renderer.frame(sections, width: 100, height: 10, now: now).lines.first).must_include "1 needs you"
-    _(renderer.frame(sections, width: 60, height: 10, now: now).lines.first).must_include "● 1  ✻ 1"
+    _(frame(sections, width: 100, height: 10).lines.first).must_include "1 needs you"
+    _(frame(sections, width: 60, height: 10).lines.first).must_include "● 1  ✻ 1"
   end
 
   it "keeps the header's settled chip distinct from the chip separator" do
     entries = {"823b882f" => {"settled_at" => now.to_i, "last_state" => "done", "state_since" => now.to_i - 5}}
     sec = Store.sectionize(sessions, Store.merge_entries(entries, sessions, now), now)
-    header = renderer.frame(sec, width: 140, height: 10, now: now).lines.first
+    header = frame(sec, width: 140, height: 10).lines.first
     _(header).must_match(/·  ◦ \d+ settled/)
     _(header).wont_match(/·\s+·/)
   end
 
   it "spins the working glyph with the tick" do
     sec = Store.sectionize([session(id: "w", state: "working")], {}, now)
-    a = renderer.frame(sec, width: 60, height: 10, now: now, tick: 0).lines[3]
-    b = renderer.frame(sec, width: 60, height: 10, now: now, tick: 1).lines[3]
+    a = frame(sec, width: 60, height: 10, tick: 0).lines[3]
+    b = frame(sec, width: 60, height: 10, tick: 1).lines[3]
     _(a).wont_equal b
     _(a).must_include ClaudeInbox::Renderer::SPINNER[0]
   end
 
   it "renders an empty state" do
     sec = Store.sectionize([], {}, now)
-    f = renderer.frame(sec, width: 60, height: 10, now: now)
+    f = frame(sec, width: 60, height: 10)
     _(f.lines.join("\n")).must_include "Nothing running."
     _(f.items.compact).must_be_empty
   end
@@ -210,28 +212,28 @@ describe ClaudeInbox::Renderer do
   # long ones get the spinner and a quip; very long ones a hint.
   it "waits quietly for the first poll, then keeps the user company" do
     sec = Store.sectionize([], {}, now)
-    quick = renderer.frame(sec, width: 60, height: 12, now: now, loading: 0.4, tick: 0, status: "polling…")
+    quick = frame(sec, width: 60, height: 12, loading: 0.4, tick: 0, status: "polling…")
     _(quick.lines.join("\n")).wont_include "Nothing running."
     _(quick.lines.join("\n")).wont_include "nothing running"
     _(quick.lines[1..-2].map(&:strip).join).must_equal ""
     _(quick.items.compact).must_be_empty
 
-    slow = renderer.frame(sec, width: 60, height: 12, now: now, loading: 3.2, tick: 0, status: "polling…")
+    slow = frame(sec, width: 60, height: 12, loading: 3.2, tick: 0, status: "polling…")
     text = slow.lines.join("\n")
     _(text).must_include ClaudeInbox::Renderer::SPINNER[0]
     _(text).must_include ClaudeInbox::Renderer::QUIPS[0]
     _(text).must_include "waiting on claude agents · 3s"
     _(text).wont_include "claude daemon status"
-    later = renderer.frame(sec, width: 60, height: 12, now: now, loading: 3.2, tick: 7, status: "polling…").lines.join("\n")
+    later = frame(sec, width: 60, height: 12, loading: 3.2, tick: 7, status: "polling…").lines.join("\n")
     _(later).must_include ClaudeInbox::Renderer::QUIPS[1]
     _(later).wont_equal text
 
-    stuck = renderer.frame(sec, width: 60, height: 12, now: now, loading: 12, tick: 0, status: "polling…").lines.join("\n")
+    stuck = frame(sec, width: 60, height: 12, loading: 12, tick: 0, status: "polling…").lines.join("\n")
     _(stuck).must_include "claude daemon status"
   end
 
   it "ends the header with the usage label, after any notice, and with nothing when there is none" do
-    header = ->(**o) { renderer.frame(sections, width: 100, height: 10, now: now, **o).lines.first }
+    header = ->(**o) { frame(sections, width: 100, height: 10, **o).lines.first }
     _(header.call(usage: "usage 5h 24% · 7d 41%")).must_match(/usage 5h 24% · 7d 41% $/)
     _(header.call(status: "⚠ daemon down", usage: "usage 5h 24%")).must_match(/⚠ daemon down  ·  usage 5h 24% $/)
     _(header.call).wont_include "usage"
@@ -244,13 +246,15 @@ describe "renderer session colors" do
   let(:renderer) { ClaudeInbox::Renderer.new(color: true, home: "/Users/byron") }
   let(:orange) { "\e[38;5;208m" }
 
+  def frame(sec, **o) = renderer.frame(sec, ClaudeInbox::Renderer::View.new(now: now, **o))
+
   def colored(name, **attrs)
     session(id: "z", name: "tinted", job_state: ClaudeInbox::JobState.new("color" => name), **attrs)
   end
 
   def line_for(session, entries = {}, **opts)
     sec = Store.sectionize([session], Store.merge_entries(entries, [session], now), now)
-    renderer.frame(sec, width: 80, height: 14, now: now, **opts).lines.find { |l| l.include?(session.name) }
+    frame(sec, width: 80, height: 14, **opts).lines.find { |l| l.include?(session.name) }
   end
 
   it "paints the label of a session /color gave a color" do
@@ -277,7 +281,7 @@ describe "renderer session colors" do
 
   it "still pads a colored row to exactly the frame width" do
     sec = Store.sectionize([colored("pink")], {}, now)
-    renderer.frame(sec, width: 64, height: 12, now: now).lines.each { |l| _(Text.width(l)).must_equal 64 }
+    frame(sec, width: 64, height: 12).lines.each { |l| _(Text.width(l)).must_equal 64 }
   end
 end
 
