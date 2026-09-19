@@ -1,0 +1,76 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Cuts a release on the maintainer's machine, the way bin/ci signs off PRs:
+# bumps VERSION from the conventional commits since the last tag, pushes the
+# gem and opens a GitHub release. See CONTRIBUTING.md.
+
+require "fileutils"
+require "open3"
+require_relative "../release/next_version"
+
+Dir.chdir(File.expand_path("..", __dir__))
+
+VERSION_FILE = "lib/claude_inbox.rb"
+VERSION_LINE = /VERSION = "(.*)"/
+DRY_RUN = ARGV.include?("--dry-run")
+
+def capture(*command)
+  out, status = Open3.capture2(*command)
+  abort "#{command.join(" ")} failed" unless status.success?
+  out.strip
+end
+
+def step(*command) = system(*command) || abort("#{command.join(" ")} failed")
+
+step "git", "fetch", "--quiet", "--tags", "origin"
+
+unless DRY_RUN
+  branch = capture("git", "branch", "--show-current")
+  abort "Release from main, not #{branch}" unless branch == "main"
+  abort "Commit or discard your changes first: the working tree is dirty" unless capture("git", "status", "--porcelain").empty?
+  abort "Pull first: HEAD is not origin/main" unless capture("git", "rev-parse", "HEAD") == capture("git", "rev-parse", "origin/main")
+end
+
+current = File.read(VERSION_FILE)[VERSION_LINE, 1]
+last_tag, = Open3.capture2("git", "describe", "--tags", "--abbrev=0", "--match", "v*", err: File::NULL)
+last_tag = last_tag.strip
+
+if last_tag.empty?
+  version = current
+  reason = "the first release, VERSION as-is"
+else
+  messages = capture("git", "log", "#{last_tag}..HEAD", "--format=%B%x00").split("\0")
+  next_version = Release::NextVersion.new(current, messages)
+  version = next_version.version
+  reason = "#{next_version.bump} bump over #{last_tag}"
+end
+
+if version.nil?
+  puts "nothing to release since #{last_tag}"
+  exit
+end
+
+tag = "v#{version}"
+
+if DRY_RUN
+  puts "would release #{tag}: #{reason}"
+  exit
+end
+
+File.write(VERSION_FILE, File.read(VERSION_FILE).sub(VERSION_LINE, %(VERSION = "#{version}")))
+step "git", "commit", "--quiet", "--all", "--message", "chore: release #{tag}"
+step "git", "tag", "--annotate", tag, "--message", tag
+
+gem_file = "claude-inbox-#{version}.gem"
+unless system("gem", "build", "claude-inbox.gemspec") && system("gem", "push", gem_file)
+  # Undo before aborting, so main never carries a version rubygems does not.
+  system "git", "tag", "--delete", tag
+  system "git", "reset", "--quiet", "--hard", "HEAD~1"
+  FileUtils.rm_f gem_file
+  abort "#{tag} was not published; the release commit and tag are undone"
+end
+FileUtils.rm_f gem_file
+
+step "git", "push", "--quiet", "origin", "main", "--follow-tags"
+puts capture("gh", "release", "create", tag, "--generate-notes", "--verify-tag")
