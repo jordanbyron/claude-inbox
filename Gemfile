@@ -2,14 +2,7 @@
 
 source "https://rubygems.org"
 
-ruby ">= 3.2"
-
-gem "tty-cursor"
-gem "tty-reader"
-gem "tty-screen"
-gem "tty-box"
-gem "pastel"
-gem "unicode-display_width"
+gemspec
 
 group :development, :test do
   gem "minitest"

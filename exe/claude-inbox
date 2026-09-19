@@ -1,0 +1,33 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "claude_inbox"
+
+if ARGV.include?("--version")
+  puts ClaudeInbox::VERSION
+  exit
+end
+
+require "claude_inbox/app"
+
+# Crash traces go here instead of the alt screen when set.
+$stderr.reopen(ENV["CLAUDE_INBOX_STDERR"], "a") if ENV["CLAUDE_INBOX_STDERR"]
+
+opts = {}
+if (i = ARGV.index("--fixture"))
+  agents = ARGV[i + 1]
+  fixtures = File.dirname(agents)
+  opts[:client] = ClaudeInbox::FixtureClient.new(agents, logs: File.binread(File.join(fixtures, "logs_raw.txt")))
+  opts[:store] = ClaudeInbox::Store.new(path: nil)
+  opts[:jobs_dir] = File.join(fixtures, "jobs")
+  opts[:pull_requests] = ClaudeInbox::PullRequests.new(cache_path: File.join(fixtures, "gh-pr-status-cache.json"), resolved_path: nil, gh: nil)
+else
+  # The only place the reaper is armed. Everything else — tests, --fixture,
+  # anything embedding App — gets one that deletes nothing.
+  opts[:client] = ClaudeInbox::AgentsClient.new
+  opts[:store] = ClaudeInbox::Store.new
+  opts[:reaper] = ClaudeInbox::Reaper.new(opts[:client], opts[:store])
+end
+opts[:color] = false if ARGV.include?("--no-color")
+
+ClaudeInbox::App.new(**opts).run

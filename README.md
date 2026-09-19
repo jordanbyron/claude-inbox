@@ -7,12 +7,21 @@ Inbox-style triage on top of Claude Code's background sessions. A companion to
 
 ![claude-inbox with one working session, one snoozed and the settled section folded](docs/screenshot.png)
 
+## Install
+
+```
+gem install claude-inbox
+claude-inbox
+```
+
+Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
+`claude-inbox --version` prints the installed version. From a checkout,
+`bin/claude-inbox` runs the same command through Bundler:
+
 ```
 bin/claude-inbox                       # live
 bin/claude-inbox --fixture test/fixtures/agents.json   # no daemon needed
 ```
-
-Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
 
 ## Sections
 
@@ -411,3 +420,6 @@ bin/screens                                         # drive the fixture in a pty
 
 `bin/screens` is how a refactor is checked against the real screen: run it on
 `main` and on the branch and diff the two.
+
+The command itself lives in `exe/claude-inbox`, which is what the gem installs;
+`bin/claude-inbox` only sets up Bundler from the checkout and loads it.
