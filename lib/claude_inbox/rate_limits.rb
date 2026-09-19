@@ -5,7 +5,7 @@ require "json"
 module ClaudeInbox
   # The subscription's 5-hour and 7-day usage, read from
   # ~/.claude/rate_limits.json. Nothing writes that file but the user's own
-  # status line script (README, "Usage"): `claude agents --json` says nothing
+  # status line script (README, "Setup"): `claude agents --json` says nothing
   # about limits and there is no CLI command for them, but every session hands
   # its status line a `rate_limits` object on each turn, so a one-line tee
   # there is the only source that costs no API calls. No file, or a file
