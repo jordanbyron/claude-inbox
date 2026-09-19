@@ -4,30 +4,43 @@ require_relative "test_helper"
 require_relative "../lib/claude_inbox/logs"
 
 describe ClaudeInbox::Logs do
-  let(:queue) { Queue.new }
   let(:replay) { (1..10).map { |i| "line #{i}" }.join("\r\n") }
-  let(:client) { ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), logs: replay) }
+  let(:client) do
+    Class.new(ClaudeInbox::FixtureClient) {
+      def asked = (@asked ||= [])
+
+      def logs(id)
+        asked << id
+        super
+      end
+    }.new(fixture_path("agents.json"), logs: replay)
+  end
   let(:now) { Time.at(1_789_400_000) }
   let(:clock) { -> { now + @elapsed } }
-  let(:logs) { ClaudeInbox::Logs.new(client, queue, clock: clock) }
+  let(:logs) { ClaudeInbox::Logs.new(client, clock: clock) }
   let(:lines) { (1..10).map { |i| "line #{i}" } }
 
   before { @elapsed = 0 }
   after { logs.stop }
 
-  it "knows nothing until asked, then answers on the queue and from the cache" do
+  def settle(id)
+    _(wait_for { logs.cached(id) }).must_equal lines
+  end
+
+  it "knows nothing until asked, then answers from the cache" do
     _(logs.cached("abc12345")).must_be_nil
     logs.want("abc12345")
     @elapsed += ClaudeInbox::Logs::DEBOUNCE
     logs.tick
-    _(queue.pop).must_equal [:peek, "abc12345", lines]
-    _(logs.cached("abc12345")).must_equal lines
+    settle("abc12345")
+    _(client.asked).must_equal %w[abc12345]
   end
 
   it "waits out the debounce before asking" do
     logs.want("abc12345")
     logs.tick
-    _(queue).must_be_empty
+    _(logs.cached("abc12345")).must_be_nil
+    _(client.asked).must_be_empty
   end
 
   it "only keeps the latest request" do
@@ -35,25 +48,28 @@ describe ClaudeInbox::Logs do
     logs.want("f23c8673")
     @elapsed += ClaudeInbox::Logs::DEBOUNCE
     logs.tick
-    _(queue.pop[1]).must_equal "f23c8673"
-    _(queue).must_be_empty
+    settle("f23c8673")
+    _(logs.cached("abc12345")).must_be_nil
+    _(client.asked).must_equal %w[f23c8673]
   end
 
   it "does not ask again while the cache is fresh" do
     logs.want("abc12345")
     @elapsed += ClaudeInbox::Logs::DEBOUNCE
     logs.tick
-    queue.pop
+    settle("abc12345")
     logs.want("abc12345")
     @elapsed += ClaudeInbox::Logs::DEBOUNCE
     logs.tick
-    _(queue).must_be_empty
+    _(logs.instance_variable_get(:@requests)).must_be_empty
+    _(client.asked).must_equal %w[abc12345]
   end
 
   it "ignores a request with nothing to fetch" do
     logs.want(nil)
     @elapsed += ClaudeInbox::Logs::DEBOUNCE
     logs.tick
-    _(queue).must_be_empty
+    _(logs.instance_variable_get(:@requests)).must_be_empty
+    _(client.asked).must_be_empty
   end
 end
