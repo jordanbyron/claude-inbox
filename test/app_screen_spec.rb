@@ -242,6 +242,15 @@ describe ClaudeInbox::App do
     end
   end
 
+  describe "opening a new session" do
+    it "strips a trailing worktree path so the new session lands in the repo it was cut from" do
+      a = loaded_app("f23c8673")
+      _(a.send(:strip_worktree, "/Users/byron/code/claude-inbox/.claude/worktrees/foo")).must_equal "/Users/byron/code/claude-inbox"
+      _(a.send(:strip_worktree, "/Users/byron/code/claude-inbox/.claude/worktrees/foo/lib")).must_equal "/Users/byron/code/claude-inbox"
+      _(a.send(:strip_worktree, "/Users/byron/code/parks_genie")).must_equal "/Users/byron/code/parks_genie"
+    end
+  end
+
   describe "deleting a session" do
     it "delivers the done notice through the queue, not from the worker" do
       a = loaded_app("f23c8673")
