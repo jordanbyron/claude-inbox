@@ -50,27 +50,33 @@ describe ClaudeInbox::Renderer do
     f.lines.each { |l| _(Text.width(l)).must_equal 80 }
   end
 
+  it "leaves one column between a row's project and the right edge, like the header and section rules" do
+    rows = frame(selected: "f23c8673").lines.grep(/  (comma3|claude-inbox|parks_genie) *$/)
+    _(rows).wont_be_empty
+    rows.each { |l| _(l).must_match(/\S $/) }
+  end
+
   it "matches the snapshot" do
     f = renderer.frame(sections, width: 72, height: 20, now: now, selected: "f23c8673")
     expected = <<-TXT.lines.map { |l| l.chomp.ljust(72) }
  ▌ claude-inbox   ● 1 needs you  ·  ✻ 1 working  ·  ○ 1 terminal
 
  ▎ NEEDS YOU ─────────────────────────────────────────────────────── 1
- ▶ ● comma3x not booting                          needs you · 0s  comma3
+ ▶ ● comma3x not booting                         needs you · 0s  comma3 
        ↳ ~/code/comma3
 
  ▎ ACTIVE ────────────────────────────────────────────────────────── 6
-   ⠋ claude-inbox-38          working · your terminal · 0s  claude-inbox
+   ⠋ claude-inbox-38         working · your terminal · 0s  claude-inbox 
        ↳ ~/code/claude-inbox
-   ✓ comma3x led flashing screen unresponsive   done · idle · 0s  comma3
+   ✓ comma3x led flashing screen unresponsive  done · idle · 0s  comma3 
        ↳ ~/code/comma3
-   ✓ trailforks skill handoff                     done · 9d  parks_genie
+   ✓ trailforks skill handoff                    done · 9d  parks_genie 
        ↳ ~/code/parks_genie
-   ✓ sensor token resilience test                done · 10d  parks_genie
+   ✓ sensor token resilience test               done · 10d  parks_genie 
        ↳ ~/code/parks_genie
-   ✓ github milestone review                     done · 17d  parks_genie
+   ✓ github milestone review                    done · 17d  parks_genie 
        ↳ ~/code/parks_genie
-   ✓ app store release strategy                  done · 18d  parks_genie
+   ✓ app store release strategy                 done · 18d  parks_genie 
        ↳ ~/code/parks_genie
  j/k move  ⏎ attach  n new  t pin  s snooze  u wake  a alias  o PR  x s…
     TXT
