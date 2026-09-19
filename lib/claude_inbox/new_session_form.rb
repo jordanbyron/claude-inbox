@@ -6,6 +6,7 @@ require_relative "settings"
 require_relative "slash_commands"
 require_relative "text"
 require_relative "text_buffer"
+require_relative "theme"
 
 module ClaudeInbox
   # State and key handling for the "new session" modal. Pure: returns what
@@ -22,8 +23,9 @@ module ClaudeInbox
 
     MENU_ROWS = 6
 
-    def initialize(cwd:, pastel:, home: Dir.home, clipboard: Images.method(:from_clipboard))
+    def initialize(cwd:, pastel:, theme: Theme.new(enabled: pastel.enabled), home: Dir.home, clipboard: Images.method(:from_clipboard))
       @p = pastel
+      @theme = theme
       @home = home
       @clipboard = clipboard
       @fields = [
@@ -147,11 +149,11 @@ module ClaudeInbox
     end
 
     def footer
-      return @p.red(@error) if @error
+      return @theme.red(@error) if @error
       return @p.dim("matches: ") + @candidates.join(@p.dim("  ")) if @candidates
       if menu
         return [["↑ ↓", "choose"], ["⇥ ⏎", "pick"], ["esc", "close"]]
-            .map { |k, d| @p.cyan.bold(k) + " " + @p.dim(d) }.join("  ")
+            .map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
       end
       keys =
         case focused.kind
@@ -161,7 +163,7 @@ module ClaudeInbox
         end
       keys += [["^S", "start"], ["^O", "start & open"],
         ["⇥", (focused.key == :cwd) ? "complete / next" : "next"], ["esc", "cancel"]]
-      keys.map { |k, d| @p.cyan.bold(k) + " " + @p.dim(d) }.join("  ")
+      keys.map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
     end
 
     private
@@ -215,7 +217,7 @@ module ClaudeInbox
         name = Text.pad(c.to_s, name_w)
         tag = (i == shown.size - 1) ? more.size : 0
         desc = Text.truncate(c.description, w - name_w - 8 - tag)
-        "    " + (on ? @p.black.on_cyan(" #{name} ") : @p.cyan(" #{name} ")) + " " + (on ? desc : @p.dim(desc))
+        "    " + (on ? @theme.pill(" #{name} ", :cyan) : @theme.cyan(" #{name} ")) + " " + (on ? desc : @p.dim(desc))
       end
       rows[-1] = Text.pad(rows[-1], w - more.size) + @p.dim(more)
       rows
@@ -223,7 +225,7 @@ module ClaudeInbox
 
     def field_label(f)
       on = f.equal?(focused)
-      (on ? @p.cyan.bold("▶ ") : "  ") + (on ? @p.bold(Text.pad(f.label, 12)) : @p.dim(Text.pad(f.label, 12)))
+      (on ? @theme.cyan_bold("▶ ") : "  ") + (on ? @p.bold(Text.pad(f.label, 12)) : @p.dim(Text.pad(f.label, 12)))
     end
 
     # The cell the cursor sits on, drawn as a block by inverting it: a bar
@@ -242,7 +244,7 @@ module ClaudeInbox
       else
         f.choices.map { |c|
           text = (c == DEFAULT) ? default_text(f) : c
-          if c == f.value then (on ? @p.black.on_cyan(" #{text} ") : @p.cyan.bold(" #{text} "))
+          if c == f.value then (on ? @theme.pill(" #{text} ", :cyan) : @theme.cyan_bold(" #{text} "))
           else @p.dim(" #{text} ")
           end
         }.join(" ")
@@ -256,8 +258,8 @@ module ClaudeInbox
 
     def prompt_box(f, w, h)
       on = f.equal?(focused)
-      edge = on ? ->(s) { @p.cyan(s) } : ->(s) { @p.dim(s) }
-      rows, hidden = f.value.view(w - 4, h, cursor: (caret if on), chip: ->(s) { @p.cyan.bold(s) })
+      edge = on ? ->(s) { @theme.cyan(s) } : ->(s) { @p.dim(s) }
+      rows, hidden = f.value.view(w - 4, h, cursor: (caret if on), chip: ->(s) { @theme.cyan_bold(s) })
       rows = [@p.dim("What should this session do?")] if f.value.empty? && !on
       rows += [""] * (h - rows.size)
       [top_edge(edge, w, hidden)] +
