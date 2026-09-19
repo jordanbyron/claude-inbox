@@ -237,10 +237,6 @@ describe ClaudeInbox::Renderer do
     _(header.call).wont_include "usage"
     _(header.call).must_include "1 needs you"
   end
-
-  it "shows the command line in the footer" do
-    _(frame(command: ClaudeInbox::TextBuffer.new("q")).lines.last).must_match(/\A :q +\z/)
-  end
 end
 
 describe "renderer session colors" do

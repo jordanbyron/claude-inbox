@@ -150,7 +150,7 @@ module ClaudeInbox
         selected: @selected&.key, top: @top, expanded: @expanded,
         peek: peek&.lines, peek_title: peek&.title, peek_subtitle: peek&.subtitle,
         modal: modal_lines(width), screen: screen_lines(width, height), status: status_text(now), usage: @rate_limits.label(now),
-        filter: @filter, filter_editing: @filter_editing, command: @command, tick: @tick / 2,
+        filter: @filter, filter_editing: @filter_editing, tick: @tick / 2,
         loading: loading_for
       )
       @items = frame.items.compact
@@ -227,7 +227,7 @@ module ClaudeInbox
     end
 
     # tty-reader glues ESC to whatever arrives within 100ms, so a fast
-    # "esc :q" comes in as one unknown key "\e:q". Vim hands make that
+    # "esc gg" comes in as one unknown key "\egg". Vim hands make that
     # constantly. Unknown ESC-prefixed strings become ESC + the rest.
     def split_keys(key)
       return [key] if key.size <= 1 || @reader.console.keys.key?(key)
@@ -238,17 +238,17 @@ module ClaudeInbox
     def handle_key(key)
       name = key_name(key)
       return handle_modal_key(name, key) if @modal
-      return handle_line_key(name, key) if @filter_editing || @command
+      return handle_line_key(name, key) if @filter_editing
 
       action = @keymap.press(name, key)
       perform(action) if action
     end
 
-    # A modal or an open filter/command line already claims every keypress
-    # ahead of the normal action table (see handle_key); mouse input defers
-    # to the same rule rather than reaching past whatever has focus.
+    # A modal or an open filter line already claims every keypress ahead of
+    # the normal action table (see handle_key); mouse input defers to the
+    # same rule rather than reaching past whatever has focus.
     def handle_mouse(event)
-      return if @modal || @filter_editing || @command
+      return if @modal || @filter_editing
       case event.kind
       when :click then click_row(event.row, event.col)
       when :scroll_up then perform(:up)
@@ -307,7 +307,6 @@ module ClaudeInbox
       when :toggle_peek then toggle_peek
       when :new_session then open_new_session
       when :filter then start_filter
-      when :command then @command = TextBuffer.new
       when :escape then clear_filter
       end
     end
@@ -508,7 +507,7 @@ module ClaudeInbox
       @modal = nil
     end
 
-    # ----- filter / command line ---------------------------------------------
+    # ----- filter line --------------------------------------------------------
 
     def start_filter
       @filter ||= TextBuffer.new
@@ -518,30 +517,17 @@ module ClaudeInbox
     def clear_filter
       @filter = nil
       @filter_editing = false
-      @command = nil
-    end
-
-    def close_line
-      @command ? @command = nil : clear_filter
     end
 
     def handle_line_key(name, key)
-      line = @command || @filter
       case name
-      when :escape then close_line
-      when :return, :enter then submit_line
+      when :escape then clear_filter
+      when :return, :enter then @filter_editing = false
       when :backspace, :ctrl_h
-        line.empty? ? close_line : line.press(name, key)
+        @filter.empty? ? clear_filter : @filter.press(name, key)
       else
-        line.press(name, key)
+        @filter.press(name, key)
       end
-    end
-
-    def submit_line
-      return @filter_editing = false unless @command
-      action = Keymap.command(@command.to_s)
-      @command = nil
-      perform(action) if action
     end
   end
 end
