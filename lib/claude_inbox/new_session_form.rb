@@ -43,18 +43,20 @@ module ClaudeInbox
       @commands_for = nil
       @pick = 0
       @dismissed = nil
+      @confirm_discard = false
     end
 
     def focused = @fields[@focus]
 
     # => :cancel | :start | :start_and_attach | :changed
     def press(name, raw)
+      return confirm_discard_press(name, raw) if @confirm_discard
       @error = nil
       @candidates = nil
       return :changed if menu && menu_press(name)
       before = command_query
       case name
-      when :escape then return :cancel
+      when :escape then return escape_pressed
       when :ctrl_s then return submit(attach: false)
       when :ctrl_o then return submit(attach: true)
       when :ctrl_v then paste_clipboard
@@ -138,7 +140,7 @@ module ClaudeInbox
       menu_rows = menu_lines(inner_w, [height - fixed - 3, MENU_ROWS].min)
       prompt_h = [height - fixed - menu_rows.size, 3].max
       out = [""]
-      out << "  " + @p.bold("New session")
+      out << "  " + (@confirm_discard ? @theme.red("Discard this session?") : @p.bold("New session"))
       out << ""
       out << "  " + field_label(@fields[0]) + @p.dim("  ⏎ newline")
       out += prompt_box(@fields[0], inner_w, prompt_h)
@@ -149,6 +151,10 @@ module ClaudeInbox
     end
 
     def footer
+      if @confirm_discard
+        return [["y", "discard"], ["esc", "keep editing"]]
+            .map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
+      end
       return @theme.red(@error) if @error
       return @p.dim("matches: ") + @candidates.join(@p.dim("  ")) if @candidates
       if menu
@@ -167,6 +173,19 @@ module ClaudeInbox
     end
 
     private
+
+    # Esc with a prompt typed asks first, so a stray keypress can't lose it.
+    def escape_pressed
+      return :cancel if @fields[0].value.empty?
+      @confirm_discard = true
+      :changed
+    end
+
+    def confirm_discard_press(name, raw)
+      return :cancel if raw == "y"
+      @confirm_discard = false if name == :escape || raw == "n" || raw == "q"
+      :changed
+    end
 
     def paste_clipboard
       clip = @clipboard.call

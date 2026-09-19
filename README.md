@@ -113,7 +113,9 @@ so read the box before answering.
 ### New session
 
 `n` opens a form. `Tab` / `Shift+Tab` move between fields, `Enter` moves on
-(inside the prompt it breaks a line), `Esc` cancels. Choice fields cycle with
+(inside the prompt it breaks a line), `Esc` cancels. Once the prompt has text,
+`Esc` asks first — `y` discards, `Esc` or `n` goes back to editing — so a
+stray `Esc` can't lose what's typed. Choice fields cycle with
 `h` `l` or the arrows. Text fields are a real editor: `←` `→` move the cursor,
 `Ctrl-A` / `Ctrl-E` jump to the ends, `Backspace` and `Delete` cut either side
 of it, `Ctrl-W` takes the word before it and `Ctrl-U` / `Ctrl-K` everything
@@ -155,9 +157,10 @@ opens a menu of what the CLI would offer — project and personal skills and
 commands, plugin skills as `plugin:name`, claude.ai's synced skills as
 `anthropic-skills:name` — narrowed as you type, each with the description
 from its front matter. `↑` `↓` choose, `Tab` or `Enter` drop the command in
-with a space after it, `Esc` closes the menu (a second `Esc` cancels the
-form). A `/` inside a word, as in `a/b`, opens nothing, and the menu only
-appears while something matches, so a path like `/Users/…` is left alone
+with a space after it, `Esc` closes the menu (a second `Esc` cancels, or asks
+first if the prompt still has text). A `/` inside a word, as in `a/b`, opens
+nothing, and the menu only appears while something matches, so a path like
+`/Users/…` is left alone
 after its first letters. Built-ins such as `/init` live inside the CLI and
 are not listed; typing one still works. Project commands follow the
 Directory field.
