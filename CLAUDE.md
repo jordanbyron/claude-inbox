@@ -1,7 +1,8 @@
 # claude-inbox
 
-A Ruby TUI over `claude agents --json`. README.md says what it does; read it
-before touching `lib/`.
+A Ruby TUI over `claude agents --json`. README.md says what it does and
+[docs/cli-quirks.md](docs/cli-quirks.md) what the daemon and CLI actually do;
+read both before touching `lib/`.
 
 ## Submitting a PR
 
