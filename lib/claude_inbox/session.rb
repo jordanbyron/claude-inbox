@@ -46,8 +46,8 @@ module ClaudeInbox
 
     # The JSON does not say where an interactive session is driven from;
     # AgentsClient reads it off the process tree: :terminal, :remote (a
-    # claude.ai/code worker), :subagent (dropped before anyone downstream sees
-    # it) or :headless (`claude -p` or an SDK run).
+    # claude.ai/code worker), :subagent or :headless (`claude -p` or an SDK
+    # run); the last two are dropped before anyone downstream sees them.
     def remote? = origin == :remote
 
     def subagent? = origin == :subagent

@@ -57,16 +57,16 @@ module ClaudeInbox
       @clock = clock
       @mutex = Mutex.new
       @sessions = []
-      @forgotten = Set.new
+      @hidden = Set.new
       @entries = load
     end
 
-    # A forgotten key still in the list is dropped: `claude rm` has returned
-    # but the daemon lists it for a poll or two more. Absent, it is released.
+    # A hidden key the daemon has stopped listing is released; one it still
+    # lists stays out of sight.
     def update(sessions)
       @mutex.synchronize do
-        @forgotten &= sessions.map(&:key)
-        @sessions = sessions.reject { |s| @forgotten.include?(s.key) }
+        @hidden &= sessions.map(&:key)
+        @sessions = sessions.reject { |s| @hidden.include?(s.key) }
         @entries = self.class.merge_entries(@entries, @sessions, @clock.call)
         save
       end
@@ -109,11 +109,17 @@ module ClaudeInbox
     # The raw hash, for the specs; nothing in lib/ reads it.
     def entry(id) = @mutex.synchronize { @entries[id]&.dup }
 
-    # Hides a session `claude rm` has taken until `update` sees the daemon has
-    # dropped it too. Memory only: the gap it bridges is seconds long.
+    # Keeps rows out of sight while `claude rm` is on them, so none paints
+    # mid-delete; `release` brings back one `rm` refused. Memory only.
+    def hide(keys) = @mutex.synchronize { @hidden.merge(keys) }
+
+    def release(keys) = @mutex.synchronize { @hidden.subtract(keys) }
+
+    # A session `claude rm` has taken stays hidden until `update` sees the
+    # daemon has dropped it too.
     def forget(id)
       @mutex.synchronize do
-        @forgotten << id
+        @hidden << id
         @sessions = @sessions.reject { |s| s.key == id }
         save if @entries.delete(id)
       end

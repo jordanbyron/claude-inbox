@@ -50,20 +50,21 @@ module ClaudeInbox
     # The rows go up as soon as `claude agents` answers, and the slow calls
     # (`claude rm`, a dozen serial `gh pr view`s) follow: that is the
     # difference between the inbox appearing at once and five seconds later.
-    # Rows the reaper is about to take are held back from that first
-    # hand-over so none paints while `claude rm` is on it; only a refused
-    # reap brings one back. The gh refresh comes last and publishes again
-    # only if a PR state moved.
+    # Every hand-over is the whole list; the store hides the rows the reaper
+    # is about to take, so a list missing a key can only mean the daemon
+    # dropped it. The gh refresh comes last and publishes again only if a PR
+    # state moved.
     def once
       now = Time.now
       sessions = Sessions.load(client: @client, jobs_dir: @jobs_dir, pull_requests: @pull_requests, overrides: @store.pr_overrides)
       doomed = @reaper.due(sessions, now)
-      @queue << [:sessions, without(sessions, doomed)]
-      reaped = @reaper.sweep(sessions, now)
-      live = without(sessions, reaped)
-      @queue << [:sessions, live] if reaped != doomed
+      @store.hide(doomed)
+      @queue << [:sessions, sessions]
+      reaped = @reaper.sweep(sessions.select { |s| doomed.include?(s.key) }, now)
+      @store.release(doomed - reaped)
+      @queue << [:sessions, sessions] if reaped != doomed
       notice_reaped(reaped) if reaped.any?
-      fresh, moved = @pull_requests.refresh(live)
+      fresh, moved = @pull_requests.refresh(sessions)
       @queue << [:sessions, fresh] if moved
     rescue => e
       @queue << [:error, e.message]
@@ -84,8 +85,6 @@ module ClaudeInbox
     end
 
     def paused? = @lock.synchronize { @paused }
-
-    def without(sessions, keys) = sessions.reject { |s| keys.include?(s.key) }
 
     def notice_reaped(keys)
       word = (keys.size == 1) ? "session" : "sessions"
