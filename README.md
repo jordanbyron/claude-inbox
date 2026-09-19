@@ -309,8 +309,12 @@ AgentsClient  →  JobState  →  PullRequests  →  Poller  →  Store  →  Re
   seconds and on demand, runs it through `JobState`, `PullRequests` and the
   `Reaper` in the order above, and hands each result to `App` over a queue.
   `App` pauses it while `claude attach` has the terminal.
-- `App` owns the terminal, the poller and the peek thread, and is the only
-  place that spawns a child.
+- `App` owns the terminal, the poller thread and the logs thread, and is the
+  only place that spawns a child.
+- `Peek` is the peek pane: whether it is open, how far back it is scrolled and
+  what to paint for the selected row. `Logs` is where the lines come from: the
+  `claude logs` replay of each session, fetched off the main thread, debounced
+  and cached.
 - `VtScreen` is a small cursor-addressed grid used to turn the `claude logs` replay
   into readable lines for the peek pane.
 - `SlashCommands` reads the skills and commands `claude` would offer from the

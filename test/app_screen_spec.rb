@@ -54,6 +54,13 @@ describe ClaudeInbox::App do
     end
   end
 
+  # `run` is what normally builds the pane and the logs thread behind it; a
+  # rendered frame asks the pane what to paint, so tests that render need one.
+  def with_peek(a)
+    a.instance_variable_set(:@peek, ClaudeInbox::Peek.new(ClaudeInbox::Logs.new(client, Queue.new)))
+    a
+  end
+
   def wait_for(timeout: 2)
     deadline = Time.now + timeout
     sleep 0.01 while !yield && Time.now < deadline
@@ -118,11 +125,6 @@ describe ClaudeInbox::App do
   end
 
   describe "clicking a row" do
-    def with_peek(a)
-      a.instance_variable_set(:@peek, ClaudeInbox::Peek.new(client, Queue.new))
-      a
-    end
-
     it "selects it and attaches, same as landing on it and pressing Enter" do
       a = with_peek(loaded_app(nil))
       a.send(:render)
@@ -159,7 +161,7 @@ describe ClaudeInbox::App do
 
     it "ignores a click past the list column, such as one landing in the peek pane" do
       a = with_peek(loaded_app("f23c8673"))
-      a.instance_variable_set(:@peek_on, true)
+      a.send(:toggle_peek)
       a.send(:render)
       attached = []
       a.define_singleton_method(:attach) { |id| attached << id }
@@ -173,7 +175,7 @@ describe ClaudeInbox::App do
   end
 
   it "moves the selection on a wheel tick, the same way j/k would" do
-    a = loaded_app("f23c8673")
+    a = with_peek(loaded_app("f23c8673"))
     a.send(:render)
     keys = a.send(:filtered, store.sections).selectable_keys({})
     idx = keys.index("f23c8673")
