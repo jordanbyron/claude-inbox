@@ -10,37 +10,42 @@ module ClaudeInbox
   # queue: [:sessions, list] for each hand-over, [:error, msg] when a poll
   # fails, [:notice, text] when the reaper took something. Nothing here
   # touches App's state directly; the queue is the whole of the interface.
+  # One worker runs every poll, so two can never overlap and publish the
+  # list out of order.
   class Poller
     INTERVAL = 4
 
-    def initialize(client:, store:, pull_requests:, jobs_dir:, reaper:, queue:)
+    def initialize(client:, store:, pull_requests:, jobs_dir:, reaper:, queue:, interval: INTERVAL)
       @client = client
       @store = store
       @pull_requests = pull_requests
       @jobs_dir = jobs_dir
       @reaper = reaper
       @queue = queue
+      @interval = interval
+      @wake = Queue.new
       @paused = false
+      @lock = Mutex.new
     end
 
     def start
-      @thread = Thread.new do
-        loop do
-          once unless @paused
-          sleep INTERVAL
-        end
-      end
+      return if @thread&.alive?
+      soon
+      @thread = Thread.new { worker }
     end
 
     def stop = @thread&.kill
 
     # Skips the poll rather than the timer, so nothing forks `claude` while
-    # another process holds the terminal.
-    def pause = @paused = true
+    # another process holds the terminal. A poll already under way finishes.
+    def pause = @lock.synchronize { @paused = true }
 
-    def resume = @paused = false
+    def resume
+      @lock.synchronize { @paused = false }
+      soon
+    end
 
-    def soon = Thread.new { once }
+    def soon = @wake << true
 
     # PR lookups and the reap sweep both happen here, on the poller, so
     # neither a slow `gh` nor a `claude rm` can stall a frame. Neither is
@@ -73,8 +78,20 @@ module ClaudeInbox
 
     private
 
-    # Hands the sessions minus `without` to the main thread; returns the
-    # list it kept.
+    # Past StandardError `once` does not catch, and a dead worker would end
+    # polling with nothing on screen to say so.
+    def worker
+      loop do
+        @wake.pop(timeout: @interval)
+        @wake.clear
+        once unless paused?
+      rescue SystemStackError, ScriptError, SecurityError => e
+        @queue << [:error, e.message]
+      end
+    end
+
+    def paused? = @lock.synchronize { @paused }
+
     def publish(sessions, without)
       live = sessions.reject { |s| without.include?(s.key) }
       @queue << [:sessions, live]
