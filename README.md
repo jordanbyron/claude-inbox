@@ -382,6 +382,5 @@ CLAUDE_INBOX_NO_REAP=1 bin/claude-inbox             # never delete an idle sessi
 bin/screens                                         # drive the fixture in a pty, print every screen
 ```
 
-`docs/architecture-review.md` records the standing design findings and which
-of them have landed. `bin/screens` is how a refactor is checked against the
-real screen: run it on `main` and on the branch and diff the two.
+`bin/screens` is how a refactor is checked against the real screen: run it on
+`main` and on the branch and diff the two.
