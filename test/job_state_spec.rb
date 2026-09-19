@@ -16,6 +16,8 @@ describe JobState do
       write_job(dir, "aaa11111",
         "state" => "working",
         "detail" => "watching CI re-run",
+        "needs" => "confirm: merge once green?",
+        "output" => {"result" => "CI re-run passed"},
         "tempo" => "idle",
         "inFlight" => {"tasks" => 1},
         "fan" => [{"kind" => "shell", "label" => "gh pr checks --watch"}],
@@ -25,6 +27,8 @@ describe JobState do
         ])
       js = JobState.read("aaa11111", jobs_dir: dir)
       _(js.detail).must_equal "watching CI re-run"
+      _(js.needs).must_equal "confirm: merge once green?"
+      _(js.result).must_equal "CI re-run passed"
       _(js.tempo).must_equal "idle"
       _(js.tasks).must_equal 1
       _(js.pr_urls).must_equal ["https://github.com/o/r/pull/7"]
@@ -70,6 +74,12 @@ describe JobState do
     stalled = JobState.new("tempo" => "idle", "inFlight" => {"tasks" => 0})
     _(stalled).wont_be :waiting_on_work?
     _(stalled.in_flight_label).must_be_nil
+  end
+
+  it "has no needs or result when the file carries neither" do
+    js = JobState.new("detail" => "thinking")
+    _(js.needs).must_be_nil
+    _(js.result).must_be_nil
   end
 
   it "reads the color /color wrote into the job file" do

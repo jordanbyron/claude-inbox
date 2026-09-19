@@ -35,4 +35,34 @@ describe ClaudeInbox::Session do
     _(s).must_be :needs_you?
     _(s.key).must_equal "u1"
   end
+
+  describe "summary" do
+    let(:job) do
+      ClaudeInbox::JobState.new("detail" => "watching CI",
+        "needs" => "confirm: merge?", "output" => {"result" => "CI green, PR #7 up"})
+    end
+
+    it "is what the session needs while blocked, what it produced once done, else its status line" do
+      _(session(state: "blocked", job_state: job).summary).must_equal "confirm: merge?"
+      _(session(state: "done", job_state: job).summary).must_equal "CI green, PR #7 up"
+      _(session(state: "working", job_state: job).summary).must_equal "watching CI"
+    end
+
+    it "falls back to the status line when the state-specific line is missing" do
+      job = ClaudeInbox::JobState.new("detail" => "watching CI")
+      _(session(state: "blocked", job_state: job).summary).must_equal "watching CI"
+      _(session(state: "done", job_state: job).summary).must_equal "watching CI"
+    end
+
+    it "is nil without a job file or before the session has said anything" do
+      _(session(job_state: nil).summary).must_be_nil
+      _(session(job_state: ClaudeInbox::JobState.new({})).summary).must_be_nil
+      _(session(job_state: ClaudeInbox::JobState.new("detail" => "  ")).summary).must_be_nil
+    end
+
+    it "flattens the line onto one row" do
+      job = ClaudeInbox::JobState.new("detail" => "step one\n  step two")
+      _(session(job_state: job).summary).must_equal "step one step two"
+    end
+  end
 end

@@ -11,7 +11,8 @@ module ClaudeInbox
   # something it started earlier — a watch shell, a sub-agent — is still open.
   # The file tells them apart: `tempo` is the agent's own pulse, `fan` names
   # each outstanding piece of work, and `detail` is the session's own status
-  # line. It also carries the PR links the daemon scanned out of the
+  # line, with `needs` naming what it is waiting on while blocked and
+  # `output.result` what it produced once done. It also carries the PR links the daemon scanned out of the
   # transcript, which PullRequests reads through here, and the color `/color`
   # set on the session, which `claude agents --json` drops.
   #
@@ -48,10 +49,12 @@ module ClaudeInbox
       nil
     end
 
-    attr_reader :detail, :tempo, :kinds, :tasks, :pr_urls, :color
+    attr_reader :detail, :needs, :result, :tempo, :kinds, :tasks, :pr_urls, :color
 
     def initialize(hash)
       @detail = hash["detail"]
+      @needs = hash["needs"]
+      @result = (hash["output"] || {})["result"]
       @tempo = hash["tempo"]
       @kinds = (hash["fan"] || []).filter_map { |f| f["kind"] }
       @tasks = (hash["inFlight"] || {})["tasks"].to_i

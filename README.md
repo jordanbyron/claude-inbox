@@ -52,6 +52,12 @@ the session's own job file, which `claude agents --json` does not expose; the
 inbox still takes the state itself from the daemon, the only thing that knows
 whether a session is alive.
 
+Under each row in Pinned, Needs You and Active is the session's own line,
+the one `claude agents` prints too: what it is waiting on while blocked
+(`↳ confirm: drop the top line?`), what it produced once done, otherwise its
+status line. It comes from the job file, like the open work above, so a
+terminal you opened yourself has none and shows its directory instead.
+
 A session you gave a color to with `/color` wears it on the label — see
 [Colors](#colors).
 
@@ -298,8 +304,8 @@ Sessions.load: AgentsClient → JobState → PullRequests  →  Poller  →  Sto
   `PullRequests` wants are the ones `JobState` read. `Session` is immutable; a
   step that adds something hands back a copy.
 - `JobState` reads `~/.claude/jobs/<id>/state.json`, the daemon's own file: the scanned
-  links `PullRequests` wants, the open work behind a `working` state, and the `/color`
-  each session carries. Never cached. `enrich` returns each background session
+  links `PullRequests` wants, the open work behind a `working` state, the session's
+  own line (`detail`, `needs`, `output.result`) and the `/color` each session carries. Never cached. `enrich` returns each background session
   with its file attached, for `Sessions.load`.
 - `PullRequests` pairs each session with the PRs its `job_state` links and keeps
   their state fresh through `gh`. `enrich` never asks gh and runs inside
@@ -376,7 +382,10 @@ Sessions.load: AgentsClient → JobState → PullRequests  →  Poller  →  Sto
   peeked or stopped from outside.
 - `~/.claude/jobs/<id>/state.json` is where the daemon keeps what the JSON
   leaves out: `children` (scanned PR and issue links), `intent`, `worktreePath`,
-  `worktreeBranch`, token count and the transcript path. `~/.claude/gh-pr-status-cache.json`
+  `worktreeBranch`, token count and the transcript path, plus the line the
+  agents view prints under a row: `detail` is the session's status line,
+  `needs` what it is waiting on while blocked, `output.result` its closing
+  summary once done. `~/.claude/gh-pr-status-cache.json`
   is keyed by PR url and calls an open draft `DRAFT`; `gh pr view` reports
   `OPEN` plus `isDraft`.
 
