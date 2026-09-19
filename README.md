@@ -276,7 +276,8 @@ stays that way.
 `~/.config/claude-inbox/state.json`, keyed by session id, atomic writes.
 Holds `wake_at`, `snoozed_at`, `alias`, `pr`, `pinned`, `pinned_at`, `settled_at`, `acknowledged_at`, `revived_at`, `last_state`, `state_since`, `last_seen`,
 and `reap_failed_at` / `reap_error` for a session `claude rm` has refused.
-Entries not seen in a poll for 7 days are pruned. Pruning only reaches entries
+`Store::Entry` is where those names live; everything else reads an entry
+through it. Entries not seen in a poll for 7 days are pruned. Pruning only reaches entries
 the daemon has *forgotten*, which is a different thing from the reaper: the
 daemon still lists sessions a month old, so those keep their entry and it is
 the 14-day reap that clears them.
@@ -296,10 +297,10 @@ AgentsClient  →  JobState  →  PullRequests  →  Poller  →  Store  →  Re
   `enrich` never asks gh; `refresh` is the slow half and runs after the list
   has gone up. `--fixture` points it at `test/fixtures/jobs` with `gh` off.
 - `Palette` maps a session color to an escape sequence and knows nothing else.
-- `Store` holds the last poll and the snooze table behind a mutex. `Store::Row` is one
-  session with its entry, and the rules are its methods.
-  `Store::Sections` is one poll sorted into sections and knows where the cursor can land:
-  the `/` filter, the fold-or-rows rule and which section a key is in live there.
+- `Store` holds the last poll and the entry table behind a mutex, and folds each poll in.
+  `Store::Entry` is what is remembered about one session, and the only place the state file's key names appear.
+  `Store::Row` is one session with its entry, and the rules are its methods.
+  `Store::Sections` is one poll sorted into sections and knows where the cursor can land: the `/` filter, the fold-or-rows rule and which section a key is in live there.
 - `Renderer` turns sections into an array of fixed-width strings. `Painter` diffs frames
   and repaints only changed rows.
 - `Reaper` runs `claude rm` over whatever `Row#reapable?` picks and appends a
