@@ -89,10 +89,8 @@ module ClaudeInbox
         if session.terminal? then session.needs_you? ? :needs_you : :active
         elsif pinned? then :pinned
         elsif snoozed?(now) then :snoozed
-        elsif !revived? && hand_settled? then :settled
         elsif !revived? && settled? then :settled # a resolved PR outranks Needs You
         elsif session.needs_you? then acknowledged? ? :active : :needs_you
-        elsif session.finished? then :active
         else :active
         end
       end
