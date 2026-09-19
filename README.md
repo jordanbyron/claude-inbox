@@ -102,8 +102,9 @@ its own history and clicking a row does nothing.
 
 The one line of chrome is the status bar at the bottom: a count per section
 (`● 1 needs you · z 1 snoozed`, shrunk to `● 1  z 1` when the terminal is
-narrow), then any notice or daemon error, then `? keys`. While you type a `:`
-command or a `/` filter, that takes over the line, as in vim.
+narrow), then any notice or daemon error, then your subscription usage if you
+have [set that up](#usage), then `? keys`. While you type a `:` command or a
+`/` filter, that takes over the line, as in vim.
 
 Bindings live in `ClaudeInbox::Keymap`, a pure resolver with chord support
 that is unit tested on its own. A fast `Esc` followed by `:` is split back
@@ -285,6 +286,38 @@ theme; `orange` and `pink` have no ansi name and go through 256-color indexes
 208 and 205. Anything else is left unpainted. Colors close with SGR 39
 (default foreground) rather than 0, so a label that is already bold or italic
 stays that way.
+
+## Usage
+
+The status bar can end with `⚡ 5h 24% · 7d 41%`: how much of the 5-hour and
+7-day rate limit windows the subscription has used. Nothing in the CLI reports
+that on demand — there is no `claude usage`, `/usage` only works inside a
+session, and `claude agents --json` says nothing about limits — but every
+session hands its [status line](https://code.claude.com/docs/en/statusline)
+script a `rate_limits` object on each turn, for Pro and Max accounts. So the
+numbers come from a file your status line script writes, and the inbox reads
+it. No polling, no API calls: with a couple of sessions running the script
+fires often enough on its own.
+
+Setting it up is two lines near the top of your status line script, right
+after it has read stdin:
+
+```bash
+input=$(cat)
+limits=$(echo "$input" | jq -c '.rate_limits // empty')
+[ -n "$limits" ] && echo "$limits" > ~/.claude/rate_limits.json.tmp && mv ~/.claude/rate_limits.json.tmp ~/.claude/rate_limits.json
+```
+
+If you have no status line yet, `/statusline` in any session will make one;
+add the lines to what it writes. The `-n` check matters: a session's first
+status line run comes before its first API response and has no `rate_limits`
+yet, and that must not blank a good file. The temp file and rename mean the
+inbox never reads half of one.
+
+Without the file the bar simply ends at `? keys`, and the same once the file
+is older than fifteen minutes, since a number no session has refreshed in
+that long is a guess. `RateLimits` is the reader; it parses the file again
+only when its mtime moves.
 
 ## State
 

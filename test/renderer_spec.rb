@@ -230,6 +230,12 @@ describe ClaudeInbox::Renderer do
     _(stuck).must_include "claude daemon status"
   end
 
+  it "puts usage before the key hint, and nothing when there is none" do
+    bar = renderer.frame(sections, width: 100, height: 10, now: now, usage: "⚡ 5h 24% · 7d 41%").lines.last
+    _(bar).must_match(/⚡ 5h 24% · 7d 41%\s+·\s+\? keys/)
+    _(renderer.frame(sections, width: 100, height: 10, now: now).lines.last).wont_include "⚡"
+  end
+
   it "shows the command line in the status bar" do
     _(frame(command: "q").lines.last).must_match(/^ :q▏\s+$/)
   end

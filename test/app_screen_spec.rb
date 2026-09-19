@@ -37,6 +37,7 @@ describe ClaudeInbox::App do
       store: store,
       pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil),
       jobs_dir: fixture_path("jobs"),
+      rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
       out: out, input: StringIO.new, color: false
     )
   end

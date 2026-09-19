@@ -55,6 +55,7 @@ module ClaudeInbox
     # opts: selected (id | :snoozed | :settled | nil), expanded ({snoozed:, settled:} => bool), top (scroll),
     #       peek (Array<String> | nil), peek_title, modal (Array<String> | nil),
     #       status (String | nil, a notice or error for the status bar's right end),
+    #       usage (String | nil, the rate-limit label before the key hint),
     #       now (Time), filter (String | nil), command,
     #       tick (Integer, drives the spinner),
     #       loading (Float seconds waited for the first poll, nil once it has landed),
@@ -117,7 +118,7 @@ module ClaudeInbox
     def status_bar(sections, width, opts)
       return command_line(width, opts) if opts[:command] || opts[:filter]
       brand = " " + @theme.cyan_bold("▌ claude-inbox")
-      right = [opts[:status] && @p.dim(opts[:status]), @theme.cyan_bold("?") + @p.dim(" keys")].compact.join(@p.dim("  ·  ")) + " "
+      right = [opts[:status] && @p.dim(opts[:status]), opts[:usage] && @p.dim(opts[:usage]), @theme.cyan_bold("?") + @p.dim(" keys")].compact.join(@p.dim("  ·  ")) + " "
       room = width - Text.width(brand) - Text.width(right) - 5
       chips = opts[:loading] ? "" : chips(sections, compact: false)
       chips = chips(sections, compact: true) if Text.width(chips) > room
