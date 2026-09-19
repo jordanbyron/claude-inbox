@@ -174,7 +174,6 @@ module ClaudeInbox
       return @notice[0] if @notice && now < @notice[1]
       return "⚠ #{@error}" if @error
       return "polling…" unless @last_poll
-      "⟳ #{Text.age(now - @last_poll)} ago"
     end
 
     def filtered(sections = @store.sections) = sections.matching(@filter&.to_s)
