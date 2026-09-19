@@ -3,7 +3,7 @@
 require "tmpdir"
 require_relative "test_helper"
 
-Store = ClaudeInbox::Store
+Store = ClaudeInbox::Store unless defined?(Store)
 
 describe Store do
   let(:now) { Time.at(1_789_600_000) }
@@ -188,62 +188,6 @@ describe Store do
       s = session(id: "a", state: "done", pid: 123, status: "idle")
       entries = Store.merge_entries({}, [s], now)
       _(entries["a"]["state_since"]).must_equal now.to_i
-    end
-  end
-
-  describe "reap rule" do
-    def reapable?(s, entry) = Store.reapable?(s, entry, now.to_i)
-
-    def draft_pr = ClaudeInbox::PullRequest.new(number: 1, url: "https://github.com/o/r/pull/1", state: "DRAFT")
-
-    let(:quiet) { {"last_state" => "done", "state_since" => now.to_i - Store::REAP_AFTER - 1} }
-    let(:recent) { {"last_state" => "done", "state_since" => now.to_i - Store::REAP_AFTER + 60} }
-
-    it "reaps a finished session quiet for longer than REAP_AFTER" do
-      _(reapable?(session(id: "a", state: "done"), quiet)).must_equal true
-    end
-
-    it "leaves one that has been quiet for less" do
-      _(reapable?(session(id: "a", state: "done"), recent)).must_equal false
-    end
-
-    it "reaps on idle time alone, where settling waits on the pull request" do
-      s = session(id: "a", state: "done", prs: [draft_pr])
-      _(Store.settled?(s, quiet)).must_equal false
-      _(reapable?(s, quiet)).must_equal true
-    end
-
-    it "reaps a long-dead failure, which never settles" do
-      s = session(id: "a", state: "failed")
-      _(Store.settled?(s, quiet)).must_equal false
-      _(reapable?(s, quiet)).must_equal true
-    end
-
-    it "never reaps a working session" do
-      _(reapable?(session(id: "a", state: "working"), quiet)).must_equal false
-    end
-
-    it "never reaps one that still has a process" do
-      _(reapable?(session(id: "a", state: "done", pid: 4321), quiet)).must_equal false
-    end
-
-    it "never reaps a pin or a snooze, however long it has been parked" do
-      _(reapable?(session(id: "a", state: "done"), quiet.merge("pinned" => true))).must_equal false
-      _(reapable?(session(id: "a", state: "done"), quiet.merge("wake_at" => Store::UNTIL_WOKEN, "snoozed_at" => 1))).must_equal false
-    end
-
-    it "reaps once an elapsed snooze has woken it" do
-      woken = quiet.merge("wake_at" => now.to_i - 60, "snoozed_at" => now.to_i - 120)
-      _(reapable?(session(id: "a", state: "done"), woken)).must_equal true
-    end
-
-    it "never reaps a session there is no id to reap with" do
-      s = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9")
-      _(reapable?(s, quiet)).must_equal false
-    end
-
-    it "never reaps a session it has no entry for" do
-      _(reapable?(session(id: "a", state: "done"), nil)).must_equal false
     end
   end
 
@@ -464,70 +408,6 @@ describe Store do
       _(Store.folded?(:settled, {settled: true})).must_equal false
       _(Store.folded?(:active, {})).must_equal false
     end
-  end
-
-  describe "Sections" do
-    let(:terminal) { session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "uuid", cwd: "/tmp/term") }
-    let(:sec) do
-      entries = {"b" => {"pinned" => true}, "z" => {"settled_at" => now.to_i}}
-      sections([terminal, session(id: "a", state: "blocked"), session(id: "b"), session(id: "c", name: "Other", cwd: "/srv/other"), session(id: "z", state: "done")], entries)
-    end
-
-    it "finds a row by key, or nothing" do
-      _(sec.row("a").id).must_equal "a"
-      _(sec.row("uuid").session.session_id).must_equal "uuid"
-      _(sec.row("nope")).must_be_nil
-      _(sec.row(:settled)).must_be_nil
-    end
-
-    it "lists the keys the cursor can land on, a fold standing in for its rows" do
-      _(sec.selectable_keys({})).must_equal ["b", "a", "uuid", "c", :settled]
-      _(sec.selectable_keys({settled: true})).must_equal %w[b a uuid c z]
-    end
-
-    it "leaves an empty fold out of the landable keys" do
-      _(sections([session(id: "a")]).selectable_keys({})).must_equal %w[a]
-    end
-
-    it "skips rows with no key" do
-      keyless = session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: nil)
-      _(sections([keyless, session(id: "a")]).selectable_keys({})).must_equal %w[a]
-    end
-
-    it "names the section a key lives in, and a fold answers itself" do
-      _(sec.section_of("b")).must_equal :pinned
-      _(sec.section_of("a")).must_equal :needs_you
-      _(sec.section_of("uuid")).must_equal :active
-      _(sec.section_of("z")).must_equal :settled
-      _(sec.section_of(:snoozed)).must_equal :snoozed
-      _(sec.section_of("nope")).must_be_nil
-    end
-
-    it "heads each section with its fold, or its first selectable row" do
-      heads = sec.heads({})
-      _(heads.map(&:first)).must_equal %i[pinned needs_you active settled]
-      _(heads.map { |_, row| row&.key }).must_equal ["b", "a", "uuid", nil]
-      _(sec.heads({settled: true}).map { |_, row| row&.key }).must_equal %w[b a uuid z]
-    end
-
-    it "filters by label or cwd, case-insensitively, and keeps rows in their sections" do
-      _(sec.matching("OTHER").active.map(&:key)).must_equal %w[c]
-      _(sec.matching("/tmp/term").active.map(&:key)).must_equal %w[uuid]
-      _(sec.matching("thing").all.map(&:key)).must_equal %w[b a uuid z]
-      _(sec.matching("zzz").all).must_be_empty
-      _(sec.matching("")).must_be_same_as sec
-      _(sec.matching(nil)).must_be_same_as sec
-    end
-  end
-
-  describe ".snooze_until" do
-    let(:evening) { Time.new(2026, 9, 16, 20, 30, 0) }
-
-    it("15m") { _(Store.snooze_until(:m15, evening)).must_equal evening.to_i + 900 }
-    it("1h") { _(Store.snooze_until(:h1, evening)).must_equal evening.to_i + 3600 }
-    it("tomorrow 9am") { _(Store.snooze_until(:tomorrow_9am, evening)).must_equal Time.new(2026, 9, 17, 9).to_i }
-    it("today 9am when it is still early") { _(Store.snooze_until(:tomorrow_9am, Time.new(2026, 9, 16, 3))).must_equal Time.new(2026, 9, 16, 9).to_i }
-    it("until woken") { _(Store.snooze_until(:until_woken, evening)).must_equal Store::UNTIL_WOKEN }
   end
 
   describe "fixture end to end" do

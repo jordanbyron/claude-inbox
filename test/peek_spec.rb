@@ -16,7 +16,7 @@ describe ClaudeInbox::Peek do
   before { @elapsed = 0 }
   after { logs.stop }
 
-  def row(**attrs) = ClaudeInbox::Store::Row.new(session: session(**attrs), entry: nil, section: :active)
+  def row(**attrs) = ClaudeInbox::Store::Row.new(session: session(**attrs), entry: nil)
 
   def pr(state) = ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: state)
 

@@ -63,7 +63,7 @@ module ClaudeInbox
 
     def row_if_due(session, now_i)
       row = @store.row(session)
-      return nil unless Store.reapable?(session, row.entry, now_i)
+      return nil unless row.reapable?(now_i)
       backing_off?(row, now_i) ? nil : row
     end
 
