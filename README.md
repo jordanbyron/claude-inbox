@@ -281,6 +281,38 @@ theme; `orange` and `pink` have no ansi name and go through 256-color indexes
 (default foreground) rather than 0, so a label that is already bold or italic
 stays that way.
 
+## Usage
+
+The header can end with `⚡ 5h 24% · 7d 41%`: how much of the 5-hour and
+7-day rate limit windows the subscription has used. Nothing in the CLI reports
+that on demand — there is no `claude usage`, `/usage` only works inside a
+session, and `claude agents --json` says nothing about limits — but every
+session hands its [status line](https://code.claude.com/docs/en/statusline)
+script a `rate_limits` object on each turn, for Pro and Max accounts. So the
+numbers come from a file your status line script writes, and the inbox reads
+it. No polling, no API calls: with a couple of sessions running the script
+fires often enough on its own.
+
+Setting it up is two lines near the top of your status line script, right
+after it has read stdin:
+
+```bash
+input=$(cat)
+limits=$(echo "$input" | jq -c '.rate_limits // empty')
+[ -n "$limits" ] && echo "$limits" > ~/.claude/rate_limits.json.tmp && mv ~/.claude/rate_limits.json.tmp ~/.claude/rate_limits.json
+```
+
+If you have no status line yet, `/statusline` in any session will make one;
+add the lines to what it writes. The `-n` check matters: a session's first
+status line run comes before its first API response and has no `rate_limits`
+yet, and that must not blank a good file. The temp file and rename mean the
+inbox never reads half of one.
+
+Without the file the header ends as it always has, and the same once the
+file is older than fifteen minutes, since a number no session has refreshed
+in that long is a guess. `RateLimits` is the reader; it parses the file again
+only when its mtime moves.
+
 ## State
 
 `~/.config/claude-inbox/state.json`, keyed by session id, atomic writes.
@@ -313,6 +345,7 @@ Sessions.load: AgentsClient → JobState → PullRequests  →  Poller  →  Sto
   `Sessions.load`; `refresh` is the slow half and runs after the list has gone
   up. `--fixture` points it at `test/fixtures/jobs` with `gh` off.
 - `Palette` maps a session color to an escape sequence and knows nothing else.
+- `RateLimits` reads `~/.claude/rate_limits.json`, which only a status line script writes, into the header's usage label; nil without it.
 - `Store` holds the last poll and the entry table behind a mutex, and folds each poll in.
   A key it was told to `hide` or `forget` stays out of every poll until it is released or the daemon stops listing it.
   `Store::Entry` is what is remembered about one session, and the only place the state file's key names appear.

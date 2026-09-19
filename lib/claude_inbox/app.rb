@@ -16,6 +16,7 @@ require_relative "new_session_form"
 require_relative "paste"
 require_relative "pull_requests"
 require_relative "poller"
+require_relative "rate_limits"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
@@ -25,9 +26,10 @@ module ClaudeInbox
     # session, so switching it on is `bin/claude-inbox`'s job and nothing
     # reaches it by forgetting an argument.
     def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new, jobs_dir: JobState::DEFAULT_DIR,
-      reaper: Reaper.disabled, out: $stdout, input: $stdin, color: true)
+      rate_limits: RateLimits.new, reaper: Reaper.disabled, out: $stdout, input: $stdin, color: true)
       @client = client
       @store = store
+      @rate_limits = rate_limits
       @terminal = Terminal.new(out, input)
       @color = color
       @renderer = Renderer.new(color: color)
@@ -147,7 +149,7 @@ module ClaudeInbox
         sections, width: width, height: height, now: now,
         selected: @selected&.key, top: @top, expanded: @expanded,
         peek: peek&.lines, peek_title: peek&.title, peek_subtitle: peek&.subtitle,
-        modal: modal_lines(width), screen: screen_lines(width, height), status: status_text(now),
+        modal: modal_lines(width), screen: screen_lines(width, height), status: status_text(now), usage: @rate_limits.label(now),
         filter: @filter, filter_editing: @filter_editing, command: @command, tick: @tick / 2,
         loading: loading_for
       )
