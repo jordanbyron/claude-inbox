@@ -5,9 +5,10 @@ require_relative "records"
 module ClaudeInbox
   # Snapshot of the last poll plus the per-session snooze table.
   #
-  # All triage rules live in the pure class methods `merge_entries` and
-  # `sectionize`; the instance is a thin mutex-guarded holder around them
-  # with a JSON file behind it.
+  # The triage rules themselves are on `Store::Row`. What lives here as pure
+  # class methods is what runs over the whole table: `merge_entries` folds a
+  # poll into it and `sectionize` sorts the Rows into `Sections`. The instance
+  # is a thin mutex-guarded holder around them with a JSON file behind it.
   class Store
     PRUNE_AFTER = 7 * 24 * 3600 # forget entries not seen in a poll for this long
     REAP_AFTER = 14 * 24 * 3600 # seconds idle before a session is deleted outright
@@ -75,8 +76,10 @@ module ClaudeInbox
       end
     end
 
-    # A session paired with its store entry and computed presentation bits.
-    Row = Struct.new(:session, :entry, :section) do
+    # A session paired with its store entry: the value the triage rules are
+    # written on. A Row is pure; every rule that needs the clock takes `now`,
+    # so the same Row answers the same way in a spec and in a poll.
+    Row = Struct.new(:session, :entry) do
       def id = session.id
 
       def alias_name = entry && entry["alias"]
@@ -91,6 +94,8 @@ module ClaudeInbox
 
       def pinned_at = entry && entry["pinned_at"]
 
+      def pinned? = entry && entry["pinned"]
+
       # When `claude rm` last refused this session, so the Reaper backs off.
       def reap_failed_at = entry && entry["reap_failed_at"]
 
@@ -103,9 +108,103 @@ module ClaudeInbox
         q = query.downcase
         label.downcase.include?(q) || session.cwd.to_s.downcase.include?(q)
       end
+
+      # ----- rules ----------------------------------------------------------
+
+      # Wake rule: a snoozed session comes back when the timer ran out or when
+      # it *becomes* blocked/failed after being snoozed. A session that was
+      # already blocked when you snoozed it stays snoozed — that is the point.
+      def woken?(now)
+        return false if wake_at.nil?
+        return true if session.needs_you? && entry["state_since"].to_i > entry["snoozed_at"].to_i
+        return false if wake_at == UNTIL_WOKEN
+        wake_at.to_i <= now.to_i
+      end
+
+      def snoozed?(now) = wake_at && !woken?(now)
+
+      # Hand-settle rule: `x` parks a row in Settled whatever the clock says. It
+      # comes back when the session changes state afterwards and is not merely
+      # finishing: working again, blocked, or failed. Finishing keeps it parked.
+      def hand_settled?
+        return false unless entry && entry["settled_at"]
+        session.finished? || entry["state_since"].to_i <= entry["settled_at"].to_i
+      end
+
+      # Acknowledge rule: attaching to a session marks its current state seen, so
+      # it drops out of Needs You without being archived to Settled. It comes
+      # back the moment the state changes again — same "state_since" test as
+      # hand-settle, just routed to Active instead of Settled.
+      def acknowledged?
+        entry && entry["acknowledged_at"] && entry["state_since"].to_i <= entry["acknowledged_at"].to_i
+      end
+
+      # Revive rule: `u` forces a settled row back to wherever its raw state
+      # puts it, overriding hand-settle and the resolved-PR rule alike. Same
+      # "state_since" test as the other two, so it holds until the state
+      # actually changes again rather than just for the next poll.
+      def revived?
+        entry && entry["revived_at"] && entry["state_since"].to_i <= entry["revived_at"].to_i
+      end
+
+      # Settle rule: hand-settled (`x`), or every pull request resolved. That
+      # holds however the session ended its turn, not just when it ran to
+      # `done` — opening a PR and asking "anything need changing?" leaves it
+      # `blocked`, and merging the PR answers the question, so the row has
+      # nothing left to say. A PR whose state nobody knows yet (no gh, offline)
+      # is ignored. A session with no pull request at all never settles on its
+      # own; only `x` parks it.
+      #
+      # `working` and `failed` never settle this way: `working` is still going,
+      # and `failed` is a failure you should see even if the PR it had already
+      # opened went on to land.
+      def settled?
+        return true if hand_settled?
+        return false if UNSETTLEABLE.include?(session.effective_state)
+        known = session.prs.select(&:known?)
+        known.any? && known.all?(&:resolved?)
+      end
+
+      # Reap rule: a background session quiet for REAP_AFTER goes to `claude
+      # rm`, which takes its transcript and its worktree with it.
+      #
+      # Not keyed on the Settled section, on purpose. Settling answers "should I
+      # still be looking at this?", and the PR rule holds a row in Active for as
+      # long as a pull request stays open — so an abandoned draft parks a session
+      # there for ever, and the deadest rows in the list are precisely the ones
+      # Settled never reaches. Idle time is the only clock here.
+      #
+      # Three things veto a reap, each an explicit "keep this": a pin, a snooze,
+      # and a live process. An interactive session has no id, so there is nothing
+      # to reap it with. A session with no entry is spared too: merge_entries
+      # writes one on the same poll, seeding `state_since` from `started_at`, so
+      # it comes back round in seconds with an idle time worth trusting instead
+      # of being reaped on a guess.
+      def reapable?(now)
+        return false unless session.actionable?
+        return false if session.alive?
+        return false if UNREAPABLE.include?(session.effective_state)
+        return false if entry.nil? || pinned? || snoozed?(now)
+        !state_since.nil? && now.to_i - state_since.to_i > REAP_AFTER
+      end
+
+      # Which section the row belongs in. Sitting in the terminal outranks
+      # everything: never settle or hide a session you are in. Then a pin
+      # parks the row at the top regardless of its state.
+      def section(now)
+        if session.terminal? then session.needs_you? ? :needs_you : :active
+        elsif pinned? then :pinned
+        elsif snoozed?(now) then :snoozed
+        elsif !revived? && hand_settled? then :settled
+        elsif !revived? && settled? then :settled # a resolved PR outranks Needs You
+        elsif session.needs_you? then acknowledged? ? :active : :needs_you
+        elsif session.finished? then :active
+        else :active
+        end
+      end
     end
 
-    # ----- pure rules -------------------------------------------------------
+    # ----- pure functions over sessions and entries ------------------------
 
     # Fold a fresh poll into the entry table. Returns a new table.
     #   * bumps `state_since` only when `state` actually changed
@@ -127,11 +226,12 @@ module ClaudeInbox
           e["state_since"] = now_i
         end
         e["last_seen"] = now_i
-        e.delete("wake_at") if woken?(s, e, now_i)
+        row = Row.new(session: s, entry: e)
+        e.delete("wake_at") if row.woken?(now_i)
         e.delete("snoozed_at") unless e["wake_at"]
-        e.delete("settled_at") if e["settled_at"] && !hand_settled?(s, e)
-        e.delete("acknowledged_at") if e["acknowledged_at"] && !acknowledged?(s, e)
-        e.delete("revived_at") if e["revived_at"] && !revived?(s, e)
+        e.delete("settled_at") if e["settled_at"] && !row.hand_settled?
+        e.delete("acknowledged_at") if e["acknowledged_at"] && !row.acknowledged?
+        e.delete("revived_at") if e["revived_at"] && !row.revived?
       end
       out
     end
@@ -148,108 +248,14 @@ module ClaudeInbox
       end
     end
 
-    # Wake rule: a snoozed session comes back when the timer ran out or when
-    # it *becomes* blocked/failed after being snoozed. A session that was
-    # already blocked when you snoozed it stays snoozed — that is the point.
-    def self.woken?(session, entry, now_i)
-      wake_at = entry["wake_at"]
-      return false if wake_at.nil?
-      return true if session.needs_you? && entry["state_since"].to_i > entry["snoozed_at"].to_i
-      return false if wake_at == UNTIL_WOKEN
-      wake_at.to_i <= now_i
-    end
-
-    def self.snoozed?(session, entry, now_i)
-      entry && entry["wake_at"] && !woken?(session, entry, now_i)
-    end
-
-    # Hand-settle rule: `x` parks a row in Settled whatever the clock says. It
-    # comes back when the session changes state afterwards and is not merely
-    # finishing: working again, blocked, or failed. Finishing keeps it parked.
-    def self.hand_settled?(session, entry)
-      return false unless entry && entry["settled_at"]
-      session.finished? || entry["state_since"].to_i <= entry["settled_at"].to_i
-    end
-
-    # Acknowledge rule: attaching to a session marks its current state seen, so
-    # it drops out of Needs You without being archived to Settled. It comes
-    # back the moment the state changes again — same "state_since" test as
-    # hand-settle, just routed to Active instead of Settled.
-    def self.acknowledged?(session, entry)
-      entry && entry["acknowledged_at"] && entry["state_since"].to_i <= entry["acknowledged_at"].to_i
-    end
-
-    # Revive rule: `u` forces a settled row back to wherever its raw state
-    # puts it, overriding hand-settle and the resolved-PR rule alike. Same
-    # "state_since" test as the other two, so it holds until the state
-    # actually changes again rather than just for the next poll.
-    def self.revived?(session, entry)
-      entry && entry["revived_at"] && entry["state_since"].to_i <= entry["revived_at"].to_i
-    end
-
-    # Settle rule: hand-settled (`x`), or every pull request resolved. That
-    # holds however the session ended its turn, not just when it ran to
-    # `done` — opening a PR and asking "anything need changing?" leaves it
-    # `blocked`, and merging the PR answers the question, so the row has
-    # nothing left to say. A PR whose state nobody knows yet (no gh, offline)
-    # is ignored. A session with no pull request at all never settles on its
-    # own; only `x` parks it.
-    #
-    # `working` and `failed` never settle this way: `working` is still going,
-    # and `failed` is a failure you should see even if the PR it had already
-    # opened went on to land.
-    def self.settled?(session, entry)
-      return true if hand_settled?(session, entry)
-      return false if UNSETTLEABLE.include?(session.effective_state)
-      known = session.prs.select(&:known?)
-      known.any? && known.all?(&:resolved?)
-    end
-
-    # Reap rule: a background session quiet for REAP_AFTER goes to `claude
-    # rm`, which takes its transcript and its worktree with it.
-    #
-    # Not keyed on the Settled section, on purpose. Settling answers "should I
-    # still be looking at this?", and the PR rule holds a row in Active for as
-    # long as a pull request stays open — so an abandoned draft parks a session
-    # there for ever, and the deadest rows in the list are precisely the ones
-    # Settled never reaches. Idle time is the only clock here.
-    #
-    # Three things veto a reap, each an explicit "keep this": a pin, a snooze,
-    # and a live process. An interactive session has no id, so there is nothing
-    # to reap it with. A session with no entry is spared too: merge_entries
-    # writes one on the same poll, seeding `state_since` from `started_at`, so
-    # it comes back round in seconds with an idle time worth trusting instead
-    # of being reaped on a guess.
-    def self.reapable?(session, entry, now_i)
-      return false unless session.actionable?
-      return false if session.alive?
-      return false if UNREAPABLE.include?(session.effective_state)
-      return false if entry.nil? || entry["pinned"] || snoozed?(session, entry, now_i)
-      since = entry["state_since"]
-      !since.nil? && now_i - since.to_i > REAP_AFTER
-    end
-
-    # (sessions, entries, now) -> Sections of Rows. Interactive sessions land in
-    # Active (they're live) but are never selectable. A pin overrides every
-    # other rule except the "you're sitting in this terminal" one, so a pinned
-    # session always parks at the top regardless of its state.
+    # (sessions, entries, now) -> Sections of Rows, each placed by
+    # `Row#section`. Interactive sessions land in Active (they're live) but
+    # are never selectable.
     def self.sectionize(sessions, entries, now)
-      now_i = now.to_i
       sec = Sections.new(pinned: [], needs_you: [], active: [], snoozed: [], settled: [])
       sessions.each do |s|
-        e = s.key && entries[s.key]
-        revived = revived?(s, e)
-        section =
-          if s.terminal? then s.needs_you? ? :needs_you : :active # you're in it; never settle or hide it
-          elsif e && e["pinned"] then :pinned
-          elsif snoozed?(s, e, now_i) then :snoozed
-          elsif !revived && hand_settled?(s, e) then :settled
-          elsif !revived && settled?(s, e) then :settled # a resolved PR outranks Needs You
-          elsif s.needs_you? then acknowledged?(s, e) ? :active : :needs_you
-          elsif s.finished? then :active
-          else :active
-          end
-        sec[section] << Row.new(session: s, entry: e, section: section)
+        row = Row.new(session: s, entry: s.key && entries[s.key])
+        sec[row.section(now)] << row
       end
       sec.pinned.sort_by! { |r| -(r.pinned_at || 0) }
       sec.needs_you.sort_by! { |r| -(r.state_since || 0) }
@@ -384,7 +390,7 @@ module ClaudeInbox
 
     # Pairs a session with its entry for the rules and the Reaper, which read
     # it through the Row's accessors rather than by key.
-    def row(session) = Row.new(session: session, entry: session.key && entry(session.key), section: nil)
+    def row(session) = Row.new(session: session, entry: session.key && entry(session.key))
 
     # The raw entry, for the specs. Nothing in lib/ reads it: callers go
     # through a Row or the readers above, so the key names stay in this file.

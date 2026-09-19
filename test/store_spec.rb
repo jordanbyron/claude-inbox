@@ -192,7 +192,9 @@ describe Store do
   end
 
   describe "reap rule" do
-    def reapable?(s, entry) = Store.reapable?(s, entry, now.to_i)
+    def row(s, entry) = Store::Row.new(session: s, entry: entry)
+
+    def reapable?(s, entry) = row(s, entry).reapable?(now.to_i)
 
     def draft_pr = ClaudeInbox::PullRequest.new(number: 1, url: "https://github.com/o/r/pull/1", state: "DRAFT")
 
@@ -209,13 +211,13 @@ describe Store do
 
     it "reaps on idle time alone, where settling waits on the pull request" do
       s = session(id: "a", state: "done", prs: [draft_pr])
-      _(Store.settled?(s, quiet)).must_equal false
+      _(row(s, quiet).settled?).must_equal false
       _(reapable?(s, quiet)).must_equal true
     end
 
     it "reaps a long-dead failure, which never settles" do
       s = session(id: "a", state: "failed")
-      _(Store.settled?(s, quiet)).must_equal false
+      _(row(s, quiet).settled?).must_equal false
       _(reapable?(s, quiet)).must_equal true
     end
 

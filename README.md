@@ -168,8 +168,8 @@ client and returns directly with no trick needed.
 
 ## Rules
 
-All four rules are pure functions in `ClaudeInbox::Store` and are the only
-place triage logic lives.
+All four rules are pure methods on `ClaudeInbox::Store::Row`, a session paired
+with its entry, and are the only place triage logic lives.
 
 **Wake.** A snoozed session returns when its timer elapses, when you press `u`,
 or when it *becomes* blocked or failed after being snoozed. A session that was
@@ -296,12 +296,13 @@ AgentsClient  →  JobState  →  PullRequests  →  Poller  →  Store  →  Re
   `enrich` never asks gh; `refresh` is the slow half and runs after the list
   has gone up. `--fixture` points it at `test/fixtures/jobs` with `gh` off.
 - `Palette` maps a session color to an escape sequence and knows nothing else.
-- `Store` holds the last poll and the snooze table behind a mutex; rules are class methods.
+- `Store` holds the last poll and the snooze table behind a mutex. `Store::Row` is one
+  session with its entry, and the rules are its methods.
   `Store::Sections` is one poll sorted into sections and knows where the cursor can land:
   the `/` filter, the fold-or-rows rule and which section a key is in live there.
 - `Renderer` turns sections into an array of fixed-width strings. `Painter` diffs frames
   and repaints only changed rows.
-- `Reaper` runs `claude rm` over whatever `Store.reapable?` picks and appends a
+- `Reaper` runs `claude rm` over whatever `Row#reapable?` picks and appends a
   line to the log for each one. `due` names them without touching anything;
   `sweep` does the deleting. Both run on the poller, and the list goes up
   between them, so a slow `rm` stalls neither a frame nor the first one.
