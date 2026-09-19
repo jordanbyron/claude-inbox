@@ -341,6 +341,54 @@ Sessions.load: AgentsClient → JobState → PullRequests  →  Poller  →  Sto
   wheel ticks into `Event`s; `App` maps a click's row back to whatever
   `Renderer` painted there.
 
+## Bubble Tea screen (experimental)
+
+`bin/claude-inbox-tea` is the same inbox with the screen written in Go on
+[Bubble Tea](https://github.com/charmbracelet/bubbletea) instead of the Ruby
+`App`/`Renderer`/`Terminal` stack. It takes the same arguments (`--fixture`,
+`--no-color`) and needs Go 1.25 on `PATH`; the first run builds `ui/` into
+`ui/.build/` and later runs rebuild only when a `.go` file changed.
+
+```
+Sessions.load → Poller → Store → Server (JSON lines over a pipe) → ui/ (Bubble Tea)
+                                  bin/claude-inbox-server              bin/claude-inbox-tea
+```
+
+Nothing below the terminal moved. `Server` runs the same `Poller`, `Store`,
+`Logs` and `Reaper` that `App` runs and speaks to the screen over stdin and
+stdout, one JSON object per line. After every poll and every edit it sends
+`sections`: the five sections, each row already placed by the Store's rules,
+with the facts the screen needs (label, state, badge details, PR, color, ages)
+and none of the styling. The other events are `polled`, `error`, `notice`,
+`peek` (the `claude logs` lines for a session), `spawned`, and the two answers
+the new-session form asks for, `defaults` and `commands`. Commands go the
+other way as `{"cmd": "snooze", "id": …, "choice": "h1"}` and so on: the store
+edits (`snooze`, `wake`, `toggle_pin`, `settle`, `acknowledge`, `set_alias`,
+`set_pr`), the daemon calls (`stop`, `rm`, `spawn`), and `refresh`, `pause`,
+`resume`, `peek`, `defaults`, `commands`, `quit`. Every command answers with
+the sections it left behind, so the screen redraws from one message.
+
+Attach is the one thing that cannot travel over the pipe. The screen sends
+`acknowledge` and `pause`, runs `bin/claude-inbox-server attach <id>` on the
+tty through `tea.ExecProcess`, and sends `resume` when it returns. That
+subcommand uses `AgentsClient#attach`, so the watchdog that keeps `←` from
+landing in the native agents view is unchanged.
+
+What the Go side decides for itself is only what the Ruby `App` decides too:
+the selection, the `/` filter, which folds are open, the peek scroll, and the
+dialogs. `ui/sections.go` mirrors `Store::Sections` (selectable keys, section
+heads, the filter) and `ui/keymap.go` mirrors `Keymap::BINDINGS`, chords
+included, so the key table above holds; `?` adds a key reference. The rules
+themselves are never duplicated: a row is where the Store put it.
+
+Not ported yet: pasting or dropping an image into the prompt (`Images`,
+`Paste`), and the wheel-as-arrows fallback for terminals without mouse
+reporting (Bubble Tea's own mouse mode covers clicks and the wheel where the
+terminal reports them).
+
+`CLAUDE_INBOX_BIN=bin/claude-inbox-tea bin/screens` drives it through the same
+key script as the Ruby screen, so the two can be diffed frame for frame.
+
 ## Things learned from the real CLI (2.1.273)
 
 - Terminal.app puts the tty's active process in the tab title, so a poller that
@@ -391,7 +439,10 @@ CLAUDE_INBOX_STDERR=/tmp/err.log bin/claude-inbox   # crash traces off the alt s
 DEBUG=1 bin/claude-inbox                            # slow-frame notes in /tmp/inbox-debug.log
 CLAUDE_INBOX_NO_REAP=1 bin/claude-inbox             # never delete an idle session
 bin/screens                                         # drive the fixture in a pty, print every screen
+bin/claude-inbox-tea --fixture test/fixtures/agents.json   # the Bubble Tea screen (needs go)
+cd ui && go test ./...                              # its tests; bin/ci runs them too
 ```
 
 `bin/screens` is how a refactor is checked against the real screen: run it on
-`main` and on the branch and diff the two.
+`main` and on the branch and diff the two. `CLAUDE_INBOX_BIN` points it at
+another binary, such as `bin/claude-inbox-tea`.

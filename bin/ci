@@ -94,6 +94,12 @@ CI.run do
 
   step "Tests: minitest", "bundle", "exec", "rake", "test"
 
+  Dir.chdir("ui") do
+    step "Style: Go", "sh", "-c", "test -z \"$(gofmt -l .)\""
+    step "Lint: Go vet", "go", "vet", "./..."
+    step "Tests: Go UI", "go", "test", "./..."
+  end
+
   head_is_pushed = system("git merge-base --is-ancestor HEAD @{push}", out: File::NULL, err: File::NULL)
 
   if !success?

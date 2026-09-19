@@ -1,0 +1,10 @@
+#!/bin/sh
+# Builds the Bubble Tea screen on first run (and whenever ui/ changes) and
+# runs it against the Ruby backend. Same arguments as bin/claude-inbox.
+set -e
+root="$(cd "$(dirname "$(readlink "$0" || echo "$0")")/.." && pwd)"
+bin="$root/ui/.build/claude-inbox-tea"
+if [ ! -x "$bin" ] || [ -n "$(find "$root/ui" -name '*.go' -newer "$bin" 2>/dev/null)" ]; then
+  (cd "$root/ui" && go build -o "$bin" .)
+fi
+CLAUDE_INBOX_ROOT="$root" exec "$bin" "$@"
