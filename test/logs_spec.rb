@@ -20,7 +20,10 @@ describe ClaudeInbox::Logs do
   let(:logs) { ClaudeInbox::Logs.new(client, clock: clock) }
   let(:lines) { (1..10).map { |i| "line #{i}" } }
 
-  before { @elapsed = 0 }
+  before do
+    @elapsed = 0
+    logs.start
+  end
   after { logs.stop }
 
   def settled_asked = (sleep 0.05

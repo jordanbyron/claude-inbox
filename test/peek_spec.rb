@@ -12,7 +12,10 @@ describe ClaudeInbox::Peek do
   let(:logs) { ClaudeInbox::Logs.new(client, clock: clock) }
   let(:peek) { ClaudeInbox::Peek.new(logs) }
 
-  before { @elapsed = 0 }
+  before do
+    @elapsed = 0
+    logs.start
+  end
   after { logs.stop }
 
   def row(**attrs) = ClaudeInbox::Store::Row.new(session: session(**attrs), entry: nil)

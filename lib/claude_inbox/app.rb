@@ -26,17 +26,20 @@ module ClaudeInbox
     # session, so switching it on is `bin/claude-inbox`'s job and nothing
     # reaches it by forgetting an argument.
     def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new, jobs_dir: JobState::DEFAULT_DIR,
-      rate_limits: RateLimits.new, reaper: Reaper.disabled, out: $stdout, input: $stdin, color: true)
+      rate_limits: RateLimits.new, reaper: Reaper.disabled, out: $stdout, input: $stdin, color: true,
+      terminal: Terminal.new(out, input))
       @client = client
       @store = store
       @rate_limits = rate_limits
-      @terminal = Terminal.new(out, input)
+      @terminal = terminal
       @color = color
       @renderer = Renderer.new(color: color)
       @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
       @queue = Queue.new
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests, jobs_dir: jobs_dir,
         reaper: reaper, queue: @queue)
+      @logs = Logs.new(client)
+      @peek = Peek.new(@logs)
       @selected = nil
       @row_items = []
       @list_width = nil
@@ -57,13 +60,23 @@ module ClaudeInbox
       install_traps
       @terminal.enter
       @poller.start
-      @logs = Logs.new(@client)
-      @peek = Peek.new(@logs)
+      @logs.start
       main_loop
     ensure
       @poller.stop
-      @logs&.stop
+      @logs.stop
       @terminal.restore
+    end
+
+    def step(input = nil)
+      drain_queue
+      @logs.tick
+      if @resize
+        @resize = false
+        @terminal.resized
+      end
+      render
+      handle_input(input) if input
     end
 
     private
@@ -107,17 +120,7 @@ module ClaudeInbox
     # ----- main loop --------------------------------------------------------
 
     def main_loop
-      until @quit
-        drain_queue
-        @logs.tick
-        if @resize
-          @resize = false
-          @terminal.resized
-        end
-        render
-        key = @reader.read_keypress(echo: false, raw: false, nonblock: true)
-        handle_input(key) if key
-      end
+      step(@reader.read_keypress(echo: false, raw: false, nonblock: true)) until @quit
     end
 
     def handle_input(raw)
