@@ -6,11 +6,8 @@ require_relative "store/row"
 require_relative "store/sections"
 
 module ClaudeInbox
-  # Snapshot of the last poll plus the per-session entry table, behind a
-  # mutex with a JSON file underneath. The values do the thinking: an
-  # `Entry` is what is remembered about one session, a `Row` pairs it with
-  # the session and carries the triage rules, and `Sections` is one poll
-  # sorted into sections. What is left here runs over the whole table.
+  # The last poll and the per-session entry table, behind a mutex, with
+  # state.json underneath.
   class Store
     PRUNE_AFTER = 7 * 24 * 3600 # forget entries not seen in a poll for this long
     REAP_AFTER = 14 * 24 * 3600 # seconds idle before a session is deleted outright
@@ -28,8 +25,6 @@ module ClaudeInbox
     # App and Renderer must agree on this, or j/k lands on rows the frame never painted.
     def self.folded?(name, expanded) = FOLDABLE_SECTIONS.include?(name) && !expanded[name]
 
-    # Fold a fresh poll into the entry table: prune what the daemon has
-    # forgotten, then let each session's Entry observe it. Returns a new table.
     def self.merge_entries(entries, sessions, now)
       out = entries.reject { |_, e| Entry.new(e).stale?(now) }.transform_values(&:dup)
       sessions.each do |s|
@@ -39,9 +34,6 @@ module ClaudeInbox
       out
     end
 
-    # (sessions, entries, now) -> Sections of Rows, each placed by
-    # `Row#section`. Interactive sessions land in Active (they're live) but
-    # are never selectable.
     def self.sectionize(sessions, entries, now)
       sec = Sections.new(pinned: [], needs_you: [], active: [], snoozed: [], settled: [])
       sessions.each do |s|
@@ -70,8 +62,7 @@ module ClaudeInbox
     end
 
     # A forgotten key still in the list is dropped: `claude rm` has returned
-    # but the daemon lists the session for a poll or two more. Once the list
-    # stops naming it the tombstone goes, since a short id is never reissued.
+    # but the daemon lists it for a poll or two more. Absent, it is released.
     def update(sessions)
       @mutex.synchronize do
         @forgotten &= sessions.map(&:key)
@@ -109,23 +100,17 @@ module ClaudeInbox
     # The hand-set link, if any; nil means the scanned links are in force.
     def pr_for(id) = @mutex.synchronize { @entries[id] && Entry.new(@entries[id]).pr }
 
-    # session key => url, for PullRequests#enrich.
     def pr_overrides
       @mutex.synchronize { @entries.transform_values { |e| Entry.new(e).pr }.select { |_, url| url } }
     end
 
-    # Pairs a session with its entry for the rules and the Reaper, which read
-    # it through the Row's accessors rather than by key.
     def row(session) = Row.new(session: session, entry: session.key && entry(session.key)&.then { |e| Entry.new(e) })
 
-    # The raw hash, for the specs. Nothing in lib/ reads it: callers go
-    # through a Row or the readers above.
+    # The raw hash, for the specs; nothing in lib/ reads it.
     def entry(id) = @mutex.synchronize { @entries[id]&.dup }
 
-    # Forgets a session at once instead of waiting out PRUNE_AFTER, for one
-    # just handed to `claude rm`, and keeps it hidden until `update` sees the
-    # daemon has dropped it too. The tombstone lives in memory only: the gap
-    # it bridges is seconds long, and the next update closes it.
+    # Hides a session `claude rm` has taken until `update` sees the daemon has
+    # dropped it too. Memory only: the gap it bridges is seconds long.
     def forget(id)
       @mutex.synchronize do
         @forgotten << id

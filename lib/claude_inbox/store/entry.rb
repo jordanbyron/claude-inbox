@@ -2,23 +2,15 @@
 
 module ClaudeInbox
   class Store
-    # What the inbox remembers about one session between polls: the snooze,
-    # the pin, the hand-settle, the alias, and when the daemon's state last
-    # changed. It wraps the hash that state.json holds, and it is the only
-    # place the key names appear; everything else reads it through a method.
-    #
-    # The mutators edit the hash in place, because `Store#edit` yields an
-    # Entry over the table's own hash and saves the table afterwards.
+    # What the inbox remembers about one session between polls, over the hash
+    # state.json holds; the key names appear nowhere else. Mutators edit that
+    # hash in place, since `Store#edit` yields it from the table and saves.
     class Entry
-      # For a key edited before any poll has seen it, such as `s` on a row
-      # that only just appeared.
+      # For a key edited before any poll has seen it (`s` on a row that only just appeared).
       def self.blank(now) = new("state_since" => now.to_i)
 
-      # A session the table has no entry for yet. A session we have never seen
-      # that is already finished and whose process the supervisor has reaped
-      # (no pid) has been quiet since it finished, not since this poll, so its
-      # state_since is seeded from started_at and REAP_AFTER's idle clock is
-      # accurate from the start instead of running from "now".
+      # A finished session with no process has been quiet since it finished,
+      # not since this poll, so its idle clock starts from `started_at`.
       def self.first_seen(session, now)
         since = (session.finished? && !session.alive? && session.started_at) ? session.started_at.to_i : now.to_i
         new("last_state" => session.effective_state, "state_since" => since)
@@ -28,7 +20,6 @@ module ClaudeInbox
         (hash ? new(hash) : first_seen(session, now)).observe(session, now)
       end
 
-      # Snooze targets, evaluated at `now`. Returns epoch seconds or UNTIL_WOKEN.
       def self.snooze_until(choice, now)
         case choice
         when :m15 then now.to_i + 15 * 60
@@ -103,8 +94,7 @@ module ClaudeInbox
         @h["snoozed_at"] = now.to_i
       end
 
-      # Also lifts a hand-settle, and forces back any row settled by the PR
-      # rule too, so `u` undoes `x` and `s` and a resolved PR alike.
+      # Also lifts a hand-settle and a PR settle, so `u` undoes `x` and a resolved PR alike.
       def wake(now)
         @h.delete("wake_at")
         @h.delete("snoozed_at")
@@ -112,9 +102,8 @@ module ClaudeInbox
         @h["revived_at"] = now.to_i
       end
 
-      # Also lifts a prior revive, so `x` after `u` takes hold again even
-      # without a state change in between: otherwise revived_at would still
-      # outrank the fresh settle in `Row#section`.
+      # Also lifts a prior revive: otherwise revived_at would still outrank
+      # the fresh settle in `Row#section` and `x` after `u` would do nothing.
       def settle(now)
         @h["settled_at"] = now.to_i
         @h.delete("wake_at")
@@ -140,14 +129,12 @@ module ClaudeInbox
         name.to_s.empty? ? @h.delete("alias") : @h["alias"] = name
       end
 
-      # Empty clears it and the scanned links show again.
       def pr=(url)
         url.to_s.empty? ? @h.delete("pr") : @h["pr"] = url
       end
 
-      # Records a reap that `claude rm` refused, so the Reaper backs off instead
-      # of shelling out every four seconds for ever at a session whose worktree
-      # is never going to let go of its unpushed commits.
+      # So the Reaper backs off instead of shelling out every poll at a
+      # worktree that is never going to let go of its unpushed commits.
       def mark_reap_failed(now, message)
         @h["reap_failed_at"] = now.to_i
         @h["reap_error"] = message.to_s.lines.first&.strip
