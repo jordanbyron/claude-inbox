@@ -15,6 +15,12 @@ module Fixtures
 
   def fixture_sessions = ClaudeInbox::FixtureClient.new(fixture_path("agents.json")).list
 
+  def wait_for(timeout: 2)
+    deadline = Time.now + timeout
+    sleep 0.01 while !yield && Time.now < deadline
+    yield
+  end
+
   def session(**attrs)
     ClaudeInbox::Session.new(
       id: "abc12345", cwd: "/tmp/proj", kind: "background",

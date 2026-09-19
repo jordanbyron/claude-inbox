@@ -5,12 +5,11 @@ require_relative "../lib/claude_inbox/logs"
 require_relative "../lib/claude_inbox/peek"
 
 describe ClaudeInbox::Peek do
-  let(:queue) { Queue.new }
   let(:replay) { (1..10).map { |i| "line #{i}" }.join("\r\n") }
   let(:client) { ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), logs: replay) }
   let(:now) { Time.at(1_789_400_000) }
   let(:clock) { -> { now + @elapsed } }
-  let(:logs) { ClaudeInbox::Logs.new(client, queue, clock: clock) }
+  let(:logs) { ClaudeInbox::Logs.new(client, clock: clock) }
   let(:peek) { ClaudeInbox::Peek.new(logs) }
 
   before { @elapsed = 0 }
@@ -20,14 +19,12 @@ describe ClaudeInbox::Peek do
 
   def pr(state) = ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: state)
 
-  # Selecting and opening the pane asks Logs for the lines; the worker
-  # answers on the queue once it has been through `claude logs`.
   def fetch(r)
     peek.select(r.key, r.session)
     peek.toggle
     @elapsed += ClaudeInbox::Logs::DEBOUNCE
     logs.tick
-    queue.pop
+    _(wait_for { logs.cached(r.session.id) }).wont_be_nil
   end
 
   it "shows nothing while closed" do
@@ -57,7 +54,7 @@ describe ClaudeInbox::Peek do
     v = peek.view(r, 10)
     _(v.lines).must_equal [ClaudeInbox::Peek::TERMINAL_NOTE, "", "pid 42 · /tmp/proj", "session u1"]
     _(v.title).must_equal "thing"
-    _(queue).must_be_empty
+    _(logs.cached("abc12345")).must_be_nil
   end
 
   it "explains a remote session the same way" do
@@ -75,7 +72,7 @@ describe ClaudeInbox::Peek do
 
     @elapsed += ClaudeInbox::Logs::DEBOUNCE
     logs.tick
-    _(queue.pop).must_equal [:peek, "abc12345", (1..10).map { |i| "line #{i}" }]
+    _(wait_for { logs.cached("abc12345") }).wont_be_nil
     _(peek.view(r, 10).lines).must_equal (1..10).map { |i| "line #{i}" }
   end
 
@@ -83,7 +80,7 @@ describe ClaudeInbox::Peek do
     r = row
     peek.select(r.key, r.session)
     logs.tick
-    _(queue).must_be_empty
+    _(logs.cached("abc12345")).must_be_nil
   end
 
   it "scrolls back from the tail and no further than the history allows" do

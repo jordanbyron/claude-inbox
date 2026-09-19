@@ -3,19 +3,15 @@
 require_relative "vt_screen"
 
 module ClaudeInbox
-  # The `claude logs <id>` replay of each session, turned into readable lines
-  # through VtScreen. Fetched off the main thread, debounced and cached:
-  # #want(id) on every selection change is cheap, #tick once per main-loop
-  # pass hands the settled request to the worker, and each answer goes out
-  # on the shared queue as [:peek, id, lines] as well as into the cache.
+  # The `claude logs <id>` replay of each session as readable lines, fetched
+  # off the main thread, debounced and cached.
   class Logs
     DEBOUNCE = 0.25
     TTL = 10
     MAX_LINES = 400
 
-    def initialize(client, queue, clock: -> { Time.now })
+    def initialize(client, clock: -> { Time.now })
       @client = client
-      @queue = queue
       @clock = clock
       @cache = {}
       @mutex = Mutex.new
@@ -56,7 +52,6 @@ module ClaudeInbox
         id = @requests.pop until @requests.empty? # only the latest matters
         lines = fetch(id)
         @mutex.synchronize { @cache[id] = [lines, @clock.call] }
-        @queue << [:peek, id, lines]
       end
     end
 

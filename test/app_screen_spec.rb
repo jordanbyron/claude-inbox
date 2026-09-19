@@ -59,14 +59,8 @@ describe ClaudeInbox::App do
   # `run` is what normally builds the pane and the logs thread behind it; a
   # rendered frame asks the pane what to paint, so tests that render need one.
   def with_peek(a)
-    a.instance_variable_set(:@peek, ClaudeInbox::Peek.new(ClaudeInbox::Logs.new(client, Queue.new)))
+    a.instance_variable_set(:@peek, ClaudeInbox::Peek.new(ClaudeInbox::Logs.new(client)))
     a
-  end
-
-  def wait_for(timeout: 2)
-    deadline = Time.now + timeout
-    sleep 0.01 while !yield && Time.now < deadline
-    yield
   end
 
   # A row's screen line, found the same way the paint did it: by scanning

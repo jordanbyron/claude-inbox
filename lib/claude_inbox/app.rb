@@ -55,7 +55,7 @@ module ClaudeInbox
       install_traps
       @terminal.enter
       @poller.start
-      @logs = Logs.new(@client, @queue)
+      @logs = Logs.new(@client)
       @peek = Peek.new(@logs)
       main_loop
     ensure
