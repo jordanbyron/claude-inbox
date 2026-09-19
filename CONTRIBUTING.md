@@ -13,6 +13,20 @@ If you want tab completion for `gh signoff`, add this to `~/.zshrc`:
 eval "$(gh signoff completion)"
 ```
 
+## Running from a checkout
+
+The command lives in `exe/claude-inbox`, which is what the gem installs.
+`bin/claude-inbox` sets up Bundler from the checkout and loads it, so it runs
+your working copy:
+
+```sh
+bin/claude-inbox                                        # live
+bin/claude-inbox --fixture test/fixtures/agents.json    # no daemon needed
+```
+
+`--fixture` reads `agents.json`, `logs_raw.txt` and `jobs/` from the directory
+of the file you pass, so a fixture can live anywhere.
+
 ## Local CI and signoff
 
 There is no GitHub Actions workflow. CI runs on your machine and reports back
