@@ -484,6 +484,30 @@ describe Store do
       store.forget("nope")
       _(store.sections.all.map(&:id)).must_equal %w[a]
     end
+
+    it "keeps the session hidden while the daemon still lists it" do
+      store = Store.new(path: nil, clock: -> { now })
+      store.update([session(id: "a"), session(id: "b")])
+      store.forget("a")
+
+      store.update([session(id: "a"), session(id: "b")])
+      _(store.sessions.map(&:id)).must_equal %w[b]
+      _(store.sections.all.map(&:id)).must_equal %w[b]
+      _(store.entry("a")).must_be_nil
+    end
+
+    it "shows the key again once a poll without it has gone by" do
+      store = Store.new(path: nil, clock: -> { now })
+      store.update([session(id: "a")])
+      store.forget("a")
+      store.update([session(id: "a")])
+      store.update([])
+
+      store.update([session(id: "a")])
+      _(store.sessions.map(&:id)).must_equal %w[a]
+      _(store.sections.all.map(&:id)).must_equal %w[a]
+      _(store.entry("a")).wont_be_nil
+    end
   end
 
   describe "persistence" do

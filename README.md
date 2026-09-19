@@ -218,6 +218,10 @@ holding commits that aren't pushed and offers a `--discard-unpushed` token to
 override it; nothing here ever passes that token, so a refusal is the end of
 it. Refusals are logged and retried at most once a day.
 
+A session that `claude rm` has taken, by the reaper or by `Ctrl-x`, stays
+hidden until the daemon stops listing it, which can be a poll or two after
+`rm` returns; the store drops it from each list in between.
+
 Every reap appends a line to `~/.config/claude-inbox/reaped.log`, which is the
 last record a session existed once its transcript is gone. If that file can't
 be opened the sweep raises and nothing is deleted. `CLAUDE_INBOX_NO_REAP=1`
@@ -304,6 +308,7 @@ Sessions.load: AgentsClient → JobState → PullRequests  →  Poller  →  Sto
   up. `--fixture` points it at `test/fixtures/jobs` with `gh` off.
 - `Palette` maps a session color to an escape sequence and knows nothing else.
 - `Store` holds the last poll and the entry table behind a mutex, and folds each poll in.
+  A key it was told to `forget` stays out of every poll until the daemon stops listing it.
   `Store::Entry` is what is remembered about one session, and the only place the state file's key names appear.
   `Store::Row` is one session with its entry, and the rules are its methods.
   `Store::Sections` is one poll sorted into sections and knows where the cursor can land: the `/` filter, the fold-or-rows rule and which section a key is in live there.
@@ -312,7 +317,8 @@ Sessions.load: AgentsClient → JobState → PullRequests  →  Poller  →  Sto
 - `Reaper` runs `claude rm` over whatever `Row#reapable?` picks and appends a
   line to the log for each one. `due` names them without touching anything;
   `sweep` does the deleting. Both run on the poller, and the list goes up
-  between them, so a slow `rm` stalls neither a frame nor the first one.
+  between them minus the rows `due` named, so a slow `rm` stalls neither a
+  frame nor the first one and a row never paints while it is being deleted.
 - `Poller` is the thread that asks `Sessions.load` for the list, every four
   seconds and on demand, runs it past the `Reaper` and then the gh refresh,
   and hands each result to `App` over a queue. An on-demand poll queues onto

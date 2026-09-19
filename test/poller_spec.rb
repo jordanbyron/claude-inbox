@@ -50,10 +50,8 @@ describe ClaudeInbox::Poller do
       _(published_ids(messages).first).must_include "f23c8673"
     end
 
-    # A reaped row has to be dropped on the way to the store, not after it
-    # gets there: `update` would fold it straight back into the entry table
-    # and the row would reappear for a poll. That holds for the early
-    # hand-over too, the one that goes up before `claude rm` runs.
+    # Including the early hand-over, the one that goes up before `claude rm`
+    # runs: a row on its way out must not paint while it is being deleted.
     it "keeps what it reaped out of the frame" do
       reaper = Class.new {
         def due(_sessions, _now) = %w[f23c8673]
@@ -82,6 +80,28 @@ describe ClaudeInbox::Poller do
       poller(reaper: reaper).once
 
       _(published_ids(messages).last).must_include "f23c8673"
+    end
+  end
+
+  # App drains the queue into the store, so the race is settled there: `rm`
+  # has returned and `forget` run, but `claude agents` still lists the id on
+  # the poll that follows.
+  describe "a delete while a poll is in flight" do
+    def drain_into_store(msgs) = msgs.each { |kind, list| store.update(list) if kind == :sessions }
+
+    it "does not bring the row back until the daemon has dropped it" do
+      poller.once
+      drain_into_store(messages)
+      _(store.sections.all.map(&:id)).must_include "f23c8673"
+
+      client.rm("f23c8673")
+      store.forget("f23c8673")
+      poller.once
+      msgs = messages
+      _(published_ids(msgs).first).must_include "f23c8673"
+      drain_into_store(msgs)
+      _(store.sections.all.map(&:id)).wont_include "f23c8673"
+      _(store.sessions.map(&:id)).wont_include "f23c8673"
     end
   end
 

@@ -65,13 +65,18 @@ module ClaudeInbox
       @clock = clock
       @mutex = Mutex.new
       @sessions = []
+      @forgotten = Set.new
       @entries = load
     end
 
+    # A forgotten key still in the list is dropped: `claude rm` has returned
+    # but the daemon lists the session for a poll or two more. Once the list
+    # stops naming it the tombstone goes, since a short id is never reissued.
     def update(sessions)
       @mutex.synchronize do
-        @sessions = sessions
-        @entries = self.class.merge_entries(@entries, sessions, @clock.call)
+        @forgotten &= sessions.map(&:key)
+        @sessions = sessions.reject { |s| @forgotten.include?(s.key) }
+        @entries = self.class.merge_entries(@entries, @sessions, @clock.call)
         save
       end
     end
@@ -118,12 +123,14 @@ module ClaudeInbox
     def entry(id) = @mutex.synchronize { @entries[id]&.dup }
 
     # Forgets a session at once instead of waiting out PRUNE_AFTER, for one
-    # the daemon no longer has and that no future poll can bring back.
+    # just handed to `claude rm`, and keeps it hidden until `update` sees the
+    # daemon has dropped it too. The tombstone lives in memory only: the gap
+    # it bridges is seconds long, and the next update closes it.
     def forget(id)
       @mutex.synchronize do
-        next unless @entries.delete(id)
+        @forgotten << id
         @sessions = @sessions.reject { |s| s.key == id }
-        save
+        save if @entries.delete(id)
       end
     end
 
