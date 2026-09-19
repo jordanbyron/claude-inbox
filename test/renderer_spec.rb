@@ -89,6 +89,16 @@ describe ClaudeInbox::Renderer do
     )
   end
 
+  it "puts the session's own line under a row, and the path under one with nothing to say" do
+    job = ClaudeInbox::JobState.new("detail" => "watching CI", "needs" => "confirm: merge once green? " + "x" * 80)
+    blocked = session(id: "aaa11111", state: "blocked", job_state: job, cwd: "/Users/byron/code/x")
+    quiet = session(id: "bbb22222", state: "working", job_state: nil, cwd: "/Users/byron/code/y")
+    sec = Store.sectionize([blocked, quiet], {}, now)
+    lines = renderer.frame(sec, width: 60, height: 12, now: now).lines
+    _(lines).must_include "       ↳ confirm: merge once green? xxxxxxxxxxxxxxxxxxxxxx…".ljust(60)
+    _(lines).must_include "       ↳ ~/code/y".ljust(60)
+  end
+
   it "badges remote sessions and counts them in the header" do
     r = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9", name: "web", origin: :remote)
     sec = Store.sectionize([r], {}, now)

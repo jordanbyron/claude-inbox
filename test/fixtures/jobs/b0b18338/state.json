@@ -1,5 +1,8 @@
 {
   "state": "done",
+  "detail": "PR #885 up; CI green",
+  "tempo": "idle",
+  "output": {"result": "token refresh retried 3x with backoff; PR #885 ready for review"},
   "color": "orange",
   "children": [
     {"id": "885", "href": "https://github.com/jordanbyron/parks_genie/pull/885", "kind": "pr"}
