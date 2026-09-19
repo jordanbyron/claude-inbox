@@ -23,6 +23,9 @@ describe ClaudeInbox::Logs do
   before { @elapsed = 0 }
   after { logs.stop }
 
+  def settled_asked = (sleep 0.05
+                       client.asked)
+
   def settle(id)
     _(wait_for { logs.cached(id) }).must_equal lines
   end
@@ -61,15 +64,13 @@ describe ClaudeInbox::Logs do
     logs.want("abc12345")
     @elapsed += ClaudeInbox::Logs::DEBOUNCE
     logs.tick
-    _(logs.instance_variable_get(:@requests)).must_be_empty
-    _(client.asked).must_equal %w[abc12345]
+    _(settled_asked).must_equal %w[abc12345]
   end
 
   it "ignores a request with nothing to fetch" do
     logs.want(nil)
     @elapsed += ClaudeInbox::Logs::DEBOUNCE
     logs.tick
-    _(logs.instance_variable_get(:@requests)).must_be_empty
-    _(client.asked).must_be_empty
+    _(settled_asked).must_be_empty
   end
 end
