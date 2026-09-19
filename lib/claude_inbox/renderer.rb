@@ -60,7 +60,7 @@ module ClaudeInbox
 
     # opts: selected (id | :snoozed | :settled | nil), expanded ({snoozed:, settled:} => bool), top (scroll),
     #       peek (Array<String> | nil), peek_title, modal (Array<String> | nil),
-    #       status (String), now (Time), filter (String | nil), command,
+    #       status (String), now (Time), filter (TextBuffer | nil), filter_editing, command (TextBuffer | nil),
     #       tick (Integer, drives the spinner),
     #       loading (Float seconds waited for the first poll, nil once it has landed),
     #       screen ({lines:, footer:} takes over everything below the header)
@@ -153,11 +153,16 @@ module ClaudeInbox
 
     def footer(width, opts)
       text =
-        if opts[:command] then " " + @theme.cyan_bold(":") + opts[:command] + @p.dim("▏")
-        elsif opts[:filter] then " " + @theme.cyan_bold("/") + opts[:filter] + (opts[:filter_editing] ? @p.dim("▏") : @p.dim("  esc clears"))
+        if opts[:command] then " " + @theme.cyan_bold(":") + line(opts[:command], width - 2)
+        elsif opts[:filter_editing] then " " + @theme.cyan_bold("/") + line(opts[:filter], width - 2)
+        elsif opts[:filter] then " " + @theme.cyan_bold("/") + opts[:filter].to_s + @p.dim("  esc clears")
         else " " + KEYS.map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
         end
       Text.pad(text, width)
+    end
+
+    def line(buffer, width)
+      buffer.row(width, cursor: ->(cell) { (cell == " ") ? @p.dim("▏") : @p.inverse(cell) })
     end
 
     def section_title(name, count, width)

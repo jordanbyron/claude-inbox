@@ -4,6 +4,7 @@ require "tty-reader"
 require_relative "agents_client"
 require_relative "debug"
 require_relative "dialog"
+require_relative "text_buffer"
 require_relative "store"
 require_relative "renderer"
 require_relative "terminal"
@@ -174,7 +175,7 @@ module ClaudeInbox
       "⟳ #{Text.age(now - @last_poll)} ago"
     end
 
-    def filtered(sections = @store.sections) = sections.matching(@filter)
+    def filtered(sections = @store.sections) = sections.matching(@filter&.to_s)
 
     def ensure_selection(sections)
       keys = sections.selectable_keys(@expanded)
@@ -307,7 +308,7 @@ module ClaudeInbox
       when :toggle_peek then toggle_peek
       when :new_session then open_new_session
       when :filter then start_filter
-      when :command then @command = +""
+      when :command then @command = TextBuffer.new
       when :escape then clear_filter
       end
     end
@@ -508,7 +509,7 @@ module ClaudeInbox
     # ----- filter / command line ---------------------------------------------
 
     def start_filter
-      @filter ||= +""
+      @filter ||= TextBuffer.new
       @filter_editing = true
     end
 
@@ -518,28 +519,27 @@ module ClaudeInbox
       @command = nil
     end
 
+    def close_line
+      @command ? @command = nil : clear_filter
+    end
+
     def handle_line_key(name, key)
-      buffer = @command || @filter
+      line = @command || @filter
       case name
-      when :escape
-        @command ? @command = nil : clear_filter
-      when :return, :enter
-        if @command
-          action = Keymap.command(@command)
-          @command = nil
-          perform(action) if action
-        else
-          @filter_editing = false
-        end
+      when :escape then close_line
+      when :return, :enter then submit_line
       when :backspace, :ctrl_h
-        if buffer.empty?
-          @command ? @command = nil : clear_filter
-        else
-          buffer.slice!(-1)
-        end
+        line.empty? ? close_line : line.press(name, key)
       else
-        buffer << key if key.is_a?(String) && key.match?(/\A[[:print:]]\z/)
+        line.press(name, key)
       end
+    end
+
+    def submit_line
+      return @filter_editing = false unless @command
+      action = Keymap.command(@command.to_s)
+      @command = nil
+      perform(action) if action
     end
   end
 end

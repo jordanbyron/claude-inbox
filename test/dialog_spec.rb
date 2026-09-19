@@ -53,8 +53,18 @@ describe ClaudeInbox::Dialog do
 
     it "ignores keys that are not printable" do
       dialog.press(:up, "\e[A")
-      dialog.press(:ctrl_a, "\x01")
+      dialog.press(:tab, "\t")
       _(dialog.value).must_equal "auth"
+    end
+
+    it "edits in the middle of the line" do
+      dialog.press(:left, "\e[D")
+      dialog.press("-", "-")
+      _(dialog.value).must_equal "aut-h"
+      dialog.press(:ctrl_a, "\x01")
+      dialog.press(:delete, "\e[3~")
+      _(dialog.value).must_equal "ut-h"
+      _(dialog.frame(60).join("\n")).must_include "> \e[7mu\e[27mt-h"
     end
 
     it "shows the line with a cursor, and its own question per kind" do
