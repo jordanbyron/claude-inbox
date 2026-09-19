@@ -5,7 +5,7 @@ module ClaudeInbox
   # own ANSI reds and greens. 256-color indices, since those render the
   # same everywhere a terminal claims 256-color support.
   class Theme
-    HUES = {red: 168, green: 108, yellow: 179, blue: 75, purple: 176, cyan: 73}.freeze
+    HUES = {red: 203, green: 108, yellow: 179, blue: 75, purple: 176, cyan: 73}.freeze
     BG = 236
 
     def initialize(enabled: true)

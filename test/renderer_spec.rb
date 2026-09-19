@@ -243,8 +243,8 @@ describe "renderer session colors" do
 
   it "keeps the glyph in the state's color while the label takes the session's" do
     line = line_for(colored("green", state: "blocked"))
-    _(line).must_include "\e[38;5;168;1m●"
-    _(line).must_include "\e[38;5;168;1mneeds you"
+    _(line).must_include "\e[38;5;203;1m●"
+    _(line).must_include "\e[38;5;203;1mneeds you"
     _(line).must_include "\e[32mtinted\e[39m"
   end
 
