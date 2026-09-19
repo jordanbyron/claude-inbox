@@ -234,6 +234,16 @@ describe ClaudeInbox::Renderer do
     _(frame(command: "q").lines.last).must_match(/^ :q▏\s+$/)
   end
 
+  it "keeps the status bar under a full screen, with the screen's own keys just above it" do
+    f = frame(screen: {lines: ["  New session"], footer: "^S start"})
+    _(f.lines.size).must_equal 24
+    _(f.lines.first).must_match(/^  New session\s+$/)
+    _(f.lines[-2]).must_match(/^ \^S start\s+$/)
+    _(f.lines.last).must_include "1 needs you"
+    _(f.lines.last).must_match(/\? keys $/)
+    _(f.items.compact).must_be_empty
+  end
+
   it "ends the status bar with the ? hint, and a notice before it when there is one" do
     _(frame.lines.last).must_match(/\? keys $/)
     _(frame(status: "⚠ daemon down").lines.last).must_match(/⚠ daemon down  ·  \? keys $/)

@@ -58,9 +58,9 @@ module ClaudeInbox
     #       now (Time), filter (String | nil), command,
     #       tick (Integer, drives the spinner),
     #       loading (Float seconds waited for the first poll, nil once it has landed),
-    #       screen ({lines:, footer:} takes over everything above the status bar)
+    #       screen ({lines:, footer:} takes over everything above the status bar, footer just over it)
     def frame(sections, width:, height:, now:, **opts)
-      return full_screen(width, height, opts) if opts[:screen]
+      return full_screen(sections, width, height, opts) if opts[:screen]
       selected = opts[:selected]
       list_w = width_for_list(width, opts[:peek])
       view_h = height - 1
@@ -104,12 +104,12 @@ module ClaudeInbox
       top.clamp(0, [size - view_h, 0].max)
     end
 
-    def full_screen(width, height, opts)
-      view_h = height - 1
+    def full_screen(sections, width, height, opts)
+      view_h = height - 2
       body = opts[:screen][:lines].first(view_h)
       body += [""] * (view_h - body.size)
-      lines = body.map { |l| Text.pad(l, width) } + [Text.pad(" " + opts[:screen][:footer], width)]
-      Frame.new(lines, [nil] * (view_h + 1), opts[:top] || 0, width)
+      lines = body.map { |l| Text.pad(l, width) } + [Text.pad(" " + opts[:screen][:footer], width), status_bar(sections, width, opts)]
+      Frame.new(lines, [nil] * height, opts[:top] || 0, width)
     end
 
     # ----- chrome -------------------------------------------------------------

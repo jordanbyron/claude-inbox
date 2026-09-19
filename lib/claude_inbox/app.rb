@@ -438,7 +438,7 @@ module ClaudeInbox
     # The new-session form takes the whole body; a Dialog is a box over it.
     def screen_lines(width, height)
       return nil unless @modal.is_a?(NewSessionForm)
-      {lines: @modal.screen(width, height - 1), footer: @modal.footer}
+      {lines: @modal.screen(width, height - 2), footer: @modal.footer}
     end
 
     def modal_lines(width)
