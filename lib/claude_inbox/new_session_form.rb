@@ -140,7 +140,7 @@ module ClaudeInbox
       menu_rows = menu_lines(inner_w, [height - fixed - 3, MENU_ROWS].min)
       prompt_h = [height - fixed - menu_rows.size, 3].max
       out = [""]
-      out << "  " + (@confirm_discard ? @theme.red("Discard this session?") : @p.bold("New session"))
+      out << "  " + (@confirm_discard ? @theme.red("Discard this session? (y/n)") : @p.bold("New session"))
       out << ""
       out << "  " + field_label(@fields[0]) + @p.dim("  ⏎ newline")
       out += prompt_box(@fields[0], inner_w, prompt_h)
