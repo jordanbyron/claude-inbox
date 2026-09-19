@@ -81,25 +81,23 @@ describe ClaudeInbox::App do
     _(app.instance_variable_get(:@modal).values[:prompt]).must_equal "one\ntwo"
   end
 
-  it "edits the filter and command lines in the middle" do
+  it "edits the filter line in the middle, and closes it on a backspace from empty" do
     app.send(:handle_input, "/")
     app.send(:handle_input, "ac")
     app.send(:handle_input, "\e[D")
     app.send(:handle_input, "b")
     _(app.instance_variable_get(:@filter).to_s).must_equal "abc"
-    app.send(:handle_input, "\r")
-    app.send(:handle_input, ":")
-    app.send(:handle_input, "x")
     app.send(:handle_input, "\x01")
     app.send(:handle_input, "q")
-    _(app.instance_variable_get(:@command).to_s).must_equal "qx"
+    _(app.instance_variable_get(:@filter).to_s).must_equal "qabc"
     app.send(:handle_input, "\x05")
     app.send(:handle_input, "\x7f")
     app.send(:handle_input, "\x7f")
-    _(app.instance_variable_get(:@command).to_s).must_equal ""
     app.send(:handle_input, "\x7f")
-    _(app.instance_variable_get(:@command)).must_be_nil
-    _(app.instance_variable_get(:@filter).to_s).must_equal "abc"
+    app.send(:handle_input, "\x7f")
+    _(app.instance_variable_get(:@filter).to_s).must_equal ""
+    app.send(:handle_input, "\x7f")
+    _(app.instance_variable_get(:@filter)).must_be_nil
   end
 
   describe "clicking a row" do

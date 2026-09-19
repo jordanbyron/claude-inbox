@@ -60,7 +60,6 @@ describe ClaudeInbox::Keymap do
     _(km.press(:tab, "\t")).must_equal :next_section
     _(km.press(:back_tab, "\e[Z")).must_equal :prev_section
     _(km.press("/", "/")).must_equal :filter
-    _(km.press(":", ":")).must_equal :command
     _(km.press("q", "q")).must_equal :quit
     _(km.press(:ctrl_c, "\x03")).must_equal :quit
   end
@@ -70,15 +69,5 @@ describe ClaudeInbox::Keymap do
     _(km.press("K", "K")).must_equal :peek_up
     _(km.press(:ctrl_e, "\x05")).must_equal :peek_down
     _(km.press(:ctrl_y, "\x19")).must_equal :peek_up
-  end
-
-  it "understands ex commands" do
-    _(ClaudeInbox::Keymap.command("q")).must_equal :quit
-    _(ClaudeInbox::Keymap.command(" wq ")).must_equal :quit
-    _(ClaudeInbox::Keymap.command("peek")).must_equal :toggle_peek
-    _(ClaudeInbox::Keymap.command("new")).must_equal :new_session
-    _(ClaudeInbox::Keymap.command("pr")).must_equal :open_pr
-    _(ClaudeInbox::Keymap.command("pin")).must_equal :toggle_pin
-    _(ClaudeInbox::Keymap.command("nope")).must_be_nil
   end
 end

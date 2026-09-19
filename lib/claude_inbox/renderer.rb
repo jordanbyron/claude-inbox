@@ -49,7 +49,7 @@ module ClaudeInbox
     KEYS = [
       ["j/k", "move"], ["⏎", "attach"], ["n", "new"], ["t", "pin"], ["s", "snooze"], ["u", "wake"],
       ["a", "alias"], ["o", "PR"], ["x", "settle"], ["p", "peek"], ["⇥", "section"],
-      ["za", "fold"], ["/", "filter"], [":q", "quit"]
+      ["za", "fold"], ["/", "filter"], ["q", "quit"]
     ].freeze
 
     def initialize(color: true, min_left: 44, home: Dir.home)
@@ -65,7 +65,7 @@ module ClaudeInbox
     # opts: selected (id | :snoozed | :settled | nil), expanded ({snoozed:, settled:} => bool), top (scroll),
     #       peek (Array<String> | nil), peek_title, modal (Array<String> | nil),
     #       status (String | nil, a notice or error at the header's right end),
-    #       usage (String | nil, the rate-limit label after it), now (Time), filter (TextBuffer | nil), filter_editing, command (TextBuffer | nil),
+    #       usage (String | nil, the rate-limit label after it), now (Time), filter (TextBuffer | nil), filter_editing,
     #       tick (Integer, drives the spinner),
     #       loading (Float seconds waited for the first poll, nil once it has landed),
     #       screen ({lines:, footer:} takes over everything below the header)
@@ -159,8 +159,7 @@ module ClaudeInbox
 
     def footer(width, opts)
       text =
-        if opts[:command] then " " + @theme.cyan_bold(":") + line(opts[:command], width - 2)
-        elsif opts[:filter_editing] then " " + @theme.cyan_bold("/") + line(opts[:filter], width - 2)
+        if opts[:filter_editing] then " " + @theme.cyan_bold("/") + line(opts[:filter], width - 2)
         elsif opts[:filter] then " " + @theme.cyan_bold("/") + opts[:filter].to_s + @p.dim("  esc clears")
         else " " + KEYS.map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
         end
