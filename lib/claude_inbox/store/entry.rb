@@ -65,7 +65,7 @@ module ClaudeInbox
 
       def last_seen = @h["last_seen"]
 
-      def pinned? = @h["pinned"] == true
+      def pinned? = @h["pinned"] ? true : false
 
       def pinned_at = @h["pinned_at"]
 

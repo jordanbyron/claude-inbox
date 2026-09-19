@@ -3,7 +3,7 @@
 require "tmpdir"
 require_relative "test_helper"
 
-Store = ClaudeInbox::Store
+Store = ClaudeInbox::Store unless defined?(Store)
 
 describe Store do
   let(:now) { Time.at(1_789_600_000) }
