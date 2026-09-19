@@ -20,6 +20,13 @@ module ClaudeInbox
 
     Frame = Struct.new(:lines, :items, :top, :list_width)
 
+    # What App hands Renderer for one frame. `peek` is a Peek::View.
+    View = Data.define(:width, :height, :now, :selected, :top, :expanded, :peek, :modal, :screen, :status,
+      :filter, :filter_editing, :command, :tick, :loading) do
+      def initialize(width:, height:, now:, selected: nil, top: 0, expanded: {}, peek: nil, modal: nil, screen: nil,
+        status: nil, filter: nil, filter_editing: false, command: nil, tick: 0, loading: nil) = super
+    end
+
     SECTION_TITLES = {
       pinned: "PINNED",
       needs_you: "NEEDS YOU",
@@ -62,40 +69,34 @@ module ClaudeInbox
 
     def caret = ->(cell) { @p.inverse(cell) }
 
-    # opts: selected (id | :snoozed | :settled | nil), expanded ({snoozed:, settled:} => bool), top (scroll),
-    #       peek (Array<String> | nil), peek_title, modal (Array<String> | nil),
-    #       status (String), now (Time), filter (TextBuffer | nil), filter_editing, command (TextBuffer | nil),
-    #       tick (Integer, drives the spinner),
-    #       loading (Float seconds waited for the first poll, nil once it has landed),
-    #       screen ({lines:, footer:} takes over everything below the header)
-    def frame(sections, width:, height:, now:, **opts)
-      return full_screen(sections, width, height, now, opts) if opts[:screen]
-      selected = opts[:selected]
-      list_w = width_for_list(width, opts[:peek])
+    def frame(sections, view)
+      return full_screen(sections, view) if view.screen
+      width, height, now, selected = view.width, view.height, view.now, view.selected
+      list_w = width_for_list(width, view.peek)
       view_h = height - 2 # header + footer
       body, items =
-        if opts[:loading]
-          [loading_state(list_w, view_h, opts[:loading], opts[:tick].to_i), []]
+        if view.loading
+          [loading_state(list_w, view_h, view.loading, view.tick), []]
         else
-          body_lines(sections, list_w, selected, opts, now)
+          body_lines(sections, list_w, view, now)
         end
 
-      top = clamp_top(opts[:top] || 0, body.size, view_h, items, selected)
+      top = clamp_top(view.top, body.size, view_h, items, selected)
       visible = body[top, view_h] || []
       visible_items = items[top, view_h] || []
       visible += [""] * (view_h - visible.size)
       visible_items += [nil] * (view_h - visible_items.size)
 
-      if opts[:peek]
+      if view.peek
         peek_w = width - list_w - 1
-        peek_lines = peek_pane(opts[:peek], opts[:peek_title], opts[:peek_subtitle], peek_w, view_h)
+        peek_lines = peek_pane(view.peek, peek_w, view_h)
         visible = visible.each_with_index.map do |l, i|
           Text.pad(l, list_w) + @p.dim("│") + Text.pad(peek_lines[i] || "", peek_w)
         end
       end
 
-      lines = [header(sections, width, opts[:status], now, loading: opts[:loading])] + visible.map { |l| Text.pad(l, width) } + [footer(width, opts)]
-      lines = overlay(lines, opts[:modal], width) if opts[:modal]
+      lines = [header(sections, width, view.status, now, loading: view.loading)] + visible.map { |l| Text.pad(l, width) } + [footer(width, view)]
+      lines = overlay(lines, view.modal, width) if view.modal
       Frame.new(lines, [nil] + visible_items + [nil], top, list_w)
     end
 
@@ -113,12 +114,13 @@ module ClaudeInbox
       top.clamp(0, [size - view_h, 0].max)
     end
 
-    def full_screen(sections, width, height, now, opts)
-      view_h = height - 2
-      body = opts[:screen][:lines].first(view_h)
+    def full_screen(sections, view)
+      width = view.width
+      view_h = view.height - 2
+      body = view.screen[:lines].first(view_h)
       body += [""] * (view_h - body.size)
-      lines = [header(sections, width, opts[:status], now)] + body.map { |l| Text.pad(l, width) } + [Text.pad(" " + opts[:screen][:footer], width)]
-      Frame.new(lines, [nil] * (view_h + 2), opts[:top] || 0, width)
+      lines = [header(sections, width, view.status, view.now)] + body.map { |l| Text.pad(l, width) } + [Text.pad(" " + view.screen[:footer], width)]
+      Frame.new(lines, [nil] * (view_h + 2), view.top, width)
     end
 
     # ----- chrome -------------------------------------------------------------
@@ -155,11 +157,11 @@ module ClaudeInbox
       chips.join(compact ? "  " : @p.dim("  ·  "))
     end
 
-    def footer(width, opts)
+    def footer(width, view)
       text =
-        if opts[:command] then " " + @theme.cyan_bold(":") + line(opts[:command], width - 2)
-        elsif opts[:filter_editing] then " " + @theme.cyan_bold("/") + line(opts[:filter], width - 2)
-        elsif opts[:filter] then " " + @theme.cyan_bold("/") + opts[:filter].to_s + @p.dim("  esc clears")
+        if view.command then " " + @theme.cyan_bold(":") + line(view.command, width - 2)
+        elsif view.filter_editing then " " + @theme.cyan_bold("/") + line(view.filter, width - 2)
+        elsif view.filter then " " + @theme.cyan_bold("/") + view.filter.to_s + @p.dim("  esc clears")
         else " " + KEYS.map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
         end
       Text.pad(text, width)
@@ -187,24 +189,24 @@ module ClaudeInbox
 
     # ----- body ---------------------------------------------------------------
 
-    def body_lines(sections, width, selected, opts, now)
+    def body_lines(sections, width, view, now)
       lines = []
       items = []
       if sections.all.empty?
         return [empty_state(width), []]
       end
-      expanded = opts[:expanded] || {}
+      selected = view.selected
       sections.each_section do |name, rows|
         next if rows.empty?
         lines << "" << section_title(name, rows.size, width)
         items << nil << nil
-        if Store.folded?(name, expanded)
+        if Store.folded?(name, view.expanded)
           lines << fold_toggle_line(name, rows.size, selected, width)
           items << Item.new(:fold_toggle, nil, name)
           next
         end
         rows.each do |row|
-          row_lines(row, name, selected, width, now, opts[:tick].to_i).each_with_index do |l, i|
+          row_lines(row, name, selected, width, now, view.tick).each_with_index do |l, i|
             lines << l
             items << ((i.zero? && row.selectable?) ? Item.new(:row, row, name) : nil)
           end
@@ -386,12 +388,12 @@ module ClaudeInbox
 
     # ----- peek ---------------------------------------------------------------
 
-    def peek_pane(lines, title, subtitle, width, height)
-      bar = Text.pad(" " + (title || ""), width)
+    def peek_pane(peek, width, height)
+      bar = Text.pad(" " + (peek.title || ""), width)
       out = [@p.inverse(bar)]
-      out << Text.pad(" " + @p.dim(subtitle.to_s), width) if subtitle
+      out << Text.pad(" " + @p.dim(peek.subtitle.to_s), width) if peek.subtitle
       body_h = height - out.size
-      wrapped = lines.flat_map { |l| Text.wrap(l, width - 1) }
+      wrapped = peek.lines.flat_map { |l| Text.wrap(l, width - 1) }
       wrapped.last(body_h).each { |l| out << Text.pad(" " + l, width) }
       out
     end
