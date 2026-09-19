@@ -47,30 +47,28 @@ module ClaudeInbox
 
     def soon = @wake << true
 
-    # PR lookups and the reap sweep both happen here, on the poller, so
-    # neither a slow `gh` nor a `claude rm` can stall a frame. Neither is
-    # allowed ahead of the list either: the rows go up as soon as `claude
-    # agents` answers, and the slow calls follow. A dozen serial `gh pr
-    # view`s, or a couple of `claude rm`s clearing worktrees, is the
+    # The rows go up as soon as `claude agents` answers, and the slow calls
+    # (`claude rm`, a dozen serial `gh pr view`s) follow: that is the
     # difference between the inbox appearing at once and five seconds later.
-    #
-    # Reaped rows are dropped before the queue and not after: `update` folds
-    # whatever it is handed back into the entry table, so a session still in
-    # this list would be recreated moments after `forget` cleared it and
-    # flicker back for a poll. So the reaper says what it is about to take
-    # (a pure lookup) and those rows are held back from the first hand-over;
-    # only a refused reap brings one back. The gh refresh comes last and
-    # publishes again only if a PR state moved.
+    # Every hand-over is the whole list; the store hides the rows the reaper
+    # is about to take, so a list missing a key can only mean the daemon
+    # dropped it. The gh refresh comes last and publishes again only if a PR
+    # state moved.
     def once
       now = Time.now
       sessions = Sessions.load(client: @client, jobs_dir: @jobs_dir, pull_requests: @pull_requests, overrides: @store.pr_overrides)
       doomed = @reaper.due(sessions, now)
-      publish(sessions, doomed)
-      reaped = @reaper.sweep(sessions, now)
-      live = publish(sessions, reaped) if reaped != doomed
-      live ||= sessions.reject { |s| doomed.include?(s.key) }
+      @store.hide(doomed)
+      @queue << [:sessions, sessions]
+      reaped = []
+      begin
+        reaped = @reaper.sweep(sessions.select { |s| doomed.include?(s.key) }, now)
+      ensure
+        @store.release(doomed - reaped)
+      end
+      @queue << [:sessions, sessions] if reaped != doomed
       notice_reaped(reaped) if reaped.any?
-      fresh, moved = @pull_requests.refresh(live)
+      fresh, moved = @pull_requests.refresh(sessions)
       @queue << [:sessions, fresh] if moved
     rescue => e
       @queue << [:error, e.message]
@@ -91,12 +89,6 @@ module ClaudeInbox
     end
 
     def paused? = @lock.synchronize { @paused }
-
-    def publish(sessions, without)
-      live = sessions.reject { |s| without.include?(s.key) }
-      @queue << [:sessions, live]
-      live
-    end
 
     def notice_reaped(keys)
       word = (keys.size == 1) ? "session" : "sessions"

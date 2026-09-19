@@ -1,23 +1,19 @@
 # frozen_string_literal: true
 
 module ClaudeInbox
-  # Interactive sessions report only `status`; fold it into the same
-  # vocabulary background sessions use. An idle terminal is a finished turn,
-  # a waiting one needs you, a busy one is working.
+  # Interactive sessions report only `status`; folded into the background
+  # vocabulary, an idle terminal is a finished turn and a waiting one needs you.
   INTERACTIVE_STATE = {"busy" => "working", "waiting" => "blocked", "idle" => "done"}.freeze
 
-  # One entry from `claude agents --json`. Immutable value object; no
-  # behaviour beyond parsing and a few predicates. AgentsClient, JobState and
-  # PullRequests each hand back a copy with one more member set (`with`),
-  # never a changed original, so a list already handed to another thread
-  # cannot move under it.
+  # One entry from `claude agents --json`. Immutable, and the enrichers hand
+  # back copies via `with`, so a list already given to another thread cannot
+  # move under it.
   Session = Data.define(
     :id, :cwd, :kind, :started_at, :session_id, :name,
     :state, :pid, :status, :waiting_for, :origin, :prs, :job_state
   ) do
-    # Every member is optional so the parser and the specs can name only the
-    # ones they have. A session nobody has been past yet answers [] for prs
-    # rather than nil, so nobody has to know whether PullRequests has.
+    # Every member is optional so the parser and the specs name only what they
+    # have; prs is [] rather than nil so nobody asks whether PullRequests has run.
     def initialize(id: nil, cwd: nil, kind: nil, started_at: nil, session_id: nil, name: nil,
       state: nil, pid: nil, status: nil, waiting_for: nil, origin: nil, prs: nil, job_state: nil)
       super(id: id, cwd: cwd, kind: kind, started_at: started_at, session_id: session_id, name: name,
@@ -48,21 +44,17 @@ module ClaudeInbox
 
     def effective_state = state || INTERACTIVE_STATE[status] || "done"
 
-    # Where an interactive session is driven from. The JSON does not say;
-    # AgentsClient reads it off the process tree, then drops :subagent rows
-    # before anyone downstream sees them.
-    #   :terminal  a claude you opened in a terminal yourself
-    #   :remote    a Remote Control worker driven from claude.ai/code, unreachable from here
-    #   :subagent  a sub-agent spawned locally by another claude process; attach to that parent instead
-    #   :headless  a `claude -p` or SDK run some program started; it answers and exits
+    # The JSON does not say where an interactive session is driven from;
+    # AgentsClient reads it off the process tree: :terminal, :remote (a
+    # claude.ai/code worker), :subagent or :headless (`claude -p` or an SDK
+    # run); the last two are dropped before anyone downstream sees them.
     def remote? = origin == :remote
 
     def subagent? = origin == :subagent
 
     def headless? = origin == :headless
 
-    # Nobody is sitting in either of these. A remote worker is not included:
-    # a person drives that one, just from claude.ai/code rather than here.
+    # A remote worker is not unattended: a person drives it, just from claude.ai/code.
     def unattended? = subagent? || headless?
 
     def terminal? = interactive? && !remote? && !unattended?
@@ -74,8 +66,7 @@ module ClaudeInbox
     # stopped and is waiting on work it started. JobState tells them apart.
     def waiting_on_work? = effective_state == "working" && job_state&.waiting_on_work? == true
 
-    # The color `/color` gave the session. Interactive sessions have no job
-    # file and so never carry one.
+    # From `/color`; interactive sessions have no job file, so never one.
     def color = job_state&.color
 
     def needs_you? = %w[blocked failed].include?(effective_state)
@@ -88,7 +79,6 @@ module ClaudeInbox
 
     def project = cwd ? File.basename(cwd) : ""
 
-    # First of the pull requests tied to this session; PullRequests finds them.
     def pr = prs.first
   end
 end

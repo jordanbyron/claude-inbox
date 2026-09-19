@@ -50,11 +50,11 @@ describe ClaudeInbox::Poller do
       _(published_ids(messages).first).must_include "f23c8673"
     end
 
-    # A reaped row has to be dropped on the way to the store, not after it
-    # gets there: `update` would fold it straight back into the entry table
-    # and the row would reappear for a poll. That holds for the early
-    # hand-over too, the one that goes up before `claude rm` runs.
-    it "keeps what it reaped out of the frame" do
+    def drain = messages.each { |kind, list| store.update(list) if kind == :sessions }
+
+    def shown = store.sessions.map(&:id)
+
+    it "keeps what it reaped out of the frame, from the first hand-over on" do
       reaper = Class.new {
         def due(_sessions, _now) = %w[f23c8673]
 
@@ -64,11 +64,12 @@ describe ClaudeInbox::Poller do
       }.new
       poller(reaper: reaper).once
       msgs = messages
-
-      lists = published_ids(msgs)
-      _(lists).wont_be_empty
-      lists.each { |ids| _(ids).wont_include "f23c8673" }
       _(msgs.assoc(:notice)[1]).must_include "reaped 1 session"
+
+      store.update(msgs.first[1])
+      _(shown).wont_include "f23c8673"
+      msgs.each { |kind, list| store.update(list) if kind == :sessions }
+      _(shown).wont_include "f23c8673"
     end
 
     it "brings a row back when its reap was refused" do
@@ -80,8 +81,92 @@ describe ClaudeInbox::Poller do
         def log_path = File::NULL
       }.new
       poller(reaper: reaper).once
+      drain
+      _(shown).must_include "f23c8673"
+    end
 
-      _(published_ids(messages).last).must_include "f23c8673"
+    it "releases what it hid when the sweep itself fails" do
+      reaper = Class.new {
+        def due(_sessions, _now) = %w[f23c8673]
+
+        def sweep(_sessions, _now) = raise(Errno::EACCES, "reaped.log")
+
+        def log_path = File::NULL
+      }.new
+      poller(reaper: reaper).once
+      msgs = messages
+      _(msgs.assoc(:error)[1]).must_include "reaped.log"
+      msgs.each { |kind, list| store.update(list) if kind == :sessions }
+      _(shown).must_include "f23c8673"
+    end
+
+    it "keeps a row the user deleted hidden even when the reaper let it go the same poll" do
+      reaper = Class.new {
+        def initialize(store) = @store = store
+
+        def due(_sessions, _now) = %w[f23c8673]
+
+        def sweep(_sessions, _now)
+          @store.forget("f23c8673")
+          []
+        end
+
+        def log_path = File::NULL
+      }.new(store)
+      poller(reaper: reaper).once
+      drain
+      _(shown).wont_include "f23c8673"
+    end
+
+    # Every hand-over after the sweep carries the reaped key; a list without
+    # it is what tells the store the daemon dropped it.
+    it "keeps a reaped row hidden on later polls while the daemon still lists it" do
+      client.define_singleton_method(:rm) do |id|
+        @refused ||= id
+        raise ClaudeInbox::AgentsClient::Error, "rm failed: unpushed commits" if id == @refused
+        removed << id
+        true
+      end
+      reaper = ClaudeInbox::Reaper.new(client, store, log_path: File::NULL, enabled: true)
+
+      poller(reaper: reaper).once
+      drain
+      poller(reaper: reaper).once
+      drain
+      refused = client.instance_variable_get(:@refused)
+      reaped = client.removed.dup
+      _(reaped.size).must_equal 1
+      _(shown).must_include refused
+      _(shown).wont_include reaped.first
+
+      2.times do
+        poller(reaper: reaper).once
+        drain
+      end
+      _(shown).wont_include reaped.first
+      _(client.removed).must_equal reaped
+    end
+  end
+
+  # App drains the queue into the store, so the race is settled there: `rm`
+  # has returned and `forget` run, but `claude agents` still lists the id on
+  # the poll that follows.
+  describe "a delete while a poll is in flight" do
+    def drain_into_store(msgs) = msgs.each { |kind, list| store.update(list) if kind == :sessions }
+
+    it "does not bring the row back until the daemon has dropped it" do
+      poller.once
+      drain_into_store(messages)
+      _(store.sections.all.map(&:id)).must_include "f23c8673"
+
+      client.rm("f23c8673")
+      store.forget("f23c8673")
+      poller.once
+      msgs = messages
+      _(published_ids(msgs).first).must_include "f23c8673"
+      drain_into_store(msgs)
+      _(store.sections.all.map(&:id)).wont_include "f23c8673"
+      _(store.sessions.map(&:id)).wont_include "f23c8673"
     end
   end
 

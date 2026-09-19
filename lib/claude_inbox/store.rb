@@ -6,11 +6,8 @@ require_relative "store/row"
 require_relative "store/sections"
 
 module ClaudeInbox
-  # Snapshot of the last poll plus the per-session entry table, behind a
-  # mutex with a JSON file underneath. The values do the thinking: an
-  # `Entry` is what is remembered about one session, a `Row` pairs it with
-  # the session and carries the triage rules, and `Sections` is one poll
-  # sorted into sections. What is left here runs over the whole table.
+  # The last poll and the per-session entry table, behind a mutex, with
+  # state.json underneath.
   class Store
     PRUNE_AFTER = 7 * 24 * 3600 # forget entries not seen in a poll for this long
     REAP_AFTER = 14 * 24 * 3600 # seconds idle before a session is deleted outright
@@ -28,8 +25,6 @@ module ClaudeInbox
     # App and Renderer must agree on this, or j/k lands on rows the frame never painted.
     def self.folded?(name, expanded) = FOLDABLE_SECTIONS.include?(name) && !expanded[name]
 
-    # Fold a fresh poll into the entry table: prune what the daemon has
-    # forgotten, then let each session's Entry observe it. Returns a new table.
     def self.merge_entries(entries, sessions, now)
       out = entries.reject { |_, e| Entry.new(e).stale?(now) }.transform_values(&:dup)
       sessions.each do |s|
@@ -39,9 +34,6 @@ module ClaudeInbox
       out
     end
 
-    # (sessions, entries, now) -> Sections of Rows, each placed by
-    # `Row#section`. Interactive sessions land in Active (they're live) but
-    # are never selectable.
     def self.sectionize(sessions, entries, now)
       sec = Sections.new(pinned: [], needs_you: [], active: [], snoozed: [], settled: [])
       sessions.each do |s|
@@ -65,13 +57,20 @@ module ClaudeInbox
       @clock = clock
       @mutex = Mutex.new
       @sessions = []
+      @hidden = Set.new
+      @forgotten = Set.new
       @entries = load
     end
 
+    # A hidden or forgotten key the daemon has stopped listing is released;
+    # one it still lists stays out of sight.
     def update(sessions)
       @mutex.synchronize do
-        @sessions = sessions
-        @entries = self.class.merge_entries(@entries, sessions, @clock.call)
+        keys = sessions.map(&:key)
+        @hidden &= keys
+        @forgotten &= keys
+        @sessions = sessions.reject { |s| @hidden.include?(s.key) || @forgotten.include?(s.key) }
+        @entries = self.class.merge_entries(@entries, @sessions, @clock.call)
         save
       end
     end
@@ -104,26 +103,34 @@ module ClaudeInbox
     # The hand-set link, if any; nil means the scanned links are in force.
     def pr_for(id) = @mutex.synchronize { @entries[id] && Entry.new(@entries[id]).pr }
 
-    # session key => url, for PullRequests#enrich.
     def pr_overrides
       @mutex.synchronize { @entries.transform_values { |e| Entry.new(e).pr }.select { |_, url| url } }
     end
 
-    # Pairs a session with its entry for the rules and the Reaper, which read
-    # it through the Row's accessors rather than by key.
     def row(session) = Row.new(session: session, entry: session.key && entry(session.key)&.then { |e| Entry.new(e) })
 
-    # The raw hash, for the specs. Nothing in lib/ reads it: callers go
-    # through a Row or the readers above.
+    # The raw hash, for the specs; nothing in lib/ reads it.
     def entry(id) = @mutex.synchronize { @entries[id]&.dup }
 
-    # Forgets a session at once instead of waiting out PRUNE_AFTER, for one
-    # the daemon no longer has and that no future poll can bring back.
+    # Keeps rows out of sight while `claude rm` is on them, so none paints
+    # mid-delete; `release` brings back one `rm` refused. Memory only.
+    def hide(keys)
+      @mutex.synchronize do
+        @hidden.merge(keys)
+        @sessions = @sessions.reject { |s| keys.include?(s.key) }
+      end
+    end
+
+    def release(keys) = @mutex.synchronize { @hidden.subtract(keys) }
+
+    # A session `claude rm` has taken stays hidden until `update` sees the
+    # daemon has dropped it too. Kept apart from `hide` so a `release` on the
+    # same poll cannot bring back what the user deleted.
     def forget(id)
       @mutex.synchronize do
-        next unless @entries.delete(id)
+        @forgotten << id
         @sessions = @sessions.reject { |s| s.key == id }
-        save
+        save if @entries.delete(id)
       end
     end
 
