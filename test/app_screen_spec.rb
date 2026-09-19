@@ -210,6 +210,20 @@ describe ClaudeInbox::App do
     end
   end
 
+  describe "deleting a session" do
+    it "delivers the done notice through the queue, not from the worker" do
+      a = loaded_app("f23c8673")
+      queue = a.instance_variable_get(:@queue)
+      a.send(:delete_session, "f23c8673")
+
+      _(wait_for { client.removed == %w[f23c8673] && !queue.empty? }).must_equal true
+      _(a.instance_variable_get(:@notice)[0]).must_equal "deleting f23c8673…"
+
+      a.send(:drain_queue)
+      _(a.instance_variable_get(:@notice)[0]).must_equal "deleted f23c8673"
+    end
+  end
+
   describe "alias and pull request editors" do
     it "seed their buffer from the store, so reopening shows what was saved" do
       a = loaded_app("f23c8673")
