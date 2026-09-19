@@ -285,17 +285,11 @@ stays that way.
 
 The right end of the header shows how much of your Claude subscription's
 5-hour and 7-day rate limit windows you have used, as `usage 5h 24% · 7d 41%`.
-It only appears once you set it up, and it needs a Pro or Max account.
+It needs a Pro or Max account and a one-time setup.
 
-The CLI has no command for these numbers. `/usage` only works inside a
-session and `claude agents --json` does not carry them. What Claude Code does
-do is hand every session's [status line](https://code.claude.com/docs/en/statusline)
-script a `rate_limits` object each turn. So the inbox reads a file that your
-status line script writes, `~/.claude/rate_limits.json`. That costs no API
-calls, and with a couple of sessions running the script fires often enough
-to keep the file fresh.
-
-Put these two lines in your status line script, just after it reads stdin:
+Claude Code passes the numbers to your [status line](https://code.claude.com/docs/en/statusline)
+script every turn, and the inbox reads them from a file that script writes.
+Put these two lines in the script, just after it reads stdin:
 
 ```bash
 input=$(cat)
@@ -304,15 +298,12 @@ limits=$(echo "$input" | jq -c '.rate_limits // empty')
 ```
 
 If you have no status line script, run `/statusline` in any session and it
-writes one for you, then add the lines to that. Keep the `-n` check. A
-session's first status line run happens before its first API response, so it
-has no `rate_limits`, and writing anyway would blank a good file. The temp
-file and rename keep the inbox from reading a half-written one.
+writes one for you, then add the lines to that. Keep the `-n` check: a
+session's first status line run has no numbers yet, and writing anyway would
+blank the file.
 
-The label stays off while the file is missing, and goes off again once the
-file is more than fifteen minutes old, since a number no session has
-refreshed in that long is stale. `RateLimits` is the reader. It parses the
-file only when its mtime changes.
+The label stays off until the file exists, and goes off again once the file
+is more than fifteen minutes old.
 
 ## State
 
