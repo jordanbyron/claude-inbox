@@ -59,7 +59,7 @@ module ClaudeInbox
     #       now (Time), filter (String | nil), command,
     #       tick (Integer, drives the spinner),
     #       loading (Float seconds waited for the first poll, nil once it has landed),
-    #       screen ({lines:, footer:} takes over everything above the status bar, footer just over it)
+    #       screen ({lines:, footer:} takes over everything below the status bar, footer on the last line)
     def frame(sections, width:, height:, now:, **opts)
       return full_screen(sections, width, height, opts) if opts[:screen]
       selected = opts[:selected]
@@ -105,20 +105,22 @@ module ClaudeInbox
       top.clamp(0, [size - view_h, 0].max)
     end
 
+    # No `?` hint: a full screen claims every key, so it never reaches Keymap.
     def full_screen(sections, width, height, opts)
       view_h = height - 2
       body = opts[:screen][:lines].first(view_h)
       body += [""] * (view_h - body.size)
-      lines = body.map { |l| Text.pad(l, width) } + [Text.pad(" " + opts[:screen][:footer], width), status_bar(sections, width, opts)]
+      lines = [status_bar(sections, width, opts, keys_hint: false)] + body.map { |l| Text.pad(l, width) } + [Text.pad(" " + opts[:screen][:footer], width)]
       Frame.new(lines, [nil] * height, opts[:top] || 0, width)
     end
 
     # ----- chrome -------------------------------------------------------------
 
-    def status_bar(sections, width, opts)
+    def status_bar(sections, width, opts, keys_hint: true)
       return command_line(width, opts) if opts[:command] || opts[:filter]
       brand = " " + @theme.cyan_bold("▌ claude-inbox")
-      right = [opts[:status] && @p.dim(opts[:status]), opts[:usage] && @p.dim(opts[:usage]), @theme.cyan_bold("?") + @p.dim(" keys")].compact.join(@p.dim("  ·  ")) + " "
+      right = [opts[:status] && @p.dim(opts[:status]), opts[:usage] && @p.dim(opts[:usage]), keys_hint && @theme.cyan_bold("?") + @p.dim(" keys")]
+        .select { |s| s }.join(@p.dim("  ·  ")) + " "
       room = width - Text.width(brand) - Text.width(right) - 5
       chips = opts[:loading] ? "" : chips(sections, compact: false)
       chips = chips(sections, compact: true) if Text.width(chips) > room

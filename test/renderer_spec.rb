@@ -240,13 +240,14 @@ describe ClaudeInbox::Renderer do
     _(frame(command: "q").lines.last).must_match(/^ :q▏\s+$/)
   end
 
-  it "keeps the status bar under a full screen, with the screen's own keys just above it" do
-    f = frame(screen: {lines: ["  New session"], footer: "^S start"})
+  it "moves the status bar up top on a full screen, minus the ? hint, and gives the screen's keys the bottom" do
+    f = frame(screen: {lines: ["  New session"], footer: "^S start"}, status: "starting session…")
     _(f.lines.size).must_equal 24
-    _(f.lines.first).must_match(/^  New session\s+$/)
-    _(f.lines[-2]).must_match(/^ \^S start\s+$/)
-    _(f.lines.last).must_include "1 needs you"
-    _(f.lines.last).must_match(/\? keys $/)
+    _(f.lines.first).must_include "● 1"
+    _(f.lines.first).must_match(/starting session… $/)
+    _(f.lines.first).wont_include "? keys"
+    _(f.lines[1]).must_match(/^  New session\s+$/)
+    _(f.lines.last).must_match(/^ \^S start\s+$/)
     _(f.items.compact).must_be_empty
   end
 

@@ -104,7 +104,9 @@ The one line of chrome is the status bar at the bottom: a count per section
 (`● 1 needs you · z 1 snoozed`, shrunk to `● 1  z 1` when the terminal is
 narrow), then any notice or daemon error, then your subscription usage if you
 have [set that up](#usage), then `? keys`. While you type a `:` command or a
-`/` filter, that takes over the line, as in vim.
+`/` filter, that takes over the line, as in vim. The new-session form needs
+the bottom line for its own keys, so there the same bar sits at the top,
+without `? keys`: the form has every key while it is open.
 
 Bindings live in `ClaudeInbox::Keymap`, a pure resolver with chord support
 that is unit tested on its own. A fast `Esc` followed by `:` is split back
