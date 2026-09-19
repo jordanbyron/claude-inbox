@@ -173,7 +173,7 @@ module ClaudeInbox
     def status_text(now)
       return @notice[0] if @notice && now < @notice[1]
       return "⚠ #{@error}" if @error
-      return "polling…" unless @last_poll
+      "polling…" unless @last_poll
     end
 
     def filtered(sections = @store.sections) = sections.matching(@filter&.to_s)
