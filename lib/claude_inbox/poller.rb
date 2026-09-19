@@ -10,37 +10,53 @@ module ClaudeInbox
   # queue: [:sessions, list] for each hand-over, [:error, msg] when a poll
   # fails, [:notice, text] when the reaper took something. Nothing here
   # touches App's state directly; the queue is the whole of the interface.
+  #
+  # Every poll runs on one worker thread. The timer is a wait on a wake
+  # queue: `soon` drops a token on it and returns, and the worker polls
+  # either when a token lands or when the wait times out. A burst of
+  # wake-ups before the worker gets to them collapses into one poll. Two
+  # polls can never overlap, so the list can't be published out of order
+  # and the reaper and the gh refresh never run twice at once. `pause`
+  # skips the poll rather than the timer.
   class Poller
     INTERVAL = 4
 
-    def initialize(client:, store:, pull_requests:, jobs_dir:, reaper:, queue:)
+    def initialize(client:, store:, pull_requests:, jobs_dir:, reaper:, queue:, interval: INTERVAL)
       @client = client
       @store = store
       @pull_requests = pull_requests
       @jobs_dir = jobs_dir
       @reaper = reaper
       @queue = queue
+      @interval = interval
+      @wake = Queue.new
       @paused = false
+      @lock = Mutex.new
     end
 
+    # The first poll is a wake-up like any other, so the list is up as soon
+    # as the worker starts rather than an interval later.
     def start
-      @thread = Thread.new do
-        loop do
-          once unless @paused
-          sleep INTERVAL
-        end
-      end
+      soon
+      @thread = Thread.new { worker }
     end
 
     def stop = @thread&.kill
 
     # Skips the poll rather than the timer, so nothing forks `claude` while
-    # another process holds the terminal.
-    def pause = @paused = true
+    # another process holds the terminal. A poll already under way when this
+    # is called runs to its end; App pauses before it releases the terminal
+    # so that the next one, not the current one, is the one held back.
+    def pause = @lock.synchronize { @paused = true }
 
-    def resume = @paused = false
+    # Polls at once as well, so the list catches up the moment an attach
+    # returns instead of at the next tick.
+    def resume
+      @lock.synchronize { @paused = false }
+      soon
+    end
 
-    def soon = Thread.new { once }
+    def soon = @wake << true
 
     # PR lookups and the reap sweep both happen here, on the poller, so
     # neither a slow `gh` nor a `claude rm` can stall a frame. Neither is
@@ -72,6 +88,16 @@ module ClaudeInbox
     end
 
     private
+
+    def worker
+      loop do
+        @wake.pop(timeout: @interval)
+        @wake.clear
+        once unless paused?
+      end
+    end
+
+    def paused? = @lock.synchronize { @paused }
 
     # Hands the sessions minus `without` to the main thread; returns the
     # list it kept.

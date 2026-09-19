@@ -18,9 +18,9 @@ describe ClaudeInbox::Poller do
   let(:store) { ClaudeInbox::Store.new(path: nil) }
   let(:queue) { Queue.new }
 
-  def poller(reaper: ClaudeInbox::Reaper.disabled)
+  def poller(reaper: ClaudeInbox::Reaper.disabled, interval: ClaudeInbox::Poller::INTERVAL)
     ClaudeInbox::Poller.new(
-      client: client, store: store, reaper: reaper, queue: queue,
+      client: client, store: store, reaper: reaper, queue: queue, interval: interval,
       pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil),
       jobs_dir: fixture_path("jobs")
     )
@@ -82,6 +82,70 @@ describe ClaudeInbox::Poller do
       poller(reaper: reaper).once
 
       _(published_ids(messages).last).must_include "f23c8673"
+    end
+  end
+
+  # The worker is a real thread here, so these wait for it to act rather than
+  # assume it has, and only ever assert that something did *not* happen after
+  # giving it far longer than it needs.
+  describe "the worker" do
+    let(:client) do
+      Class.new(ClaudeInbox::FixtureClient) {
+        def polls = (@polls ||= Queue.new)
+
+        def list
+          polls << true
+          super
+        end
+      }.new(fixture_path("agents.json"))
+    end
+
+    def polls = client.polls.size
+
+    def wait_for_polls(n)
+      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 2
+      sleep 0.01 until polls >= n || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
+      polls
+    end
+
+    after { @poller&.stop }
+
+    it "polls once when started" do
+      @poller = poller(interval: 60)
+      @poller.start
+      _(wait_for_polls(1)).must_equal 1
+    end
+
+    it "collapses a burst of wake-ups into one poll" do
+      @poller = poller(interval: 60)
+      @poller.soon
+      @poller.soon
+      @poller.start
+      _(wait_for_polls(1)).must_equal 1
+      sleep 0.2
+      _(polls).must_equal 1
+    end
+
+    it "polls again on the interval" do
+      @poller = poller(interval: 0.05)
+      @poller.start
+      _(wait_for_polls(2)).must_be :>=, 2
+    end
+
+    it "skips the poll while paused and catches up on resume" do
+      @poller = poller(interval: 60)
+      @poller.pause
+      @poller.start
+      @poller.soon
+      sleep 0.2
+      _(polls).must_equal 0
+
+      @poller.resume
+      _(wait_for_polls(1)).must_equal 1
+    end
+
+    it "can be stopped before it was started" do
+      poller.stop
     end
   end
 end

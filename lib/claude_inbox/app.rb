@@ -382,7 +382,6 @@ module ClaudeInbox
       @terminal.release { @client.attach(id) }
     ensure
       @poller.resume
-      @poller.soon
     end
 
     # ----- modals -----------------------------------------------------------
@@ -433,7 +432,7 @@ module ClaudeInbox
         id = @client.spawn(**v)
         notice("started #{id}")
         @pending_select = id
-        attach ? @queue << [:attach, id] : @poller.once
+        attach ? @queue << [:attach, id] : @poller.soon
       end
     end
 
@@ -478,7 +477,7 @@ module ClaudeInbox
     def stop_session(id)
       in_background do
         @client.stop(id)
-        @poller.once
+        @poller.soon
       end
     end
 
@@ -488,7 +487,7 @@ module ClaudeInbox
         @client.rm(id)
         @store.forget(id)
         notice("deleted #{id}")
-        @poller.once
+        @poller.soon
       end
     end
 
