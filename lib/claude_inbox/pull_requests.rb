@@ -25,8 +25,8 @@ module ClaudeInbox
   #
   # Claude Code already does the hard part: the daemon scans each background
   # session's transcript for links and writes them to the session's job state
-  # file, which JobState reads onto `job_state` before `enrich` runs.
-  # `claude agents --json` does not expose them.
+  # file, which JobState reads onto `job_state`; `claude agents --json` does
+  # not expose them.
   # It is a link scan, so a session that merely mentions a PR gets it too.
   # Interactive sessions have no job file; for those the store's `pr` override
   # is the only source.
@@ -60,32 +60,29 @@ module ClaudeInbox
       @mutex = Mutex.new
     end
 
-    # Fills in `prs` on every session from what is already known, asking
-    # nobody. The scanned links come off `job_state`, so JobState.enrich runs
-    # first; a session without one (interactive, or forgotten) has no links.
-    # `overrides` maps session key => url for links set by hand; an override
-    # replaces the scanned list.
+    # Each session with its `prs` set from what is already known, asking
+    # nobody. The scanned links come off `job_state`, so a session without
+    # one (interactive, or forgotten) has none; Sessions.load sees to the
+    # order. `overrides` maps session key => url for links set by hand; an
+    # override replaces the scanned list.
     def enrich(sessions, overrides = {})
-      sessions.each do |s|
+      sessions.map do |s|
         urls = overrides[s.key] ? [overrides[s.key]] : (s.job_state&.pr_urls || [])
-        s.prs = urls.map { |u| known(u) }
+        s.with(prs: urls.map { |u| known(u) })
       end
-      sessions
     end
 
-    # Asks gh about every PR on these sessions that is due and writes the
-    # answers back into `prs`. True when any state changed, so the caller
-    # knows whether the list is worth publishing again.
+    # Asks gh about every PR on these sessions that is due. Returns the
+    # sessions with the answers on their `prs` and whether any state changed,
+    # so the caller knows whether the list is worth publishing again.
     def refresh(sessions)
       changed = false
-      sessions.each do |s|
-        s.prs = s.prs.map { |pr|
-          fresh = status(pr.url)
-          changed = true if fresh.state != pr.state
-          fresh
-        }
+      fresh = sessions.map do |s|
+        s.with(prs: s.prs.map { |pr|
+          status(pr.url).tap { |now| changed = true if now.state != pr.state }
+        })
       end
-      changed
+      [fresh, changed]
     end
 
     # Best known state for a url without asking gh.

@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
-require_relative "job_state"
-require_relative "pull_requests"
 require_relative "reaper"
+require_relative "sessions"
 require_relative "store"
 
 module ClaudeInbox
@@ -55,19 +54,19 @@ module ClaudeInbox
     # this list would be recreated moments after `forget` cleared it and
     # flicker back for a poll. So the reaper says what it is about to take
     # (a pure lookup) and those rows are held back from the first hand-over;
-    # only a refused reap brings one back. Rows are handed over as copies so
-    # the gh refresh can write PR states into its own set and publish again
-    # only if one moved.
+    # only a refused reap brings one back. The gh refresh comes last and
+    # publishes again only if a PR state moved.
     def once
       now = Time.now
-      sessions = @pull_requests.enrich(JobState.enrich(@client.list, jobs_dir: @jobs_dir), @store.pr_overrides)
+      sessions = Sessions.load(client: @client, jobs_dir: @jobs_dir, pull_requests: @pull_requests, overrides: @store.pr_overrides)
       doomed = @reaper.due(sessions, now)
       publish(sessions, doomed)
       reaped = @reaper.sweep(sessions, now)
       live = publish(sessions, reaped) if reaped != doomed
       live ||= sessions.reject { |s| doomed.include?(s.key) }
       notice_reaped(reaped) if reaped.any?
-      @queue << [:sessions, live] if @pull_requests.refresh(live)
+      fresh, moved = @pull_requests.refresh(live)
+      @queue << [:sessions, fresh] if moved
     rescue => e
       @queue << [:error, e.message]
     end
@@ -78,7 +77,7 @@ module ClaudeInbox
     # list it kept.
     def publish(sessions, without)
       live = sessions.reject { |s| without.include?(s.key) }
-      @queue << [:sessions, live.map(&:dup)]
+      @queue << [:sessions, live]
       live
     end
 

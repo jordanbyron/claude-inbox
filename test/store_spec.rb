@@ -41,7 +41,7 @@ describe Store do
       r = session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "u9", origin: :remote)
       e = Store.merge_entries({}, [r], now)
       _(e["u9"]["last_state"]).must_equal "working"
-      e = Store.merge_entries(e, [r.dup.tap { |x| x.status = "idle" }], now + 60)
+      e = Store.merge_entries(e, [r.with(status: "idle")], now + 60)
       _(e["u9"]["last_state"]).must_equal "done"
       _(e["u9"]["state_since"]).must_equal (now + 60).to_i
     end
