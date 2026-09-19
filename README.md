@@ -14,7 +14,8 @@ gem install claude-inbox
 claude-inbox
 ```
 
-Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
+Requires Ruby 3.2+ and a `claude` on PATH with the agents feature. Versions
+are published to rubygems and listed under GitHub Releases.
 `claude-inbox --version` prints the installed version.
 
 ## Sections
@@ -429,6 +430,7 @@ Sessions.load: AgentsClient → JobState → PullRequests  →  Poller  →  Sto
 ```
 bundle install
 bin/ci                       # full signoff: lint, gem audit, tests (see CONTRIBUTING.md)
+bin/release --dry-run        # the version the commits since the last tag call for
 bundle exec rake test        # minitest/spec, test/**/*_spec.rb
 bundle exec standardrb
 CLAUDE_INBOX_STDERR=/tmp/err.log bin/claude-inbox   # crash traces off the alt screen
