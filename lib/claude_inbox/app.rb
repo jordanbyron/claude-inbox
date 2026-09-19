@@ -445,7 +445,7 @@ module ClaudeInbox
     end
 
     def modal_lines(width)
-      @modal.frame(width) if @modal.is_a?(Dialog)
+      @modal.frame(width, @renderer.caret) if @modal.is_a?(Dialog)
     end
 
     def handle_modal_key(name, key)

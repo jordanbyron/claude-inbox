@@ -41,6 +41,7 @@ describe ClaudeInbox::Dialog do
 
   describe "prompt" do
     let(:dialog) { ClaudeInbox::Dialog::Prompt.new(:alias, "abc12345", "auth") }
+    let(:caret) { ->(cell) { "[#{cell}]" } }
 
     it "edits the line and saves it on enter" do
       _(dialog.press("!", "!")).must_be_nil
@@ -64,11 +65,19 @@ describe ClaudeInbox::Dialog do
       dialog.press(:ctrl_a, "\x01")
       dialog.press(:delete, "\e[3~")
       _(dialog.value).must_equal "ut-h"
-      _(dialog.frame(60).join("\n")).must_include "> \e[7mu\e[27mt-h"
+      _(dialog.frame(60, caret).join("\n")).must_include "> [u]t-h"
+    end
+
+    it "keeps a space the cursor sits on" do
+      dialog.press(:ctrl_w, "\x17")
+      dialog.press("a b", "a b")
+      dialog.press(:left, "\e[D")
+      dialog.press(:left, "\e[D")
+      _(dialog.frame(60, caret).join("\n")).must_include "> a[ ]b"
     end
 
     it "shows the line with a cursor, and its own question per kind" do
-      _(dialog.frame(60).join("\n")).must_include "> auth_"
+      _(dialog.frame(60, caret).join("\n")).must_include "> auth[ ]"
       pr = ClaudeInbox::Dialog::Prompt.new(:pr, "abc12345", "")
       _(pr.frame(60).join("\n")).must_include "Pull request URL (empty clears):"
     end

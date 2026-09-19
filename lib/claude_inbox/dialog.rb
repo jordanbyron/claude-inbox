@@ -17,9 +17,9 @@ module ClaudeInbox
       @id = id
     end
 
-    def frame(width)
+    def frame(width, caret = nil)
       box = [width - 4, 44].min
-      TTY::Box.frame(lines(box - 4).join("\n"), title: {top_left: title}, padding: [0, 1], width: box)
+      TTY::Box.frame(lines(box - 4, caret).join("\n"), title: {top_left: title}, padding: [0, 1], width: box)
         .split("\n")
     end
 
@@ -38,7 +38,7 @@ module ClaudeInbox
 
       def title = " Snooze "
 
-      def lines(_width) = MENU.map { |k, label, _| "  #{k}  #{label}" } + ["", "  esc  cancel"]
+      def lines(_width, _caret) = MENU.map { |k, label, _| "  #{k}  #{label}" } + ["", "  esc  cancel"]
 
       def press(name, key)
         return :cancel if name == :escape || key == "q"
@@ -56,7 +56,7 @@ module ClaudeInbox
 
       def title = TITLES.fetch(kind)
 
-      def lines(_width)
+      def lines(_width, _caret)
         case kind
         when :stop then ["  Stop session #{id}?", "", "  y  stop it", "  esc  cancel"]
         when :delete
@@ -77,7 +77,6 @@ module ClaudeInbox
     class Prompt < Dialog
       TITLES = {alias: " Alias ", pr: " Pull request "}.freeze
       QUESTIONS = {alias: "  New alias:", pr: "  Pull request URL (empty clears):"}.freeze
-      CURSOR = ->(cell) { (cell == " ") ? "_" : "\e[7m#{cell}\e[27m" }
 
       def initialize(kind, id, value)
         super(kind, id)
@@ -88,8 +87,8 @@ module ClaudeInbox
 
       def title = TITLES.fetch(kind)
 
-      def lines(width)
-        [QUESTIONS.fetch(kind), "", "  > " + @buffer.row(width - 4, cursor: CURSOR), "", "  ⏎ save · esc cancel"]
+      def lines(width, caret)
+        [QUESTIONS.fetch(kind), "", "  > " + @buffer.row(width - 4, cursor: caret), "", "  ⏎ save · esc cancel"]
       end
 
       def press(name, key)

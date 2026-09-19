@@ -58,6 +58,8 @@ module ClaudeInbox
       @home = home
     end
 
+    def caret = ->(cell) { @p.inverse(cell) }
+
     # opts: selected (id | :snoozed | :settled | nil), expanded ({snoozed:, settled:} => bool), top (scroll),
     #       peek (Array<String> | nil), peek_title, modal (Array<String> | nil),
     #       status (String), now (Time), filter (TextBuffer | nil), filter_editing, command (TextBuffer | nil),
@@ -161,9 +163,7 @@ module ClaudeInbox
       Text.pad(text, width)
     end
 
-    def line(buffer, width)
-      buffer.row(width, cursor: ->(cell) { (cell == " ") ? @p.dim("▏") : @p.inverse(cell) })
-    end
+    def line(buffer, width) = buffer.row(width, cursor: caret)
 
     def section_title(name, count, width)
       title = " #{SECTION_TITLES[name]} "
