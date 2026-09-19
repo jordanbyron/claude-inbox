@@ -11,6 +11,10 @@ describe ClaudeInbox::Session do
     _(s.job_state).must_be_nil
   end
 
+  it "answers [] for prs even when handed nil, as the Struct it replaced did" do
+    _(ClaudeInbox::Session.new(id: "abc12345", prs: nil).pr).must_be_nil
+  end
+
   # The poller publishes a list and then keeps working on it, so a step that
   # learns something new must not reach into what is already on screen.
   it "answers with a copy from with, leaving the original as it was" do

@@ -286,14 +286,14 @@ the 14-day reap that clears them.
 
 ```
 Sessions.load: AgentsClient → JobState → PullRequests  →  Poller  →  Store  →  Renderer  →  App
-               (shells out)   (jobs dir)  (job_state + gh)  (thread)   (pure)    (strings)   (terminal + key loop)
+               (shells out)   (jobs dir)  (known states)  (thread, then gh)  (pure)  (strings)  (terminal + key loop)
 ```
 
 - `AgentsClient` is the only thing that runs `claude`. `FixtureClient` swaps in a JSON file.
 - `Sessions.load` is the one place the list is put together: `AgentsClient`,
-  then `JobState`, then `PullRequests#enrich`, in that order because each reads
-  what the one before attached. `Session` is immutable; each step hands back
-  copies.
+  then `JobState`, then `PullRequests#enrich`, in that order because the links
+  `PullRequests` wants are the ones `JobState` read. `Session` is immutable; a
+  step that adds something hands back a copy.
 - `JobState` reads `~/.claude/jobs/<id>/state.json`, the daemon's own file: the scanned
   links `PullRequests` wants, the open work behind a `working` state, and the `/color`
   each session carries. Never cached. `enrich` returns each background session
