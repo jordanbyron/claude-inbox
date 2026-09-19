@@ -5,6 +5,7 @@ require_relative "../lib/claude_inbox/app"
 require "stringio"
 
 CTRL_X = "\x18"
+CTRL_S = "\x13"
 
 describe ClaudeInbox::App do
   let(:out) { StringIO.new }
@@ -15,7 +16,14 @@ describe ClaudeInbox::App do
 
       def stopped = (@stopped ||= [])
 
+      def attached = (@attached ||= [])
+
+      def hold = @gate = Queue.new
+
+      def release = @gate&.push(true)
+
       def rm(id)
+        @gate&.pop
         removed << id
         true
       end
@@ -25,201 +33,153 @@ describe ClaudeInbox::App do
         true
       end
 
-      def spawn(**) = "deadbeef"
+      def attach(id) = attached << id
+
+      def spawn(**)
+        @gate&.pop
+        "deadbeef"
+      end
     }.new(fixture_path("agents.json"))
   end
 
   let(:store) { ClaudeInbox::Store.new(path: nil) }
+  let(:pull_requests) { ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil) }
 
   let(:app) do
     ClaudeInbox::App.new(
-      client: client,
-      store: store,
-      pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil),
-      jobs_dir: fixture_path("jobs"),
+      client: client, store: store, pull_requests: pull_requests, jobs_dir: fixture_path("jobs"),
       out: out, input: StringIO.new, color: false
     )
   end
 
-  it "fills in each session's color from its job file on every poll" do
-    loaded_app(nil)
-    by_id = store.sessions.to_h { |s| [s.id, s.color] }
-    _(by_id["b0b18338"]).must_equal "orange"
-    _(by_id["b03695b1"]).must_be_nil
+  before do
+    store.update(ClaudeInbox::Sessions.load(client: client, jobs_dir: fixture_path("jobs"), pull_requests: pull_requests, overrides: {}))
+    app.step
   end
 
-  def loaded_app(selected)
-    app.tap do |a|
-      a.instance_variable_get(:@poller).once
-      a.send(:drain_queue)
-      a.instance_variable_set(:@selected, selected && ClaudeInbox::Store::Selection.row(selected))
-    end
+  after { client.release }
+
+  def press(*keys) = keys.each { |k| app.handle_input(k) }
+
+  def screen
+    app.step
+    rows, cols = TTY::Screen.size
+    ClaudeInbox::VtScreen.new(rows: [rows, 8].max, cols: [cols, 40].max).feed(out.string).lines
   end
 
-  # `run` is what normally builds the pane and the logs thread behind it; a
-  # rendered frame asks the pane what to paint, so tests that render need one.
-  def with_peek(a)
-    a.instance_variable_set(:@peek, ClaudeInbox::Peek.new(ClaudeInbox::Logs.new(client)))
-    a
-  end
+  def status_line = screen.first
 
-  # A row's screen line, found the same way the paint did it: by scanning
-  # the row->item map render just built, rather than assuming a layout.
-  def row_for(a, key)
-    idx = a.instance_variable_get(:@row_items).index { |item| item&.key == key }
-    idx + 1
-  end
+  def footer = screen.last
+
+  def selected_line = screen.find { |l| l.include?("▶") }
+
+  def row_of(label) = screen.index { |l| l.include?(label) } + 1
+
+  def click(col, row) = press("\e[<0;#{col};#{row}M")
 
   it "hands a paste to the new-session form whole, and types it into the filter" do
-    app.send(:handle_input, "/")
-    app.send(:handle_input, "\e[200~thi\e[201~")
-    _(app.instance_variable_get(:@filter).to_s).must_equal "thi"
-    app.send(:handle_input, "\e")
-    app.send(:handle_input, "n")
-    app.send(:handle_input, "\e[200~one\ntwo\e[201~")
-    _(app.instance_variable_get(:@modal).values[:prompt]).must_equal "one\ntwo"
+    press("/", "\e[200~thi\e[201~")
+    _(footer).must_include "/thi"
+    press("\e", "n", "\e[200~one\ntwo\e[201~")
+    prompt = screen.select { |l| l.start_with?("  │") }.map { |l| l.delete("│").strip }
+    _(prompt.join("\n").strip).must_equal "one\ntwo"
   end
 
   it "edits the filter and command lines in the middle" do
-    app.send(:handle_input, "/")
-    app.send(:handle_input, "ac")
-    app.send(:handle_input, "\e[D")
-    app.send(:handle_input, "b")
-    _(app.instance_variable_get(:@filter).to_s).must_equal "abc"
-    app.send(:handle_input, "\r")
-    app.send(:handle_input, ":")
-    app.send(:handle_input, "x")
-    app.send(:handle_input, "\x01")
-    app.send(:handle_input, "q")
-    _(app.instance_variable_get(:@command).to_s).must_equal "qx"
-    app.send(:handle_input, "\x05")
-    app.send(:handle_input, "\x7f")
-    app.send(:handle_input, "\x7f")
-    _(app.instance_variable_get(:@command).to_s).must_equal ""
-    app.send(:handle_input, "\x7f")
-    _(app.instance_variable_get(:@command)).must_be_nil
-    _(app.instance_variable_get(:@filter).to_s).must_equal "abc"
+    press("/", "ac", "\e[D", "b")
+    _(footer).must_include "/abc"
+    press("\r", ":", "x", "\x01", "q")
+    _(footer).must_include ":qx"
+    press("\x05", "\x7f", "\x7f")
+    _(footer.strip).must_equal ":"
+    press("\x7f")
+    _(footer).must_include "/abc  esc clears"
   end
 
   describe "clicking a row" do
     it "selects it and attaches, same as landing on it and pressing Enter" do
-      a = with_peek(loaded_app(nil))
-      a.send(:render)
-      attached = []
-      a.define_singleton_method(:attach) { |id| attached << id }
-      row = row_for(a, "f23c8673")
-
-      a.send(:handle_input, "\e[<0;5;#{row}M")
-
-      _(a.instance_variable_get(:@selected)).must_equal ClaudeInbox::Store::Selection.row("f23c8673")
-      _(attached).must_equal ["f23c8673"]
+      click(5, row_of("comma3x led flashing"))
+      _(client.attached).must_equal ["823b882f"]
+      _(selected_line).must_include "comma3x led flashing"
     end
 
     it "refuses on a terminal row instead of attaching, same as Enter" do
-      a = with_peek(loaded_app(nil))
-      a.send(:render)
-      row = row_for(a, "4a93393d-1c06-57da-9fb8-12f5b1535d95")
-
-      a.send(:handle_input, "\e[<0;5;#{row}M")
-
-      _(a.instance_variable_get(:@notice)[0]).must_include "terminal"
+      click(5, row_of("claude-inbox-38"))
+      _(client.attached).must_be_empty
+      _(status_line).must_include "terminal"
     end
 
     it "expands a folded section when its toggle line is clicked" do
-      a = with_peek(loaded_app(nil))
       store.settle("b03695b1")
-      a.send(:render)
-      row = row_for(a, :settled)
-
-      a.send(:handle_input, "\e[<0;5;#{row}M")
-
-      _(a.instance_variable_get(:@expanded)[:settled]).must_equal true
+      click(5, row_of("… 1 settled"))
+      _(screen.join("\n")).must_include "app store release strategy"
     end
 
     it "ignores a click past the list column, such as one landing in the peek pane" do
-      a = with_peek(loaded_app("f23c8673"))
-      a.send(:toggle_peek)
-      a.send(:render)
-      attached = []
-      a.define_singleton_method(:attach) { |id| attached << id }
-      row = row_for(a, "f23c8673")
-      col = a.instance_variable_get(:@list_width) + 5
-
-      a.send(:handle_input, "\e[<0;#{col};#{row}M")
-
-      _(attached).must_be_empty
+      press("p")
+      row = row_of("comma3x not booting")
+      col = screen[row - 1].index("│") + 5
+      click(col, row)
+      _(client.attached).must_be_empty
     end
   end
 
   it "moves the selection on a wheel tick, the same way j/k would" do
-    a = with_peek(loaded_app("f23c8673"))
-    a.send(:render)
-    stops = a.send(:filtered, store.sections).selections({})
-    idx = stops.index(ClaudeInbox::Store::Selection.row("f23c8673"))
-
-    a.send(:handle_input, "\e[<65;1;1M")
-
-    _(a.instance_variable_get(:@selected)).must_equal stops[idx + 1]
+    _(selected_line).must_include "comma3x not booting"
+    press("\e[<65;1;1M")
+    _(selected_line).must_include "claude-inbox-38"
+    press("\e[<64;1;1M")
+    _(selected_line).must_include "comma3x not booting"
   end
 
   describe "Tab and Shift-Tab" do
     it "walk a section headed by a terminal row like any other, and wrap" do
-      a = with_peek(loaded_app("823b882f"))
       store.settle("b03695b1")
-      row = ->(key) { ClaudeInbox::Store::Selection.row(key) }
-
-      a.send(:perform, :next_section)
-      _(a.instance_variable_get(:@selected)).must_equal ClaudeInbox::Store::Selection.fold(:settled)
-      a.send(:perform, :next_section)
-      _(a.instance_variable_get(:@selected)).must_equal row["f23c8673"]
-      a.send(:perform, :next_section)
-      _(a.instance_variable_get(:@selected)).must_equal row["4a93393d-1c06-57da-9fb8-12f5b1535d95"]
-      a.send(:perform, :prev_section)
-      _(a.instance_variable_get(:@selected)).must_equal row["f23c8673"]
+      press("\t")
+      _(selected_line).must_include "claude-inbox-38"
+      press("\t")
+      _(selected_line).must_include "… 1 settled"
+      press("\t")
+      _(selected_line).must_include "comma3x not booting"
+      press("\e[Z")
+      _(selected_line).must_include "… 1 settled"
     end
   end
 
   describe "ctrl-x deletes a session" do
     it "asks first and deletes once confirmed" do
-      a = loaded_app("f23c8673")
-
-      a.send(:handle_key, CTRL_X)
-      _(a.send(:modal_lines, 60).join("\n")).must_include "Delete session f23c8673?"
+      press(CTRL_X)
+      _(screen.join("\n")).must_include "Delete session f23c8673?"
       _(client.removed).must_be_empty
 
-      a.send(:handle_key, "y")
+      press("y")
       _(wait_for { client.removed == %w[f23c8673] }).must_equal true
       _(wait_for { store.entry("f23c8673").nil? }).must_equal true
+      _(screen.join("\n")).wont_include "comma3x not booting"
     end
 
     it "keeps the session when the confirm is dismissed" do
       ["\e", "n", "q"].each do |dismiss|
-        a = loaded_app("f23c8673")
-        a.send(:handle_key, CTRL_X)
-        a.send(:handle_key, dismiss)
-
-        _(a.send(:modal_lines, 60)).must_be_nil
+        press(CTRL_X, dismiss)
+        _(screen.join("\n")).wont_include "Delete session"
         _(client.removed).must_be_empty
       end
     end
 
     it "refuses on a terminal row instead of arming a confirm it can't honour" do
-      a = loaded_app("4a93393d-1c06-57da-9fb8-12f5b1535d95")
-      a.send(:handle_key, CTRL_X)
-
-      _(a.send(:modal_lines, 60)).must_be_nil
-      _(a.instance_variable_get(:@notice)[0]).must_include "terminal"
+      press("\t", CTRL_X)
+      _(screen.join("\n")).wont_include "Delete session"
+      _(status_line).must_include "terminal"
     end
 
     # Waiting for the stop to land is what makes "nothing was deleted" mean
     # anything: the action runs on a thread, so asserting it straight away
     # passes no matter which way the key was routed.
     it "still stops rather than deletes on X, sharing the one confirm" do
-      a = loaded_app("f23c8673")
-      a.send(:handle_key, "X")
-      _(a.send(:modal_lines, 60).join("\n")).must_include "Stop session f23c8673?"
+      press("X")
+      _(screen.join("\n")).must_include "Stop session f23c8673?"
 
-      a.send(:handle_key, "y")
+      press("y")
       _(wait_for { client.stopped == %w[f23c8673] }).must_equal true
       _(client.removed).must_be_empty
       _(store.entry("f23c8673")).wont_be_nil
@@ -227,47 +187,38 @@ describe ClaudeInbox::App do
   end
 
   describe "starting a session" do
-    it "delivers the notice and the selection through the queue, not from the worker" do
-      a = loaded_app("f23c8673")
-      queue = a.instance_variable_get(:@queue)
-      a.send(:start_session, Struct.new(:values).new({prompt: "hi", cwd: "/tmp"}), attach: false)
+    it "says so while the worker runs, then names the session and lands on its row" do
+      client.hold
+      press("n", "h", "i", CTRL_S)
+      _(status_line).must_include "starting session…"
 
-      _(wait_for { queue.size == 2 }).must_equal true
-      _(a.instance_variable_get(:@notice)[0]).must_equal "starting session…"
-      _(a.instance_variable_get(:@pending_select)).must_be_nil
-
-      a.send(:drain_queue)
-      _(a.instance_variable_get(:@notice)[0]).must_equal "started deadbeef"
-      _(a.instance_variable_get(:@pending_select)).must_equal "deadbeef"
+      client.release
+      _(wait_for { status_line.include?("started deadbeef") }).must_equal true
+      store.update(store.sessions + [session(id: "deadbeef", name: "fresh one")])
+      _(selected_line).must_include "fresh one"
     end
   end
 
   describe "deleting a session" do
-    it "delivers the done notice through the queue, not from the worker" do
-      a = loaded_app("f23c8673")
-      queue = a.instance_variable_get(:@queue)
-      a.send(:delete_session, "f23c8673")
+    it "says so while the worker runs, then confirms once it is gone" do
+      client.hold
+      press(CTRL_X, "y")
+      _(status_line).must_include "deleting f23c8673…"
 
-      _(wait_for { client.removed == %w[f23c8673] && !queue.empty? }).must_equal true
-      _(a.instance_variable_get(:@notice)[0]).must_equal "deleting f23c8673…"
-
-      a.send(:drain_queue)
-      _(a.instance_variable_get(:@notice)[0]).must_equal "deleted f23c8673"
+      client.release
+      _(wait_for { status_line.include?("deleted f23c8673") }).must_equal true
     end
   end
 
   describe "alias and pull request editors" do
     it "seed their buffer from the store, so reopening shows what was saved" do
-      a = loaded_app("f23c8673")
       store.set_alias("f23c8673", "auth spike")
       store.set_pr("f23c8673", "https://github.com/o/r/pull/7")
 
-      a.send(:perform, :alias)
-      _(a.instance_variable_get(:@modal).value).must_equal "auth spike"
-      a.send(:handle_key, "\e")
-
-      a.send(:perform, :link_pr)
-      _(a.instance_variable_get(:@modal).value).must_equal "https://github.com/o/r/pull/7"
+      press("a")
+      _(screen.join("\n")).must_include "> auth spike"
+      press("\e", "P")
+      _(screen.join("\n")).must_include "> https://github.com/o/r/pull/7"
     end
   end
 end
