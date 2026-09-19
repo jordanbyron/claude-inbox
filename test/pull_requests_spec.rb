@@ -25,10 +25,8 @@ describe PullRequests do
   end
 
   it "enriches sessions, letting an override replace the scanned list" do
-    a = session(id: "b03695b1")
-    b = session(id: "b0b18338")
-    ClaudeInbox::JobState.enrich([a, b], jobs_dir: fixture_path("jobs"))
-    prs.enrich([a, b], {"b0b18338" => "https://github.com/o/r/pull/1"})
+    sessions = ClaudeInbox::JobState.enrich([session(id: "b03695b1"), session(id: "b0b18338")], jobs_dir: fixture_path("jobs"))
+    a, b = prs.enrich(sessions, {"b0b18338" => "https://github.com/o/r/pull/1"})
     _(a.prs.map(&:number)).must_equal [856, 866]
     _(b.prs.map(&:number)).must_equal [1]
   end
@@ -70,18 +68,35 @@ describe PullRequests do
       calls << url
       PullRequest.new(number: url[/\d+\z/].to_i, url: url, state: "OPEN")
     end
-    a = session(id: "b03695b1")                        # 856 and 866, both resolved in the cache
-    b = session(id: "b0b18338")                        # nothing scanned; linked by hand below
-    ClaudeInbox::JobState.enrich([a, b], jobs_dir: fixture_path("jobs"))
-    client.enrich([a, b], {"b0b18338" => "https://github.com/o/r/pull/1"})
+    sessions = ClaudeInbox::JobState.enrich([
+      session(id: "b03695b1"), # 856 and 866, both resolved in the cache
+      session(id: "b0b18338")  # nothing scanned; linked by hand below
+    ], jobs_dir: fixture_path("jobs"))
+    a, b = client.enrich(sessions, {"b0b18338" => "https://github.com/o/r/pull/1"})
     _(calls).must_be_empty
     _(a.prs.map(&:state)).must_equal %w[MERGED CLOSED]
     _(b.prs.map(&:state)).must_equal [nil]
 
-    _(client.refresh([a, b])).must_equal true
+    (_, fresh_b), moved = client.refresh([a, b])
+    _(moved).must_equal true
     _(calls.map { |u| u[/\d+\z/] }).must_equal %w[1] # resolved PRs are never asked about
-    _(b.prs.map(&:state)).must_equal %w[OPEN]
-    _(client.refresh([a, b])).must_equal false # inside the refresh window: nothing moved
+    _(fresh_b.prs.map(&:state)).must_equal %w[OPEN]
+    _, moved = client.refresh([a, fresh_b])
+    _(moved).must_equal false # inside the refresh window: nothing moved
+  end
+
+  # The poller hands the list to the main thread before it asks gh, so the
+  # answers must land on new sessions, not on the ones already published.
+  it "leaves the sessions it refreshed as they were" do
+    client = PullRequests.new(cache_path: nil, resolved_path: nil, gh: "gh", clock: -> { now })
+    client.define_singleton_method(:fetch) { |u| PullRequest.new(number: 1, url: u, state: "OPEN") }
+    before = client.enrich([session(id: "x")], {"x" => "https://github.com/o/r/pull/1"}).first
+    _(before.prs.map(&:state)).must_equal [nil]
+
+    (after,), moved = client.refresh([before])
+    _(moved).must_equal true
+    _(after.prs.map(&:state)).must_equal %w[OPEN]
+    _(before.prs.map(&:state)).must_equal [nil]
   end
 
   it "remembers merged and closed PRs on disk so the next launch never asks" do

@@ -33,11 +33,11 @@ module ClaudeInbox
       "monitor" => "monitor"
     }.freeze
 
-    # Fills `job_state` on every background session. Interactive sessions have
-    # no job file, and neither does one the daemon has already forgotten.
+    # Each background session with its job file read onto `job_state`, or nil
+    # when there is none: interactive sessions have no job file, and neither
+    # does one the daemon has already forgotten. Sessions.load calls this.
     def self.enrich(sessions, jobs_dir: DEFAULT_DIR)
-      sessions.each { |s| s.job_state = read(s.id, jobs_dir: jobs_dir) if s.background? }
-      sessions
+      sessions.map { |s| s.background? ? s.with(job_state: read(s.id, jobs_dir: jobs_dir)) : s }
     end
 
     # => JobState, or nil when there is no readable file for this id.

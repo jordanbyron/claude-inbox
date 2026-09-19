@@ -106,8 +106,9 @@ module ClaudeInbox
     # origin, terminal when unlisted) and drops the unattended ones, whose
     # parent is the row worth showing.
     def assign_origins(sessions, origins)
-      sessions.each { |s| s.origin = origins.fetch(s.pid, :terminal) if s.interactive? }
-      sessions.reject(&:unattended?)
+      sessions
+        .map { |s| s.interactive? ? s.with(origin: origins.fetch(s.pid, :terminal)) : s }
+        .reject(&:unattended?)
     end
 
     # pid => origin, given `ps` for the sessions and for their parents. Pure.

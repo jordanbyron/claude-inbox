@@ -81,9 +81,10 @@ describe JobState do
   it "enriches background sessions only" do
     Dir.mktmpdir do |dir|
       write_job(dir, "aaa11111", "tempo" => "idle", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}])
-      bg = session(id: "aaa11111")
-      term = session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "u1")
-      JobState.enrich([bg, term], jobs_dir: dir)
+      bg, term = JobState.enrich([
+        session(id: "aaa11111"),
+        session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "u1")
+      ], jobs_dir: dir)
       _(bg.job_state.in_flight_label).must_equal "1 shell"
       _(bg).must_be :waiting_on_work?
       _(term.job_state).must_be_nil

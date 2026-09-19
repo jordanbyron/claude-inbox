@@ -285,17 +285,23 @@ the 14-day reap that clears them.
 ## Layout
 
 ```
-AgentsClient  →  JobState  →  PullRequests  →  Poller  →  Store  →  Renderer  →  App
- (shells out)    (jobs dir)   (job_state + gh)  (thread)   (pure)    (strings)   (terminal + key loop)
+Sessions.load: AgentsClient → JobState → PullRequests  →  Poller  →  Store  →  Renderer  →  App
+               (shells out)   (jobs dir)  (job_state + gh)  (thread)   (pure)    (strings)   (terminal + key loop)
 ```
 
 - `AgentsClient` is the only thing that runs `claude`. `FixtureClient` swaps in a JSON file.
+- `Sessions.load` is the one place the list is put together: `AgentsClient`,
+  then `JobState`, then `PullRequests#enrich`, in that order because each reads
+  what the one before attached. `Session` is immutable; each step hands back
+  copies.
 - `JobState` reads `~/.claude/jobs/<id>/state.json`, the daemon's own file: the scanned
   links `PullRequests` wants, the open work behind a `working` state, and the `/color`
-  each session carries. Never cached.
-- `PullRequests` fills in each session's `prs` from its `job_state` and `gh`.
-  `enrich` never asks gh; `refresh` is the slow half and runs after the list
-  has gone up. `--fixture` points it at `test/fixtures/jobs` with `gh` off.
+  each session carries. Never cached. `enrich` returns each background session
+  with its file attached, for `Sessions.load`.
+- `PullRequests` pairs each session with the PRs its `job_state` links and keeps
+  their state fresh through `gh`. `enrich` never asks gh and runs inside
+  `Sessions.load`; `refresh` is the slow half and runs after the list has gone
+  up. `--fixture` points it at `test/fixtures/jobs` with `gh` off.
 - `Palette` maps a session color to an escape sequence and knows nothing else.
 - `Store` holds the last poll and the entry table behind a mutex, and folds each poll in.
   `Store::Entry` is what is remembered about one session, and the only place the state file's key names appear.
@@ -307,10 +313,10 @@ AgentsClient  →  JobState  →  PullRequests  →  Poller  →  Store  →  Re
   line to the log for each one. `due` names them without touching anything;
   `sweep` does the deleting. Both run on the poller, and the list goes up
   between them, so a slow `rm` stalls neither a frame nor the first one.
-- `Poller` is the thread that asks `AgentsClient` for the list, every four
-  seconds and on demand, runs it through `JobState`, `PullRequests` and the
-  `Reaper` in the order above, and hands each result to `App` over a queue.
-  `App` pauses it while `claude attach` has the terminal.
+- `Poller` is the thread that asks `Sessions.load` for the list, every four
+  seconds and on demand, runs it past the `Reaper` and then the gh refresh,
+  and hands each result to `App` over a queue. `App` pauses it while `claude
+  attach` has the terminal.
 - `Terminal` is the screen: the alt screen with its mouse and wheel modes, raw
   mode, the cached size and the `Painter` that diffs frames onto it. `release`
   lends it to `claude attach` and takes it back.

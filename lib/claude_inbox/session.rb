@@ -6,17 +6,21 @@ module ClaudeInbox
   # a waiting one needs you, a busy one is working.
   INTERACTIVE_STATE = {"busy" => "working", "waiting" => "blocked", "idle" => "done"}.freeze
 
-  # One entry from `claude agents --json`. Plain value object; no behaviour
-  # beyond parsing and a few predicates.
-  Session = Struct.new(
+  # One entry from `claude agents --json`. Immutable value object; no
+  # behaviour beyond parsing and a few predicates. AgentsClient, JobState and
+  # PullRequests each hand back a copy with one more member set (`with`),
+  # never a changed original, so a list already handed to another thread
+  # cannot move under it.
+  Session = Data.define(
     :id, :cwd, :kind, :started_at, :session_id, :name,
     :state, :pid, :status, :waiting_for, :origin, :prs, :job_state
   ) do
-    # An unfilled session answers [] for prs rather than nil, so nobody has
-    # to know whether PullRequests has been past yet.
-    def initialize(*args, **kwargs)
+    # Every member is optional so the parser and the specs can name only the
+    # ones they have. A session nobody has been past yet answers [] for prs
+    # rather than nil, so nobody has to know whether PullRequests has.
+    def initialize(id: nil, cwd: nil, kind: nil, started_at: nil, session_id: nil, name: nil,
+      state: nil, pid: nil, status: nil, waiting_for: nil, origin: nil, prs: [], job_state: nil)
       super
-      self.prs ||= []
     end
 
     def self.from_hash(h)
@@ -44,8 +48,8 @@ module ClaudeInbox
     def effective_state = state || INTERACTIVE_STATE[status] || "done"
 
     # Where an interactive session is driven from. The JSON does not say;
-    # AgentsClient fills this in from the process tree, then drops
-    # :subagent rows before anyone downstream sees them.
+    # AgentsClient reads it off the process tree, then drops :subagent rows
+    # before anyone downstream sees them.
     #   :terminal  a claude you opened in a terminal yourself
     #   :remote    a Remote Control worker driven from claude.ai/code, unreachable from here
     #   :subagent  a sub-agent spawned locally by another claude process; attach to that parent instead
@@ -83,7 +87,7 @@ module ClaudeInbox
 
     def project = cwd ? File.basename(cwd) : ""
 
-    # First of the pull requests tied to this session; PullRequests fills them in.
+    # First of the pull requests tied to this session; PullRequests finds them.
     def pr = prs.first
   end
 end
