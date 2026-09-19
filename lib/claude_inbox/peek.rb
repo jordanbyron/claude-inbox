@@ -29,10 +29,9 @@ module ClaudeInbox
 
     def close = @open = false
 
-    # Called on every selection change. `session` is the selected session
-    # when the key names one; a fold has none.
-    def select(key, session)
-      @selected = key
+    # Called on every selection change; a fold has no session.
+    def select(selection, session)
+      @selected = selection
       @session = session
       @offset = 0
       @logs.want(session.id) if session&.actionable?
@@ -46,8 +45,8 @@ module ClaudeInbox
     # `row` is the selected row as the frame shows it, or nil when nothing is
     # selected. Answers nil when there is no pane to paint.
     def view(row, height)
-      return nil unless @open && @selected.is_a?(String)
-      View.new(scrolled(body(row), height - 2), row&.label || @selected, subtitle(row))
+      return nil unless @open && @selected&.row?
+      View.new(scrolled(body(row), height - 2), row&.label || @selected.key, subtitle(row))
     end
 
     private

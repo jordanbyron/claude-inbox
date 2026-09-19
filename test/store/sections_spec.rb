@@ -15,41 +15,47 @@ describe ClaudeInbox::Store::Sections do
     sections([terminal, session(id: "a", state: "blocked"), session(id: "b"), session(id: "c", name: "Other", cwd: "/srv/other"), session(id: "z", state: "done")], entries)
   end
 
-  it "finds a row by key, or nothing" do
-    _(sec.row("a").id).must_equal "a"
-    _(sec.row("uuid").session.session_id).must_equal "uuid"
-    _(sec.row("nope")).must_be_nil
-    _(sec.row(:settled)).must_be_nil
+  def row(key) = Store::Selection.row(key)
+
+  def fold(name) = Store::Selection.fold(name)
+
+  it "finds a row by its selection, or nothing" do
+    _(sec.row(row("a")).id).must_equal "a"
+    _(sec.row(row("uuid")).session.session_id).must_equal "uuid"
+    _(sec.row(row("nope"))).must_be_nil
+    _(sec.row(fold(:settled))).must_be_nil
+    _(sec.row(nil)).must_be_nil
   end
 
-  it "lists the keys the cursor can land on, a fold standing in for its rows" do
-    _(sec.selectable_keys({})).must_equal ["b", "a", "uuid", "c", :settled]
-    _(sec.selectable_keys({settled: true})).must_equal %w[b a uuid c z]
+  it "lists where the cursor can land, a fold standing in for its rows" do
+    _(sec.selections({})).must_equal [row("b"), row("a"), row("uuid"), row("c"), fold(:settled)]
+    _(sec.selections({settled: true})).must_equal %w[b a uuid c z].map { |k| row(k) }
   end
 
-  it "leaves an empty fold out of the landable keys" do
-    _(sections([session(id: "a")]).selectable_keys({})).must_equal %w[a]
+  it "leaves an empty fold out of the landable selections" do
+    _(sections([session(id: "a")]).selections({})).must_equal [row("a")]
   end
 
   it "skips rows with no key" do
     keyless = session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: nil)
-    _(sections([keyless, session(id: "a")]).selectable_keys({})).must_equal %w[a]
+    _(sections([keyless, session(id: "a")]).selections({})).must_equal [row("a")]
   end
 
-  it "names the section a key lives in, and a fold answers itself" do
-    _(sec.section_of("b")).must_equal :pinned
-    _(sec.section_of("a")).must_equal :needs_you
-    _(sec.section_of("uuid")).must_equal :active
-    _(sec.section_of("z")).must_equal :settled
-    _(sec.section_of(:snoozed)).must_equal :snoozed
-    _(sec.section_of("nope")).must_be_nil
+  it "names the section a selection lives in, and a fold answers itself" do
+    _(sec.section_of(row("b"))).must_equal :pinned
+    _(sec.section_of(row("a"))).must_equal :needs_you
+    _(sec.section_of(row("uuid"))).must_equal :active
+    _(sec.section_of(row("z"))).must_equal :settled
+    _(sec.section_of(fold(:snoozed))).must_equal :snoozed
+    _(sec.section_of(row("nope"))).must_be_nil
+    _(sec.section_of(nil)).must_be_nil
   end
 
   it "heads each section with its fold, or its first selectable row" do
     heads = sec.heads({})
     _(heads.map(&:first)).must_equal %i[pinned needs_you active settled]
-    _(heads.map { |_, row| row&.key }).must_equal ["b", "a", "uuid", nil]
-    _(sec.heads({settled: true}).map { |_, row| row&.key }).must_equal %w[b a uuid z]
+    _(heads.map(&:last)).must_equal [row("b"), row("a"), row("uuid"), fold(:settled)]
+    _(sec.heads({settled: true}).map(&:last)).must_equal %w[b a uuid z].map { |k| row(k) }
   end
 
   it "filters by label or cwd, case-insensitively, and keeps rows in their sections" do

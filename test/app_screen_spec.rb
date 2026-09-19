@@ -52,7 +52,7 @@ describe ClaudeInbox::App do
     app.tap do |a|
       a.instance_variable_get(:@poller).once
       a.send(:drain_queue)
-      a.instance_variable_set(:@selected, selected)
+      a.instance_variable_set(:@selected, selected && ClaudeInbox::Store::Selection.row(selected))
     end
   end
 
@@ -90,7 +90,7 @@ describe ClaudeInbox::App do
 
       a.send(:handle_input, "\e[<0;5;#{row}M")
 
-      _(a.instance_variable_get(:@selected)).must_equal "f23c8673"
+      _(a.instance_variable_get(:@selected)).must_equal ClaudeInbox::Store::Selection.row("f23c8673")
       _(attached).must_equal ["f23c8673"]
     end
 
@@ -133,12 +133,29 @@ describe ClaudeInbox::App do
   it "moves the selection on a wheel tick, the same way j/k would" do
     a = with_peek(loaded_app("f23c8673"))
     a.send(:render)
-    keys = a.send(:filtered, store.sections).selectable_keys({})
-    idx = keys.index("f23c8673")
+    stops = a.send(:filtered, store.sections).selections({})
+    idx = stops.index(ClaudeInbox::Store::Selection.row("f23c8673"))
 
     a.send(:handle_input, "\e[<65;1;1M")
 
-    _(a.instance_variable_get(:@selected)).must_equal keys[idx + 1]
+    _(a.instance_variable_get(:@selected)).must_equal stops[idx + 1]
+  end
+
+  describe "Tab and Shift-Tab" do
+    it "walk a section headed by a terminal row like any other, and wrap" do
+      a = with_peek(loaded_app("823b882f"))
+      store.settle("b03695b1")
+      row = ->(key) { ClaudeInbox::Store::Selection.row(key) }
+
+      a.send(:perform, :next_section)
+      _(a.instance_variable_get(:@selected)).must_equal ClaudeInbox::Store::Selection.fold(:settled)
+      a.send(:perform, :next_section)
+      _(a.instance_variable_get(:@selected)).must_equal row["f23c8673"]
+      a.send(:perform, :next_section)
+      _(a.instance_variable_get(:@selected)).must_equal row["4a93393d-1c06-57da-9fb8-12f5b1535d95"]
+      a.send(:perform, :prev_section)
+      _(a.instance_variable_get(:@selected)).must_equal row["f23c8673"]
+    end
   end
 
   describe "ctrl-x deletes a session" do

@@ -3,6 +3,7 @@
 require_relative "records"
 require_relative "store/entry"
 require_relative "store/row"
+require_relative "store/selection"
 require_relative "store/sections"
 
 module ClaudeInbox

@@ -13,7 +13,9 @@ module ClaudeInbox
   # Pure: no terminal, no IO, no clock beyond the `now` it is handed.
   class Renderer
     Item = Struct.new(:kind, :row, :section) do
-      def key = (kind == :fold_toggle) ? section : row&.key
+      def selection = (kind == :fold_toggle) ? Store::Selection.fold(section) : Store::Selection.row(row.key)
+
+      def key = selection.key
     end
 
     Frame = Struct.new(:lines, :items, :top, :list_width)

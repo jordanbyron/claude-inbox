@@ -8,37 +8,37 @@ module ClaudeInbox
 
       def all = SECTIONS.flat_map { |k| self[k] }
 
-      def row(key) = all.find { |r| r.key == key }
+      def row(selection)
+        all.find { |r| r.key == selection.key } if selection&.row?
+      end
 
       def matching(query)
         return self if query.nil? || query.empty?
         self.class.new(**to_h.transform_values { |rows| rows.select { |r| r.matches?(query) } })
       end
 
-      def section_of(key)
-        return key if FOLDABLE_SECTIONS.include?(key)
-        each_section { |name, rows| return name if rows.any? { |r| r.key == key } }
+      def section_of(selection)
+        return nil if selection.nil?
+        return selection.key if selection.fold?
+        each_section { |name, rows| return name if rows.any? { |r| r.key == selection.key } }
         nil
       end
 
-      def selectable_keys(expanded)
-        stops(expanded).flat_map { |name, rows| rows ? rows.map(&:key) : [name] }
-      end
+      def selections(expanded) = stops(expanded).flat_map(&:last)
 
-      # `[name, row]` per section, row nil where the fold itself is the stop.
+      # `[name, selection]` per section: its first row, or the fold standing in for them.
       def heads(expanded)
-        stops(expanded).filter_map { |name, rows| [name, rows&.first] if rows.nil? || rows.any? }
+        stops(expanded).filter_map { |name, stops| [name, stops.first] if stops.any? }
       end
 
       private
 
-      # nil for a folded section, whose fold is the stop; an empty fold is
-      # left out, since there is nothing under it to open.
+      # An empty fold is left out, since there is nothing under it to open.
       def stops(expanded)
         SECTIONS.filter_map do |name|
           rows = self[name]
-          if !Store.folded?(name, expanded) then [name, rows.select(&:selectable?)]
-          elsif rows.any? then [name, nil]
+          if !Store.folded?(name, expanded) then [name, rows.select(&:selectable?).map { |r| Selection.row(r.key) }]
+          elsif rows.any? then [name, [Selection.fold(name)]]
           end
         end
       end
