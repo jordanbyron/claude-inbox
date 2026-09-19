@@ -58,15 +58,18 @@ module ClaudeInbox
       @mutex = Mutex.new
       @sessions = []
       @hidden = Set.new
+      @forgotten = Set.new
       @entries = load
     end
 
-    # A hidden key the daemon has stopped listing is released; one it still
-    # lists stays out of sight.
+    # A hidden or forgotten key the daemon has stopped listing is released;
+    # one it still lists stays out of sight.
     def update(sessions)
       @mutex.synchronize do
-        @hidden &= sessions.map(&:key)
-        @sessions = sessions.reject { |s| @hidden.include?(s.key) }
+        keys = sessions.map(&:key)
+        @hidden &= keys
+        @forgotten &= keys
+        @sessions = sessions.reject { |s| @hidden.include?(s.key) || @forgotten.include?(s.key) }
         @entries = self.class.merge_entries(@entries, @sessions, @clock.call)
         save
       end
@@ -111,15 +114,21 @@ module ClaudeInbox
 
     # Keeps rows out of sight while `claude rm` is on them, so none paints
     # mid-delete; `release` brings back one `rm` refused. Memory only.
-    def hide(keys) = @mutex.synchronize { @hidden.merge(keys) }
+    def hide(keys)
+      @mutex.synchronize do
+        @hidden.merge(keys)
+        @sessions = @sessions.reject { |s| keys.include?(s.key) }
+      end
+    end
 
     def release(keys) = @mutex.synchronize { @hidden.subtract(keys) }
 
     # A session `claude rm` has taken stays hidden until `update` sees the
-    # daemon has dropped it too.
+    # daemon has dropped it too. Kept apart from `hide` so a `release` on the
+    # same poll cannot bring back what the user deleted.
     def forget(id)
       @mutex.synchronize do
-        @hidden << id
+        @forgotten << id
         @sessions = @sessions.reject { |s| s.key == id }
         save if @entries.delete(id)
       end

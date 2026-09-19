@@ -60,8 +60,12 @@ module ClaudeInbox
       doomed = @reaper.due(sessions, now)
       @store.hide(doomed)
       @queue << [:sessions, sessions]
-      reaped = @reaper.sweep(sessions.select { |s| doomed.include?(s.key) }, now)
-      @store.release(doomed - reaped)
+      reaped = []
+      begin
+        reaped = @reaper.sweep(sessions.select { |s| doomed.include?(s.key) }, now)
+      ensure
+        @store.release(doomed - reaped)
+      end
       @queue << [:sessions, sessions] if reaped != doomed
       notice_reaped(reaped) if reaped.any?
       fresh, moved = @pull_requests.refresh(sessions)

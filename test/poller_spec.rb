@@ -85,6 +85,39 @@ describe ClaudeInbox::Poller do
       _(shown).must_include "f23c8673"
     end
 
+    it "releases what it hid when the sweep itself fails" do
+      reaper = Class.new {
+        def due(_sessions, _now) = %w[f23c8673]
+
+        def sweep(_sessions, _now) = raise(Errno::EACCES, "reaped.log")
+
+        def log_path = File::NULL
+      }.new
+      poller(reaper: reaper).once
+      msgs = messages
+      _(msgs.assoc(:error)[1]).must_include "reaped.log"
+      msgs.each { |kind, list| store.update(list) if kind == :sessions }
+      _(shown).must_include "f23c8673"
+    end
+
+    it "keeps a row the user deleted hidden even when the reaper let it go the same poll" do
+      reaper = Class.new {
+        def initialize(store) = @store = store
+
+        def due(_sessions, _now) = %w[f23c8673]
+
+        def sweep(_sessions, _now)
+          @store.forget("f23c8673")
+          []
+        end
+
+        def log_path = File::NULL
+      }.new(store)
+      poller(reaper: reaper).once
+      drain
+      _(shown).wont_include "f23c8673"
+    end
+
     # Every hand-over after the sweep carries the reaped key; a list without
     # it is what tells the store the daemon dropped it.
     it "keeps a reaped row hidden on later polls while the daemon still lists it" do
