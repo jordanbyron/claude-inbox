@@ -263,8 +263,8 @@ module ClaudeInbox
       glyph = glyph_for(s, section, tick)
       meta = meta_for(row, section, now)
 
-      # " " marker " " glyph " " label "  " meta "  " project
-      chrome = 1 + 1 + 1 + 1 + 1 + 2 + Text.width(meta) + 2
+      # " " marker " " glyph " " label "  " meta "  " project " "
+      chrome = 1 + 1 + 1 + 1 + 1 + 2 + Text.width(meta) + 2 + 1
       # Project is only cut once the label has given up all its space too,
       # so the row can never exceed `width` and fall into Text.pad's blind
       # tail-chop (which used to land mid-project-name with no ellipsis).
@@ -274,7 +274,7 @@ module ClaudeInbox
       label_w = [width - chrome - Text.width(project_text), 0].max
       label = Text.truncate(row.label, label_w)
       label = style_label(label, row, section, sel)
-      first = " #{marker} #{glyph} " + Text.pad(label, label_w) + "  " + meta + "  " + project
+      first = " #{marker} #{glyph} " + Text.pad(label, label_w) + "  " + meta + "  " + project + " "
 
       return [Text.pad(first, width)] unless %i[pinned needs_you active].include?(section)
 
