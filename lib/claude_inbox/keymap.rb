@@ -29,19 +29,13 @@ module ClaudeInbox
       "o" => :open_pr, "P" => :link_pr, "t" => :toggle_pin,
       "R" => :refresh, "p" => :toggle_peek, "n" => :new_session,
       :tab => :next_section, :back_tab => :prev_section,
-      "/" => :filter, ":" => :command, :escape => :escape,
+      "/" => :filter, :escape => :escape,
       "q" => :quit, :ctrl_c => :quit
     }.freeze
 
     CHORDS = {
       "g" => {"g" => :top},
       "z" => {"o" => :fold_open, "c" => :fold_close, "a" => :fold_toggle}
-    }.freeze
-
-    # Lines you can type after ":".
-    COMMANDS = {
-      "peek" => :toggle_peek, "refresh" => :refresh, "new" => :new_session, "n" => :new_session,
-      "pr" => :open_pr, "pin" => :toggle_pin
     }.freeze
 
     attr_reader :pending
@@ -65,10 +59,6 @@ module ClaudeInbox
         return nil
       end
       BINDINGS[name] || BINDINGS[raw]
-    end
-
-    def self.command(line)
-      COMMANDS[line.strip]
     end
 
     private

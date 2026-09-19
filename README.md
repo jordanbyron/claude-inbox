@@ -99,13 +99,12 @@ its own history and clicking a row does nothing.
 | `X` | stop the session (`y` to confirm) |
 | `Ctrl-x` | delete the session for good, conversation and worktree with it (`y` to confirm) |
 | `/` | filter by name or cwd; `Enter` keeps it, `Esc` clears |
-| `:` | command line: `:peek`, `:refresh`, `:pr`, `:pin`, `:new`/`:n` |
 | `R` | poll now |
 | `q` | quit |
 
 Bindings live in `ClaudeInbox::Keymap`, a pure resolver with chord support
-that is unit tested on its own. A fast `Esc` followed by `:` is split back
-into two keys, since tty-reader would otherwise glue them together.
+that is unit tested on its own. A fast `Esc` followed by a chord key is split
+back into two keys, since tty-reader would otherwise glue them together.
 
 `X` and `Ctrl-x` both ask before they act, and both take `y`, but they are not
 the same thing. `X` runs `claude stop`: the process ends, the conversation is
