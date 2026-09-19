@@ -35,6 +35,8 @@ module ClaudeInbox
       @queue = Queue.new
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests, jobs_dir: jobs_dir,
         reaper: reaper, queue: @queue)
+      @logs = Logs.new(client)
+      @peek = Peek.new(@logs)
       @selected = nil
       @row_items = []
       @list_width = nil
@@ -56,13 +58,31 @@ module ClaudeInbox
       install_traps
       @terminal.enter
       @poller.start
-      @logs = Logs.new(@client)
-      @peek = Peek.new(@logs)
+      @logs.start
       main_loop
     ensure
       @poller.stop
-      @logs&.stop
+      @logs.stop
       @terminal.restore
+    end
+
+    def step
+      drain_queue
+      @logs.tick
+      if @resize
+        @resize = false
+        @terminal.resized
+      end
+      render
+    end
+
+    def handle_input(raw)
+      @paste.feed(raw).each do |kind, text|
+        next handle_paste(text) if kind == :paste
+        events = Mouse.events(text)
+        next events.each { |e| handle_mouse(e) } if events.any?
+        split_keys(text).each { |k| handle_key(k) }
+      end
     end
 
     private
@@ -107,24 +127,9 @@ module ClaudeInbox
 
     def main_loop
       until @quit
-        drain_queue
-        @logs.tick
-        if @resize
-          @resize = false
-          @terminal.resized
-        end
-        render
+        step
         key = @reader.read_keypress(echo: false, raw: false, nonblock: true)
         handle_input(key) if key
-      end
-    end
-
-    def handle_input(raw)
-      @paste.feed(raw).each do |kind, text|
-        next handle_paste(text) if kind == :paste
-        events = Mouse.events(text)
-        next events.each { |e| handle_mouse(e) } if events.any?
-        split_keys(text).each { |k| handle_key(k) }
       end
     end
 

@@ -21,6 +21,12 @@ describe ClaudeInbox::Sessions do
     _(linked.prs.map(&:state)).must_equal %w[MERGED CLOSED]
   end
 
+  it "fills in each session's color from its job file" do
+    by_id = load.to_h { |s| [s.id, s.color] }
+    _(by_id["b0b18338"]).must_equal "orange"
+    _(by_id["b03695b1"]).must_be_nil
+  end
+
   it "leaves an interactive session with no job file and no pull requests" do
     term = load.find(&:interactive?)
     _(term.job_state).must_be_nil
