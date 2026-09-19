@@ -239,8 +239,19 @@ describe ClaudeInbox::NewSessionForm do
     _(f.screen(80, 24).join("\n")).must_include "a\e[7mb\e[0m"
   end
 
-  it "cancels on escape" do
+  it "cancels on escape when the prompt is empty" do
     _(form.press(:escape, "\e")).must_equal :cancel
+  end
+
+  it "asks to confirm on escape once the prompt has text, then honors the answer" do
+    form.press("h", "h")
+    _(form.press(:escape, "\e")).must_equal :changed
+    _(form.screen(80, 24).join("\n")).must_include "Discard this session?"
+    _(form.footer).must_include "discard"
+    _(form.press("n", "n")).must_equal :changed
+    _(form.screen(80, 24).join("\n")).must_include "New session"
+    _(form.press(:escape, "\e")).must_equal :changed
+    _(form.press("y", "y")).must_equal :cancel
   end
 
   describe "slash commands" do
@@ -319,7 +330,8 @@ describe ClaudeInbox::NewSessionForm do
         type(f, "s")
         _(f.menu.map(&:name)).must_equal %w[unslop unsplit]
         _(f.press(:escape, "\e")).must_equal :changed
-        _(f.press(:escape, "\e")).must_equal :cancel
+        _(f.press(:escape, "\e")).must_equal :changed
+        _(f.footer).must_include "discard"
       end
     end
 
