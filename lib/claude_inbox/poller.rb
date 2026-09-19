@@ -37,6 +37,7 @@ module ClaudeInbox
     # The first poll is a wake-up like any other, so the list is up as soon
     # as the worker starts rather than an interval later.
     def start
+      return if @thread&.alive?
       soon
       @thread = Thread.new { worker }
     end
@@ -89,11 +90,17 @@ module ClaudeInbox
 
     private
 
+    # `once` answers a failed poll with [:error] and carries on, but only for
+    # StandardError. With a single worker, anything past that would end
+    # polling for the rest of the session with nothing on screen to say so,
+    # so the loop reports it the same way and keeps going.
     def worker
       loop do
         @wake.pop(timeout: @interval)
         @wake.clear
         once unless paused?
+      rescue SystemStackError, ScriptError, SecurityError => e
+        @queue << [:error, e.message]
       end
     end
 

@@ -147,5 +147,30 @@ describe ClaudeInbox::Poller do
     it "can be stopped before it was started" do
       poller.stop
     end
+
+    it "starts one worker however many times start is called" do
+      @poller = poller(interval: 60)
+      @poller.start
+      @poller.start
+      _(wait_for_polls(1)).must_equal 1
+      sleep 0.2
+      _(polls).must_equal 1
+    end
+
+    it "reports a poll that blew the stack and keeps polling" do
+      client.define_singleton_method(:list) do
+        polls << true
+        raise SystemStackError, "stack level too deep"
+      end
+      @poller = poller(interval: 60)
+      @poller.start
+      _(wait_for_polls(1)).must_equal 1
+      _(queue.pop).must_equal [:error, "stack level too deep"]
+      client.singleton_class.remove_method(:list)
+
+      @poller.soon
+      _(wait_for_polls(2)).must_equal 2
+      _(queue.pop.first).must_equal :sessions
+    end
   end
 end

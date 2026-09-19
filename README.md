@@ -316,8 +316,9 @@ Sessions.load: AgentsClient → JobState → PullRequests  →  Poller  →  Sto
 - `Poller` is the thread that asks `Sessions.load` for the list, every four
   seconds and on demand, runs it past the `Reaper` and then the gh refresh,
   and hands each result to `App` over a queue. An on-demand poll queues onto
-  that same thread rather than racing it, so a burst of them is one `claude
-  agents` call and no two polls overlap. `App` pauses it while `claude
+  that same thread rather than racing it, so a burst of them while it is idle
+  is one `claude agents` call, one that lands mid-poll is a single follow-up,
+  and no two polls overlap. `App` pauses it while `claude
   attach` has the terminal.
 - `Terminal` is the screen: the alt screen with its mouse and wheel modes, raw
   mode, the cached size and the `Painter` that diffs frames onto it. `release`
