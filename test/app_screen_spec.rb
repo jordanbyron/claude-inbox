@@ -24,6 +24,8 @@ describe ClaudeInbox::App do
         stopped << id
         true
       end
+
+      def spawn(**) = "deadbeef"
     }.new(fixture_path("agents.json"))
   end
 
@@ -189,6 +191,36 @@ describe ClaudeInbox::App do
       _(wait_for { client.stopped == %w[f23c8673] }).must_equal true
       _(client.removed).must_be_empty
       _(store.entry("f23c8673")).wont_be_nil
+    end
+  end
+
+  describe "starting a session" do
+    it "delivers the notice and the selection through the queue, not from the worker" do
+      a = loaded_app("f23c8673")
+      queue = a.instance_variable_get(:@queue)
+      a.send(:start_session, Struct.new(:values).new({prompt: "hi", cwd: "/tmp"}), attach: false)
+
+      _(wait_for { queue.size == 2 }).must_equal true
+      _(a.instance_variable_get(:@notice)[0]).must_equal "starting session…"
+      _(a.instance_variable_get(:@pending_select)).must_be_nil
+
+      a.send(:drain_queue)
+      _(a.instance_variable_get(:@notice)[0]).must_equal "started deadbeef"
+      _(a.instance_variable_get(:@pending_select)).must_equal "deadbeef"
+    end
+  end
+
+  describe "deleting a session" do
+    it "delivers the done notice through the queue, not from the worker" do
+      a = loaded_app("f23c8673")
+      queue = a.instance_variable_get(:@queue)
+      a.send(:delete_session, "f23c8673")
+
+      _(wait_for { client.removed == %w[f23c8673] && !queue.empty? }).must_equal true
+      _(a.instance_variable_get(:@notice)[0]).must_equal "deleting f23c8673…"
+
+      a.send(:drain_queue)
+      _(a.instance_variable_get(:@notice)[0]).must_equal "deleted f23c8673"
     end
   end
 

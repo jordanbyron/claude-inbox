@@ -94,6 +94,7 @@ module ClaudeInbox
           @error = nil
         when :error then @error = rest[0]
         when :notice then notice(rest[0])
+        when :select then @pending_select = rest[0]
         when :attach then attach(rest[0])
         end
       end
@@ -430,8 +431,8 @@ module ClaudeInbox
       notice("starting session…")
       in_background do
         id = @client.spawn(**v)
-        notice("started #{id}")
-        @pending_select = id
+        @queue << [:notice, "started #{id}"]
+        @queue << [:select, id]
         attach ? @queue << [:attach, id] : @poller.soon
       end
     end
@@ -486,7 +487,7 @@ module ClaudeInbox
       in_background do
         @client.rm(id)
         @store.forget(id)
-        notice("deleted #{id}")
+        @queue << [:notice, "deleted #{id}"]
         @poller.soon
       end
     end
