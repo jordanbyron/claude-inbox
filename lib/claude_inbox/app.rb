@@ -414,7 +414,7 @@ module ClaudeInbox
       return notice("no pull request linked — P sets one") unless pr
       opener = RUBY_PLATFORM.include?("darwin") ? "open" : "xdg-open"
       notice("opening #{pr.short}")
-      Thread.new { Subprocess.capture(opener, pr.url) }
+      in_background { Subprocess.capture(opener, pr.url) }
     end
 
     def open_new_session

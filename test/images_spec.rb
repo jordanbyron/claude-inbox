@@ -37,7 +37,7 @@ describe ClaudeInbox::Images do
     it "saves an image to a file of its own and prunes stale ones" do
       Dir.mktmpdir do |dir|
         now = Time.at(1_789_400_000)
-        old = touch(dir, "old.png", mtime: now - ClaudeInbox::Store::REAP_AFTER - 1)
+        old = touch(dir, "old.png", mtime: now - ClaudeInbox::Images::KEEP_FOR - 1)
         kept = touch(dir, "kept.png", mtime: now - 60)
         calls = []
         run = ->(*argv) {

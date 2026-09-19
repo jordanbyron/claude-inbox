@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "fileutils"
-require_relative "store"
 require_relative "subprocess"
 
 module ClaudeInbox
@@ -10,6 +9,8 @@ module ClaudeInbox
   module Images
     DEFAULT_DIR = File.join(Dir.home, ".config", "claude-inbox", "images")
     EXTENSIONS = %w[.png .jpg .jpeg .gif .webp .bmp .svg].freeze
+    # Matches Store::REAP_AFTER: an image is useless once the session that carried it is reaped.
+    KEEP_FOR = 14 * 24 * 3600
 
     Clipboard = Struct.new(:image, :text)
 
@@ -47,7 +48,7 @@ module ClaudeInbox
 
     def self.prune(dir, now)
       Dir.glob(File.join(dir, "*.png")).each do |f|
-        File.delete(f) if now - File.mtime(f) > Store::REAP_AFTER
+        File.delete(f) if now - File.mtime(f) > KEEP_FOR
       rescue SystemCallError
         nil
       end
