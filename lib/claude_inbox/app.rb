@@ -144,7 +144,7 @@ module ClaudeInbox
       @tick += 1
       frame = @renderer.frame(
         sections, width: width, height: height, now: now,
-        selected: @selected, top: @top, expanded: @expanded,
+        selected: @selected&.key, top: @top, expanded: @expanded,
         peek: peek&.lines, peek_title: peek&.title, peek_subtitle: peek&.subtitle,
         modal: modal_lines(width), screen: screen_lines(width, height), status: status_text(now),
         filter: @filter, filter_editing: @filter_editing, command: @command, tick: @tick / 2,
@@ -177,31 +177,29 @@ module ClaudeInbox
     def filtered(sections = @store.sections) = sections.matching(@filter)
 
     def ensure_selection(sections)
-      keys = sections.selectable_keys(@expanded)
-      if @pending_select && keys.include?(@pending_select)
-        select(@pending_select)
+      stops = sections.selections(@expanded)
+      pending = @pending_select && Store::Selection.row(@pending_select)
+      if pending && stops.include?(pending)
+        select(pending)
         @pending_select = nil
         return
       end
-      return if keys.include?(@selected)
-      select(keys.first)
+      return if stops.include?(@selected)
+      select(stops.first)
     end
 
-    def select(key)
-      @selected = key
-      @peek.select(key, selected_session)
+    def select(selection)
+      @selected = selection
+      @peek.select(selection, selected_session)
     end
 
     def session_for(key) = @store.sessions.find { |s| s.key == key }
 
-    def selected_session = session_for(@selected)
-
-    # True when the selection is a background session we can act on.
-    def actionable_id?(key) = session_for(key)&.actionable?
+    def selected_session = session_for(@selected&.key)
 
     # Guard for attach/stop: refuse politely on a terminal or remote row.
     def require_actionable
-      return true if actionable_id?(@selected)
+      return true if selected_session&.actionable?
       if (s = selected_session)&.interactive?
         notice(s.remote? ? "that's a remote session — open it at claude.ai/code" : "that's your own terminal — switch to that window")
       end
@@ -211,7 +209,7 @@ module ClaudeInbox
     # Guard for snooze/wake/alias: anything with a key, since those live in
     # our own store. A terminal you are sitting in is the one exception.
     def require_storable
-      return true if @selected.is_a?(String) && !selected_session&.terminal?
+      return true if @selected&.row? && !selected_session&.terminal?
       notice("you're in that terminal right now — nothing to snooze") if selected_session&.terminal?
       false
     end
@@ -263,7 +261,7 @@ module ClaudeInbox
       return if @list_width && col > @list_width
       item = row_item_at(row)
       return unless item
-      select(item.key)
+      select(item.selection)
       activate
     end
 
@@ -316,23 +314,19 @@ module ClaudeInbox
 
     def move(delta)
       return if @items.nil? || @items.empty?
-      keys = filtered.selectable_keys(@expanded)
-      idx = keys.index(@selected) || 0
-      select(keys[(idx + delta).clamp(0, keys.size - 1)])
+      stops = filtered.selections(@expanded)
+      idx = stops.index(@selected) || 0
+      select(stops[(idx + delta).clamp(0, stops.size - 1)])
     end
 
     # Tab / Shift-Tab: first selectable row of the next / previous section.
     def jump_section(dir)
       sections = filtered
-      # A row's id rather than its key, kept as it was: a section headed by an
-      # interactive row (no id) contributes nil here and Tab passes it over.
-      firsts = sections.heads(@expanded).map { |name, row| row ? row.id : name }
-      return if firsts.empty?
+      heads = sections.heads(@expanded)
+      return if heads.empty?
       current = sections.section_of(@selected)
-      order = Store::SECTIONS.select { |k| firsts.any? { |f| sections.section_of(f) == k } }
-      idx = order.index(current) || -1
-      target = order[(idx + dir) % order.size]
-      select(firsts.find { |f| sections.section_of(f) == target })
+      idx = heads.index { |name, _| name == current } || -1
+      select(heads[(idx + dir) % heads.size].last)
     end
 
     # The foldable section the cursor is currently on or inside, if any.
@@ -354,8 +348,8 @@ module ClaudeInbox
     end
 
     def activate
-      return @expanded[@selected] = true if Store::FOLDABLE_SECTIONS.include?(@selected)
-      attach(@selected) if require_actionable
+      return @expanded[@selected.key] = true if @selected&.fold?
+      attach(@selected.key) if require_actionable
     end
 
     def toggle_peek
@@ -364,16 +358,16 @@ module ClaudeInbox
     end
 
     def wake_selected
-      @store.wake(@selected) if require_storable
+      @store.wake(@selected.key) if require_storable
     end
 
     def toggle_pin_selected
-      @store.toggle_pin(@selected) if require_storable
+      @store.toggle_pin(@selected.key) if require_storable
     end
 
     def settle_selected
       return unless require_storable
-      @store.settle(@selected)
+      @store.settle(@selected.key)
       notice("settled — u brings it back")
     end
 
@@ -389,24 +383,24 @@ module ClaudeInbox
 
     def open_snooze_menu
       return unless require_storable
-      @modal = Dialog::Snooze.new(@selected)
+      @modal = Dialog::Snooze.new(@selected.key)
     end
 
     def open_confirm(kind)
       return unless require_actionable
-      @modal = Dialog::Confirm.new(kind, @selected)
+      @modal = Dialog::Confirm.new(kind, @selected.key)
     end
 
     def open_alias_editor
       return unless require_storable
-      current = @store.alias_for(@selected) || ""
-      @modal = Dialog::Prompt.new(:alias, @selected, current)
+      current = @store.alias_for(@selected.key) || ""
+      @modal = Dialog::Prompt.new(:alias, @selected.key, current)
     end
 
     def open_pr_editor
       return unless require_storable
-      current = @store.pr_for(@selected) || selected_session&.pr&.url || ""
-      @modal = Dialog::Prompt.new(:pr, @selected, current)
+      current = @store.pr_for(@selected.key) || selected_session&.pr&.url || ""
+      @modal = Dialog::Prompt.new(:pr, @selected.key, current)
     end
 
     # Hands the first PR to the OS browser opener.

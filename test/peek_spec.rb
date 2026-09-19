@@ -17,10 +17,12 @@ describe ClaudeInbox::Peek do
 
   def row(**attrs) = ClaudeInbox::Store::Row.new(session: session(**attrs), entry: nil)
 
+  def on(key) = ClaudeInbox::Store::Selection.row(key)
+
   def pr(state) = ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: state)
 
   def fetch(r)
-    peek.select(r.key, r.session)
+    peek.select(on(r.key), r.session)
     peek.toggle
     @elapsed += ClaudeInbox::Logs::DEBOUNCE
     logs.tick
@@ -28,12 +30,12 @@ describe ClaudeInbox::Peek do
   end
 
   it "shows nothing while closed" do
-    peek.select("abc12345", session)
+    peek.select(on("abc12345"), session)
     _(peek.view(row, 10)).must_be_nil
   end
 
   it "shows a placeholder when nothing is selected" do
-    peek.select("abc12345", nil)
+    peek.select(on("abc12345"), nil)
     peek.toggle
     v = peek.view(nil, 10)
     _(v.lines).must_equal ["(nothing selected)"]
@@ -42,14 +44,14 @@ describe ClaudeInbox::Peek do
   end
 
   it "stays closed on a fold, which has no session to show" do
-    peek.select(:settled, nil)
+    peek.select(ClaudeInbox::Store::Selection.fold(:settled), nil)
     peek.toggle
     _(peek.view(nil, 10)).must_be_nil
   end
 
   it "explains a terminal session instead of fetching its logs" do
     r = row(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u1", pid: 42)
-    peek.select(r.key, r.session)
+    peek.select(on(r.key), r.session)
     peek.toggle
     v = peek.view(r, 10)
     _(v.lines).must_equal [ClaudeInbox::Peek::TERMINAL_NOTE, "", "pid 42 · /tmp/proj", "session u1"]
@@ -59,14 +61,14 @@ describe ClaudeInbox::Peek do
 
   it "explains a remote session the same way" do
     r = row(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u2", pid: 7, origin: :remote)
-    peek.select(r.key, r.session)
+    peek.select(on(r.key), r.session)
     peek.toggle
     _(peek.view(r, 10).lines.first).must_equal ClaudeInbox::Peek::REMOTE_NOTE
   end
 
   it "says loading until the worker answers, then shows the logs" do
     r = row
-    peek.select(r.key, r.session)
+    peek.select(on(r.key), r.session)
     peek.toggle
     _(peek.view(r, 10).lines).must_equal ["(loading…)"]
 
@@ -78,7 +80,7 @@ describe ClaudeInbox::Peek do
 
   it "waits out the debounce before asking" do
     r = row
-    peek.select(r.key, r.session)
+    peek.select(on(r.key), r.session)
     logs.tick
     _(logs.cached("abc12345")).must_be_nil
   end
@@ -102,12 +104,12 @@ describe ClaudeInbox::Peek do
     r = row
     fetch(r)
     peek.scroll(3)
-    peek.select(r.key, r.session)
+    peek.select(on(r.key), r.session)
     _(peek.view(r, 6).lines).must_equal (1..10).map { |i| "line #{i}" }
   end
 
   it "closes on demand" do
-    peek.select("abc12345", session)
+    peek.select(on("abc12345"), session)
     peek.toggle
     _(peek.open?).must_equal true
     peek.close
@@ -117,7 +119,7 @@ describe ClaudeInbox::Peek do
 
   it "sums up the session and its pull requests under the title" do
     r = row(status: "idle", waiting_for: "permission prompt", prs: [pr("OPEN"), pr(nil)])
-    peek.select(r.key, r.session)
+    peek.select(on(r.key), r.session)
     peek.toggle
     started = now.strftime("started %b %-d %H:%M")
     _(peek.view(r, 10).subtitle).must_equal "working · idle · permission prompt · abc12345 · #{started} · #7 open · #7 ?"
