@@ -283,7 +283,7 @@ stays that way.
 
 ## Usage
 
-The header can end with `⚡ 5h 24% · 7d 41%`: how much of the 5-hour and
+The header can end with `usage 5h 24% · 7d 41%`: how much of the 5-hour and
 7-day rate limit windows the subscription has used. Nothing in the CLI reports
 that on demand — there is no `claude usage`, `/usage` only works inside a
 session, and `claude agents --json` says nothing about limits — but every

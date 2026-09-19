@@ -20,7 +20,7 @@ module ClaudeInbox
       @data = nil
     end
 
-    # "⚡ 5h 23% · 7d 41%", or nil. Parses only when the file has changed,
+    # "usage 5h 23% · 7d 41%", or nil. Parses only when the file has changed,
     # since render asks several times a second.
     def label(now = Time.now)
       mtime = File.mtime(@path)
@@ -40,7 +40,7 @@ module ClaudeInbox
         pct = hash.dig(key, "used_percentage")
         "#{word} #{pct.round}%" if pct.is_a?(Numeric)
       end
-      "⚡ " + parts.join(" · ") unless parts.empty?
+      "usage " + parts.join(" · ") unless parts.empty?
     rescue JSON::ParserError, TypeError
       nil
     end

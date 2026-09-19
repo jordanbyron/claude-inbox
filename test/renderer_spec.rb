@@ -232,9 +232,9 @@ describe ClaudeInbox::Renderer do
 
   it "ends the header with the usage label, after any notice, and with nothing when there is none" do
     header = ->(**o) { renderer.frame(sections, width: 100, height: 10, now: now, **o).lines.first }
-    _(header.call(usage: "⚡ 5h 24% · 7d 41%")).must_match(/⚡ 5h 24% · 7d 41% $/)
-    _(header.call(status: "⚠ daemon down", usage: "⚡ 5h 24%")).must_match(/⚠ daemon down  ·  ⚡ 5h 24% $/)
-    _(header.call).wont_include "⚡"
+    _(header.call(usage: "usage 5h 24% · 7d 41%")).must_match(/usage 5h 24% · 7d 41% $/)
+    _(header.call(status: "⚠ daemon down", usage: "usage 5h 24%")).must_match(/⚠ daemon down  ·  usage 5h 24% $/)
+    _(header.call).wont_include "usage"
     _(header.call).must_include "1 needs you"
   end
 

@@ -17,12 +17,12 @@ describe ClaudeInbox::RateLimits do
 
   it "shows both windows, rounded" do
     with_file('{"five_hour":{"used_percentage":23.5,"resets_at":1},"seven_day":{"used_percentage":41.2,"resets_at":2}}') do |rl|
-      _(rl.label(now)).must_equal "⚡ 5h 24% · 7d 41%"
+      _(rl.label(now)).must_equal "usage 5h 24% · 7d 41%"
     end
   end
 
   it "shows whichever window is present" do
-    with_file('{"seven_day":{"used_percentage":80}}') { |rl| _(rl.label(now)).must_equal "⚡ 7d 80%" }
+    with_file('{"seven_day":{"used_percentage":80}}') { |rl| _(rl.label(now)).must_equal "usage 7d 80%" }
   end
 
   it "is nil with no file, an empty object, or junk" do
@@ -41,10 +41,10 @@ describe ClaudeInbox::RateLimits do
 
   it "re-reads only when the file changes" do
     with_file('{"five_hour":{"used_percentage":10}}') do |rl, path|
-      _(rl.label(now)).must_equal "⚡ 5h 10%"
+      _(rl.label(now)).must_equal "usage 5h 10%"
       File.write(path, '{"five_hour":{"used_percentage":50}}')
       File.utime(now + 1, now + 1, path)
-      _(rl.label(now + 2)).must_equal "⚡ 5h 50%"
+      _(rl.label(now + 2)).must_equal "usage 5h 50%"
       File.delete(path)
       _(rl.label(now + 3)).must_be_nil
     end
