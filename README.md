@@ -283,18 +283,19 @@ stays that way.
 
 ## Usage
 
-The header can end with `usage 5h 24% · 7d 41%`: how much of the 5-hour and
-7-day rate limit windows the subscription has used. Nothing in the CLI reports
-that on demand — there is no `claude usage`, `/usage` only works inside a
-session, and `claude agents --json` says nothing about limits — but every
-session hands its [status line](https://code.claude.com/docs/en/statusline)
-script a `rate_limits` object on each turn, for Pro and Max accounts. So the
-numbers come from a file your status line script writes, and the inbox reads
-it. No polling, no API calls: with a couple of sessions running the script
-fires often enough on its own.
+The right end of the header shows how much of your Claude subscription's
+5-hour and 7-day rate limit windows you have used, as `usage 5h 24% · 7d 41%`.
+It only appears once you set it up, and it needs a Pro or Max account.
 
-Setting it up is two lines near the top of your status line script, right
-after it has read stdin:
+The CLI has no command for these numbers. `/usage` only works inside a
+session and `claude agents --json` does not carry them. What Claude Code does
+do is hand every session's [status line](https://code.claude.com/docs/en/statusline)
+script a `rate_limits` object each turn. So the inbox reads a file that your
+status line script writes, `~/.claude/rate_limits.json`. That costs no API
+calls, and with a couple of sessions running the script fires often enough
+to keep the file fresh.
+
+Put these two lines in your status line script, just after it reads stdin:
 
 ```bash
 input=$(cat)
@@ -302,16 +303,16 @@ limits=$(echo "$input" | jq -c '.rate_limits // empty')
 [ -n "$limits" ] && echo "$limits" > ~/.claude/rate_limits.json.tmp && mv ~/.claude/rate_limits.json.tmp ~/.claude/rate_limits.json
 ```
 
-If you have no status line yet, `/statusline` in any session will make one;
-add the lines to what it writes. The `-n` check matters: a session's first
-status line run comes before its first API response and has no `rate_limits`
-yet, and that must not blank a good file. The temp file and rename mean the
-inbox never reads half of one.
+If you have no status line script, run `/statusline` in any session and it
+writes one for you, then add the lines to that. Keep the `-n` check. A
+session's first status line run happens before its first API response, so it
+has no `rate_limits`, and writing anyway would blank a good file. The temp
+file and rename keep the inbox from reading a half-written one.
 
-Without the file the header ends as it always has, and the same once the
-file is older than fifteen minutes, since a number no session has refreshed
-in that long is a guess. `RateLimits` is the reader; it parses the file again
-only when its mtime moves.
+The label stays off while the file is missing, and goes off again once the
+file is more than fifteen minutes old, since a number no session has
+refreshed in that long is stale. `RateLimits` is the reader. It parses the
+file only when its mtime changes.
 
 ## State
 
@@ -345,7 +346,7 @@ Sessions.load: AgentsClient → JobState → PullRequests  →  Poller  →  Sto
   `Sessions.load`; `refresh` is the slow half and runs after the list has gone
   up. `--fixture` points it at `test/fixtures/jobs` with `gh` off.
 - `Palette` maps a session color to an escape sequence and knows nothing else.
-- `RateLimits` reads `~/.claude/rate_limits.json`, which only a status line script writes, into the header's usage label; nil without it.
+- `RateLimits` reads `~/.claude/rate_limits.json`, the file a status line script writes, and gives the header its usage label. Nil without the file.
 - `Store` holds the last poll and the entry table behind a mutex, and folds each poll in.
   A key it was told to `hide` or `forget` stays out of every poll until it is released or the daemon stops listing it.
   `Store::Entry` is what is remembered about one session, and the only place the state file's key names appear.
