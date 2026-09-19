@@ -18,6 +18,10 @@ module ClaudeInbox
       @pending = nil
       @pending_at = nil
       @requests = Queue.new
+    end
+
+    def start
+      return if @thread&.alive?
       @thread = Thread.new { worker }
       @thread.abort_on_exception = false
     end
@@ -42,7 +46,7 @@ module ClaudeInbox
       @requests << id unless fresh
     end
 
-    def stop = @thread.kill
+    def stop = @thread&.kill
 
     private
 
