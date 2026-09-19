@@ -1,0 +1,31 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+root = File.expand_path("../..", File.realpath(__FILE__))
+ENV["BUNDLE_GEMFILE"] ||= File.join(root, "Gemfile")
+require "bundler/setup"
+require File.join(root, "lib", "claude_inbox")
+require File.join(root, "lib", "claude_inbox", "server")
+
+$stderr.reopen(ENV["CLAUDE_INBOX_STDERR"], "a") if ENV["CLAUDE_INBOX_STDERR"]
+
+opts = {}
+if (i = ARGV.index("--fixture"))
+  fixtures = File.join(root, "test", "fixtures")
+  opts[:client] = ClaudeInbox::FixtureClient.new(ARGV[i + 1], logs: File.binread(File.join(fixtures, "logs_raw.txt")))
+  opts[:store] = ClaudeInbox::Store.new(path: nil)
+  opts[:jobs_dir] = File.join(fixtures, "jobs")
+  opts[:pull_requests] = ClaudeInbox::PullRequests.new(cache_path: File.join(fixtures, "gh-pr-status-cache.json"), resolved_path: nil, gh: nil)
+else
+  opts[:client] = ClaudeInbox::AgentsClient.new
+  opts[:store] = ClaudeInbox::Store.new
+  opts[:reaper] = ClaudeInbox::Reaper.new(opts[:client], opts[:store])
+end
+
+# `attach` is the one subcommand: the screen hands over the tty and runs
+# this in the foreground, since an attach cannot travel over the pipe.
+if ARGV[0] == "attach"
+  opts[:client].attach(ARGV[1])
+else
+  ClaudeInbox::Server.new(**opts).run
+end
