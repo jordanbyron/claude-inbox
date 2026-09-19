@@ -7,12 +7,15 @@ Inbox-style triage on top of Claude Code's background sessions. A companion to
 
 ![claude-inbox with one working session, one snoozed and the settled section folded](docs/screenshot.png)
 
+## Install
+
 ```
-bin/claude-inbox                       # live
-bin/claude-inbox --fixture test/fixtures/agents.json   # no daemon needed
+gem install claude-inbox
+claude-inbox
 ```
 
 Requires Ruby 3.2+ and a `claude` on PATH with the agents feature.
+`claude-inbox --version` prints the installed version.
 
 ## Sections
 

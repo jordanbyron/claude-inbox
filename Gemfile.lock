@@ -1,3 +1,14 @@
+PATH
+  remote: .
+  specs:
+    claude-inbox (0.1.0)
+      pastel (~> 0.8)
+      tty-box (~> 0.7)
+      tty-cursor (~> 0.7)
+      tty-reader (~> 0.9)
+      tty-screen (~> 0.8)
+      unicode-display_width (~> 2.6)
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -81,19 +92,15 @@ PLATFORMS
 
 DEPENDENCIES
   bundler-audit
+  claude-inbox!
   minitest
-  pastel
   rake
   standard
-  tty-box
-  tty-cursor
-  tty-reader
-  tty-screen
-  unicode-display_width
 
 CHECKSUMS
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   bundler-audit (0.9.3) sha256=81c8766c71e47d0d28a0f98c7eed028539f21a6ea3cd8f685eb6f42333c9b4e9
+  claude-inbox (0.1.0)
   drb (2.2.3) sha256=0b00d6fdb50995fe4a45dea13663493c841112e4068656854646f418fda13373
   json (2.21.2) sha256=1f1d3b7cf2b3ba1a69beca0bb6db13d5438b80bff3cd54cdaaa620b9b07c1c6a
   language_server-protocol (3.17.0.6) sha256=5ef2c0c138f8267e1bc631d3328347d354f96724b0af22f2c79516120443b7f0
@@ -125,9 +132,6 @@ CHECKSUMS
   unicode-display_width (2.6.0) sha256=12279874bba6d5e4d2728cef814b19197dbb10d7a7837a869bab65da943b7f5a
   unicode_utils (1.4.0) sha256=b922d0cf2313b6b7136ada6645ce7154ffc86418ca07d53b058efe9eb72f2a40
   wisper (2.0.1) sha256=ce17bc5c3a166f241a2e6613848b025c8146fce2defba505920c1d1f3f88fae6
-
-RUBY VERSION
-  ruby 3.4.3
 
 BUNDLED WITH
   4.0.3

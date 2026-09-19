@@ -6,26 +6,4 @@
 root = File.expand_path("../..", File.realpath(__FILE__))
 ENV["BUNDLE_GEMFILE"] ||= File.join(root, "Gemfile")
 require "bundler/setup"
-require File.join(root, "lib", "claude_inbox")
-require File.join(root, "lib", "claude_inbox", "app")
-
-# Crash traces go here instead of the alt screen when set.
-$stderr.reopen(ENV["CLAUDE_INBOX_STDERR"], "a") if ENV["CLAUDE_INBOX_STDERR"]
-
-opts = {}
-if (i = ARGV.index("--fixture"))
-  fixtures = File.join(root, "test", "fixtures")
-  opts[:client] = ClaudeInbox::FixtureClient.new(ARGV[i + 1], logs: File.binread(File.join(fixtures, "logs_raw.txt")))
-  opts[:store] = ClaudeInbox::Store.new(path: nil)
-  opts[:jobs_dir] = File.join(fixtures, "jobs")
-  opts[:pull_requests] = ClaudeInbox::PullRequests.new(cache_path: File.join(fixtures, "gh-pr-status-cache.json"), resolved_path: nil, gh: nil)
-else
-  # The only place the reaper is armed. Everything else — tests, --fixture,
-  # anything embedding App — gets one that deletes nothing.
-  opts[:client] = ClaudeInbox::AgentsClient.new
-  opts[:store] = ClaudeInbox::Store.new
-  opts[:reaper] = ClaudeInbox::Reaper.new(opts[:client], opts[:store])
-end
-opts[:color] = false if ARGV.include?("--no-color")
-
-ClaudeInbox::App.new(**opts).run
+load File.join(root, "exe", "claude-inbox")
