@@ -309,7 +309,10 @@ AgentsClient  →  JobState  →  PullRequests  →  Poller  →  Store  →  Re
   seconds and on demand, runs it through `JobState`, `PullRequests` and the
   `Reaper` in the order above, and hands each result to `App` over a queue.
   `App` pauses it while `claude attach` has the terminal.
-- `App` owns the terminal, the poller thread and the logs thread, and is the
+- `Terminal` is the screen: the alt screen with its mouse and wheel modes, raw
+  mode, the cached size and the `Painter` that diffs frames onto it. `release`
+  lends it to `claude attach` and takes it back.
+- `App` owns the key loop, the poller thread and the logs thread, and is the
   only place that spawns a child.
 - `Peek` is the peek pane: whether it is open, how far back it is scrolled and
   what to paint for the selected row. `Logs` is where the lines come from: the
@@ -320,6 +323,9 @@ AgentsClient  →  JobState  →  PullRequests  →  Poller  →  Store  →  Re
 - `SlashCommands` reads the skills and commands `claude` would offer from the
   same directories it reads them, front matter included, for the new-session
   prompt's menu. Pure filesystem; it never runs `claude`.
+- `Dialog` is a box over the list that claims every key until it answers:
+  the snooze menu, the stop and delete confirms, the alias and pull request
+  prompts. Pure, like `NewSessionForm`; `App` acts on the answer.
 - `Mouse` turns the SGR escape sequences the terminal sends for clicks and
   wheel ticks into `Event`s; `App` maps a click's row back to whatever
   `Renderer` painted there.

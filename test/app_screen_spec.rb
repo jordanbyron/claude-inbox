@@ -67,51 +67,11 @@ describe ClaudeInbox::App do
     yield
   end
 
-  # StringIO#string hands back the live buffer, so copy before clearing it.
-  def taken = out.string.dup.tap {
-    out.truncate(0)
-    out.rewind
-  }
-
   # A row's screen line, found the same way the paint did it: by scanning
   # the row->item map render just built, rather than assuming a layout.
   def row_for(a, key)
     idx = a.instance_variable_get(:@row_items).index { |item| item&.key == key }
     idx + 1
-  end
-
-  it "takes the wheel for the duration of the alt screen and hands it back" do
-    app.send(:enter_screen)
-    entered = taken
-    _(entered).must_include ClaudeInbox::App::ALT_ON
-    _(entered).must_include ClaudeInbox::App::WHEEL_KEYS_ON
-
-    app.send(:restore_screen)
-    left = taken
-    _(left).must_include ClaudeInbox::App::WHEEL_KEYS_OFF
-    # The mode belongs to the alt screen, so it has to go first.
-    _(left.index(ClaudeInbox::App::WHEEL_KEYS_OFF)).must_be :<, left.index(ClaudeInbox::App::ALT_OFF)
-  end
-
-  it "takes over the mouse for the duration of the alt screen and hands it back" do
-    app.send(:enter_screen)
-    entered = taken
-    _(entered).must_include ClaudeInbox::App::MOUSE_ON
-
-    app.send(:restore_screen)
-    left = taken
-    _(left).must_include ClaudeInbox::App::MOUSE_OFF
-    _(left.index(ClaudeInbox::App::MOUSE_OFF)).must_be :<, left.index(ClaudeInbox::App::ALT_OFF)
-  end
-
-  it "asks for bracketed paste for the duration of the alt screen and hands it back" do
-    app.send(:enter_screen)
-    _(taken).must_include ClaudeInbox::App::PASTE_ON
-
-    app.send(:restore_screen)
-    left = taken
-    _(left).must_include ClaudeInbox::App::PASTE_OFF
-    _(left.index(ClaudeInbox::App::PASTE_OFF)).must_be :<, left.index(ClaudeInbox::App::ALT_OFF)
   end
 
   it "hands a paste to the new-session form whole, and types it into the filter" do
@@ -121,7 +81,7 @@ describe ClaudeInbox::App do
     app.send(:handle_input, "\e")
     app.send(:handle_input, "n")
     app.send(:handle_input, "\e[200~one\ntwo\e[201~")
-    _(app.instance_variable_get(:@modal)[:form].values[:prompt]).must_equal "one\ntwo"
+    _(app.instance_variable_get(:@modal).values[:prompt]).must_equal "one\ntwo"
   end
 
   describe "clicking a row" do
@@ -239,11 +199,11 @@ describe ClaudeInbox::App do
       store.set_pr("f23c8673", "https://github.com/o/r/pull/7")
 
       a.send(:perform, :alias)
-      _(a.instance_variable_get(:@modal)[:buffer]).must_equal "auth spike"
+      _(a.instance_variable_get(:@modal).value).must_equal "auth spike"
       a.send(:handle_key, "\e")
 
       a.send(:perform, :link_pr)
-      _(a.instance_variable_get(:@modal)[:buffer]).must_equal "https://github.com/o/r/pull/7"
+      _(a.instance_variable_get(:@modal).value).must_equal "https://github.com/o/r/pull/7"
     end
   end
 end

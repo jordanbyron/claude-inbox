@@ -1,14 +1,12 @@
 # frozen_string_literal: true
 
-require "io/console"
-require "tty-cursor"
 require "tty-reader"
-require "tty-screen"
-require "tty-box"
 require_relative "agents_client"
 require_relative "debug"
+require_relative "dialog"
 require_relative "store"
 require_relative "renderer"
+require_relative "terminal"
 require_relative "logs"
 require_relative "peek"
 require_relative "keymap"
@@ -22,34 +20,6 @@ module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
   # child process that takes over the terminal.
   class App
-    ALT_ON = "\e[?1049h"
-    ALT_OFF = "\e[?1049l"
-    # Alternate scroll mode: while the alt screen is up the terminal turns
-    # wheel ticks into cursor keys, so a scroll moves the selection instead of
-    # dragging the scrollback we are covering into view. Terminals that don't
-    # know the mode ignore it and keep scrolling their own history.
-    WHEEL_KEYS_ON = "\e[?1007h"
-    WHEEL_KEYS_OFF = "\e[?1007l"
-    # Real mouse reporting: button events plus the SGR encoding, so clicks
-    # and wheel ticks arrive as escape sequences we parse ourselves (Mouse)
-    # instead of the terminal only ever translating the wheel to arrow
-    # keys. Terminals that don't understand either mode just ignore it and
-    # fall back to WHEEL_KEYS_ON's translation, or their own scrollback.
-    MOUSE_ON = "\e[?1000h\e[?1006h"
-    MOUSE_OFF = "\e[?1006l\e[?1000l"
-    # Bracketed paste: what is pasted arrives fenced off from what is typed
-    # (Paste), and a pasted image, which has no text, arrives as an empty
-    # fence rather than not at all.
-    PASTE_ON = "\e[?2004h"
-    PASTE_OFF = "\e[?2004l"
-
-    SNOOZE_MENU = [
-      ["1", "15 minutes", :m15],
-      ["2", "1 hour", :h1],
-      ["3", "tomorrow 9am", :tomorrow_9am],
-      ["4", "until I wake it", :until_woken]
-    ].freeze
-
     # The reaper defaults to off. It is the only thing here that deletes a
     # session, so switching it on is `bin/claude-inbox`'s job and nothing
     # reaches it by forgetting an argument.
@@ -57,11 +27,9 @@ module ClaudeInbox
       reaper: Reaper.disabled, out: $stdout, input: $stdin, color: true)
       @client = client
       @store = store
-      @out = out
-      @input = input
+      @terminal = Terminal.new(out, input)
       @color = color
       @renderer = Renderer.new(color: color)
-      @painter = Painter.new(out)
       @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
       @queue = Queue.new
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests, jobs_dir: jobs_dir,
@@ -80,13 +48,12 @@ module ClaudeInbox
       @last_poll = nil
       @quit = false
       @resize = false
-      @restored = true
     end
 
     def run
       @booted_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       install_traps
-      enter_screen
+      @terminal.enter
       @poller.start
       @logs = Logs.new(@client, @queue)
       @peek = Peek.new(@logs)
@@ -94,51 +61,15 @@ module ClaudeInbox
     ensure
       @poller.stop
       @logs&.stop
-      restore_screen
+      @terminal.restore
     end
 
     private
 
-    # ----- terminal ---------------------------------------------------------
-
     def install_traps
-      at_exit { restore_screen }
+      at_exit { @terminal.restore }
       %w[INT TERM].each { |sig| trap(sig) { @quit = true } }
       trap("WINCH") { @resize = true } if Signal.list.key?("WINCH")
-    end
-
-    def enter_screen
-      @out.print ALT_ON, WHEEL_KEYS_ON, MOUSE_ON, PASTE_ON, TTY::Cursor.hide, TTY::Cursor.clear_screen
-      @out.flush
-      @input.raw! if @input.respond_to?(:raw!) && @input.tty?
-      @restored = false
-      @size = nil
-      @painter.invalidate
-    end
-
-    def restore_screen
-      return if @restored
-      @restored = true
-      @input.cooked! if @input.respond_to?(:cooked!) && @input.tty?
-      @out.print TTY::Cursor.show, PASTE_OFF, MOUSE_OFF, WHEEL_KEYS_OFF, ALT_OFF
-      @out.flush
-    rescue
-      nil
-    end
-
-    # Cached: querying the terminal can fall back to spawning `tput`, which
-    # is far too slow to do on every frame. Refreshed on WINCH and re-entry.
-    def size
-      @size ||= measure_size
-    end
-
-    def measure_size
-      rows, cols = begin
-        (@out.respond_to?(:winsize) && @out.tty?) ? @out.winsize : TTY::Screen.size
-      rescue
-        TTY::Screen.size
-      end
-      [[cols, 40].max, [rows, 8].max]
     end
 
     # ----- threads ----------------------------------------------------------
@@ -178,8 +109,7 @@ module ClaudeInbox
         @logs.tick
         if @resize
           @resize = false
-          @size = nil
-          @painter.invalidate
+          @terminal.resized
         end
         render
         key = @reader.read_keypress(echo: false, raw: false, nonblock: true)
@@ -199,7 +129,7 @@ module ClaudeInbox
     # The form takes a paste whole, images included; the one-line editors
     # take it as typing, so a pasted PR URL lands where it should.
     def handle_paste(text)
-      return @modal[:form].paste(text) if @modal && @modal[:kind] == :new
+      return @modal.paste(text) if @modal.is_a?(NewSessionForm)
       text.each_char { |c| handle_key(c) }
     end
 
@@ -207,7 +137,7 @@ module ClaudeInbox
       t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       now = Time.now
       sections = filtered(@store.sections(now))
-      width, height = size
+      width, height = @terminal.size
       ensure_selection(sections)
       peek = @peek.view(sections.row(@selected), height)
       @tick += 1
@@ -223,7 +153,7 @@ module ClaudeInbox
       @row_items = frame.items
       @list_width = frame.list_width
       @top = frame.top
-      @painter.paint(frame.lines)
+      @terminal.paint(frame.lines)
       dt = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
       Debug.log("render #{(dt * 1000).round}ms") if dt > 0.05
     end
@@ -381,7 +311,7 @@ module ClaudeInbox
       end
     end
 
-    def page = [size[1] - 2, 1].max
+    def page = [@terminal.size[1] - 2, 1].max
 
     def move(delta)
       return if @items.nil? || @items.empty?
@@ -419,7 +349,7 @@ module ClaudeInbox
       if @peek.open? then @peek.close
       elsif (name = current_fold_section) && @expanded[name] then @expanded[name] = false
       end
-      @painter.invalidate
+      @terminal.invalidate
     end
 
     def activate
@@ -429,7 +359,7 @@ module ClaudeInbox
 
     def toggle_peek
       @peek.toggle
-      @painter.invalidate
+      @terminal.invalidate
     end
 
     def wake_selected
@@ -446,17 +376,11 @@ module ClaudeInbox
       notice("settled — u brings it back")
     end
 
-    # ----- attach handoff ---------------------------------------------------
-
     def attach(id)
       @store.acknowledge(id)
       @poller.pause
-      restore_screen
-      @out.print TTY::Cursor.clear_screen
-      @out.flush
-      @client.attach(id)
+      @terminal.release { @client.attach(id) }
     ensure
-      enter_screen
       @poller.resume
       @poller.soon
     end
@@ -465,24 +389,24 @@ module ClaudeInbox
 
     def open_snooze_menu
       return unless require_storable
-      @modal = {kind: :snooze, id: @selected}
+      @modal = Dialog::Snooze.new(@selected)
     end
 
     def open_confirm(kind)
       return unless require_actionable
-      @modal = {kind: kind, id: @selected}
+      @modal = Dialog::Confirm.new(kind, @selected)
     end
 
     def open_alias_editor
       return unless require_storable
       current = @store.alias_for(@selected) || ""
-      @modal = {kind: :alias, id: @selected, buffer: +current}
+      @modal = Dialog::Prompt.new(:alias, @selected, current)
     end
 
     def open_pr_editor
       return unless require_storable
       current = @store.pr_for(@selected) || selected_session&.pr&.url || ""
-      @modal = {kind: :pr, id: @selected, buffer: +current}
+      @modal = Dialog::Prompt.new(:pr, @selected, current)
     end
 
     # Hands the first PR to the OS browser opener.
@@ -496,7 +420,7 @@ module ClaudeInbox
 
     def open_new_session
       cwd = selected_session&.cwd || Dir.pwd
-      @modal = {kind: :new, form: NewSessionForm.new(cwd: cwd, pastel: Pastel.new(enabled: @color))}
+      @modal = NewSessionForm.new(cwd: cwd, pastel: Pastel.new(enabled: @color))
     end
 
     # `attach:` hands the terminal over as soon as the session starts. Without
@@ -513,68 +437,41 @@ module ClaudeInbox
       end
     end
 
+    # The new-session form takes the whole body; a Dialog is a box over it.
     def screen_lines(width, height)
-      return nil unless @modal && @modal[:kind] == :new
-      form = @modal[:form]
-      {lines: form.screen(width, height - 2), footer: form.footer}
+      return nil unless @modal.is_a?(NewSessionForm)
+      {lines: @modal.screen(width, height - 2), footer: @modal.footer}
     end
 
     def modal_lines(width)
-      return nil unless @modal && @modal[:kind] != :new
-      content =
-        case @modal[:kind]
-        when :snooze
-          SNOOZE_MENU.map { |k, label, _| "  #{k}  #{label}" } + ["", "  esc  cancel"]
-        when :stop
-          ["  Stop session #{@modal[:id]}?", "", "  y  stop it", "  esc  cancel"]
-        when :delete
-          ["  Delete session #{@modal[:id]}?", "  Its worktree and conversation", "  go with it.",
-            "", "  y  delete it", "  esc  keep it"]
-        when :alias
-          ["  New alias:", "", "  > #{@modal[:buffer]}_", "", "  ⏎ save · esc cancel"]
-        when :pr
-          ["  Pull request URL (empty clears):", "", "  > #{@modal[:buffer]}_", "", "  ⏎ save · esc cancel"]
-        end
-      title = {snooze: " Snooze ", stop: " Stop ", delete: " Delete ", alias: " Alias ", pr: " Pull request "}[@modal[:kind]]
-      TTY::Box.frame(content.join("\n"), title: {top_left: title}, padding: [0, 1], width: [width - 4, 44].min)
-        .split("\n")
+      @modal.frame(width) if @modal.is_a?(Dialog)
     end
 
     def handle_modal_key(name, key)
-      case @modal[:kind]
-      when :new
-        form = @modal[:form]
-        case form.press(name, key)
-        when :cancel then @modal = nil
-        when :start
-          @modal = nil
-          start_session(form, attach: false)
-        when :start_and_attach
-          @modal = nil
-          start_session(form, attach: true)
-        end
+      return handle_form_key(name, key) if @modal.is_a?(NewSessionForm)
+      case @modal.press(name, key)
+      when :cancel then @modal = nil
       when :snooze
-        if name == :escape || name == "q"
-          @modal = nil
-        elsif (entry = SNOOZE_MENU.find { |k, _, _| k == key })
-          @store.snooze(@modal[:id], entry[2])
-          @modal = nil
-        end
-      when :alias, :pr
-        case name
-        when :escape then @modal = nil
-        when :return, :enter then save_text_modal
-        when :backspace, :ctrl_h then @modal[:buffer] = @modal[:buffer][0...-1]
-        else @modal[:buffer] << key if key.is_a?(String) && key.match?(/\A[[:print:]]\z/)
-        end
-      when :stop, :delete
-        if key == "y"
-          kind, id = @modal.values_at(:kind, :id)
-          @modal = nil
-          (kind == :stop) ? stop_session(id) : delete_session(id)
-        elsif name == :escape || key == "n" || key == "q"
-          @modal = nil
-        end
+        @store.snooze(@modal.id, @modal.choice)
+        @modal = nil
+      when :confirm
+        kind, id = @modal.kind, @modal.id
+        @modal = nil
+        (kind == :stop) ? stop_session(id) : delete_session(id)
+      when :save then save_prompt
+      end
+    end
+
+    def handle_form_key(name, key)
+      form = @modal
+      case form.press(name, key)
+      when :cancel then @modal = nil
+      when :start
+        @modal = nil
+        start_session(form, attach: false)
+      when :start_and_attach
+        @modal = nil
+        start_session(form, attach: true)
       end
     end
 
@@ -595,12 +492,12 @@ module ClaudeInbox
       end
     end
 
-    def save_text_modal
-      value = @modal[:buffer].strip
-      if @modal[:kind] == :alias
-        @store.set_alias(@modal[:id], value)
+    def save_prompt
+      value = @modal.value.strip
+      if @modal.kind == :alias
+        @store.set_alias(@modal.id, value)
       elsif value.empty? || PullRequests.valid_url?(value)
-        @store.set_pr(@modal[:id], value)
+        @store.set_pr(@modal.id, value)
         @poller.soon
       else
         return notice("that's not a github.com pull request url")
