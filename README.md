@@ -281,6 +281,30 @@ theme; `orange` and `pink` have no ansi name and go through 256-color indexes
 (default foreground) rather than 0, so a label that is already bold or italic
 stays that way.
 
+## Usage
+
+The right end of the header shows how much of your Claude subscription's
+5-hour and 7-day rate limit windows you have used, as `usage 5h 24% · 7d 41%`.
+It needs a Pro or Max account and a one-time setup.
+
+Claude Code passes the numbers to your [status line](https://code.claude.com/docs/en/statusline)
+script every turn, and the inbox reads them from a file that script writes.
+Put these two lines in the script, just after it reads stdin:
+
+```bash
+input=$(cat)
+limits=$(echo "$input" | jq -c '.rate_limits // empty')
+[ -n "$limits" ] && echo "$limits" > ~/.claude/rate_limits.json.tmp && mv ~/.claude/rate_limits.json.tmp ~/.claude/rate_limits.json
+```
+
+If you have no status line script, run `/statusline` in any session and it
+writes one for you, then add the lines to that. Keep the `-n` check: a
+session's first status line run has no numbers yet, and writing anyway would
+blank the file.
+
+The label stays off until the file exists, and goes off again once the file
+is more than fifteen minutes old.
+
 ## State
 
 `~/.config/claude-inbox/state.json`, keyed by session id, atomic writes.
@@ -313,6 +337,7 @@ Sessions.load: AgentsClient → JobState → PullRequests  →  Poller  →  Sto
   `Sessions.load`; `refresh` is the slow half and runs after the list has gone
   up. `--fixture` points it at `test/fixtures/jobs` with `gh` off.
 - `Palette` maps a session color to an escape sequence and knows nothing else.
+- `RateLimits` reads `~/.claude/rate_limits.json`, the file a status line script writes, and gives the header its usage label. Nil without the file.
 - `Store` holds the last poll and the entry table behind a mutex, and folds each poll in.
   A key it was told to `hide` or `forget` stays out of every poll until it is released or the daemon stops listing it.
   `Store::Entry` is what is remembered about one session, and the only place the state file's key names appear.

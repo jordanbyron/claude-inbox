@@ -64,7 +64,8 @@ module ClaudeInbox
 
     # opts: selected (id | :snoozed | :settled | nil), expanded ({snoozed:, settled:} => bool), top (scroll),
     #       peek (Array<String> | nil), peek_title, modal (Array<String> | nil),
-    #       status (String), now (Time), filter (TextBuffer | nil), filter_editing, command (TextBuffer | nil),
+    #       status (String | nil, a notice or error at the header's right end),
+    #       usage (String | nil, the rate-limit label after it), now (Time), filter (TextBuffer | nil), filter_editing, command (TextBuffer | nil),
     #       tick (Integer, drives the spinner),
     #       loading (Float seconds waited for the first poll, nil once it has landed),
     #       screen ({lines:, footer:} takes over everything below the header)
@@ -94,7 +95,7 @@ module ClaudeInbox
         end
       end
 
-      lines = [header(sections, width, opts[:status], now, loading: opts[:loading])] + visible.map { |l| Text.pad(l, width) } + [footer(width, opts)]
+      lines = [header(sections, width, opts, now)] + visible.map { |l| Text.pad(l, width) } + [footer(width, opts)]
       lines = overlay(lines, opts[:modal], width) if opts[:modal]
       Frame.new(lines, [nil] + visible_items + [nil], top, list_w)
     end
@@ -117,17 +118,18 @@ module ClaudeInbox
       view_h = height - 2
       body = opts[:screen][:lines].first(view_h)
       body += [""] * (view_h - body.size)
-      lines = [header(sections, width, opts[:status], now)] + body.map { |l| Text.pad(l, width) } + [Text.pad(" " + opts[:screen][:footer], width)]
+      lines = [header(sections, width, opts, now)] + body.map { |l| Text.pad(l, width) } + [Text.pad(" " + opts[:screen][:footer], width)]
       Frame.new(lines, [nil] * (view_h + 2), opts[:top] || 0, width)
     end
 
     # ----- chrome -------------------------------------------------------------
 
-    def header(sections, width, status, now, loading: nil)
+    def header(sections, width, opts, now)
       brand = " " + @theme.cyan_bold("▌ claude-inbox")
-      right = status ? @p.dim(status) + " " : ""
+      right = [opts[:status], opts[:usage]].compact.map { |s| @p.dim(s) }.join(@p.dim("  ·  "))
+      right += " " unless right.empty?
       room = width - Text.width(brand) - Text.width(right) - 3
-      chips = loading ? "" : header_chips(sections, compact: false)
+      chips = opts[:loading] ? "" : header_chips(sections, compact: false)
       chips = header_chips(sections, compact: true) if Text.width(chips) > room
       chips = "" if Text.width(chips) > room
       Text.pad(brand + "   " + chips, width - Text.width(right)) + right
