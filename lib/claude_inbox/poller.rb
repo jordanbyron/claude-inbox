@@ -10,14 +10,8 @@ module ClaudeInbox
   # queue: [:sessions, list] for each hand-over, [:error, msg] when a poll
   # fails, [:notice, text] when the reaper took something. Nothing here
   # touches App's state directly; the queue is the whole of the interface.
-  #
-  # Every poll runs on one worker thread. The timer is a wait on a wake
-  # queue: `soon` drops a token on it and returns, and the worker polls
-  # either when a token lands or when the wait times out. A burst of
-  # wake-ups before the worker gets to them collapses into one poll. Two
-  # polls can never overlap, so the list can't be published out of order
-  # and the reaper and the gh refresh never run twice at once. `pause`
-  # skips the poll rather than the timer.
+  # One worker runs every poll, so two can never overlap and publish the
+  # list out of order.
   class Poller
     INTERVAL = 4
 
@@ -34,8 +28,6 @@ module ClaudeInbox
       @lock = Mutex.new
     end
 
-    # The first poll is a wake-up like any other, so the list is up as soon
-    # as the worker starts rather than an interval later.
     def start
       return if @thread&.alive?
       soon
@@ -45,13 +37,9 @@ module ClaudeInbox
     def stop = @thread&.kill
 
     # Skips the poll rather than the timer, so nothing forks `claude` while
-    # another process holds the terminal. A poll already under way when this
-    # is called runs to its end; App pauses before it releases the terminal
-    # so that the next one, not the current one, is the one held back.
+    # another process holds the terminal. A poll already under way finishes.
     def pause = @lock.synchronize { @paused = true }
 
-    # Polls at once as well, so the list catches up the moment an attach
-    # returns instead of at the next tick.
     def resume
       @lock.synchronize { @paused = false }
       soon
@@ -90,10 +78,8 @@ module ClaudeInbox
 
     private
 
-    # `once` answers a failed poll with [:error] and carries on, but only for
-    # StandardError. With a single worker, anything past that would end
-    # polling for the rest of the session with nothing on screen to say so,
-    # so the loop reports it the same way and keeps going.
+    # Past StandardError `once` does not catch, and a dead worker would end
+    # polling with nothing on screen to say so.
     def worker
       loop do
         @wake.pop(timeout: @interval)
@@ -106,8 +92,6 @@ module ClaudeInbox
 
     def paused? = @lock.synchronize { @paused }
 
-    # Hands the sessions minus `without` to the main thread; returns the
-    # list it kept.
     def publish(sessions, without)
       live = sessions.reject { |s| without.include?(s.key) }
       @queue << [:sessions, live]
