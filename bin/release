@@ -58,15 +58,19 @@ if DRY_RUN
   exit
 end
 
-File.write(VERSION_FILE, File.read(VERSION_FILE).sub(VERSION_LINE, %(VERSION = "#{version}")))
-step "git", "commit", "--quiet", "--all", "--message", "chore: release #{tag}"
+# The first release ships VERSION as it stands, so there is nothing to commit.
+bumped = version != current
+if bumped
+  File.write(VERSION_FILE, File.read(VERSION_FILE).sub(VERSION_LINE, %(VERSION = "#{version}")))
+  step "git", "commit", "--quiet", "--all", "--message", "chore: release #{tag}"
+end
 step "git", "tag", "--annotate", tag, "--message", tag
 
 gem_file = "claude-inbox-#{version}.gem"
 unless system("gem", "build", "claude-inbox.gemspec") && system("gem", "push", gem_file)
   # Undo before aborting, so main never carries a version rubygems does not.
   system "git", "tag", "--delete", tag
-  system "git", "reset", "--quiet", "--hard", "HEAD~1"
+  system "git", "reset", "--quiet", "--hard", "HEAD~1" if bumped
   FileUtils.rm_f gem_file
   abort "#{tag} was not published; the release commit and tag are undone"
 end
