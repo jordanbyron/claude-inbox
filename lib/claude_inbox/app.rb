@@ -45,7 +45,6 @@ module ClaudeInbox
       @tick = 0
       @modal = nil
       @filter = nil
-      @status = "starting…"
       @last_poll = nil
       @quit = false
       @resize = false
@@ -141,16 +140,14 @@ module ClaudeInbox
       sections = filtered(@store.sections(now))
       width, height = @terminal.size
       ensure_selection(sections)
-      peek = @peek.view(sections.row(@selected), height)
       @tick += 1
-      frame = @renderer.frame(
-        sections, width: width, height: height, now: now,
-        selected: @selected&.key, top: @top, expanded: @expanded,
-        peek: peek&.lines, peek_title: peek&.title, peek_subtitle: peek&.subtitle,
-        modal: modal_lines(width), screen: screen_lines(width, height), status: status_text(now),
-        filter: @filter, filter_editing: @filter_editing, command: @command, tick: @tick / 2,
-        loading: loading_for
+      view = Renderer::View.new(
+        width: width, height: height, now: now, selected: @selected&.key, top: @top, expanded: @expanded,
+        peek: @peek.view(sections.row(@selected), height), modal: modal_lines(width), screen: screen_lines(width, height),
+        status: status_text(now), filter: @filter, filter_editing: @filter_editing, command: @command,
+        tick: @tick / 2, loading: loading_for
       )
+      frame = @renderer.frame(sections, view)
       @items = frame.items.compact
       @row_items = frame.items
       @list_width = frame.list_width
