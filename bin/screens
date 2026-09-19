@@ -1,0 +1,79 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "pty"
+require "io/console"
+
+root = File.expand_path("../..", File.realpath(__FILE__))
+ENV["BUNDLE_GEMFILE"] ||= File.join(root, "Gemfile")
+require "bundler/setup"
+require File.join(root, "lib", "claude_inbox", "vt_screen")
+
+cols = (ARGV[0] || 100).to_i
+rows = (ARGV[1] || 30).to_i
+
+SCRIPT = [
+  ["boot", nil, 2.0],
+  ["j j", "jj", 0.4],
+  ["G", "G", 0.4],
+  ["tab", "\t", 0.4],
+  ["za on the settled fold", "za", 0.4],
+  ["gg", "gg", 0.4],
+  ["peek", "p", 0.8],
+  ["peek off", "p", 0.4],
+  ["snooze 15m", "s1", 0.4],
+  ["j onto a done row", "j", 0.4],
+  ["pin", "t", 0.4],
+  ["unpin", "t", 0.4],
+  ["settle", "x", 0.4],
+  ["G to the settled fold", "G", 0.4],
+  ["zo", "zo", 0.4],
+  ["G to the last settled row", "G", 0.4],
+  ["wake", "u", 0.4],
+  ["filter 'inbox'", "/inbox\r", 0.4],
+  ["clear filter", "\e", 0.4],
+  ["alias prompt", "a", 0.4],
+  ["cancel", "\e", 0.4],
+  ["stop confirm", "X", 0.4],
+  ["cancel", "\e", 0.4],
+  ["new session form", "n", 0.6],
+  ["cancel", "\e", 0.4],
+  [":q", ":q\r", 0.4]
+].freeze
+
+master, slave = PTY.open
+slave.winsize = [rows, cols]
+pid = spawn(
+  {"CLAUDE_INBOX_NO_REAP" => "1", "TERM" => "xterm-256color"},
+  "ruby", File.join(root, "bin", "claude-inbox"),
+  "--fixture", File.join(root, "test", "fixtures", "agents.json"), "--no-color",
+  in: slave, out: slave, err: slave
+)
+slave.close
+
+screen = ClaudeInbox::VtScreen.new(rows: rows, cols: cols)
+
+def pump(master, seconds)
+  buf = +""
+  deadline = Time.now + seconds
+  while Time.now < deadline
+    next unless IO.select([master], nil, nil, 0.05)
+    begin
+      buf << master.read_nonblock(65_536)
+    rescue IO::WaitReadable
+      next
+    rescue EOFError, Errno::EIO
+      break
+    end
+  end
+  buf
+end
+
+SCRIPT.each do |label, keys, wait|
+  master.write(keys) if keys
+  screen.feed(pump(master, wait))
+  puts "===== #{label}"
+  puts screen.lines
+end
+
+Process.wait(pid)

@@ -379,4 +379,9 @@ bundle exec standardrb
 CLAUDE_INBOX_STDERR=/tmp/err.log bin/claude-inbox   # crash traces off the alt screen
 DEBUG=1 bin/claude-inbox                            # slow-frame notes in /tmp/inbox-debug.log
 CLAUDE_INBOX_NO_REAP=1 bin/claude-inbox             # never delete an idle session
+bin/screens                                         # drive the fixture in a pty, print every screen
 ```
+
+`docs/architecture-review.md` records the standing design findings and which
+of them have landed. `bin/screens` is how a refactor is checked against the
+real screen: run it on `main` and on the branch and diff the two.
