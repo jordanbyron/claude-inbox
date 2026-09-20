@@ -190,6 +190,44 @@ describe ClaudeInbox::App do
     end
   end
 
+  describe "adopting a remote session" do
+    let(:client) do
+      Class.new(ClaudeInbox::FixtureClient) {
+        def adopted = (@adopted ||= [])
+
+        def attached = (@attached ||= [])
+
+        def adopt(**opts)
+          adopted << opts
+          "adop7ed0"
+        end
+
+        def attach(id) = attached << id
+
+        def release = nil
+      }.new(fixture_path("agents.json"), origins: {57405 => :remote})
+    end
+
+    it "asks on Enter, then pulls the conversation in and attaches to it" do
+      press("\t", "\r")
+      _(screen.join("\n")).must_include "Pull this session into the daemon?"
+      _(client.adopted).must_be_empty
+
+      press("y")
+      _(wait_for {
+        app.step
+        client.attached == %w[adop7ed0]
+      }).must_equal true
+      _(client.adopted).must_equal [{session_id: "4a93393d-1c06-57da-9fb8-12f5b1535d95", cwd: "/Users/byron/code/claude-inbox", pid: 57405}]
+    end
+
+    it "leaves it alone when dismissed" do
+      press("\t", "\r", "\e")
+      _(screen.join("\n")).wont_include "Pull this session"
+      _(client.adopted).must_be_empty
+    end
+  end
+
   describe "starting a session" do
     it "says so while the worker runs, then names the session and lands on its row" do
       client.hold

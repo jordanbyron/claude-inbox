@@ -204,7 +204,7 @@ module ClaudeInbox
     def require_actionable
       return true if selected_session&.actionable?
       if (s = selected_session)&.interactive?
-        notice(s.remote? ? "that's a remote session — w opens it at claude.ai/code" : "that's your own terminal — switch to that window")
+        notice(s.remote? ? "that's a remote session — Enter adopts it, w opens it at claude.ai/code" : "that's your own terminal — switch to that window")
       end
       false
     end
@@ -352,6 +352,7 @@ module ClaudeInbox
 
     def activate
       return @expanded[@selected.key] = true if @selected&.fold?
+      return @modal = Dialog::Confirm.new(:adopt, @selected.key) if selected_session&.remote?
       attach(@selected.key) if require_actionable
     end
 
@@ -479,7 +480,11 @@ module ClaudeInbox
       when :confirm
         kind, id = @modal.kind, @modal.id
         @modal = nil
-        (kind == :stop) ? stop_session(id) : delete_session(id)
+        case kind
+        when :stop then stop_session(id)
+        when :delete then delete_session(id)
+        when :adopt then adopt_session(id)
+        end
       when :save then save_prompt
       end
     end
@@ -500,6 +505,18 @@ module ClaudeInbox
       in_background do
         @client.stop(id)
         @poller.soon
+      end
+    end
+
+    def adopt_session(key)
+      s = session_for(key)
+      return unless s&.remote?
+      notice("adopting #{s.display_name}…")
+      in_background do
+        id = @client.adopt(session_id: s.session_id, cwd: s.cwd, pid: s.pid)
+        @queue << [:notice, "adopted as #{id}"]
+        @queue << [:select, id]
+        @queue << [:attach, id]
       end
     end
 

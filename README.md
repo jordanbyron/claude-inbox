@@ -30,9 +30,10 @@ are published to rubygems and listed under GitHub Releases.
    a terminal you opened yourself, a Remote Control worker, a sub-agent and a
    headless `claude -p` run all "interactive"; the inbox tells them apart from
    the process tree. Sub-agents and headless runs are dropped, since nobody is
-   sitting in them. Remote sessions settle and snooze like any other row. A
-   terminal you are sitting in never settles, and none of these can be
-   attached, peeked or stopped from outside; Enter tells you so.
+   sitting in them. Remote sessions settle and snooze like any other row,
+   and Enter pulls one into the daemon (see Remote Control below). A
+   terminal you are sitting in never settles and can't be attached, peeked
+   or stopped from outside; Enter tells you so.
 4. **Snoozed.** Sorted by wake time, parked ("until I wake it") entries last.
    Collapsed; Enter expands.
 5. **Settled.** Parked with `x`, or whose pull request is merged or closed.
@@ -68,7 +69,7 @@ scrolls its own history and clicks do nothing.
 | `j` `k` | move down / up |
 | `gg` `G` | first / last row |
 | `Ctrl-d` `Ctrl-u` | half page down / up (`Ctrl-f` `Ctrl-b` full page) |
-| `Enter` `l` | attach (full-screen handoff; `←` or `Ctrl+Z` return here), or expand Snoozed / Settled |
+| `Enter` `l` | attach (full-screen handoff; `←` or `Ctrl+Z` return here), adopt a remote session, or expand Snoozed / Settled |
 | `Tab` `Shift+Tab` | jump to the next / previous section |
 | `h` | close the peek pane, else collapse the current Snoozed / Settled fold |
 | `za` `zo` `zc` | toggle / open / close the Snoozed or Settled fold under the cursor |
@@ -175,10 +176,13 @@ the state. Two kinds of session have it:
   Remote Control across a stop and a wake, since the daemon saves the flag.
 - A worker a `claude remote-control` server spawned for a request from your
   phone. That is how a session started away from the desk lands on this
-  machine. The daemon calls it interactive, so `Enter` can't attach to it;
-  `w` opens it, and the peek pane shows its link. Once the server is stopped,
-  `claude --bg --resume <session uuid>` brings the conversation back as a
-  daemon row, uuid from the peek pane.
+  machine. The daemon calls it interactive and can't attach to it, so
+  `Enter` offers to adopt it instead: `y` ends the worker and resumes the
+  conversation as a background session under the same id, with Remote
+  Control on, and attaches. The phone session you were in ends there and a
+  new one takes its place, with the whole conversation; the server keeps
+  running for the next request. A worker nobody has messaged yet has
+  nothing to adopt, and Enter says so.
 
 ## Pull request state
 

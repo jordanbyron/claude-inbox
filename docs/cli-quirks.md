@@ -35,9 +35,15 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   last. A worker that `claude remote-control` spawned carries the same
   bridge id on its command line as `--session-id cse_<id>`, next to
   `--sdk-url`; the JSON row for it has the local conversation uuid as
-  `sessionId`, so `claude --resume` takes it once the server has let go.
-  The server refuses to start in a directory whose trust dialog hasn't been
-  accepted.
+  `sessionId`. While the worker runs, `claude --bg --resume <uuid>` says the
+  session is open elsewhere and starts a copy instead. With the worker
+  killed, the same command resumes under the same uuid as a daemon row, the
+  server logs `Session failed` and does not respawn it, and the resumed
+  session registers a new bridge rather than reclaiming the worker's. A
+  worker nobody has messaged yet has an empty transcript, and resuming it
+  fails with `source session not found`. The server refuses to start in a
+  directory whose trust dialog hasn't been accepted, and brings back the
+  sessions it served last time when restarted within four hours.
 - `~/.claude/gh-pr-status-cache.json` is keyed by PR url and calls an open
   draft `DRAFT`; `gh pr view` reports `OPEN` plus `isDraft`. The cache only
   covers PRs Claude Code's own sessions opened, so a link scan finds plenty

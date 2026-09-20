@@ -7,7 +7,7 @@ module ClaudeInbox
   # lands on a warm cache. Main-thread state only.
   class Peek
     TERMINAL_NOTE = "This is a claude you opened in a terminal yourself. The daemon can't attach to it, read its output, or stop it from outside. Switch to that window."
-    REMOTE_NOTE = "This is a Remote Control session driven from claude.ai/code. The daemon can't attach to it or read its output from here. Open it in the web or mobile app instead."
+    REMOTE_NOTE = "This is a Remote Control session driven from claude.ai/code. The daemon can't attach to it or read its output from here. Enter pulls it into the daemon; w opens it in the web or mobile app."
 
     # What Renderer paints: the body lines, the title bar, the dim line under it.
     View = Struct.new(:lines, :title, :subtitle)

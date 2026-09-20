@@ -89,6 +89,46 @@ module ClaudeInbox
       argv
     end
 
+    # Pull a conversation a `claude remote-control` server is serving into
+    # the daemon, as a background session under the same id. Returns the
+    # short id. The worker goes first: while it is open, a resume only makes
+    # a copy. The server marks the session failed and leaves it be; the
+    # resumed session gets a bridge of its own.
+    def adopt(session_id:, cwd:, pid:)
+      raise Error, "nothing to adopt yet — send it a message from your phone first" if transcript_empty?(cwd, session_id)
+      Process.kill("TERM", pid)
+      wait_gone(pid)
+      r = Subprocess.capture(*self.class.adopt_args(@bin, session_id), chdir: cwd)
+      raise Error, "claude --bg --resume failed: #{(r.err + r.out).strip}" unless r.success?
+      r.out[/\b[0-9a-f]{8}\b/] || r.out.strip
+    end
+
+    def self.adopt_args(bin, session_id) = [bin, "--bg", "--resume", session_id, "--remote-control"]
+
+    # Where the CLI keeps a directory's transcripts: every slash and dot in
+    # the path becomes a dash.
+    def self.transcript_path(cwd, session_id, home: Dir.home)
+      File.join(home, ".claude", "projects", cwd.gsub(%r{[/.]}, "-"), "#{session_id}.jsonl")
+    end
+
+    # A worker nobody has messaged yet has an empty file, and the daemon
+    # reports "source session not found" on resuming it.
+    def transcript_empty?(cwd, session_id)
+      path = self.class.transcript_path(cwd, session_id)
+      File.exist?(path) && File.zero?(path)
+    end
+
+    def wait_gone(pid, timeout: 5)
+      deadline = Time.now + timeout
+      while Time.now < deadline
+        Process.kill(0, pid)
+        sleep 0.1
+      end
+      raise Error, "the worker #{pid} would not exit"
+    rescue Errno::ESRCH
+      nil
+    end
+
     def parse(json)
       JSON.parse(json).map { |h| Session.from_hash(h) }
     end
@@ -234,6 +274,8 @@ module ClaudeInbox
       sleep 0.5
       "deadbeef"
     end
+
+    def adopt(session_id:, cwd:, pid:) = "adop7ed0"
 
     def rm(_id) = true
   end

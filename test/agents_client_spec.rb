@@ -63,6 +63,12 @@ describe ClaudeInbox::AgentsClient do
       _(origins([[100, 200, "claude"]], {200 => "claude rc --worker"})).must_equal({100 => :remote})
     end
 
+    it "resumes an adopted conversation under the daemon with Remote Control on" do
+      _(ClaudeInbox::AgentsClient.adopt_args("claude", "u1")).must_equal ["claude", "--bg", "--resume", "u1", "--remote-control"]
+      _(ClaudeInbox::AgentsClient.transcript_path("/Users/x/.claude/w/p", "u1", home: "/Users/x"))
+        .must_equal "/Users/x/.claude/projects/-Users-x--claude-w-p/u1.jsonl"
+    end
+
     it "reads a worker's bridge id off its command line" do
       rows = [[100, 200, "claude --print --sdk-url https://api/cse_01AB --session-id cse_01AB"], [101, 200, "claude"]]
       _(ClaudeInbox::AgentsClient.bridge_ids(rows)).must_equal({100 => "cse_01AB"})
