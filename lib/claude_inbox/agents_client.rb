@@ -76,13 +76,16 @@ module ClaudeInbox
     def self.mention(path) = "@" + path.gsub(" ", "\\ ")
 
     # Pure so it can be tested: "default" means leave the flag off.
-    def self.spawn_args(bin, prompt:, model: nil, effort: nil, permission_mode: nil, worktree: false, name: nil)
+    # --remote-control takes an optional name and eats whatever follows it,
+    # prompt included, so it goes last.
+    def self.spawn_args(bin, prompt:, model: nil, effort: nil, permission_mode: nil, worktree: false, name: nil, remote: false)
       argv = [bin, "--bg", prompt]
       argv += ["--model", model] if model && model != "default"
       argv += ["--effort", effort] if effort && effort != "default"
       argv += ["--permission-mode", permission_mode] if permission_mode && permission_mode != "default"
       argv += ["--name", name] if name && !name.strip.empty?
       argv << "--worktree" if worktree
+      argv << "--remote-control" if remote
       argv
     end
 
@@ -103,15 +106,17 @@ module ClaudeInbox
     def classify_origins(sessions)
       pids = sessions.select { |s| s.interactive? && s.pid }.map(&:pid)
       return sessions if pids.empty?
-      assign_origins(sessions, origins_by_pid(pids))
+      rows = ps_rows(pids)
+      assign_origins(sessions, origins_from(rows), self.class.bridge_ids(rows))
     end
 
     # Tags each interactive session with where it is driven from (pid =>
-    # origin, terminal when unlisted) and drops the unattended ones, whose
-    # parent is the row worth showing.
-    def assign_origins(sessions, origins)
+    # origin, terminal when unlisted) and the bridge a remote one is served
+    # over, and drops the unattended ones, whose parent is the row worth
+    # showing.
+    def assign_origins(sessions, origins, bridges = {})
       sessions
-        .map { |s| s.interactive? ? s.with(origin: origins.fetch(s.pid, :terminal)) : s }
+        .map { |s| s.interactive? ? s.with(origin: origins.fetch(s.pid, :terminal), bridge_id: bridges[s.pid]) : s }
         .reject(&:unattended?)
     end
 
@@ -141,12 +146,16 @@ module ClaudeInbox
     # terminal often enough to matter; the false positive is accepted.
     def self.headless?(cmd) = cmd.split.drop(1).any? { |arg| HEADLESS_FLAGS.include?(arg) }
 
-    def origins_by_pid(pids)
-      rows = ps_rows(pids)
+    # pid => bridge session id, for the workers a `claude remote-control`
+    # server spawned: each is started with `--session-id cse_…`, the same id
+    # a background session records as bridgeSessionId. Pure.
+    def self.bridge_ids(rows)
+      rows.filter_map { |pid, _, cmd| (m = cmd.match(/--session-id[= ](cse_\w+)/)) && [pid, m[1]] }.to_h
+    end
+
+    def origins_from(rows)
       return {} if rows.empty?
       self.class.origins(rows, ps_commands(rows.map { |_, ppid, _| ppid }.uniq))
-    rescue Errno::ENOENT
-      {}
     end
 
     def ps_rows(pids)
@@ -156,6 +165,8 @@ module ClaudeInbox
         pid, ppid, *cmd = l.split
         [pid.to_i, ppid.to_i, cmd.join(" ")]
       }
+    rescue Errno::ENOENT
+      []
     end
 
     # pid => command, for the given parent pids.
@@ -196,18 +207,19 @@ module ClaudeInbox
 
   # Reads a committed JSON fixture instead of the daemon.
   class FixtureClient < AgentsClient
-    def initialize(path, logs: nil, origins: {})
+    def initialize(path, logs: nil, origins: {}, bridges: {})
       super(jobs_dir: File.join(File.dirname(path), "jobs"))
       @path = path
       @logs = logs
       @origins = origins
+      @bridges = bridges
     end
 
     # Fixture rows carry no process tree; tag each interactive row from the
     # pid => origin map the test hands in, otherwise as a terminal, then drop
     # the unattended ones same as the real client does.
     def list
-      assign_origins(parse(File.read(@path)), @origins)
+      assign_origins(parse(File.read(@path)), @origins, @bridges)
     end
 
     def logs(_id) = @logs

@@ -50,7 +50,7 @@ module ClaudeInbox
       nil
     end
 
-    attr_reader :detail, :needs, :result, :tempo, :kinds, :tasks, :pr_urls, :color, :intent
+    attr_reader :detail, :needs, :result, :tempo, :kinds, :tasks, :pr_urls, :color, :intent, :bridge_id, :flags
 
     def initialize(hash)
       @detail = hash["detail"]
@@ -62,7 +62,13 @@ module ClaudeInbox
       @pr_urls = (hash["children"] || []).select { |c| c["kind"] == "pr" && c["href"] }.map { |c| c["href"] }
       @color = hash["color"]
       @intent = hash["intent"]
+      @bridge_id = hash["bridgeSessionId"]
+      @flags = hash["respawnFlags"] || []
     end
+
+    # The flags the session was started with, which the daemon puts back on
+    # a wake, are the only record of Remote Control being on it.
+    def remote_control? = flags.include?("--remote-control")
 
     # The agent itself is not thinking. On its own this means little — a
     # session whose process died leaves the same reading behind — so it only

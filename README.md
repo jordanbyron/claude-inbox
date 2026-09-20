@@ -81,6 +81,7 @@ scrolls its own history and clicks do nothing.
 | `x` | settle a working or needs-you session by hand (returns when it changes state, unless it just finished) |
 | `a` | set a local alias (never touches the real session name) |
 | `o` | open the session's pull request in the browser |
+| `w` | open the session at claude.ai/code |
 | `P` | link a pull request by hand (empty clears; the scanned links return) |
 | `X` | stop the session (`y` to confirm) |
 | `Ctrl-x` | delete the session for good, conversation and worktree with it (`y` to confirm) |
@@ -97,7 +98,7 @@ box before answering.
 ### New session
 
 `n` opens a form: prompt, name, directory, model, effort, permissions,
-worktree. `Tab` / `Shift+Tab` move between fields, `Esc` cancels. Choice
+worktree, Remote Control. `Tab` / `Shift+Tab` move between fields, `Esc` cancels. Choice
 fields cycle with `h` `l` or the arrows; "default" shows what your settings
 resolve to. The directory defaults to the selected row's, and `Tab` completes
 it.
@@ -112,6 +113,10 @@ an `[Image #1]` token the prompt can point at: "make the button look like
 [Image #1]". Pasted images are saved under `~/.config/claude-inbox/images/`
 for 14 days; a dropped file is referenced where it is. Reading the clipboard
 is macOS only.
+
+Remote Control set to yes starts the session with `--remote-control`, so it
+runs under the daemon like any other row and is also listed at claude.ai/code
+and in the Claude mobile app. See Remote Control below.
 
 Slash commands work as at Claude Code's own prompt. Type `/` at the start of a
 word for a menu of your skills and commands, plugin skills as `plugin:name`,
@@ -155,6 +160,25 @@ aren't pushed, and nothing here ever overrides that refusal. Every reap
 appends a line to `~/.config/claude-inbox/reaped.log`, the last record a
 session existed once its transcript is gone. `CLAUDE_INBOX_NO_REAP=1` turns
 reaping off.
+
+## Remote Control
+
+Every background session has a page at claude.ai/code, where you can follow
+it from a browser or the Claude mobile app; `w` opens it. A session with
+Remote Control on can also be driven from there, the way `claude
+--remote-control` and `/rc` allow in a terminal. Its row wears a `⇅` after
+the state. Two kinds of session have it:
+
+- A background session the `n` form started with Remote Control set to yes,
+  or one you ran as `claude --bg "…" --remote-control` yourself. It is a
+  daemon row like any other: `Enter` attaches, `X` stops, and it keeps its
+  Remote Control across a stop and a wake, since the daemon saves the flag.
+- A worker a `claude remote-control` server spawned for a request from your
+  phone. That is how a session started away from the desk lands on this
+  machine. The daemon calls it interactive, so `Enter` can't attach to it;
+  `w` opens it, and the peek pane shows its link. Once the server is stopped,
+  `claude --bg --resume <session uuid>` brings the conversation back as a
+  daemon row, uuid from the peek pane.
 
 ## Pull request state
 

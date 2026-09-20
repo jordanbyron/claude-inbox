@@ -56,6 +56,7 @@ describe ClaudeInbox::Keymap do
     _(km.press("n", "n")).must_equal :new_session
     _(km.press("t", "t")).must_equal :toggle_pin
     _(km.press("o", "o")).must_equal :open_pr
+    _(km.press("w", "w")).must_equal :open_remote
     _(km.press("P", "P")).must_equal :link_pr
     _(km.press(:tab, "\t")).must_equal :next_section
     _(km.press(:back_tab, "\e[Z")).must_equal :prev_section

@@ -58,7 +58,7 @@ module ClaudeInbox
     end
 
     def interactive_note(s)
-      [s.remote? ? REMOTE_NOTE : TERMINAL_NOTE, "", "pid #{s.pid} · #{s.cwd}", "session #{s.session_id}"]
+      [s.remote? ? REMOTE_NOTE : TERMINAL_NOTE, "", "pid #{s.pid} · #{s.cwd}", "session #{s.session_id}", s.remote_url].compact
     end
 
     def subtitle(row)

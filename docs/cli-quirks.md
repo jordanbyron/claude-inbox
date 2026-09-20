@@ -22,6 +22,22 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   CLI offers eight colors, and its own tmux code says what they mean to a
   terminal: six are ansi names, `orange` and `pink` are 256-color indexes 208
   and 205. Interactive sessions have no job file, so no color and no line.
+- Every `--bg` session registers a bridge and records it in `state.json` as
+  `bridgeSessionId: cse_<id>`; claude.ai/code shows the session at
+  `https://claude.ai/code/session_<id>`. `--bg` and `--remote-control`
+  combine (checked on 2.1.278): the session then also prints the `/rc
+  active · Continue here, on your phone, or at …` banner a terminal session
+  gets from `/rc`, which a plain `--bg` session never does. The flag is
+  the only trace of that in the job file, as a `respawnFlags` entry, and
+  the daemon puts it back on `claude --bg --resume <id>`. `--remote-control`
+  takes an optional name, so anything after it, the prompt included, becomes
+  that name and the session starts with no prompt; the flag has to come
+  last. A worker that `claude remote-control` spawned carries the same
+  bridge id on its command line as `--session-id cse_<id>`, next to
+  `--sdk-url`; the JSON row for it has the local conversation uuid as
+  `sessionId`, so `claude --resume` takes it once the server has let go.
+  The server refuses to start in a directory whose trust dialog hasn't been
+  accepted.
 - `~/.claude/gh-pr-status-cache.json` is keyed by PR url and calls an open
   draft `DRAFT`; `gh pr view` reports `OPEN` plus `isDraft`. The cache only
   covers PRs Claude Code's own sessions opened, so a link scan finds plenty

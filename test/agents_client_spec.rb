@@ -30,9 +30,10 @@ describe ClaudeInbox::AgentsClient do
   end
 
   it "classifies fixture interactive rows as remote when told their pids" do
-    c = ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), origins: {57405 => :remote})
+    c = ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), origins: {57405 => :remote}, bridges: {57405 => "cse_01AB"})
     s = c.list.find(&:interactive?)
     _(s).must_be :remote?
+    _(s.remote_url).must_equal "https://claude.ai/code/session_01AB"
     _(s).wont_be :terminal?
     _(sessions.find(&:interactive?)).must_be :terminal?
   end
@@ -60,6 +61,11 @@ describe ClaudeInbox::AgentsClient do
     it "knows a Remote Control worker by its flag or its parent" do
       _(origins([[100, 200, "claude --sdk-url wss://x"]], {200 => "-zsh"})).must_equal({100 => :remote})
       _(origins([[100, 200, "claude"]], {200 => "claude rc --worker"})).must_equal({100 => :remote})
+    end
+
+    it "reads a worker's bridge id off its command line" do
+      rows = [[100, 200, "claude --print --sdk-url https://api/cse_01AB --session-id cse_01AB"], [101, 200, "claude"]]
+      _(ClaudeInbox::AgentsClient.bridge_ids(rows)).must_equal({100 => "cse_01AB"})
     end
 
     it "knows a sub-agent by its claude parent" do

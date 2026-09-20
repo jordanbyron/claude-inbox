@@ -35,7 +35,8 @@ module ClaudeInbox
         Field.new(:model, "Model", :choice, DEFAULT, AgentsClient::MODELS),
         Field.new(:effort, "Effort", :choice, DEFAULT, AgentsClient::EFFORTS),
         Field.new(:permission_mode, "Permissions", :choice, DEFAULT, AgentsClient::PERMISSION_MODES),
-        Field.new(:worktree, "Worktree", :choice, "no", %w[no yes])
+        Field.new(:worktree, "Worktree", :choice, "no", %w[no yes]),
+        Field.new(:remote, "Remote Control", :choice, "no", %w[no yes])
       ]
       @focus = 0
       @error = nil
@@ -116,6 +117,7 @@ module ClaudeInbox
       @fields.to_h { |f| [f.key, f.value.to_s] }.tap do |v|
         v[:prompt] = field(:prompt).value.expand { |chip| AgentsClient.mention(chip.path) }.strip
         v[:worktree] = v[:worktree] == "yes"
+        v[:remote] = v[:remote] == "yes"
         v[:name] = nil if v[:name].strip.empty?
         v[:cwd] = File.expand_path(v[:cwd].strip.empty? ? "." : v[:cwd].strip)
       end

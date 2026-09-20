@@ -204,7 +204,7 @@ module ClaudeInbox
     def require_actionable
       return true if selected_session&.actionable?
       if (s = selected_session)&.interactive?
-        notice(s.remote? ? "that's a remote session — open it at claude.ai/code" : "that's your own terminal — switch to that window")
+        notice(s.remote? ? "that's a remote session — w opens it at claude.ai/code" : "that's your own terminal — switch to that window")
       end
       false
     end
@@ -302,6 +302,7 @@ module ClaudeInbox
       when :alias then open_alias_editor
       when :link_pr then open_pr_editor
       when :open_pr then open_pr
+      when :open_remote then open_remote
       when :stop then open_confirm(:stop)
       when :delete then open_confirm(:delete)
       when :refresh then @poller.soon
@@ -405,13 +406,22 @@ module ClaudeInbox
       @modal = Dialog::Prompt.new(:pr, @selected.key, current)
     end
 
-    # Hands the first PR to the OS browser opener.
     def open_pr
       pr = selected_session&.pr
       return notice("no pull request linked — P sets one") unless pr
+      open_in_browser(pr.url, pr.short)
+    end
+
+    def open_remote
+      url = selected_session&.remote_url
+      return notice("no claude.ai/code page for this session") unless url
+      open_in_browser(url, "claude.ai/code")
+    end
+
+    def open_in_browser(url, what)
       opener = RUBY_PLATFORM.include?("darwin") ? "open" : "xdg-open"
-      notice("opening #{pr.short}")
-      in_background { Subprocess.capture(opener, pr.url) }
+      notice("opening #{what}")
+      in_background { Subprocess.capture(opener, url) }
     end
 
     def open_new_session
