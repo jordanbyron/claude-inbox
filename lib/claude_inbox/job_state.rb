@@ -13,8 +13,9 @@ module ClaudeInbox
   # each outstanding piece of work, and `detail` is the session's own status
   # line, with `needs` naming what it is waiting on while blocked and
   # `output.result` what it produced once done. It also carries the PR links the daemon scanned out of the
-  # transcript, which PullRequests reads through here, and the color `/color`
-  # set on the session, which `claude agents --json` drops.
+  # transcript, which PullRequests reads through here, the color `/color`
+  # set on the session, which `claude agents --json` drops, and `intent`, the
+  # prompt the session was started from.
   #
   # Never cached. A color changes the moment you type `/color`, so every poll
   # asks the file again.
@@ -49,7 +50,7 @@ module ClaudeInbox
       nil
     end
 
-    attr_reader :detail, :needs, :result, :tempo, :kinds, :tasks, :pr_urls, :color
+    attr_reader :detail, :needs, :result, :tempo, :kinds, :tasks, :pr_urls, :color, :intent
 
     def initialize(hash)
       @detail = hash["detail"]
@@ -60,6 +61,7 @@ module ClaudeInbox
       @tasks = (hash["inFlight"] || {})["tasks"].to_i
       @pr_urls = (hash["children"] || []).select { |c| c["kind"] == "pr" && c["href"] }.map { |c| c["href"] }
       @color = hash["color"]
+      @intent = hash["intent"]
     end
 
     # The agent itself is not thinking. On its own this means little — a

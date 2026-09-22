@@ -84,7 +84,7 @@ scrolls its own history and clicks do nothing.
 | `P` | link a pull request by hand (empty clears; the scanned links return) |
 | `X` | stop the session (`y` to confirm) |
 | `Ctrl-x` | delete the session for good, conversation and worktree with it (`y` to confirm) |
-| `/` | filter by name or cwd; `Enter` keeps it, `Esc` clears |
+| `/` | filter by name, cwd, the prompt it started from, or what it is doing now; `Enter` keeps it, `Esc` clears |
 | `R` | poll now |
 | `q` | quit |
 

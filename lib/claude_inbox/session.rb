@@ -69,6 +69,9 @@ module ClaudeInbox
     # From `/color`; interactive sessions have no job file, so never one.
     def color = job_state&.color
 
+    # The prompt this session was started with.
+    def intent = job_state&.intent
+
     # The session's own one-line account of where it is, the same line
     # `claude agents` prints under a row: what it needs while blocked, what
     # it produced once done, otherwise its status line. Nil without a job

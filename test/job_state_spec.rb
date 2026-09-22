@@ -88,6 +88,12 @@ describe JobState do
     _(JobState.new({}).color).must_be_nil
   end
 
+  it "reads the prompt the session was started with" do
+    js = JobState.new({"intent" => "Look into the TIAA gateway 403s"})
+    _(js.intent).must_equal "Look into the TIAA gateway 403s"
+    _(JobState.new({}).intent).must_be_nil
+  end
+
   it "enriches background sessions only" do
     Dir.mktmpdir do |dir|
       write_job(dir, "aaa11111", "tempo" => "idle", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}])

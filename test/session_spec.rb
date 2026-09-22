@@ -65,4 +65,16 @@ describe ClaudeInbox::Session do
       _(session(job_state: job).summary).must_equal "step one step two"
     end
   end
+
+  describe "intent" do
+    it "is the prompt the session was started with" do
+      job = ClaudeInbox::JobState.new("intent" => "Look into the TIAA gateway 403s")
+      _(session(job_state: job).intent).must_equal "Look into the TIAA gateway 403s"
+    end
+
+    it "is nil without a job file, as an interactive session has none" do
+      _(session(job_state: nil).intent).must_be_nil
+      _(session(job_state: ClaudeInbox::JobState.new({})).intent).must_be_nil
+    end
+  end
 end
