@@ -156,7 +156,7 @@ module ClaudeInbox
       out += prompt_box(field(:prompt), inner_w, prompt_h)
       out += menu_rows
       out << ""
-      @fields[1..].each { |f| out << "  " + field_label(f) + field_value(f, inner_w - 14) }
+      @fields[1..].each { |f| out << "  " + field_label(f) + field_value(f, inner_w - 16) }
       out.first(height) + [""] * [height - out.size, 0].max
     end
 
@@ -261,7 +261,7 @@ module ClaudeInbox
 
     def field_label(f)
       on = f.equal?(focused)
-      (on ? @theme.cyan_bold("▶ ") : "  ") + (on ? @p.bold(Text.pad(f.label, 12)) : @p.dim(Text.pad(f.label, 12)))
+      (on ? @theme.cyan_bold("▶ ") : "  ") + (on ? @p.bold(Text.pad(f.label, 14)) : @p.dim(Text.pad(f.label, 14)))
     end
 
     # The cell the cursor sits on, drawn as a block by inverting it: a bar
