@@ -170,8 +170,10 @@ a second.
 ## Setup
 
 The right end of the header shows how much of your Claude subscription's
-5-hour and 7-day rate limit windows you have used, as `usage 5h 24% · 7d 41%`.
-It needs a Pro or Max account and a one-time setup.
+5-hour and 7-day rate limit windows you have used, as a ten-cell bar per
+window (`5h ██░░░░░░░░ 24%  7d ████░░░░░░ 41%`) that turns yellow at 70% and
+red at 90%, like the context bar many status lines draw. It needs a Pro or
+Max account and a one-time setup.
 
 Claude Code passes the numbers to your [status line](https://code.claude.com/docs/en/statusline)
 script every turn, and the inbox reads them from a file that script writes.
@@ -188,7 +190,7 @@ writes one for you, then add the lines to that. Keep the `-n` check: a
 session's first status line run has no numbers yet, and writing anyway would
 blank the file.
 
-The label stays off until the file exists, and goes off again once the file
+The bars stay off until the file exists, and goes off again once the file
 is more than fifteen minutes old.
 
 ## Contributing

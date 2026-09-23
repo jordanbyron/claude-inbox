@@ -149,7 +149,7 @@ module ClaudeInbox
       view = Renderer::View.new(
         width: width, height: height, now: now, selected: @selected&.key, top: @top, expanded: @expanded,
         peek: @peek.view(sections.row(@selected), height), modal: modal_lines(width), screen: screen_lines(width, height),
-        status: status_text(now), usage: @rate_limits.label(now), filter: @filter, filter_editing: @filter_editing,
+        status: status_text(now), usage: @rate_limits.windows(now), filter: @filter, filter_editing: @filter_editing,
         tick: @tick / 2, loading: loading_for
       )
       frame = @renderer.frame(sections, view)
