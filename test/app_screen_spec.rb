@@ -6,6 +6,7 @@ require "stringio"
 
 CTRL_X = "\x18"
 CTRL_S = "\x13"
+CTRL_U = "\x15"
 
 describe ClaudeInbox::App do
   let(:terminal) { ScreenTerminal.new }
@@ -189,7 +190,9 @@ describe ClaudeInbox::App do
   describe "starting a session" do
     it "says so while the worker runs, then names the session and lands on its row" do
       client.hold
-      press("n", "h", "i", CTRL_S)
+      # The form defaults to the selected fixture row's cwd, a path from the
+      # machine the fixture was captured on, so point it somewhere real.
+      press("n", "h", "i", "\e[B", "\e[B", CTRL_U, *Dir.pwd.chars, CTRL_S)
       _(status_line).must_include "starting session…"
 
       client.release

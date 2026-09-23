@@ -127,13 +127,30 @@ module ClaudeInbox
 
     def header(sections, width, view)
       brand = " " + @theme.cyan_bold("▌ claude-inbox")
-      right = [view.status, view.usage].compact.map { |s| @p.dim(s) }.join(@p.dim("  ·  "))
+      right = [view.status && @p.dim(view.status), view.usage && usage_meters(view.usage)].compact.join(@p.dim("  ·  "))
       right += " " unless right.empty?
       room = width - Text.width(brand) - Text.width(right) - 3
       chips = view.loading ? "" : header_chips(sections, compact: false)
       chips = header_chips(sections, compact: true) if Text.width(chips) > room
       chips = "" if Text.width(chips) > room
       Text.pad(brand + "   " + chips, width - Text.width(right)) + right
+    end
+
+    # "5h ██░░░░░░░░ 24%" per window, drawn and colored the way the context
+    # bar in the user's status line is, so the two read alike.
+    def usage_meters(windows)
+      windows.map do |w|
+        filled = w.percent / 10
+        bar = "█" * filled + "░" * (10 - filled)
+        "#{@p.dim(w.span)} #{@theme.public_send(usage_hue(w.percent), bar)} #{@p.dim("#{w.percent}%")}"
+      end.join("  ")
+    end
+
+    def usage_hue(percent)
+      if percent >= 90 then :red
+      elsif percent >= 70 then :yellow
+      else :green
+      end
     end
 
     def header_chips(sections, compact:)

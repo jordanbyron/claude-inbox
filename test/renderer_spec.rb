@@ -232,11 +232,13 @@ describe ClaudeInbox::Renderer do
     _(stuck).must_include "claude daemon status"
   end
 
-  it "ends the header with the usage label, after any notice, and with nothing when there is none" do
-    header = ->(**o) { frame(sections, width: 100, height: 10, **o).lines.first }
-    _(header.call(usage: "usage 5h 24% · 7d 41%")).must_match(/usage 5h 24% · 7d 41% $/)
-    _(header.call(status: "⚠ daemon down", usage: "usage 5h 24%")).must_match(/⚠ daemon down  ·  usage 5h 24% $/)
-    _(header.call).wont_include "usage"
+  it "ends the header with a usage bar per window, after any notice, and with nothing when there is none" do
+    header = ->(**o) { frame(sections, width: 120, height: 10, **o).lines.first }
+    five = ClaudeInbox::RateLimits::Window.new("5h", 24)
+    seven = ClaudeInbox::RateLimits::Window.new("7d", 100)
+    _(header.call(usage: [five, seven])).must_match(/5h ██░░░░░░░░ 24%  7d ██████████ 100% $/)
+    _(header.call(status: "⚠ daemon down", usage: [five])).must_match(/⚠ daemon down  ·  5h ██░░░░░░░░ 24% $/)
+    _(header.call).wont_include "5h"
     _(header.call).must_include "1 needs you"
   end
 end
@@ -282,6 +284,13 @@ describe "renderer session colors" do
   it "still pads a colored row to exactly the frame width" do
     sec = Store.sectionize([colored("pink")], {}, now)
     frame(sec, width: 64, height: 12).lines.each { |l| _(Text.width(l)).must_equal 64 }
+  end
+
+  it "turns a usage bar yellow from 70% and red from 90%" do
+    bar = ->(pct) { frame(Store.sectionize([], {}, now), width: 100, height: 5, usage: [ClaudeInbox::RateLimits::Window.new("5h", pct)]).lines.first }
+    _(bar.call(69)).must_include "\e[38;5;108m██████░░░░"
+    _(bar.call(70)).must_include "\e[38;5;179m███████░░░"
+    _(bar.call(90)).must_include "\e[38;5;203m█████████░"
   end
 end
 

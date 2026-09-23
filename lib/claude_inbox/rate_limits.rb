@@ -13,6 +13,9 @@ module ClaudeInbox
   class RateLimits
     DEFAULT_PATH = File.join(Dir.home, ".claude", "rate_limits.json")
     STALE_AFTER = 15 * 60
+    SPANS = {"five_hour" => "5h", "seven_day" => "7d"}.freeze
+
+    Window = Data.define(:span, :percent)
 
     def initialize(path: DEFAULT_PATH)
       @path = path
@@ -20,9 +23,10 @@ module ClaudeInbox
       @data = nil
     end
 
-    # "usage 5h 23% · 7d 41%", or nil. Parses only when the file has changed,
-    # since render asks several times a second.
-    def label(now = Time.now)
+    # The windows the file reports, each with a whole percent, or nil.
+    # Parses only when the file has changed, since render asks several times
+    # a second.
+    def windows(now = Time.now)
       mtime = File.mtime(@path)
       return nil if now - mtime > STALE_AFTER
       @data = parse if mtime != @mtime
@@ -36,11 +40,11 @@ module ClaudeInbox
 
     def parse
       hash = JSON.parse(File.read(@path))
-      parts = {"five_hour" => "5h", "seven_day" => "7d"}.filter_map do |key, word|
+      windows = SPANS.filter_map do |key, span|
         pct = hash.dig(key, "used_percentage")
-        "#{word} #{pct.round}%" if pct.is_a?(Numeric)
+        Window.new(span, pct.round.clamp(0, 100)) if pct.is_a?(Numeric)
       end
-      "usage " + parts.join(" · ") unless parts.empty?
+      windows unless windows.empty?
     rescue JSON::ParserError, TypeError
       nil
     end
