@@ -15,8 +15,9 @@ module ClaudeInbox
   class Poller
     INTERVAL = 4
 
-    def initialize(client:, store:, pull_requests:, jobs_dir:, reaper:, queue:, interval: INTERVAL)
+    def initialize(client:, store:, pull_requests:, jobs_dir:, reaper:, queue:, interval: INTERVAL, clock: -> { Time.now })
       @client = client
+      @clock = clock
       @store = store
       @pull_requests = pull_requests
       @jobs_dir = jobs_dir
@@ -55,7 +56,7 @@ module ClaudeInbox
     # dropped it. The gh refresh comes last and publishes again only if a PR
     # state moved.
     def once
-      now = Time.now
+      now = @clock.call
       sessions = Sessions.load(client: @client, jobs_dir: @jobs_dir, pull_requests: @pull_requests, overrides: @store.pr_overrides)
       doomed = @reaper.due(sessions, now)
       @store.hide(doomed)

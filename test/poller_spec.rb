@@ -15,12 +15,15 @@ describe ClaudeInbox::Poller do
     }.new(fixture_path("agents.json"))
   end
 
-  let(:store) { ClaudeInbox::Store.new(path: nil) }
+  # Pinned: the reaper's 14-day cutoff against the fixture's startedAt
+  # decides how many rows are due, and the wall clock keeps moving it.
+  let(:clock) { -> { Time.at(1_789_604_500) } }
+  let(:store) { ClaudeInbox::Store.new(path: nil, clock: clock) }
   let(:queue) { Queue.new }
 
   def poller(reaper: ClaudeInbox::Reaper.disabled, interval: ClaudeInbox::Poller::INTERVAL)
     ClaudeInbox::Poller.new(
-      client: client, store: store, reaper: reaper, queue: queue, interval: interval,
+      client: client, store: store, reaper: reaper, queue: queue, interval: interval, clock: clock,
       pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil),
       jobs_dir: fixture_path("jobs")
     )
