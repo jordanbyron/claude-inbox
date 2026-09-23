@@ -36,8 +36,11 @@ describe ClaudeInbox::App do
 
       def attach(id) = attached << id
 
+      def fail_spawn(message) = @spawn_error = message
+
       def spawn(**)
         @gate&.pop
+        raise ClaudeInbox::AgentsClient::Error, @spawn_error if @spawn_error
         "deadbeef"
       end
     }.new(fixture_path("agents.json"))
@@ -199,6 +202,21 @@ describe ClaudeInbox::App do
       _(wait_for { status_line.include?("started deadbeef") }).must_equal true
       store.update(store.sessions + [session(id: "deadbeef", name: "fresh one")])
       _(selected_line).must_include "fresh one"
+    end
+
+    # A directory `claude` has never run in before is exactly where `claude
+    # --bg` is most likely to fail (nothing there to answer its first-run
+    # trust prompt), so the form has to hand the composed prompt back rather
+    # than dropping it once the spawn is known to have failed.
+    it "reopens the form with the prompt and the error, instead of losing it, when the spawn fails" do
+      client.fail_spawn("claude --bg failed: not a trusted directory")
+      press("n", *"fix the thing".chars, "\e[B", "\e[B", CTRL_U, *Dir.pwd.chars, CTRL_S)
+      _(wait_for { screen.join("\n").include?("not a trusted directory") }).must_equal true
+      lines = screen
+      _(lines.join("\n")).must_include "fix the thing"
+      _(lines.join("\n")).must_include "New session"
+      press(CTRL_S)
+      _(status_line).must_include "starting session…"
     end
   end
 

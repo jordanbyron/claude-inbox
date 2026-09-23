@@ -44,12 +44,19 @@ module ClaudeInbox
       @pick = 0
       @dismissed = nil
       @confirm_discard = false
+      @busy = false
     end
 
     def focused = @fields[@focus]
 
     # => :cancel | :start | :start_and_attach | :changed
     def press(name, raw)
+      # `:start`/`:start_and_attach` leave the form up until the spawn is
+      # known to have worked, so a failure (untrusted directory, `claude`
+      # missing, ...) can hand the composed prompt back instead of losing
+      # it; there is no way to cancel a spawn already under way, so every
+      # key is swallowed until the App reports back.
+      return :changed if @busy
       return confirm_discard_press(name, raw) if @confirm_discard
       @error = nil
       @candidates = nil
@@ -140,7 +147,8 @@ module ClaudeInbox
       menu_rows = menu_lines(inner_w, [height - fixed - 3, MENU_ROWS].min)
       prompt_h = [height - fixed - menu_rows.size, 3].max
       out = [""]
-      out << "  " + (@confirm_discard ? @theme.red("Discard this session? (y/n)") : @p.bold("New session"))
+      title = @busy ? @p.dim("Starting session…") : @p.bold("New session")
+      out << "  " + (@confirm_discard ? @theme.red("Discard this session? (y/n)") : title)
       out << ""
       out << "  " + field_label(@fields[0]) + @p.dim("  ⏎ newline")
       out += prompt_box(@fields[0], inner_w, prompt_h)
@@ -151,6 +159,7 @@ module ClaudeInbox
     end
 
     def footer
+      return @p.dim("starting session…") if @busy
       if @confirm_discard
         return [["y", "discard"], ["esc", "keep editing"]]
             .map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
@@ -170,6 +179,16 @@ module ClaudeInbox
       keys += [["^S", "start"], ["^O", "start & open"],
         ["⇥", (focused.key == :cwd) ? "complete / next" : "next"], ["esc", "cancel"]]
       keys.map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
+    end
+
+    # The App's `claude --bg` call failed after `:start`/`:start_and_attach`
+    # already handed the form off — an untrusted directory, a stale binary,
+    # a permissions error. The composed prompt is still here, so the form
+    # reopens on it with the reason shown instead of the App just logging
+    # the failure and losing the draft.
+    def submission_failed(message)
+      @busy = false
+      @error = message
     end
 
     private
@@ -357,6 +376,7 @@ module ClaudeInbox
         @focus = 2
         return :changed
       end
+      @busy = true
       attach ? :start_and_attach : :start
     end
   end
