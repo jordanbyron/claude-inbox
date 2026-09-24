@@ -80,9 +80,9 @@ module ClaudeInbox
     # prompt included, so it goes last.
     def self.spawn_args(bin, prompt:, model: nil, effort: nil, permission_mode: nil, worktree: false, name: nil, remote: false)
       argv = [bin, "--bg", prompt]
-      argv += ["--model", model] if model && model != "default"
-      argv += ["--effort", effort] if effort && effort != "default"
-      argv += ["--permission-mode", permission_mode] if permission_mode && permission_mode != "default"
+      {"--model" => model, "--effort" => effort, "--permission-mode" => permission_mode}.each do |flag, value|
+        argv += [flag, value] if value && value != "default"
+      end
       argv += ["--name", name] if name && !name.strip.empty?
       argv << "--worktree" if worktree
       argv << "--remote-control" if remote
