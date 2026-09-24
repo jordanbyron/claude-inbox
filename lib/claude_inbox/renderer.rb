@@ -156,25 +156,31 @@ module ClaudeInbox
     end
 
     def header_chips(sections, compact:)
-      pn = sections.pinned.size
-      n = sections.needs_you.size
-      w = sections.active.count { |r| r.session.effective_state == "working" && !r.session.waiting_on_work? }
-      q = sections.active.count { |r| r.session.waiting_on_work? }
-      i = sections.all.count { |r| r.session.terminal? }
-      m = sections.all.count { |r| r.session.remote? }
-      z = sections.snoozed.size
-      d = sections.settled.size
-      chips = []
-      chips << @theme.cyan_bold(compact ? "★ #{pn}" : "★ #{pn} pinned") if pn > 0
-      chips << @theme.red_bold(compact ? "● #{n}" : "● #{n} need#{"s" if n == 1} you") if n > 0
-      chips << @theme.yellow(compact ? "✻ #{w}" : "✻ #{w} working") if w > 0
-      chips << @theme.yellow(compact ? "◌ #{q}" : "◌ #{q} idle") if q > 0
-      chips << @p.dim(compact ? "○ #{i}" : "○ #{i} terminal#{"s" if i > 1}") if i > 0
-      chips << @theme.blue(compact ? "⇅ #{m}" : "⇅ #{m} remote") if m > 0
-      chips << @theme.purple(compact ? "z #{z}" : "z #{z} snoozed") if z > 0
-      chips << @p.dim(compact ? "◦ #{d}" : "◦ #{d} settled") if d > 0
+      pinned = sections.pinned.size
+      needing = sections.needs_you.size
+      working = sections.active.count { |r| r.session.effective_state == "working" && !r.session.waiting_on_work? }
+      idle = sections.active.count { |r| r.session.waiting_on_work? }
+      terminals = sections.all.count { |r| r.session.terminal? }
+      remotes = sections.all.count { |r| r.session.remote? }
+      snoozed = sections.snoozed.size
+      settled = sections.settled.size
+      chips = [
+        header_chip(pinned, "★", "pinned", compact) { |s| @theme.cyan_bold(s) },
+        header_chip(needing, "●", "need#{"s" if needing == 1} you", compact) { |s| @theme.red_bold(s) },
+        header_chip(working, "✻", "working", compact) { |s| @theme.yellow(s) },
+        header_chip(idle, "◌", "idle", compact) { |s| @theme.yellow(s) },
+        header_chip(terminals, "○", "terminal#{"s" if terminals > 1}", compact) { |s| @p.dim(s) },
+        header_chip(remotes, "⇅", "remote", compact) { |s| @theme.blue(s) },
+        header_chip(snoozed, "z", "snoozed", compact) { |s| @theme.purple(s) },
+        header_chip(settled, "◦", "settled", compact) { |s| @p.dim(s) }
+      ].compact
       chips << @p.dim("nothing running") if sections.all.empty?
       chips.join(compact ? "  " : @p.dim("  ·  "))
+    end
+
+    def header_chip(count, glyph, words, compact)
+      return unless count > 0
+      yield(compact ? "#{glyph} #{count}" : "#{glyph} #{count} #{words}")
     end
 
     def footer(width, view)
