@@ -23,6 +23,32 @@ describe ClaudeInbox::Store::Row do
     _(aliased.matches?("thing")).must_equal false
   end
 
+  describe "searching a session you cannot name" do
+    def job(**h) = ClaudeInbox::JobState.new(h.transform_keys(&:to_s))
+
+    it "searches the prompt the session was started with" do
+      r = row(session(id: "a", name: "SEAR-1594", cwd: "/srv/app",
+        job_state: job(intent: "Restore the OpenSearch indexes in Sagemaker")), nil)
+      _(r.matches?("opensearch")).must_equal true
+      _(r.matches?("sagemaker")).must_equal true
+      _(r.matches?("kubernetes")).must_equal false
+    end
+
+    it "searches the line the session is showing about itself" do
+      r = row(session(id: "a", name: "SEAR-1594", state: "working",
+        job_state: job(detail: "Reading the synonym-mode application")), nil)
+      _(r.matches?("synonym")).must_equal true
+    end
+
+    it "leaves an interactive session searchable by name and cwd alone" do
+      r = row(session(id: nil, session_id: "u1", kind: "interactive", name: "shell",
+        cwd: "/srv/app", job_state: nil), nil)
+      _(r.matches?("shell")).must_equal true
+      _(r.matches?("app")).must_equal true
+      _(r.matches?("opensearch")).must_equal false
+    end
+  end
+
   it "answers nil for every reader when no poll has recorded the session yet" do
     r = row(session(id: "a"), nil)
     _(r.entry).must_be_nil

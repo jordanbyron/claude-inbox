@@ -27,9 +27,11 @@ module ClaudeInbox
 
       def reap_failed_at = entry&.reap_failed_at
 
+      # Names get shortened and forgotten, so the filter also reads what the
+      # session was asked to do and what it says it is doing now.
       def matches?(query)
         q = query.downcase
-        label.downcase.include?(q) || session.cwd.to_s.downcase.include?(q)
+        [label, session.cwd, session.intent, session.summary].any? { |field| field.to_s.downcase.include?(q) }
       end
 
       # A session already blocked when you snoozed it stays snoozed; one that
