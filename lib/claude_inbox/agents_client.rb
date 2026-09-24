@@ -64,10 +64,7 @@ module ClaudeInbox
 
     # Start a background session. Returns its short id.
     def spawn(prompt:, cwd:, **opts)
-      argv = self.class.spawn_args(@bin, prompt: prompt, **opts)
-      r = Subprocess.capture(*argv, chdir: cwd)
-      raise Error, "claude --bg failed: #{(r.err + r.out).strip}" unless r.success?
-      r.out[/\b[0-9a-f]{8}\b/] || r.out.strip
+      start_bg(self.class.spawn_args(@bin, prompt: prompt, **opts), cwd, "claude --bg")
     end
 
     # How a prompt attaches a file: the same @ mention the CLI's own prompt
@@ -98,9 +95,7 @@ module ClaudeInbox
       raise Error, "nothing to adopt yet — send it a message from your phone first" if transcript_empty?(cwd, session_id)
       Process.kill("TERM", pid)
       wait_gone(pid)
-      r = Subprocess.capture(*self.class.adopt_args(@bin, session_id), chdir: cwd)
-      raise Error, "claude --bg --resume failed: #{(r.err + r.out).strip}" unless r.success?
-      r.out[/\b[0-9a-f]{8}\b/] || r.out.strip
+      start_bg(self.class.adopt_args(@bin, session_id), cwd, "claude --bg --resume")
     end
 
     def self.adopt_args(bin, session_id) = [bin, "--bg", "--resume", session_id, "--remote-control"]
@@ -242,6 +237,12 @@ module ClaudeInbox
       r = Subprocess.capture(*argv)
       raise Error, "#{argv[1]} failed: #{r.err.strip}" unless r.success?
       true
+    end
+
+    def start_bg(argv, cwd, what)
+      r = Subprocess.capture(*argv, chdir: cwd)
+      raise Error, "#{what} failed: #{(r.err + r.out).strip}" unless r.success?
+      r.out[/\b[0-9a-f]{8}\b/] || r.out.strip
     end
   end
 
