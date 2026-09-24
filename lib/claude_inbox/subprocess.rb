@@ -36,7 +36,8 @@ module ClaudeInbox
       until readers.empty?
         ready, = IO.select(readers)
         ready.each do |io|
-          case (chunk = io.read_nonblock(65_536, exception: false))
+          chunk = io.read_nonblock(65_536, exception: false)
+          case chunk
           when :wait_readable then next
           when nil
             readers.delete(io)
