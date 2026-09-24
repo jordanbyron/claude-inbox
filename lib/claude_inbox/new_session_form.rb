@@ -119,14 +119,14 @@ module ClaudeInbox
         v[:worktree] = v[:worktree] == "yes"
         v[:remote] = v[:remote] == "yes"
         v[:name] = nil if v[:name].strip.empty?
-        v[:cwd] = File.expand_path(v[:cwd].strip.empty? ? "." : v[:cwd].strip)
+        v[:cwd] = directory
       end
     end
 
     # Settings resolve against the directory the session will run in, so
     # they follow the Directory field.
     def defaults
-      cwd = values[:cwd]
+      cwd = directory
       return @defaults if @defaults_for == cwd
       @defaults_for = cwd
       @defaults = Settings.defaults(cwd, home: @home)
@@ -135,7 +135,7 @@ module ClaudeInbox
     # Project commands live under the Directory field's path, so they
     # follow it as the defaults do.
     def commands
-      cwd = values[:cwd]
+      cwd = directory
       return @commands if @commands_for == cwd
       @commands_for = cwd
       @commands = SlashCommands.list(cwd: cwd, home: @home)
@@ -343,6 +343,11 @@ module ClaudeInbox
     def move(d) = @focus = (@focus + d) % @fields.size
 
     def field(key) = @fields.find { |f| f.key == key }
+
+    def directory
+      path = field(:cwd).value.to_s.strip
+      File.expand_path(path.empty? ? "." : path)
+    end
 
     def focus_on(key) = @focus = @fields.index { |f| f.key == key }
 
