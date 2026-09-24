@@ -9,8 +9,8 @@ module ClaudeInbox
   #
   # The one thing in the inbox that destroys anything without being asked
   # first, so the whole of it lives here rather than spread through the poll
-  # loop: one public method, and one append-only log that is the last record
-  # a session ever existed once `claude rm` has taken its transcript.
+  # loop, along with the append-only log that is the last record a session
+  # ever existed once `claude rm` has taken its transcript.
   #
   # Unpushed work is safe by construction. `claude rm` refuses a worktree
   # holding commits that aren't pushed and reports a --discard-unpushed token
@@ -19,8 +19,6 @@ module ClaudeInbox
   class Reaper
     RETRY_AFTER = 24 * 3600
     DEFAULT_LOG = File.join(Dir.home, ".config", "claude-inbox", "reaped.log")
-
-    attr_reader :log_path
 
     def initialize(client, store, log_path: DEFAULT_LOG, enabled: self.class.enabled?)
       @client = client
@@ -52,6 +50,11 @@ module ClaudeInbox
     # Keys `sweep` would go after right now, without touching any of them,
     # so the poller can hand the list over minus these before `claude rm`.
     def due(sessions, now) = due_rows(sessions, now.to_i).map(&:key)
+
+    def report(keys)
+      word = (keys.size == 1) ? "session" : "sessions"
+      "reaped #{keys.size} #{word} idle over #{Store::REAP_AFTER / 86_400}d — see #{@log_path}"
+    end
 
     private
 

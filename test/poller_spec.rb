@@ -63,11 +63,11 @@ describe ClaudeInbox::Poller do
 
         def sweep(_sessions, _now) = %w[f23c8673]
 
-        def log_path = File::NULL
+        def report(keys) = "reaped #{keys.join(" ")}"
       }.new
       poller(reaper: reaper).once
       msgs = messages
-      _(msgs.assoc(:notice)[1]).must_include "reaped 1 session"
+      _(msgs.assoc(:notice)[1]).must_equal "reaped f23c8673"
 
       store.update(msgs.first[1])
       _(shown).wont_include "f23c8673"
@@ -81,7 +81,7 @@ describe ClaudeInbox::Poller do
 
         def sweep(_sessions, _now) = []
 
-        def log_path = File::NULL
+        def report(keys) = "reaped #{keys.join(" ")}"
       }.new
       poller(reaper: reaper).once
       drain
@@ -94,7 +94,7 @@ describe ClaudeInbox::Poller do
 
         def sweep(_sessions, _now) = raise(Errno::EACCES, "reaped.log")
 
-        def log_path = File::NULL
+        def report(keys) = "reaped #{keys.join(" ")}"
       }.new
       poller(reaper: reaper).once
       msgs = messages
@@ -114,7 +114,7 @@ describe ClaudeInbox::Poller do
           []
         end
 
-        def log_path = File::NULL
+        def report(keys) = "reaped #{keys.join(" ")}"
       }.new(store)
       poller(reaper: reaper).once
       drain
