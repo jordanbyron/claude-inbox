@@ -24,8 +24,7 @@ describe ClaudeInbox::Poller do
   def poller(reaper: ClaudeInbox::Reaper.disabled, interval: ClaudeInbox::Poller::INTERVAL)
     ClaudeInbox::Poller.new(
       client: client, store: store, reaper: reaper, queue: queue, interval: interval, clock: clock,
-      pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil),
-      jobs_dir: fixture_path("jobs")
+      pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil)
     )
   end
 

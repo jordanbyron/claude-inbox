@@ -10,8 +10,8 @@ module ClaudeInbox
   module Sessions
     module_function
 
-    def load(client:, jobs_dir:, pull_requests:, overrides:)
-      sessions = JobState.enrich(client.list, jobs_dir: jobs_dir)
+    def load(client:, pull_requests:, overrides:)
+      sessions = JobState.enrich(client.list, jobs_dir: client.jobs_dir)
       pull_requests.enrich(sessions, overrides)
     end
   end

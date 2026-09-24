@@ -2,6 +2,7 @@
 
 require "json"
 require_relative "debug"
+require_relative "job_state"
 require_relative "subprocess"
 
 module ClaudeInbox
@@ -10,8 +11,11 @@ module ClaudeInbox
   class AgentsClient
     class Error < StandardError; end
 
-    def initialize(bin: "claude")
+    attr_reader :jobs_dir
+
+    def initialize(bin: "claude", jobs_dir: JobState::DEFAULT_DIR)
       @bin = bin
+      @jobs_dir = jobs_dir
     end
 
     # => Array<Session>
@@ -193,7 +197,7 @@ module ClaudeInbox
   # Reads a committed JSON fixture instead of the daemon.
   class FixtureClient < AgentsClient
     def initialize(path, logs: nil, origins: {})
-      super()
+      super(jobs_dir: File.join(File.dirname(path), "jobs"))
       @path = path
       @logs = logs
       @origins = origins
