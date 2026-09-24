@@ -23,7 +23,6 @@ module ClaudeInbox
     def start
       return if @thread&.alive?
       @thread = Thread.new { worker }
-      @thread.abort_on_exception = false
     end
 
     def cached(id)

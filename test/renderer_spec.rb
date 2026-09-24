@@ -298,7 +298,7 @@ describe ClaudeInbox::Painter do
   it "paints only changed lines" do
     out = StringIO.new
     painter = ClaudeInbox::Painter.new(out)
-    painter.paint(%w[a b c], force: true)
+    painter.paint(%w[a b c])
     out.truncate(0)
     out.rewind
     painter.paint(%w[a X c])
@@ -309,7 +309,7 @@ describe ClaudeInbox::Painter do
 
   it "never erases to end of line after a row" do
     out = StringIO.new
-    ClaudeInbox::Painter.new(out).paint(%w[a b], force: true)
+    ClaudeInbox::Painter.new(out).paint(%w[a b])
     _(out.string).wont_include "\e[K"
     _(out.string).wont_include "\e[0K"
   end

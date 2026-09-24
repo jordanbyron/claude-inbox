@@ -15,8 +15,6 @@ module ClaudeInbox
     OSC = /\e\][^\a\e]*(?:\a|\e\\)?/
     ESC_OTHER = /\e[()#][A-Za-z0-9]|\e[A-Za-z0-9=>78]/
 
-    attr_reader :rows, :cols
-
     def initialize(rows: 300, cols: 300)
       @rows = rows
       @cols = cols

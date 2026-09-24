@@ -445,11 +445,10 @@ module ClaudeInbox
       @prev = []
     end
 
-    def paint(lines, force: false)
+    def paint(lines)
       buf = +""
-      buf << @cursor.clear_screen if force
       lines.each_with_index do |line, i|
-        next if !force && @prev[i] == line
+        next if @prev[i] == line
         buf << @cursor.move_to(0, i) << line
       end
       if @prev.size > lines.size

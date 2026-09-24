@@ -19,8 +19,6 @@ module ClaudeInbox
 
     RESET = "\e[39m"
 
-    def self.known?(name) = ANSI.key?(name) || INDEXED.key?(name)
-
     def self.sequence(name)
       return "\e[#{ANSI[name]}m" if ANSI.key?(name)
       return "\e[38;5;#{INDEXED[name]}m" if INDEXED.key?(name)

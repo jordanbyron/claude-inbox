@@ -34,10 +34,4 @@ describe Palette do
   it "leaves text alone when color is off" do
     _(Palette.new(enabled: false).paint("x", "orange")).must_equal "x"
   end
-
-  it "knows which colors it can paint" do
-    _(Palette.known?("orange")).must_equal true
-    _(Palette.known?("chartreuse")).must_equal false
-    _(Palette.known?(nil)).must_equal false
-  end
 end
