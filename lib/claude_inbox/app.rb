@@ -155,7 +155,6 @@ module ClaudeInbox
         tick: @tick / 2, loading: loading_for
       )
       frame = @renderer.frame(sections, view)
-      @items = frame.items.compact
       @row_items = frame.items
       @list_width = frame.list_width
       @top = frame.top
@@ -316,8 +315,8 @@ module ClaudeInbox
     def page = [@terminal.size[1] - 2, 1].max
 
     def move(delta)
-      return if @items.nil? || @items.empty?
       stops = filtered.selections(@expanded)
+      return if stops.empty?
       idx = stops.index(@selected) || 0
       select(stops[(idx + delta).clamp(0, stops.size - 1)])
     end
