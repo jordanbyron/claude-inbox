@@ -87,6 +87,15 @@ describe JobState do
     _(js.result).must_be_nil
   end
 
+  it "summarizes by state: needs while blocked, result once done, else the detail line" do
+    js = JobState.new("detail" => "watching\n  CI", "needs" => "confirm: merge?", "output" => {"result" => "PR #7 up"})
+    _(js.summary("blocked")).must_equal "confirm: merge?"
+    _(js.summary("done")).must_equal "PR #7 up"
+    _(js.summary("working")).must_equal "watching CI"
+    _(JobState.new("detail" => "watching CI").summary("blocked")).must_equal "watching CI"
+    _(JobState.new({}).summary("done")).must_be_nil
+  end
+
   it "reads the color /color wrote into the job file" do
     _(JobState.read("b0b18338", jobs_dir: fixture_path("jobs")).color).must_equal "orange"
     _(JobState.read("b03695b1", jobs_dir: fixture_path("jobs")).color).must_be_nil

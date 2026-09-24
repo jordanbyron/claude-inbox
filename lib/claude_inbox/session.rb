@@ -84,20 +84,8 @@ module ClaudeInbox
     def intent = job_state&.intent
 
     # The session's own one-line account of where it is, the same line
-    # `claude agents` prints under a row: what it needs while blocked, what
-    # it produced once done, otherwise its status line. Nil without a job
-    # file, or before the session has said anything.
-    def summary
-      return nil unless job_state
-      line =
-        case effective_state
-        when "blocked" then job_state.needs || job_state.detail
-        when "done" then job_state.result || job_state.detail
-        else job_state.detail
-        end
-      line = line.to_s.gsub(/\s+/, " ").strip
-      line.empty? ? nil : line
-    end
+    # `claude agents` prints under a row. Nil without a job file.
+    def summary = job_state&.summary(effective_state)
 
     def needs_you? = %w[blocked failed].include?(effective_state)
 
