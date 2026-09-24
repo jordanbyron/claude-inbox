@@ -129,7 +129,7 @@ module ClaudeInbox
 
     def header(sections, width, view)
       brand = " " + @theme.cyan_bold("▌ claude-inbox")
-      right = [view.status && @p.dim(view.status), view.usage && usage_meters(view.usage)].compact.join(@p.dim("  ·  "))
+      right = [view.status && @p.dim(view.status), view.usage && usage_meters(view.usage, view.now)].compact.join(@p.dim("  ·  "))
       right += " " unless right.empty?
       room = width - Text.width(brand) - Text.width(right) - 3
       chips = view.loading ? "" : header_chips(sections, compact: false)
@@ -138,13 +138,15 @@ module ClaudeInbox
       Text.pad(brand + "   " + chips, width - Text.width(right)) + right
     end
 
-    # "5h ██░░░░░░░░ 24%" per window, drawn and colored the way the context
-    # bar in the user's status line is, so the two read alike.
-    def usage_meters(windows)
+    # "session ██░░░░░░░░ 24% · 3h left" per window, drawn and colored the way
+    # the context bar in the user's status line is, so the two read alike.
+    def usage_meters(windows, now)
       windows.map do |w|
         filled = w.percent / 10
         bar = "█" * filled + "░" * (10 - filled)
-        "#{@p.dim(w.span)} #{@theme.public_send(usage_hue(w.percent), bar)} #{@p.dim("#{w.percent}%")}"
+        left = w.resets_at && w.resets_at.to_i - now.to_i
+        figure = left&.positive? ? "#{w.percent}% · #{Text.age(left)} left" : "#{w.percent}%"
+        "#{@p.dim(w.label)} #{@theme.public_send(usage_hue(w.percent), bar)} #{@p.dim(figure)}"
       end.join("  ")
     end
 

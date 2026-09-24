@@ -7,7 +7,7 @@ require_relative "../lib/claude_inbox/rate_limits"
 describe ClaudeInbox::RateLimits do
   let(:now) { Time.now }
 
-  def window(span, percent) = ClaudeInbox::RateLimits::Window.new(span, percent)
+  def window(label, percent, resets_at = nil) = ClaudeInbox::RateLimits::Window.new(label, percent, resets_at)
 
   def with_file(json)
     Dir.mktmpdir do |dir|
@@ -19,12 +19,12 @@ describe ClaudeInbox::RateLimits do
 
   it "shows both windows, rounded" do
     with_file('{"five_hour":{"used_percentage":23.5,"resets_at":1},"seven_day":{"used_percentage":41.2,"resets_at":2}}') do |rl|
-      _(rl.windows(now)).must_equal [window("5h", 24), window("7d", 41)]
+      _(rl.windows(now)).must_equal [window("session", 24, Time.at(1)), window("week", 41, Time.at(2))]
     end
   end
 
   it "shows whichever window is present" do
-    with_file('{"seven_day":{"used_percentage":80}}') { |rl| _(rl.windows(now)).must_equal [window("7d", 80)] }
+    with_file('{"seven_day":{"used_percentage":80}}') { |rl| _(rl.windows(now)).must_equal [window("week", 80)] }
   end
 
   it "is nil with no file, an empty object, or junk" do
@@ -43,10 +43,10 @@ describe ClaudeInbox::RateLimits do
 
   it "re-reads only when the file changes" do
     with_file('{"five_hour":{"used_percentage":10}}') do |rl, path|
-      _(rl.windows(now)).must_equal [window("5h", 10)]
+      _(rl.windows(now)).must_equal [window("session", 10)]
       File.write(path, '{"five_hour":{"used_percentage":50}}')
       File.utime(now + 1, now + 1, path)
-      _(rl.windows(now + 2)).must_equal [window("5h", 50)]
+      _(rl.windows(now + 2)).must_equal [window("session", 50)]
       File.delete(path)
       _(rl.windows(now + 3)).must_be_nil
     end

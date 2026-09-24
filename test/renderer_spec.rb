@@ -234,12 +234,21 @@ describe ClaudeInbox::Renderer do
 
   it "ends the header with a usage bar per window, after any notice, and with nothing when there is none" do
     header = ->(**o) { frame(sections, width: 120, height: 10, **o).lines.first }
-    five = ClaudeInbox::RateLimits::Window.new("5h", 24)
-    seven = ClaudeInbox::RateLimits::Window.new("7d", 100)
-    _(header.call(usage: [five, seven])).must_match(/5h ██░░░░░░░░ 24%  7d ██████████ 100% $/)
-    _(header.call(status: "⚠ daemon down", usage: [five])).must_match(/⚠ daemon down  ·  5h ██░░░░░░░░ 24% $/)
-    _(header.call).wont_include "5h"
+    five = ClaudeInbox::RateLimits::Window.new("session", 24)
+    seven = ClaudeInbox::RateLimits::Window.new("week", 100)
+    _(header.call(usage: [five, seven])).must_match(/session ██░░░░░░░░ 24%  week ██████████ 100% $/)
+    _(header.call(status: "⚠ daemon down", usage: [five])).must_match(/⚠ daemon down  ·  session ██░░░░░░░░ 24% $/)
+    _(header.call).wont_include "session"
     _(header.call).must_include "1 needs you"
+  end
+
+  it "says how long until each usage window resets, and nothing once it has" do
+    header = ->(**o) { frame(sections, width: 120, height: 10, **o).lines.first }
+    five = ClaudeInbox::RateLimits::Window.new("session", 24, now + 3 * 3600 + 60)
+    seven = ClaudeInbox::RateLimits::Window.new("week", 41, now + 2 * 86_400 + 3600)
+    _(header.call(usage: [five, seven])).must_match(/session ██░░░░░░░░ 24% · 3h left  week ████░░░░░░ 41% · 2d left $/)
+    past = ClaudeInbox::RateLimits::Window.new("session", 24, now - 60)
+    _(header.call(usage: [past])).must_match(/session ██░░░░░░░░ 24% $/)
   end
 end
 
@@ -287,7 +296,7 @@ describe "renderer session colors" do
   end
 
   it "turns a usage bar yellow from 70% and red from 90%" do
-    bar = ->(pct) { frame(Store.sectionize([], {}, now), width: 100, height: 5, usage: [ClaudeInbox::RateLimits::Window.new("5h", pct)]).lines.first }
+    bar = ->(pct) { frame(Store.sectionize([], {}, now), width: 100, height: 5, usage: [ClaudeInbox::RateLimits::Window.new("session", pct)]).lines.first }
     _(bar.call(69)).must_include "\e[38;5;108m██████░░░░"
     _(bar.call(70)).must_include "\e[38;5;179m███████░░░"
     _(bar.call(90)).must_include "\e[38;5;203m█████████░"
