@@ -171,9 +171,10 @@ a second.
 
 The right end of the header shows how much of your Claude subscription's
 5-hour and 7-day rate limit windows you have used, as a ten-cell bar per
-window (`5h ██░░░░░░░░ 24%  7d ████░░░░░░ 41%`) that turns yellow at 70% and
-red at 90%, like the context bar many status lines draw. It needs a Pro or
-Max account and a one-time setup.
+window (`5h ██░░░░░░░░ 24% for 3h  7d ████░░░░░░ 41% for 2d`) that turns
+yellow at 70% and red at 90%, like the context bar many status lines draw.
+`for 2d` is how long until that window resets. It needs a Pro or Max account
+and a one-time setup.
 
 Claude Code passes the numbers to your [status line](https://code.claude.com/docs/en/statusline)
 script every turn, and the inbox reads them from a file that script writes.

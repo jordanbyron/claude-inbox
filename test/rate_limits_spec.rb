@@ -7,7 +7,7 @@ require_relative "../lib/claude_inbox/rate_limits"
 describe ClaudeInbox::RateLimits do
   let(:now) { Time.now }
 
-  def window(span, percent) = ClaudeInbox::RateLimits::Window.new(span, percent)
+  def window(span, percent, resets_at = nil) = ClaudeInbox::RateLimits::Window.new(span, percent, resets_at)
 
   def with_file(json)
     Dir.mktmpdir do |dir|
@@ -19,7 +19,7 @@ describe ClaudeInbox::RateLimits do
 
   it "shows both windows, rounded" do
     with_file('{"five_hour":{"used_percentage":23.5,"resets_at":1},"seven_day":{"used_percentage":41.2,"resets_at":2}}') do |rl|
-      _(rl.windows(now)).must_equal [window("5h", 24), window("7d", 41)]
+      _(rl.windows(now)).must_equal [window("5h", 24, Time.at(1)), window("7d", 41, Time.at(2))]
     end
   end
 

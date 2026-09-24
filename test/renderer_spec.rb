@@ -241,6 +241,15 @@ describe ClaudeInbox::Renderer do
     _(header.call).wont_include "5h"
     _(header.call).must_include "1 needs you"
   end
+
+  it "says how long until each usage window resets, and nothing once it has" do
+    header = ->(**o) { frame(sections, width: 120, height: 10, **o).lines.first }
+    five = ClaudeInbox::RateLimits::Window.new("5h", 24, now + 3 * 3600 + 60)
+    seven = ClaudeInbox::RateLimits::Window.new("7d", 41, now + 2 * 86_400 + 3600)
+    _(header.call(usage: [five, seven])).must_match(/5h ██░░░░░░░░ 24% for 3h  7d ████░░░░░░ 41% for 2d $/)
+    past = ClaudeInbox::RateLimits::Window.new("5h", 24, now - 60)
+    _(header.call(usage: [past])).must_match(/5h ██░░░░░░░░ 24% $/)
+  end
 end
 
 describe "renderer session colors" do

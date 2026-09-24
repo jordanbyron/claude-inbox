@@ -15,7 +15,10 @@ module ClaudeInbox
     STALE_AFTER = 15 * 60
     SPANS = {"five_hour" => "5h", "seven_day" => "7d"}.freeze
 
-    Window = Data.define(:span, :percent)
+    # `resets_at` is when the window rolls over, or nil if the file omits it.
+    Window = Data.define(:span, :percent, :resets_at) do
+      def initialize(span:, percent:, resets_at: nil) = super
+    end
 
     def initialize(path: DEFAULT_PATH)
       @path = path
@@ -23,7 +26,8 @@ module ClaudeInbox
       @data = nil
     end
 
-    # The windows the file reports, each with a whole percent, or nil.
+    # The windows the file reports, each with a whole percent and its reset
+    # time, or nil.
     # Parses only when the file has changed, since render asks several times
     # a second.
     def windows(now = Time.now)
@@ -42,7 +46,9 @@ module ClaudeInbox
       hash = JSON.parse(File.read(@path))
       windows = SPANS.filter_map do |key, span|
         pct = hash.dig(key, "used_percentage")
-        Window.new(span, pct.round.clamp(0, 100)) if pct.is_a?(Numeric)
+        next unless pct.is_a?(Numeric)
+        resets_at = hash.dig(key, "resets_at")
+        Window.new(span, pct.round.clamp(0, 100), (Time.at(resets_at) if resets_at.is_a?(Numeric)))
       end
       windows unless windows.empty?
     rescue JSON::ParserError, TypeError
