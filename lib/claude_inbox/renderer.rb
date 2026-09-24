@@ -20,6 +20,10 @@ module ClaudeInbox
 
     Frame = Struct.new(:lines, :items, :top, :list_width)
 
+    CHROME_ROWS = 2 # header + footer
+
+    def self.body_height(height) = height - CHROME_ROWS
+
     # What App hands Renderer for one frame. `peek` is a Peek::View.
     View = Data.define(:width, :height, :now, :selected, :top, :expanded, :peek, :modal, :screen,
       :status, :usage, :filter, :filter_editing, :tick, :loading) do
@@ -75,7 +79,7 @@ module ClaudeInbox
       return full_screen(sections, view) if view.screen
       width, height, now, selected = view.width, view.height, view.now, view.selected
       list_w = width_for_list(width, view.peek)
-      view_h = height - 2 # header + footer
+      view_h = Renderer.body_height(height)
       body, items =
         if view.loading
           [loading_state(list_w, view_h, view.loading, view.tick), []]
@@ -118,11 +122,11 @@ module ClaudeInbox
 
     def full_screen(sections, view)
       width = view.width
-      view_h = view.height - 2
+      view_h = Renderer.body_height(view.height)
       body = view.screen[:lines].first(view_h)
       body += [""] * (view_h - body.size)
       lines = [header(sections, width, view)] + body.map { |l| Text.pad(l, width) } + [Text.pad(" " + view.screen[:footer], width)]
-      Frame.new(lines, [nil] * (view_h + 2), view.top, width)
+      Frame.new(lines, [nil] * view.height, view.top, width)
     end
 
     # ----- chrome -------------------------------------------------------------

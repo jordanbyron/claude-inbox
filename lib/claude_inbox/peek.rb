@@ -44,9 +44,9 @@ module ClaudeInbox
 
     # `row` is the selected row as the frame shows it, or nil when nothing is
     # selected. Answers nil when there is no pane to paint.
-    def view(row, height)
+    def view(row, body_h)
       return nil unless @open && @selected&.row?
-      View.new(scrolled(body(row), height - 2), row&.label || @selected.key, subtitle(row))
+      View.new(scrolled(body(row), body_h), row&.label || @selected.key, subtitle(row))
     end
 
     private
