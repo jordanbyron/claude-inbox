@@ -14,6 +14,11 @@ describe ClaudeInbox::AgentsClient do
     _(a).must_equal ["claude", "--bg", "fix it", "--model", "opus", "--effort", "high", "--permission-mode", "acceptEdits", "--name", "flaky", "--worktree"]
   end
 
+  it "puts --remote-control last, where its optional name cannot eat the prompt" do
+    a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "fix it", name: "flaky", remote: true)
+    _(a).must_equal ["claude", "--bg", "fix it", "--name", "flaky", "--remote-control"]
+  end
+
   it "mentions a file the way the CLI's own prompt does, spaces escaped" do
     _(ClaudeInbox::AgentsClient.mention("/tmp/Screen Shot.png")).must_equal "@/tmp/Screen\\ Shot.png"
   end
@@ -65,6 +70,7 @@ describe ClaudeInbox::NewSessionForm do
     _(form.press(:ctrl_s, "\x13")).must_equal :start
     v = form.values
     _(v[:worktree]).must_equal true
+    _(v[:remote]).must_equal false
     _(v[:name]).must_be_nil
     _(v[:cwd]).must_equal Dir.pwd
   end
@@ -177,7 +183,7 @@ describe ClaudeInbox::NewSessionForm do
       type("line#{i}")
       form.press(:return, "\r")
     }
-    rows = form.screen(80, 20)
+    rows = form.screen(80, 21)
     top = rows.index { |r| r.include?("┌") }
     _(rows[top]).must_include "↑ 4 more"
     _(rows[top + 1]).must_include "line4"

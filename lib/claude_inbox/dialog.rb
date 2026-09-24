@@ -49,10 +49,11 @@ module ClaudeInbox
       end
     end
 
-    # `X` stop and `Ctrl-x` delete both ask first and both take `y`, but the
-    # words differ because the outcomes do: read the box before answering.
+    # `X` stop, `Ctrl-x` delete and Enter on a remote row all ask first and
+    # all take `y`, but the words differ because the outcomes do: read the
+    # box before answering.
     class Confirm < Dialog
-      TITLES = {stop: " Stop ", delete: " Delete "}.freeze
+      TITLES = {stop: " Stop ", delete: " Delete ", adopt: " Adopt "}.freeze
 
       def title = TITLES.fetch(kind)
 
@@ -62,6 +63,9 @@ module ClaudeInbox
         when :delete
           ["  Delete session #{id}?", "  Its worktree and conversation", "  go with it.",
             "", "  y  delete it", "  esc  keep it"]
+        when :adopt
+          ["  Pull this session into the daemon?", "  Its phone session ends and a",
+            "  new one takes its place.", "", "  y  adopt it", "  esc  cancel"]
         end
       end
 

@@ -358,7 +358,8 @@ module ClaudeInbox
             state_badge(s) + @p.dim(" · #{where} · #{age}")
           else
             age = row.state_since ? @p.dim(" · " + Text.age(now.to_i - row.state_since.to_i)) : ""
-            state_badge(s) + age
+            remote = s.remote_control? ? @theme.blue(" ⇅") : ""
+            state_badge(s) + remote + age
           end
         end
       pr = pr_badge(s, section)

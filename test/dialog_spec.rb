@@ -26,6 +26,12 @@ describe ClaudeInbox::Dialog do
   end
 
   describe "confirm" do
+    it "asks before pulling a remote session into the daemon" do
+      adopt = ClaudeInbox::Dialog::Confirm.new(:adopt, "u1")
+      _(adopt.frame(60).join("\n")).must_include "Pull this session into the daemon?"
+      _(adopt.press("y", "y")).must_equal :confirm
+    end
+
     it "takes y and nothing else, and says which it is asking about" do
       stop = ClaudeInbox::Dialog::Confirm.new(:stop, "abc12345")
       _(stop.frame(60).join("\n")).must_include "Stop session abc12345?"

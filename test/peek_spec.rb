@@ -62,11 +62,12 @@ describe ClaudeInbox::Peek do
     _(logs.cached("abc12345")).must_be_nil
   end
 
-  it "explains a remote session the same way" do
-    r = row(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u2", pid: 7, origin: :remote)
+  it "explains a remote session the same way, with its claude.ai/code link" do
+    r = row(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u2", pid: 7, origin: :remote, bridge_id: "cse_01AB")
     peek.select(on(r.key), r.session)
     peek.toggle
     _(peek.view(r, 10).lines.first).must_equal ClaudeInbox::Peek::REMOTE_NOTE
+    _(peek.view(r, 10).lines.last).must_equal "https://claude.ai/code/session_01AB"
   end
 
   it "says loading until the worker answers, then shows the logs" do

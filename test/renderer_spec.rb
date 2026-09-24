@@ -109,6 +109,15 @@ describe ClaudeInbox::Renderer do
     _(text).must_include "⇅ 1 remote"
   end
 
+  it "marks a background session with Remote Control on, and only that one" do
+    rc = session(state: "done", job_state: ClaudeInbox::JobState.new("respawnFlags" => ["--remote-control"]))
+    plain = session(id: "def45678", name: "other", state: "done", job_state: ClaudeInbox::JobState.new("bridgeSessionId" => "cse_01AB"))
+    sec = Store.sectionize([rc, plain], {}, now)
+    text = frame(sec, width: 90, height: 12).lines.join("\n")
+    _(text).must_match(/✓ thing\s+done ⇅/)
+    _(text).wont_match(/✓ other\s+done ⇅/)
+  end
+
   it "separates an agent that is thinking from one waiting on what it started" do
     thinking = ClaudeInbox::JobState.new("tempo" => "active", "inFlight" => {"tasks" => 2},
       "fan" => [{"kind" => "in_process_teammate"}, {"kind" => "in_process_teammate"}])

@@ -11,6 +11,20 @@ describe ClaudeInbox::Session do
     _(s.job_state).must_be_nil
   end
 
+  it "knows where claude.ai/code shows it, from the job file or the worker's own bridge id" do
+    _(session.remote_url).must_be_nil
+    bg = session(job_state: ClaudeInbox::JobState.new("bridgeSessionId" => "cse_01AB"))
+    _(bg.remote_url).must_equal "https://claude.ai/code/session_01AB"
+    worker = session(id: nil, kind: "interactive", origin: :remote, bridge_id: "cse_01CD")
+    _(worker.remote_url).must_equal "https://claude.ai/code/session_01CD"
+  end
+
+  it "has Remote Control when started with the flag, or when a remote server spawned it" do
+    _(session(job_state: ClaudeInbox::JobState.new("bridgeSessionId" => "cse_01AB"))).wont_be :remote_control?
+    _(session(job_state: ClaudeInbox::JobState.new("respawnFlags" => ["--remote-control"]))).must_be :remote_control?
+    _(session(id: nil, kind: "interactive", origin: :remote)).must_be :remote_control?
+  end
+
   it "answers [] for prs even when handed nil, as the Struct it replaced did" do
     _(ClaudeInbox::Session.new(id: "abc12345", prs: nil).pr).must_be_nil
   end

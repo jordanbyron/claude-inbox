@@ -19,6 +19,8 @@ describe JobState do
         "needs" => "confirm: merge once green?",
         "output" => {"result" => "CI re-run passed"},
         "tempo" => "idle",
+        "bridgeSessionId" => "cse_01AB",
+        "respawnFlags" => ["--remote-control", "--model", "opus"],
         "inFlight" => {"tasks" => 1},
         "fan" => [{"kind" => "shell", "label" => "gh pr checks --watch"}],
         "children" => [
@@ -32,6 +34,9 @@ describe JobState do
       _(js.tempo).must_equal "idle"
       _(js.tasks).must_equal 1
       _(js.pr_urls).must_equal ["https://github.com/o/r/pull/7"]
+      _(js.bridge_id).must_equal "cse_01AB"
+      _(js).must_be :remote_control?
+      _(JobState.new({})).wont_be :remote_control?
       _(js).must_be :waiting_on_work?
       _(js.in_flight_label).must_equal "1 shell"
     end

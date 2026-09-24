@@ -10,14 +10,14 @@ module ClaudeInbox
   # move under it.
   Session = Data.define(
     :id, :cwd, :kind, :started_at, :session_id, :name,
-    :state, :pid, :status, :waiting_for, :origin, :prs, :job_state
+    :state, :pid, :status, :waiting_for, :origin, :prs, :job_state, :bridge_id
   ) do
     # Every member is optional so the parser and the specs name only what they
     # have; prs is [] rather than nil so nobody asks whether PullRequests has run.
     def initialize(id: nil, cwd: nil, kind: nil, started_at: nil, session_id: nil, name: nil,
-      state: nil, pid: nil, status: nil, waiting_for: nil, origin: nil, prs: nil, job_state: nil)
+      state: nil, pid: nil, status: nil, waiting_for: nil, origin: nil, prs: nil, job_state: nil, bridge_id: nil)
       super(id: id, cwd: cwd, kind: kind, started_at: started_at, session_id: session_id, name: name,
-            state: state, pid: pid, status: status, waiting_for: waiting_for, origin: origin, prs: prs || [], job_state: job_state)
+            state: state, pid: pid, status: status, waiting_for: waiting_for, origin: origin, prs: prs || [], job_state: job_state, bridge_id: bridge_id)
     end
 
     def self.from_hash(h)
@@ -58,6 +58,17 @@ module ClaudeInbox
     def unattended? = subagent? || headless?
 
     def terminal? = interactive? && !remote? && !unattended?
+
+    # Where claude.ai/code shows this session. Every background session
+    # registers a bridge and records it in the job file; a worker a `claude
+    # remote-control` server spawned carries it on its command line.
+    def remote_url
+      bridge = bridge_id || job_state&.bridge_id
+      bridge && "https://claude.ai/code/session_#{bridge.delete_prefix("cse_")}"
+    end
+
+    # Driven from claude.ai/code as well as from here, not only followed there.
+    def remote_control? = remote? || job_state&.remote_control? == true
 
     # Selection handle: short id for background sessions, the UUID otherwise.
     def key = id || session_id

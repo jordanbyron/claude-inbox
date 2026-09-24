@@ -30,9 +30,10 @@ are published to rubygems and listed under GitHub Releases.
    a terminal you opened yourself, a Remote Control worker, a sub-agent and a
    headless `claude -p` run all "interactive"; the inbox tells them apart from
    the process tree. Sub-agents and headless runs are dropped, since nobody is
-   sitting in them. Remote sessions settle and snooze like any other row. A
-   terminal you are sitting in never settles, and none of these can be
-   attached, peeked or stopped from outside; Enter tells you so.
+   sitting in them. Remote sessions settle and snooze like any other row,
+   and Enter pulls one into the daemon (see Remote Control below). A
+   terminal you are sitting in never settles and can't be attached, peeked
+   or stopped from outside; Enter tells you so.
 4. **Snoozed.** Sorted by wake time, parked ("until I wake it") entries last.
    Collapsed; Enter expands.
 5. **Settled.** Parked with `x`, or whose pull request is merged or closed.
@@ -68,7 +69,7 @@ scrolls its own history and clicks do nothing.
 | `j` `k` | move down / up |
 | `gg` `G` | first / last row |
 | `Ctrl-d` `Ctrl-u` | half page down / up (`Ctrl-f` `Ctrl-b` full page) |
-| `Enter` `l` | attach (full-screen handoff; `←` or `Ctrl+Z` return here), or expand Snoozed / Settled |
+| `Enter` `l` | attach (full-screen handoff; `←` or `Ctrl+Z` return here), adopt a remote session, or expand Snoozed / Settled |
 | `Tab` `Shift+Tab` | jump to the next / previous section |
 | `h` | close the peek pane, else collapse the current Snoozed / Settled fold |
 | `za` `zo` `zc` | toggle / open / close the Snoozed or Settled fold under the cursor |
@@ -81,6 +82,7 @@ scrolls its own history and clicks do nothing.
 | `x` | settle a working or needs-you session by hand (returns when it changes state, unless it just finished) |
 | `a` | set a local alias (never touches the real session name) |
 | `o` | open the session's pull request in the browser |
+| `w` | open the session at claude.ai/code |
 | `P` | link a pull request by hand (empty clears; the scanned links return) |
 | `X` | stop the session (`y` to confirm) |
 | `Ctrl-x` | delete the session for good, conversation and worktree with it (`y` to confirm) |
@@ -97,7 +99,7 @@ box before answering.
 ### New session
 
 `n` opens a form: prompt, name, directory, model, effort, permissions,
-worktree. `Tab` / `Shift+Tab` move between fields, `Esc` cancels. Choice
+worktree, Remote Control. `Tab` / `Shift+Tab` move between fields, `Esc` cancels. Choice
 fields cycle with `h` `l` or the arrows; "default" shows what your settings
 resolve to. The directory defaults to the selected row's, and `Tab` completes
 it.
@@ -112,6 +114,10 @@ an `[Image #1]` token the prompt can point at: "make the button look like
 [Image #1]". Pasted images are saved under `~/.config/claude-inbox/images/`
 for 14 days; a dropped file is referenced where it is. Reading the clipboard
 is macOS only.
+
+Remote Control set to yes starts the session with `--remote-control`, so it
+runs under the daemon like any other row and is also listed at claude.ai/code
+and in the Claude mobile app. See Remote Control below.
 
 Slash commands work as at Claude Code's own prompt. Type `/` at the start of a
 word for a menu of your skills and commands, plugin skills as `plugin:name`,
@@ -155,6 +161,28 @@ aren't pushed, and nothing here ever overrides that refusal. Every reap
 appends a line to `~/.config/claude-inbox/reaped.log`, the last record a
 session existed once its transcript is gone. `CLAUDE_INBOX_NO_REAP=1` turns
 reaping off.
+
+## Remote Control
+
+Every background session has a page at claude.ai/code, where you can follow
+it from a browser or the Claude mobile app; `w` opens it. A session with
+Remote Control on can also be driven from there, the way `claude
+--remote-control` and `/rc` allow in a terminal. Its row wears a `⇅` after
+the state. Two kinds of session have it:
+
+- A background session the `n` form started with Remote Control set to yes,
+  or one you ran as `claude --bg "…" --remote-control` yourself. It is a
+  daemon row like any other: `Enter` attaches, `X` stops, and it keeps its
+  Remote Control across a stop and a wake, since the daemon saves the flag.
+- A worker a `claude remote-control` server spawned for a request from your
+  phone. That is how a session started away from the desk lands on this
+  machine. The daemon calls it interactive and can't attach to it, so
+  `Enter` offers to adopt it instead: `y` ends the worker and resumes the
+  conversation as a background session under the same id, with Remote
+  Control on, and attaches. The phone session you were in ends there and a
+  new one takes its place, with the whole conversation; the server keeps
+  running for the next request. A worker nobody has messaged yet has
+  nothing to adopt, and Enter says so.
 
 ## Pull request state
 

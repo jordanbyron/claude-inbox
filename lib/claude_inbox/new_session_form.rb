@@ -35,7 +35,8 @@ module ClaudeInbox
         Field.new(:model, "Model", :choice, DEFAULT, AgentsClient::MODELS),
         Field.new(:effort, "Effort", :choice, DEFAULT, AgentsClient::EFFORTS),
         Field.new(:permission_mode, "Permissions", :choice, DEFAULT, AgentsClient::PERMISSION_MODES),
-        Field.new(:worktree, "Worktree", :choice, "no", %w[no yes])
+        Field.new(:worktree, "Worktree", :choice, "no", %w[no yes]),
+        Field.new(:remote, "Remote Control", :choice, "no", %w[no yes])
       ]
       @focus = 0
       @error = nil
@@ -116,6 +117,7 @@ module ClaudeInbox
       @fields.to_h { |f| [f.key, f.value.to_s] }.tap do |v|
         v[:prompt] = field(:prompt).value.expand { |chip| AgentsClient.mention(chip.path) }.strip
         v[:worktree] = v[:worktree] == "yes"
+        v[:remote] = v[:remote] == "yes"
         v[:name] = nil if v[:name].strip.empty?
         v[:cwd] = File.expand_path(v[:cwd].strip.empty? ? "." : v[:cwd].strip)
       end
@@ -154,7 +156,7 @@ module ClaudeInbox
       out += prompt_box(field(:prompt), inner_w, prompt_h)
       out += menu_rows
       out << ""
-      @fields[1..].each { |f| out << "  " + field_label(f) + field_value(f, inner_w - 14) }
+      @fields[1..].each { |f| out << "  " + field_label(f) + field_value(f, inner_w - 16) }
       out.first(height) + [""] * [height - out.size, 0].max
     end
 
@@ -259,7 +261,7 @@ module ClaudeInbox
 
     def field_label(f)
       on = f.equal?(focused)
-      (on ? @theme.cyan_bold("▶ ") : "  ") + (on ? @p.bold(Text.pad(f.label, 12)) : @p.dim(Text.pad(f.label, 12)))
+      (on ? @theme.cyan_bold("▶ ") : "  ") + (on ? @p.bold(Text.pad(f.label, 14)) : @p.dim(Text.pad(f.label, 14)))
     end
 
     # The cell the cursor sits on, drawn as a block by inverting it: a bar
