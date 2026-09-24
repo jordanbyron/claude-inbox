@@ -158,8 +158,9 @@ module ClaudeInbox
       rows
     end
 
-    # Text.segments on cells: a chip is one cell however wide its label, so
-    # the wrap has to measure cells rather than a joined string.
+    # Text.wrap on cells, keeping the trailing spaces the cursor may sit on:
+    # a chip is one cell however wide its label, so the wrap has to measure
+    # cells rather than a joined string.
     def segments(cells, width)
       return [cells] if width_of(cells) <= width
       words = cells.slice_when { |c, _| c == " " }.to_a
