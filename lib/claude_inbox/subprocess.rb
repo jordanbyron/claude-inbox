@@ -37,8 +37,9 @@ module ClaudeInbox
         ready, = IO.select(readers)
         ready.each do |io|
           chunk = io.read_nonblock(65_536, exception: false)
-          if chunk.nil? || chunk == :wait_readable
-            next unless chunk.nil?
+          case chunk
+          when :wait_readable then next
+          when nil
             readers.delete(io)
             io.close
           else
