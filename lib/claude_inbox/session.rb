@@ -14,10 +14,8 @@ module ClaudeInbox
   ) do
     # Every member is optional so the parser and the specs name only what they
     # have; prs is [] rather than nil so nobody asks whether PullRequests has run.
-    def initialize(id: nil, cwd: nil, kind: nil, started_at: nil, session_id: nil, name: nil,
-      state: nil, pid: nil, status: nil, waiting_for: nil, origin: nil, prs: nil, job_state: nil, bridge_id: nil)
-      super(id: id, cwd: cwd, kind: kind, started_at: started_at, session_id: session_id, name: name,
-            state: state, pid: pid, status: status, waiting_for: waiting_for, origin: origin, prs: prs || [], job_state: job_state, bridge_id: bridge_id)
+    def initialize(prs: nil, **given)
+      super(**self.class.members.to_h { |m| [m, nil] }, **given, prs: prs || [])
     end
 
     def self.from_hash(h)
