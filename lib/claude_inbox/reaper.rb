@@ -20,8 +20,6 @@ module ClaudeInbox
     RETRY_AFTER = 24 * 3600
     DEFAULT_LOG = File.join(Dir.home, ".config", "claude-inbox", "reaped.log")
 
-    attr_reader :log_path
-
     def initialize(client, store, log_path: DEFAULT_LOG, enabled: self.class.enabled?)
       @client = client
       @store = store
@@ -56,6 +54,11 @@ module ClaudeInbox
       return [] unless @enabled
       now_i = now.to_i
       sessions.filter_map { |s| row_if_due(s, now_i)&.key }
+    end
+
+    def report(keys)
+      word = (keys.size == 1) ? "session" : "sessions"
+      "reaped #{keys.size} #{word} idle over #{Store::REAP_AFTER / 86_400}d — see #{@log_path}"
     end
 
     private

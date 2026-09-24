@@ -128,6 +128,13 @@ describe Reaper do
     _(store.entry("old1")).wont_be_nil
   end
 
+  it "words what it took for the notice, and says where the log is" do
+    reaper = Reaper.new(client, nil, log_path: log_path)
+
+    _(reaper.report(%w[old1])).must_equal "reaped 1 session idle over 14d — see #{log_path}"
+    _(reaper.report(%w[old1 old2])).must_equal "reaped 2 sessions idle over 14d — see #{log_path}"
+  end
+
   it "does nothing at all when disabled" do
     sessions = [quiet_session("old1")]
     _(Reaper.disabled.sweep(sessions, now)).must_be_empty

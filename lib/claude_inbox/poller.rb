@@ -68,7 +68,7 @@ module ClaudeInbox
         @store.release(doomed - reaped)
       end
       @queue << [:sessions, sessions] if reaped != doomed
-      notice_reaped(reaped) if reaped.any?
+      @queue << [:notice, @reaper.report(reaped)] if reaped.any?
       fresh, moved = @pull_requests.refresh(sessions)
       @queue << [:sessions, fresh] if moved
     rescue => e
@@ -90,10 +90,5 @@ module ClaudeInbox
     end
 
     def paused? = @lock.synchronize { @paused }
-
-    def notice_reaped(keys)
-      word = (keys.size == 1) ? "session" : "sessions"
-      @queue << [:notice, "reaped #{keys.size} #{word} idle over #{Store::REAP_AFTER / 86_400}d — see #{@reaper.log_path}"]
-    end
   end
 end
