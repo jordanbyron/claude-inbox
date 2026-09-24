@@ -37,6 +37,10 @@ module ClaudeInbox
 
     SECTION_HUES = {pinned: :cyan, needs_you: :red, active: :yellow, snoozed: :purple}.freeze
 
+    # GitHub's colors. A draft has no hue, so it dims; a state missing from
+    # the table isn't named on the badge at all.
+    PR_HUES = {"OPEN" => :green, "DRAFT" => nil, "MERGED" => :purple, "CLOSED" => :red}.freeze
+
     SPINNER = %w[⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏].freeze
 
     # The first poll usually lands inside a second. Past LOADING_QUIET the
@@ -203,8 +207,9 @@ module ClaudeInbox
       Text.pad(" " + section_color(name, "▎") + section_color(name, @p.bold(title)) + @p.dim("─" * fill) + @p.dim(count_s), width)
     end
 
-    def section_color(name, s)
-      hue = SECTION_HUES[name]
+    def section_color(name, s) = tint(SECTION_HUES[name], s)
+
+    def tint(hue, s)
       hue ? @theme.public_send(hue, s) : @p.dim(s)
     end
 
@@ -366,19 +371,13 @@ module ClaudeInbox
       pr ? base + @p.dim(" · ") + pr : base
     end
 
-    # "#885 open" in GitHub's colors: green open, dim draft, purple merged,
-    # red closed. Only the first PR is shown; the peek subtitle lists them all.
+    # "#885 open". Only the first PR is shown; the peek subtitle lists them all.
     def pr_badge(s, section)
       pr = s.pr
       return nil unless pr
       return @p.dim("#{pr.short} #{pr.state&.downcase}".strip) if section == :settled
-      case pr.state
-      when "OPEN" then @theme.green("#{pr.short} open")
-      when "DRAFT" then @p.dim("#{pr.short} draft")
-      when "MERGED" then @theme.purple("#{pr.short} merged")
-      when "CLOSED" then @theme.red("#{pr.short} closed")
-      else @p.dim(pr.short)
-      end
+      return @p.dim(pr.short) unless PR_HUES.key?(pr.state)
+      tint(PR_HUES[pr.state], "#{pr.short} #{pr.state.downcase}")
     end
 
     def state_badge(s)
