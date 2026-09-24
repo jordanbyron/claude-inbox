@@ -202,8 +202,9 @@ module ClaudeInbox
 
     # Guard for attach/stop: refuse politely on a terminal or remote row.
     def require_actionable
-      return true if selected_session&.actionable?
-      if (s = selected_session)&.interactive?
+      s = selected_session
+      return true if s&.actionable?
+      if s&.interactive?
         notice(s.remote? ? "that's a remote session — Enter adopts it, w opens it at claude.ai/code" : "that's your own terminal — switch to that window")
       end
       false
@@ -212,8 +213,9 @@ module ClaudeInbox
     # Guard for snooze/wake/alias: anything with a key, since those live in
     # our own store. A terminal you are sitting in is the one exception.
     def require_storable
-      return true if @selected&.row? && !selected_session&.terminal?
-      notice("you're in that terminal right now — nothing to snooze") if selected_session&.terminal?
+      s = selected_session
+      return true if @selected&.row? && !s&.terminal?
+      notice("you're in that terminal right now — nothing to snooze") if s&.terminal?
       false
     end
 
