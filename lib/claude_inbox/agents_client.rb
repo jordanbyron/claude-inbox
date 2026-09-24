@@ -111,54 +111,9 @@ module ClaudeInbox
       File.join(home, ".claude", "projects", cwd.gsub(%r{[/.]}, "-"), "#{session_id}.jsonl")
     end
 
-    # A worker nobody has messaged yet has an empty file, and the daemon
-    # reports "source session not found" on resuming it.
-    def transcript_empty?(cwd, session_id)
-      path = self.class.transcript_path(cwd, session_id)
-      File.exist?(path) && File.zero?(path)
-    end
-
-    def wait_gone(pid, timeout: 5)
-      deadline = Time.now + timeout
-      while Time.now < deadline
-        Process.kill(0, pid)
-        sleep 0.1
-      end
-      raise Error, "the worker #{pid} would not exit"
-    rescue Errno::ESRCH
-      nil
-    end
-
-    def parse(json)
-      JSON.parse(json).map { |h| Session.from_hash(h) }
-    end
-
     # Flags that mark a claude process as one a program drives rather than one
     # you type in: the headless print mode and the SDK's stream protocol.
     HEADLESS_FLAGS = %w[-p --print --input-format --output-format].freeze
-
-    # The JSON reports Remote Control workers, local sub-agents and headless
-    # runs as `interactive`, same as a terminal you opened yourself, each named
-    # after its directory. The process tree tells them apart; see `origins`.
-    # Everything but a terminal and a remote worker is dropped here rather than
-    # merely flagged: attach lands on the session that asked for it, so there
-    # is nothing useful to show or act on directly.
-    def classify_origins(sessions)
-      pids = sessions.select { |s| s.interactive? && s.pid }.map(&:pid)
-      return sessions if pids.empty?
-      rows = ps_rows(pids)
-      assign_origins(sessions, origins_from(rows), self.class.bridge_ids(rows))
-    end
-
-    # Tags each interactive session with where it is driven from (pid =>
-    # origin, terminal when unlisted) and the bridge a remote one is served
-    # over, and drops the unattended ones, whose parent is the row worth
-    # showing.
-    def assign_origins(sessions, origins, bridges = {})
-      sessions
-        .map { |s| s.interactive? ? s.with(origin: origins.fetch(s.pid, :terminal), bridge_id: bridges[s.pid]) : s }
-        .reject(&:unattended?)
-    end
 
     # pid => origin, given `ps` for the sessions and for their parents. Pure.
     #
@@ -193,6 +148,53 @@ module ClaudeInbox
       rows.filter_map { |pid, _, cmd| (m = cmd.match(/--session-id[= ](cse_\w+)/)) && [pid, m[1]] }.to_h
     end
 
+    private
+
+    # A worker nobody has messaged yet has an empty file, and the daemon
+    # reports "source session not found" on resuming it.
+    def transcript_empty?(cwd, session_id)
+      path = self.class.transcript_path(cwd, session_id)
+      File.exist?(path) && File.zero?(path)
+    end
+
+    def wait_gone(pid, timeout: 5)
+      deadline = Time.now + timeout
+      while Time.now < deadline
+        Process.kill(0, pid)
+        sleep 0.1
+      end
+      raise Error, "the worker #{pid} would not exit"
+    rescue Errno::ESRCH
+      nil
+    end
+
+    def parse(json)
+      JSON.parse(json).map { |h| Session.from_hash(h) }
+    end
+
+    # The JSON reports Remote Control workers, local sub-agents and headless
+    # runs as `interactive`, same as a terminal you opened yourself, each named
+    # after its directory. The process tree tells them apart; see `origins`.
+    # Everything but a terminal and a remote worker is dropped here rather than
+    # merely flagged: attach lands on the session that asked for it, so there
+    # is nothing useful to show or act on directly.
+    def classify_origins(sessions)
+      pids = sessions.select { |s| s.interactive? && s.pid }.map(&:pid)
+      return sessions if pids.empty?
+      rows = ps_rows(pids)
+      assign_origins(sessions, origins_from(rows), self.class.bridge_ids(rows))
+    end
+
+    # Tags each interactive session with where it is driven from (pid =>
+    # origin, terminal when unlisted) and the bridge a remote one is served
+    # over, and drops the unattended ones, whose parent is the row worth
+    # showing.
+    def assign_origins(sessions, origins, bridges = {})
+      sessions
+        .map { |s| s.interactive? ? s.with(origin: origins.fetch(s.pid, :terminal), bridge_id: bridges[s.pid]) : s }
+        .reject(&:unattended?)
+    end
+
     def origins_from(rows)
       return {} if rows.empty?
       self.class.origins(rows, ps_commands(rows.map { |_, ppid, _| ppid }.uniq))
@@ -219,8 +221,6 @@ module ClaudeInbox
         [pid.to_i, cmd.join(" ")]
       }
     end
-
-    private
 
     def kill_when_agents_view(pid)
       loop do
