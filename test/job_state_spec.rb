@@ -31,8 +31,6 @@ describe JobState do
       _(js.detail).must_equal "watching CI re-run"
       _(js.needs).must_equal "confirm: merge once green?"
       _(js.result).must_equal "CI re-run passed"
-      _(js.tempo).must_equal "idle"
-      _(js.tasks).must_equal 1
       _(js.pr_urls).must_equal ["https://github.com/o/r/pull/7"]
       _(js.bridge_id).must_equal "cse_01AB"
       _(js).must_be :remote_control?

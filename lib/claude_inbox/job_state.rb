@@ -50,7 +50,7 @@ module ClaudeInbox
       nil
     end
 
-    attr_reader :detail, :needs, :result, :tempo, :kinds, :tasks, :pr_urls, :color, :intent, :bridge_id, :flags
+    attr_reader :detail, :needs, :result, :pr_urls, :color, :intent, :bridge_id
 
     def initialize(hash)
       @detail = hash["detail"]
@@ -70,13 +70,6 @@ module ClaudeInbox
     # a wake, are the only record of Remote Control being on it.
     def remote_control? = flags.include?("--remote-control")
 
-    # The agent itself is not thinking. On its own this means little — a
-    # session whose process died leaves the same reading behind — so it only
-    # says something paired with work still in flight.
-    def agent_idle? = tempo == "idle"
-
-    def in_flight? = tasks.positive?
-
     # True when the agent has stopped and is only waiting on what it started.
     def waiting_on_work? = agent_idle? && in_flight?
 
@@ -89,6 +82,15 @@ module ClaudeInbox
     end
 
     private
+
+    attr_reader :tempo, :kinds, :tasks, :flags
+
+    # The agent itself is not thinking. On its own this means little — a
+    # session whose process died leaves the same reading behind — so it only
+    # says something paired with work still in flight.
+    def agent_idle? = tempo == "idle"
+
+    def in_flight? = tasks.positive?
 
     def count_label = "#{tasks} #{plural("task", tasks)}"
 
