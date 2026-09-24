@@ -2,7 +2,6 @@
 
 require_relative "reaper"
 require_relative "sessions"
-require_relative "store"
 
 module ClaudeInbox
   # Asks `claude agents` for the list off the main thread, every INTERVAL
