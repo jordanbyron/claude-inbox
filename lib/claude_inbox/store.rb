@@ -35,10 +35,15 @@ module ClaudeInbox
       out
     end
 
+    def self.row_for(session, entries)
+      hash = session.key && entries[session.key]
+      Row.new(session: session, entry: hash && Entry.new(hash))
+    end
+
     def self.sectionize(sessions, entries, now)
       sec = Sections.new(pinned: [], needs_you: [], active: [], snoozed: [], settled: [])
       sessions.each do |s|
-        row = Row.new(session: s, entry: s.key && entries[s.key] && Entry.new(entries[s.key]))
+        row = row_for(s, entries)
         sec[row.section(now)] << row
       end
       sec.pinned.sort_by! { |r| -(r.pinned_at || 0) }
@@ -108,7 +113,11 @@ module ClaudeInbox
       @mutex.synchronize { @entries.transform_values { |e| Entry.new(e).pr }.select { |_, url| url } }
     end
 
-    def row(session) = Row.new(session: session, entry: session.key && entry(session.key)&.then { |e| Entry.new(e) })
+    # A copy, not the live entry: the reaper decides a deletion on this row
+    # while the UI thread may be editing that entry in place.
+    def row(session)
+      @mutex.synchronize { self.class.row_for(session, {session.key => @entries[session.key]&.dup}) }
+    end
 
     # The raw hash, for the specs; nothing in lib/ reads it.
     def entry(id) = @mutex.synchronize { @entries[id]&.dup }
