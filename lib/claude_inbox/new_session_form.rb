@@ -160,16 +160,10 @@ module ClaudeInbox
 
     def footer
       return @p.dim("starting session…") if @busy
-      if @confirm_discard
-        return [["y", "discard"], ["esc", "keep editing"]]
-            .map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
-      end
+      return hints([["y", "discard"], ["esc", "keep editing"]]) if @confirm_discard
       return @theme.red(@error) if @error
       return @p.dim("matches: ") + @candidates.join(@p.dim("  ")) if @candidates
-      if menu
-        return [["↑ ↓", "choose"], ["⇥ ⏎", "pick"], ["esc", "close"]]
-            .map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
-      end
+      return hints([["↑ ↓", "choose"], ["⇥ ⏎", "pick"], ["esc", "close"]]) if menu
       keys =
         case focused.kind
         when :multiline then [["⏎", "newline"], ["^V", "image"]]
@@ -178,7 +172,7 @@ module ClaudeInbox
         end
       keys += [["^S", "start"], ["^O", "start & open"],
         ["⇥", (focused.key == :cwd) ? "complete / next" : "next"], ["esc", "cancel"]]
-      keys.map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
+      hints(keys)
     end
 
     # The App's `claude --bg` call failed after `:start`/`:start_and_attach`
@@ -260,6 +254,8 @@ module ClaudeInbox
       rows[-1] = Text.pad(rows[-1], w - more.size) + @p.dim(more)
       rows
     end
+
+    def hints(pairs) = pairs.map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
 
     def field_label(f)
       on = f.equal?(focused)
