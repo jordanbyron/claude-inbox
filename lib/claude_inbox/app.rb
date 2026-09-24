@@ -25,7 +25,7 @@ module ClaudeInbox
     # The reaper defaults to off. It is the only thing here that deletes a
     # session, so switching it on is `bin/claude-inbox`'s job and nothing
     # reaches it by forgetting an argument.
-    def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new, jobs_dir: JobState::DEFAULT_DIR,
+    def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
       rate_limits: RateLimits.new, reaper: Reaper.disabled, out: $stdout, input: $stdin, color: true,
       terminal: Terminal.new(out, input))
       @client = client
@@ -36,7 +36,7 @@ module ClaudeInbox
       @renderer = Renderer.new(color: color)
       @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
       @queue = Queue.new
-      @poller = Poller.new(client: client, store: store, pull_requests: pull_requests, jobs_dir: jobs_dir,
+      @poller = Poller.new(client: client, store: store, pull_requests: pull_requests,
         reaper: reaper, queue: @queue)
       @logs = Logs.new(client)
       @peek = Peek.new(@logs)

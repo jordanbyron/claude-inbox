@@ -14,12 +14,11 @@ module ClaudeInbox
   class Poller
     INTERVAL = 4
 
-    def initialize(client:, store:, pull_requests:, jobs_dir:, reaper:, queue:, interval: INTERVAL, clock: -> { Time.now })
+    def initialize(client:, store:, pull_requests:, reaper:, queue:, interval: INTERVAL, clock: -> { Time.now })
       @client = client
       @clock = clock
       @store = store
       @pull_requests = pull_requests
-      @jobs_dir = jobs_dir
       @reaper = reaper
       @queue = queue
       @interval = interval
@@ -56,7 +55,7 @@ module ClaudeInbox
     # state moved.
     def once
       now = @clock.call
-      sessions = Sessions.load(client: @client, jobs_dir: @jobs_dir, pull_requests: @pull_requests, overrides: @store.pr_overrides)
+      sessions = Sessions.load(client: @client, pull_requests: @pull_requests, overrides: @store.pr_overrides)
       doomed = @reaper.due(sessions, now)
       @store.hide(doomed)
       @queue << [:sessions, sessions]

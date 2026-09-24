@@ -7,7 +7,7 @@ describe ClaudeInbox::Sessions do
   let(:pull_requests) { ClaudeInbox::PullRequests.new(cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: nil) }
 
   def load(overrides = {})
-    ClaudeInbox::Sessions.load(client: client, jobs_dir: fixture_path("jobs"), pull_requests: pull_requests, overrides: overrides)
+    ClaudeInbox::Sessions.load(client: client, pull_requests: pull_requests, overrides: overrides)
   end
 
   # The PR numbers can only come out if JobState was past before

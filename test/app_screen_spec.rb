@@ -51,14 +51,14 @@ describe ClaudeInbox::App do
 
   let(:app) do
     ClaudeInbox::App.new(
-      client: client, store: store, pull_requests: pull_requests, jobs_dir: fixture_path("jobs"),
+      client: client, store: store, pull_requests: pull_requests,
       rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
       terminal: terminal, input: StringIO.new, color: false
     )
   end
 
   before do
-    store.update(ClaudeInbox::Sessions.load(client: client, jobs_dir: fixture_path("jobs"), pull_requests: pull_requests, overrides: {}))
+    store.update(ClaudeInbox::Sessions.load(client: client, pull_requests: pull_requests, overrides: {}))
     app.step
   end
 
