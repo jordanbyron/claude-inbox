@@ -43,27 +43,21 @@ module ClaudeInbox
     # Raises if the log cannot be opened, before anything is deleted. No
     # audit trail, no reaping.
     def sweep(sessions, now)
-      return [] unless @enabled
       now_i = now.to_i
-      due = sessions.filter_map { |s| row_if_due(s, now_i) }
-      return [] if due.empty?
-      with_log { |log| due.filter_map { |row| reap(row, log, now_i) } }
+      rows = due_rows(sessions, now_i)
+      return [] if rows.empty?
+      with_log { |log| rows.filter_map { |row| reap(row, log, now_i) } }
     end
 
     # Keys `sweep` would go after right now, without touching any of them,
     # so the poller can hand the list over minus these before `claude rm`.
-    def due(sessions, now)
-      return [] unless @enabled
-      now_i = now.to_i
-      sessions.filter_map { |s| row_if_due(s, now_i)&.key }
-    end
+    def due(sessions, now) = due_rows(sessions, now.to_i).map(&:key)
 
     private
 
-    def row_if_due(session, now_i)
-      row = @store.row(session)
-      return nil unless row.reapable?(now_i)
-      backing_off?(row, now_i) ? nil : row
+    def due_rows(sessions, now_i)
+      return [] unless @enabled
+      sessions.map { |s| @store.row(s) }.select { |row| row.reapable?(now_i) && !backing_off?(row, now_i) }
     end
 
     def backing_off?(row, now_i)
