@@ -138,15 +138,15 @@ module ClaudeInbox
       Text.pad(brand + "   " + chips, width - Text.width(right)) + right
     end
 
-    # "5h ██░░░░░░░░ 24% for 3h" per window, drawn and colored the way the
-    # context bar in the user's status line is, so the two read alike.
+    # "session ██░░░░░░░░ 24% · 3h left" per window, drawn and colored the way
+    # the context bar in the user's status line is, so the two read alike.
     def usage_meters(windows, now)
       windows.map do |w|
         filled = w.percent / 10
         bar = "█" * filled + "░" * (10 - filled)
         left = w.resets_at && w.resets_at.to_i - now.to_i
-        figure = left&.positive? ? "#{w.percent}% for #{Text.age(left)}" : "#{w.percent}%"
-        "#{@p.dim(w.span)} #{@theme.public_send(usage_hue(w.percent), bar)} #{@p.dim(figure)}"
+        figure = left&.positive? ? "#{w.percent}% · #{Text.age(left)} left" : "#{w.percent}%"
+        "#{@p.dim(w.label)} #{@theme.public_send(usage_hue(w.percent), bar)} #{@p.dim(figure)}"
       end.join("  ")
     end
 
