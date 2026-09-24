@@ -8,12 +8,13 @@ module ClaudeInbox
     HUES = {red: 203, green: 108, yellow: 179, blue: 75, purple: 176, cyan: 73}.freeze
     BG = 236
 
+    HUES.each_key do |hue|
+      define_method(hue) { |text| color(text, hue) }
+      define_method(:"#{hue}_bold") { |text| color(text, hue, bold: true) }
+    end
+
     def initialize(enabled: true)
       @enabled = enabled
-      HUES.each_key do |hue|
-        define_singleton_method(hue) { |text| color(text, hue) }
-        define_singleton_method(:"#{hue}_bold") { |text| color(text, hue, bold: true) }
-      end
     end
 
     # A filled pill: editor-background text on the hue, for a selected row
