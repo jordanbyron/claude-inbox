@@ -23,6 +23,10 @@ module ClaudeInbox
 
     MENU_ROWS = 6
 
+    # Keys a :choice field answers to, as the step through its choices; an
+    # editable field spends these on its own text instead.
+    CYCLE = {:left => -1, :right => 1, "h" => -1, "l" => 1, " " => 1}.freeze
+
     def initialize(cwd:, pastel:, theme: Theme.new(enabled: pastel.enabled), home: Dir.home, clipboard: Images.method(:from_clipboard))
       @p = pastel
       @theme = theme
@@ -346,23 +350,10 @@ module ClaudeInbox
 
     def focus_on(key) = @focus = @fields.index { |f| f.key == key }
 
-    # Keys a :choice field answers to; an editable field spends these on its
-    # own text instead.
     def choose(name, raw)
-      case name
-      when :left then cycle(-1)
-      when :right then cycle(1)
-      else
-        case raw
-        when "h" then cycle(-1)
-        when "l", " " then cycle(1)
-        end
-      end
-    end
-
-    def cycle(d)
+      d = CYCLE[name] || CYCLE[raw]
+      return unless d
       f = focused
-      return unless f.kind == :choice
       f.value = f.choices[(f.choices.index(f.value) + d) % f.choices.size]
     end
 
