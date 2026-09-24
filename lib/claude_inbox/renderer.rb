@@ -35,6 +35,8 @@ module ClaudeInbox
       settled: "SETTLED"
     }.freeze
 
+    SECTION_HUES = {pinned: :cyan, needs_you: :red, active: :yellow, snoozed: :purple}.freeze
+
     SPINNER = %w[⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏].freeze
 
     # The first poll usually lands inside a second. Past LOADING_QUIET the
@@ -190,18 +192,12 @@ module ClaudeInbox
       title = " #{SECTION_TITLES[name]} "
       count_s = " #{count} "
       fill = [width - 3 - Text.width(title) - Text.width(count_s), 0].max
-      color = section_color(name)
-      Text.pad(" " + color.call("▎") + color.call(@p.bold(title)) + @p.dim("─" * fill) + @p.dim(count_s), width)
+      Text.pad(" " + section_color(name, "▎") + section_color(name, @p.bold(title)) + @p.dim("─" * fill) + @p.dim(count_s), width)
     end
 
-    def section_color(name)
-      case name
-      when :pinned then ->(s) { @theme.cyan(s) }
-      when :needs_you then ->(s) { @theme.red(s) }
-      when :active then ->(s) { @theme.yellow(s) }
-      when :snoozed then ->(s) { @theme.purple(s) }
-      else ->(s) { @p.dim(s) }
-      end
+    def section_color(name, s)
+      hue = SECTION_HUES[name]
+      hue ? @theme.public_send(hue, s) : @p.dim(s)
     end
 
     # ----- body ---------------------------------------------------------------
