@@ -26,8 +26,8 @@ module ClaudeInbox
     def list(cwd:, home: Dir.home)
       found = {}
       add = ->(cmd) { found[cmd.name] ||= cmd }
-      local(File.join(cwd, ".claude"), "project").each(&add)
-      local(File.join(home, ".claude"), "user").each(&add)
+      from_dir(File.join(cwd, ".claude"), "project").each(&add)
+      from_dir(File.join(home, ".claude"), "user").each(&add)
       plugins(home).each(&add)
       synced(home).each(&add)
       found.values.sort_by(&:name)
@@ -39,8 +39,9 @@ module ClaudeInbox
       starts + rest.select { |c| c.name.downcase.include?(q) }
     end
 
-    def local(dir, source)
-      skills(File.join(dir, "skills"), source) + commands(File.join(dir, "commands"), source)
+    def from_dir(dir, source, prefix: nil)
+      skills(File.join(dir, "skills"), source, prefix:) +
+        commands(File.join(dir, "commands"), source, prefix:)
     end
 
     def skills(dir, source, prefix: nil)
@@ -70,8 +71,7 @@ module ClaudeInbox
       (installed["plugins"] || {}).flat_map do |key, entries|
         plugin = key.split("@").first
         Array(entries).filter_map { |e| e["installPath"] if e.is_a?(Hash) }.uniq.flat_map do |root|
-          skills(File.join(root, "skills"), "plugin", prefix: plugin) +
-            commands(File.join(root, "commands"), "plugin", prefix: plugin)
+          from_dir(root, "plugin", prefix: plugin)
         end
       end
     end
