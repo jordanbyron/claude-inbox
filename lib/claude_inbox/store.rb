@@ -116,7 +116,7 @@ module ClaudeInbox
     # A copy, not the live entry: the reaper decides a deletion on this row
     # while the UI thread may be editing that entry in place.
     def row(session)
-      @mutex.synchronize { self.class.row_for(session, @entries.slice(session.key).transform_values(&:dup)) }
+      @mutex.synchronize { self.class.row_for(session, {session.key => @entries[session.key]&.dup}) }
     end
 
     # The raw hash, for the specs; nothing in lib/ reads it.
