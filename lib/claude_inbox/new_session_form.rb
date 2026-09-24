@@ -114,7 +114,7 @@ module ClaudeInbox
 
     def values
       @fields.to_h { |f| [f.key, f.value.to_s] }.tap do |v|
-        v[:prompt] = @fields[0].value.expand { |chip| AgentsClient.mention(chip.path) }.strip
+        v[:prompt] = field(:prompt).value.expand { |chip| AgentsClient.mention(chip.path) }.strip
         v[:worktree] = v[:worktree] == "yes"
         v[:name] = nil if v[:name].strip.empty?
         v[:cwd] = File.expand_path(v[:cwd].strip.empty? ? "." : v[:cwd].strip)
@@ -150,8 +150,8 @@ module ClaudeInbox
       title = @busy ? @p.dim("Starting session…") : @p.bold("New session")
       out << "  " + (@confirm_discard ? @theme.red("Discard this session? (y/n)") : title)
       out << ""
-      out << "  " + field_label(@fields[0]) + @p.dim("  ⏎ newline")
-      out += prompt_box(@fields[0], inner_w, prompt_h)
+      out << "  " + field_label(field(:prompt)) + @p.dim("  ⏎ newline")
+      out += prompt_box(field(:prompt), inner_w, prompt_h)
       out += menu_rows
       out << ""
       @fields[1..].each { |f| out << "  " + field_label(f) + field_value(f, inner_w - 14) }
@@ -195,7 +195,7 @@ module ClaudeInbox
 
     # Esc with a prompt typed asks first, so a stray keypress can't lose it.
     def escape_pressed
-      return :cancel if @fields[0].value.empty?
+      return :cancel if field(:prompt).value.empty?
       @confirm_discard = true
       :changed
     end
@@ -344,6 +344,10 @@ module ClaudeInbox
 
     def move(d) = @focus = (@focus + d) % @fields.size
 
+    def field(key) = @fields.find { |f| f.key == key }
+
+    def focus_on(key) = @focus = @fields.index { |f| f.key == key }
+
     # Keys a :choice field answers to; an editable field spends these on its
     # own text instead.
     def choose(name, raw)
@@ -368,12 +372,12 @@ module ClaudeInbox
       v = values
       if v[:prompt].empty?
         @error = "a prompt is required"
-        @focus = 0
+        focus_on(:prompt)
         return :changed
       end
       unless File.directory?(v[:cwd])
         @error = "no such directory: #{v[:cwd]}"
-        @focus = 2
+        focus_on(:cwd)
         return :changed
       end
       @busy = true
