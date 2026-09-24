@@ -61,13 +61,8 @@ module ClaudeInbox
     end
 
     # Greedy word wrap on display width. Words wider than `w` are split.
-    def wrap(s, w) = segments(s, w).map(&:rstrip)
-
-    # Word wrap that keeps every character, so joining the segments back
-    # together returns the original string. An editor needs that: `wrap`
-    # drops the space you just typed, and with it the cursor's place.
-    def segments(s, w)
-      return [s] if w <= 0 || width(s) <= w
+    def wrap(s, w)
+      return [s.rstrip] if w <= 0 || width(s) <= w
       lines = []
       line = +""
       s.split(/(?<= )/).each do |word|
@@ -76,13 +71,14 @@ module ClaudeInbox
           line = +""
         end
         while width(word) > w
-          lines << take(word, w)
-          word = word[take(word, w).size..]
+          head = take(word, w)
+          lines << head
+          word = word[head.size..]
         end
         line << word
       end
       lines << line unless line.empty?
-      lines
+      lines.map(&:rstrip)
     end
 
     # "45s", "12m", "3h", "2d"
