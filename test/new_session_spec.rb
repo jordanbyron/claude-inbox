@@ -81,6 +81,27 @@ describe ClaudeInbox::NewSessionForm do
   it "starts and attaches on ^O, starts and stays put on ^S" do
     type("do it")
     _(form.press(:ctrl_o, "\x0f")).must_equal :start_and_attach
+    other = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false))
+    type_into(other, "do it")
+    _(other.press(:ctrl_s, "\x13")).must_equal :start
+  end
+
+  def type_into(f, str) = str.each_char { |c| f.press((c == " ") ? :space : c, c) }
+
+  it "goes busy on ^S and ignores keys until the App reports back" do
+    type("do it")
+    _(form.press(:ctrl_s, "\x13")).must_equal :start
+    _(form.footer).must_include "starting session…"
+    _(form.press("x", "x")).must_equal :changed
+    _(form.values[:prompt]).must_equal "do it"
+  end
+
+  it "hands the prompt back with the failure once the App reports it failed" do
+    type("do it")
+    form.press(:ctrl_s, "\x13")
+    form.submission_failed("claude --bg failed: not a trusted directory")
+    _(form.footer).must_include "not a trusted directory"
+    _(form.values[:prompt]).must_equal "do it"
     _(form.press(:ctrl_s, "\x13")).must_equal :start
   end
 

@@ -111,6 +111,8 @@ module ClaudeInbox
         when :notice then notice(rest[0])
         when :select then @pending_select = rest[0]
         when :attach then attach(rest[0])
+        when :form_started then @modal = nil if @modal.equal?(rest[0])
+        when :form_failed then form_failed(*rest)
         end
       end
     rescue ThreadError
@@ -434,9 +436,18 @@ module ClaudeInbox
       in_background do
         id = @client.spawn(**v)
         @queue << [:notice, "started #{id}"]
+        @queue << [:form_started, form]
         @queue << [:select, id]
         attach ? @queue << [:attach, id] : @poller.soon
+      rescue AgentsClient::Error => e
+        @queue << [:form_failed, form, e.message]
       end
+    end
+
+    # A spawn failure hands the form back rather than just logging it, so
+    # the composed prompt survives (see NewSessionForm#submission_failed).
+    def form_failed(form, message)
+      @modal.equal?(form) ? form.submission_failed(message) : (@error = message)
     end
 
     # The new-session form takes the whole body; a Dialog is a box over it.
@@ -464,16 +475,15 @@ module ClaudeInbox
       end
     end
 
+    # `:start`/`:start_and_attach` leave the form as `@modal`, now busy: it
+    # closes itself once the spawn is confirmed to have started (`:form_started`)
+    # or reopens with the failure and the prompt intact (`:form_failed`).
     def handle_form_key(name, key)
       form = @modal
       case form.press(name, key)
       when :cancel then @modal = nil
-      when :start
-        @modal = nil
-        start_session(form, attach: false)
-      when :start_and_attach
-        @modal = nil
-        start_session(form, attach: true)
+      when :start then start_session(form, attach: false)
+      when :start_and_attach then start_session(form, attach: true)
       end
     end
 
