@@ -182,8 +182,11 @@ module ClaudeInbox
       def elide(url) = url.sub(/(?<=#)(.{4}).+(.{4})\z/, "\\1…\\2")
 
       def off_lines(s)
-        return [] unless s.state == :off
-        ["", "  or set CLAUDE_INBOX_LISTEN=lan in your shell; the README's", "  \"Starting sessions from your phone\" has the rest"]
+        case s.state
+        when :off then ["", "  or set CLAUDE_INBOX_LISTEN=lan in your shell; the README's", "  \"Starting sessions from your phone\" has the rest"]
+        when :in_use then ["", "  quit whatever holds it, or pick another port with --listen=PORT"]
+        else []
+        end
       end
 
       def key_lines(s)
