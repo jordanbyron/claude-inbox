@@ -65,12 +65,13 @@ describe ClaudeInbox::Listener do
   def drained = Array.new(queue.size) { queue.pop }
 
   describe "routing and the token" do
-    it "serves the page at / to anyone, as HTML no other site can frame" do
+    it "serves the phone page at / to anyone, as HTML that reaches only this listener and can't be framed" do
       r = call("GET", "/", token: nil)
       _(r.status).must_equal 200
       _(r.headers["content-type"]).must_equal "text/html; charset=utf-8"
-      _(r.headers["content-security-policy"]).must_include "frame-ancestors 'none'"
-      _(r.body).must_include "claude-inbox is listening"
+      _(r.headers["content-security-policy"]).must_equal "default-src 'none'; script-src 'unsafe-inline'; " \
+        "style-src 'unsafe-inline'; img-src blob: data:; connect-src 'self'; form-action 'none'; frame-ancestors 'none'"
+      _(r.body.b).must_equal File.binread(File.expand_path("../lib/claude_inbox/remote.html", __dir__))
       _(r.headers.values_at("connection", "cache-control", "x-content-type-options", "referrer-policy"))
         .must_equal ["close", "no-store", "nosniff", "no-referrer"]
     end
@@ -131,6 +132,26 @@ describe ClaudeInbox::Listener do
       _(call("POST", "/api/options", "{}").headers["allow"]).must_equal "GET"
       _(call("GET", "/api/nope").status).must_equal 404
       _(raw("garbage\r\n\r\n").status).must_equal 400
+    end
+  end
+
+  describe "the phone page" do
+    let(:page) { ClaudeInbox::Listener::PAGE }
+
+    it "refuses what the listener would, before sending it" do
+      _(page).must_include "const MAX_IMAGES = #{ClaudeInbox::Listener::MAX_IMAGES};"
+      _(page).must_include "const MAX_BODY = #{ClaudeInbox::Listener::MAX_BODY};"
+    end
+
+    it "loads nothing from anywhere else, which the CSP would block without a word" do
+      _(page).wont_match(/<link\b|@import/)
+      _(page).wont_match(%r{\b(?:src|href|action)=["']?(?:https?:)?//})
+      _(page).wont_match(%r{url\(["']?(?:https?:)?//})
+    end
+
+    it "sends only the keys a start takes, so none is refused as unknown" do
+      sent = page[/JSON\.stringify\(\{(.*?)\}\);/m, 1].scan(/(\w+):/).flatten - %w[data]
+      _(sent.sort).must_equal (ClaudeInbox::SessionRequest::KEYS + %w[images]).sort
     end
   end
 
