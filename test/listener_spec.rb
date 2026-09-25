@@ -200,7 +200,16 @@ describe ClaudeInbox::Listener do
     it "hands back the claude.ai/code page once the session has registered its bridge" do
       FileUtils.mkdir_p(File.join(tmp, "jobs", "deadbeef"))
       File.write(File.join(tmp, "jobs", "deadbeef", "state.json"), JSON.generate(bridgeSessionId: "cse_01AbC"))
-      _(start({prompt: "go", cwd: project}).json["url"]).must_equal "https://claude.ai/code/session_01AbC"
+      _(start({prompt: "go", cwd: project, remote: true}).json["url"]).must_equal "https://claude.ai/code/session_01AbC"
+    end
+
+    it "answers without waiting for a bridge a session without Remote Control seldom registers" do
+      options[:bridge_wait] = 3
+      began = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      r = start({prompt: "go", cwd: project, remote: false})
+      _(r.status).must_equal 201
+      _(r.json["url"]).must_be_nil
+      _(Process.clock_gettime(Process::CLOCK_MONOTONIC) - began).must_be :<, 1
     end
 
     it "refuses what the form refuses, naming the field, and starts nothing" do
