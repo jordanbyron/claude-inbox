@@ -56,6 +56,15 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   messaged yet has an empty transcript, and resuming it fails with `source session not found`. The server refuses to start in a
   directory whose trust dialog hasn't been accepted, and brings back the
   sessions it served last time when restarted within four hours.
+- `~/.claude.json` is where the CLI keeps the answer to the trust dialog:
+  `projects` is keyed by directory, and an accepted one has
+  `hasTrustDialogAccepted: true`. A directory counts as trusted when it or
+  a parent has the flag, though inside a git repository the CLI stops
+  looking at the repository's root (read from the 2.1.282 bundle). The file
+  is private and unversioned. The inbox reads it only to choose and order
+  the directories it offers for a new session, never to decide whether one
+  may start, so if the format changes that list gets shorter and nothing
+  else breaks.
 - `~/.claude/gh-pr-status-cache.json` is keyed by PR url and calls an open
   draft `DRAFT`; `gh pr view` reports `OPEN` plus `isDraft`. The cache only
   covers PRs Claude Code's own sessions opened, so a link scan finds plenty

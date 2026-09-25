@@ -1,0 +1,21 @@
+{
+  "numStartups": 212,
+  "theme": "dark",
+  "projects": {
+    "/Users/me/code/claude-inbox": {
+      "allowedTools": [],
+      "hasTrustDialogAccepted": true,
+      "lastSessionId": "823b882f-171f-4b66-b779-48a245dd21bc"
+    },
+    "/Users/me/Downloads": {
+      "allowedTools": [],
+      "hasTrustDialogAccepted": false
+    },
+    "/Users/me/code/never-asked": {
+      "allowedTools": []
+    },
+    "/Users/me/code/comma3": {
+      "hasTrustDialogAccepted": true
+    }
+  }
+}
