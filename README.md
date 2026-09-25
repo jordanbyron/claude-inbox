@@ -235,6 +235,35 @@ and rejected tokens, counting a repeat rather than listing it again. Anyone with
 you, in your projects: treat a leaked URL like a leaked password, and press
 `r`.
 
+**The page.** The pairing URL opens the `n` form, sized for a phone:
+prompt, name, directory, model, effort, permissions, worktree and Remote
+Control, which starts out on, since you are away from the desk. The
+directories are the ones your sessions ran in lately, then the projects
+whose trust dialog you accepted, and the one you picked last is picked
+again. "default" in a list says what that directory's settings make it:
+`default (opus)`. Add image takes a photo or picks from the library, scales
+it to 2000 pixels on the long edge and sends it as a JPEG, which leaves the
+photo's metadata, location included, on the phone; an `[Image #1]` lands at
+the cursor, as a paste does in the form. What you type is kept on the phone
+until a start goes through, a refusal shows under the field it is about,
+and a start that went through gives the session's id and an Open in Claude
+link to its claude.ai/code page. The page keeps the token and takes it out
+of the address bar. Once the token is rotated it says "token rejected:
+press N in the inbox and pair again" and asks for the new pairing URL.
+
+**On the home screen.**
+
+1. In the inbox, press `N` and then `c`. The pairing URL, token and all, is
+   on the clipboard, and Universal Clipboard takes it to the phone.
+2. On the phone, paste it into Safari and open it.
+3. Tap Share, then Add to Home Screen, then Add.
+4. Open the new icon. It keeps its own storage, apart from Safari's, so the
+   first time it asks for the token: paste the pairing URL again and tap
+   Pair.
+
+The page comes from the inbox itself, so with the inbox closed or the Mac
+asleep the icon has nothing to open.
+
 **Permission modes.** A remote start may use `default` and `plan`, nothing
 wider. `default` means whatever your settings say for that directory, so it
 is worked out first: a project whose settings default to `bypassPermissions`
@@ -269,6 +298,25 @@ refusal is `{"error", "field"}` with the same message the form would show,
 and a CLI refusal such as "Workspace not trusted" comes back as a 500. Send
 an `Idempotency-Key` header and a retry gets the first answer instead of a
 second session.
+
+**A Shortcut.** To start a session from the share sheet, with the photos or
+text you shared, a Shortcut can send the same request. In outline:
+
+1. Receive Images and Text from the Share Sheet.
+2. Get Images from the Shortcut Input, and Repeat with Each: Resize Image
+   to 2000 on the longest edge, Convert Image to JPEG, Base64 Encode, a
+   Dictionary with `data` set to the encoded text, and Add to Variable
+   `images`.
+3. Ask for Input for the prompt, with the shared text as its default.
+4. Get Contents of URL `http://192.168.1.20:7433/api/sessions`, method POST,
+   with the headers `Authorization: Bearer <token>` and `Idempotency-Key`
+   (the Current Date will do), and a JSON body: `prompt`, `cwd` as a
+   directory's label from `/api/options` such as `claude-inbox`, `remote`
+   true, and `images` as the variable.
+5. Show the answer, or Open URLs on its `url`.
+
+Put the token in a Text action at the top. If you share the Shortcut, make
+that action an Import Question, so the token isn't in what you share.
 
 A remote start never moves the cursor, attaches, or closes what you have
 open. The header says `started 31472308 from 192.168.1.30`, and the row
