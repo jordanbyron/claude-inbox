@@ -59,9 +59,9 @@ module ClaudeInbox
 
     def terminal? = interactive? && !remote? && !unattended?
 
-    # Where claude.ai/code shows this session. Every background session
-    # registers a bridge and records it in the job file; a worker a `claude
-    # remote-control` server spawned carries it on its command line.
+    # Where claude.ai/code shows this session. A background session with
+    # Remote Control on records its bridge in the job file; a worker a
+    # `claude remote-control` server spawned carries it on its command line.
     def remote_url
       bridge = bridge_id || job_state&.bridge_id
       bridge && "https://claude.ai/code/session_#{bridge.delete_prefix("cse_")}"

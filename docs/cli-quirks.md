@@ -22,26 +22,32 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   CLI offers eight colors, and its own tmux code says what they mean to a
   terminal: six are ansi names, `orange` and `pink` are 256-color indexes 208
   and 205. Interactive sessions have no job file, so no color and no line.
-- Every `--bg` session registers a bridge and records it in `state.json` as
-  `bridgeSessionId: cse_<id>`; claude.ai/code shows the session at
-  `https://claude.ai/code/session_<id>`. `--bg` and `--remote-control`
-  combine (checked on 2.1.278): the session then also prints the `/rc
-  active · Continue here, on your phone, or at …` banner a terminal session
-  gets from `/rc`, which a plain `--bg` session never does. The flag is
-  the only trace of that in the job file, as a `respawnFlags` entry, and
-  the daemon puts it back on `claude --bg --resume <id>`. `--remote-control`
-  takes an optional name, so anything after it, the prompt included, becomes
-  that name and the session starts with no prompt; the flag has to come
-  last. A worker that `claude remote-control` spawned carries the same
+- A `--bg` session with Remote Control on registers a bridge and records it
+  in `state.json` as `bridgeSessionId: cse_<id>`; claude.ai/code shows the
+  session at `https://claude.ai/code/session_<id>`. On 2.1.282 a plain
+  `--bg` session registers none, so it has no page there. `--bg` and
+  `--remote-control` combine (checked on 2.1.278): the session then also
+  prints the `/rc active · Continue here, on your phone, or at …` banner a
+  terminal session gets from `/rc`. The flag lands in the job file as a
+  `respawnFlags` entry, and the daemon puts it back on `claude --bg
+  --resume <id>`. `--bg` also honours `remoteControlAtStartup` (/config's
+  "Enable Remote Control for all sessions", checked on 2.1.282) and
+  registers a bridge, but prints no banner and leaves `respawnFlags`
+  untouched. The CLI reads that setting from user settings or the legacy
+  copy in `~/.claude.json`; project and local settings can only set it to
+  false. `--remote-control` takes an optional name, so anything after it,
+  the prompt included, becomes that name and the session starts with no
+  prompt; the flag has to come last. A worker that `claude remote-control` spawned carries the same
   bridge id on its command line as `--session-id cse_<id>`, next to
   `--sdk-url`; the JSON row for it has the local conversation uuid as
   `sessionId`. While the worker runs, `claude --bg --resume <uuid>` says the
   session is open elsewhere and starts a copy instead. With the worker
   killed, the same command resumes under the same uuid as a daemon row, the
   server logs `Session failed` and does not respawn it, and the resumed
-  session registers a new bridge rather than reclaiming the worker's. A
-  worker nobody has messaged yet has an empty transcript, and resuming it
-  fails with `source session not found`. The server refuses to start in a
+  session registers a new bridge rather than reclaiming the worker's. With
+  `--remote-control` on the end, the new bridge reports `/remote-control
+  is active` within a second (checked on 2.1.282). A worker nobody has
+  messaged yet has an empty transcript, and resuming it fails with `source session not found`. The server refuses to start in a
   directory whose trust dialog hasn't been accepted, and brings back the
   sessions it served last time when restarted within four hours.
 - `~/.claude/gh-pr-status-cache.json` is keyed by PR url and calls an open
