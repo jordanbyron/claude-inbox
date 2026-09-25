@@ -5,24 +5,6 @@ require_relative "test_helper"
 
 Reaper = ClaudeInbox::Reaper
 
-# Stands in for `claude rm`: records what it took, and refuses the ids it was
-# told to, the way the real thing refuses a worktree holding unpushed commits.
-class RecordingClient < ClaudeInbox::AgentsClient
-  attr_reader :removed
-
-  def initialize(refuse: [])
-    super()
-    @refuse = refuse
-    @removed = []
-  end
-
-  def rm(id)
-    raise ClaudeInbox::AgentsClient::Error, "rm failed: worktree has unpushed commits" if @refuse.include?(id)
-    @removed << id
-    true
-  end
-end
-
 describe Reaper do
   let(:now) { Time.at(1_789_600_000) }
   let(:quiet_since) { now.to_i - ClaudeInbox::Store::REAP_AFTER - 86_400 }

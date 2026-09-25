@@ -11,49 +11,16 @@ CTRL_U = "\x15"
 describe ClaudeInbox::App do
   let(:terminal) { ScreenTerminal.new }
 
-  let(:client) do
-    Class.new(ClaudeInbox::FixtureClient) {
-      def removed = (@removed ||= [])
-
-      def stopped = (@stopped ||= [])
-
-      def attached = (@attached ||= [])
-
-      def hold = @gate = Queue.new
-
-      def release = @gate&.push(true)
-
-      def rm(id)
-        @gate&.pop
-        removed << id
-        true
-      end
-
-      def stop(id)
-        stopped << id
-        true
-      end
-
-      def attach(id) = attached << id
-
-      def fail_spawn(message) = @spawn_error = message
-
-      def spawn(**)
-        @gate&.pop
-        raise ClaudeInbox::AgentsClient::Error, @spawn_error if @spawn_error
-        "deadbeef"
-      end
-    }.new(fixture_path("agents.json"))
-  end
-
+  let(:client) { RecordingClient.new }
   let(:store) { ClaudeInbox::Store.new(path: nil) }
   let(:pull_requests) { ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil) }
+  let(:queue) { Queue.new }
 
   let(:app) do
     ClaudeInbox::App.new(
       client: client, store: store, pull_requests: pull_requests,
       rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
-      terminal: terminal, input: StringIO.new, color: false
+      terminal: terminal, input: StringIO.new, color: false, queue: queue
     )
   end
 
@@ -255,6 +222,41 @@ describe ClaudeInbox::App do
       _(lines.join("\n")).must_include "New session"
       press(CTRL_S)
       _(status_line).must_include "starting session…"
+    end
+  end
+
+  describe "a session started from another device" do
+    it "says so, without moving the cursor or closing the form someone is typing in" do
+      press("j")
+      before = selected_line
+      press("n", *"half a thought".chars)
+      queue << [:notice, "remote: starting session…"]
+      _(status_line).must_include "remote: starting session…"
+
+      store.update(store.sessions + [session(id: "31472308", name: "from the phone")])
+      queue << [:remote_started, "31472308", "192.168.1.30"]
+      lines = screen
+      _(lines.first).must_include "started 31472308 from 192.168.1.30"
+      _(lines.join("\n")).must_include "New session"
+      _(lines.join("\n")).must_include "half a thought"
+      _(client.attached).must_be_empty
+
+      press("\e", "y")
+      _(selected_line).must_equal before
+      _(screen.join("\n")).must_include "from the phone"
+    end
+  end
+
+  describe "N" do
+    it "opens the pairing dialog, which says how to turn the listener on while it is off" do
+      press("N")
+      _(screen.join("\n")).must_include "off: start with --listen or --listen-lan"
+      _(screen.join("\n")).must_include "esc close"
+      press("c", "r", "y")
+      _(screen.join("\n")).wont_include "rotate?"
+      _(screen.join("\n")).must_include "Pair a phone"
+      press("\e")
+      _(screen.join("\n")).wont_include "Pair a phone"
     end
   end
 

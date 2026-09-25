@@ -24,11 +24,12 @@ module ClaudeInbox
 
     def self.body_height(height) = height - CHROME_ROWS
 
-    # What App hands Renderer for one frame. `peek` is a Peek::View.
+    # What App hands Renderer for one frame. `peek` is a Peek::View and
+    # `listening` a Listener::Snapshot.
     View = Data.define(:width, :height, :now, :selected, :top, :expanded, :peek, :modal, :screen,
-      :status, :usage, :filter, :filter_editing, :tick, :loading) do
+      :status, :usage, :filter, :filter_editing, :tick, :loading, :listening) do
       def initialize(width:, height:, now:, selected: nil, top: 0, expanded: {}, peek: nil, modal: nil, screen: nil,
-        status: nil, usage: nil, filter: nil, filter_editing: false, tick: 0, loading: nil) = super
+        status: nil, usage: nil, filter: nil, filter_editing: false, tick: 0, loading: nil, listening: nil) = super
     end
 
     SECTION_TITLES = {
@@ -139,8 +140,8 @@ module ClaudeInbox
       brand = " " + @theme.cyan_bold("▌ claude-inbox")
       right = header_right(view, width - Text.width(brand) - 3)
       room = width - Text.width(brand) - Text.width(right) - 3
-      chips = view.loading ? "" : header_chips(sections, compact: false)
-      chips = header_chips(sections, compact: true) if Text.width(chips) > room
+      chips = view.loading ? "" : header_chips(sections, compact: false, listening: view.listening)
+      chips = header_chips(sections, compact: true, listening: view.listening) if Text.width(chips) > room
       chips = "" if Text.width(chips) > room
       Text.pad(brand + "   " + chips, width - Text.width(right)) + right
     end
@@ -175,7 +176,7 @@ module ClaudeInbox
       end
     end
 
-    def header_chips(sections, compact:)
+    def header_chips(sections, compact:, listening: nil)
       pinned = sections.pinned.size
       needing = sections.needs_you.size
       working = sections.active.count { |r| r.session.effective_state == "working" && !r.session.waiting_on_work? }
@@ -195,7 +196,16 @@ module ClaudeInbox
         header_chip(settled, "◦", "settled", compact) { |s| @p.dim(s) }
       ].compact
       chips << @p.dim("nothing running") if sections.all.empty?
-      chips.join(compact ? "  " : @p.dim("  ·  "))
+      [*chips, listening_chip(listening)].compact.join(compact ? "  " : @p.dim("  ·  "))
+    end
+
+    # Red when the listener was asked for and isn't up: the port is taken,
+    # or another inbox holds it. Nothing when it wasn't asked for.
+    def listening_chip(listening)
+      case listening&.state
+      when :listening then @theme.blue("◉ #{"lan" if listening.lan}:#{listening.port}")
+      when :in_use, :held then @theme.red("◉ !")
+      end
     end
 
     def header_chip(count, glyph, words, compact)
