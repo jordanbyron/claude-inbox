@@ -24,12 +24,8 @@ module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
   # child process that takes over the terminal.
   class App
-    # The reaper and the listener default to off. The reaper is the only
-    # thing here that deletes a session and the listener the only way in
-    # from another machine, so switching either on is `bin/claude-inbox`'s
-    # job and nothing reaches them by forgetting an argument. `listen` is
-    # Listener.options' hash, or any of Listener.new's options. `queue` is
-    # how every other thread reaches App.
+    # The reaper deletes sessions and the listener lets other machines in,
+    # so both are off unless `bin/claude-inbox` switches them on.
     def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
       rate_limits: RateLimits.new, reaper: Reaper.disabled, listen: nil, out: $stdout, input: $stdin, color: true,
       terminal: Terminal.new(out, input), queue: Queue.new)

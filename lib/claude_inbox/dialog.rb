@@ -129,10 +129,10 @@ module ClaudeInbox
       def lines(width, _caret)
         s = @snapshot.call
         out = ["  " + state_line(s)]
-        out += (s.state == :listening) ? listening_lines(s) : advice(s)
+        out += (s.state == :listening) ? listening_lines(s) : advice(s, width)
         if s.recent.any?
           out << "" << "  recent:"
-          out += s.recent.reverse.map { |o| "    #{o.at.strftime("%H:%M")}  #{o.via}  #{o.result}" }
+          out += s.recent.reverse.map { |o| "    #{o.at.strftime("%H:%M")}  #{o.via}  #{o.result}#{" ×#{o.count}" if o.count > 1}" }
         end
         out << ""
         out += key_lines(s)
@@ -164,6 +164,7 @@ module ClaudeInbox
           when :listening then "listening on #{host}#{" · LAN, cleartext" if s.lan}"
           when :in_use then "#{host} in use"
           when :held then "another inbox#{" (pid #{s.held_by})" if s.held_by} is listening"
+          when :failed then "#{host}: the listener failed"
           else "off: start with --listen or --listen-lan"
           end
         s.fixture ? "#{line} · fixture" : line
@@ -178,10 +179,11 @@ module ClaudeInbox
 
       def elide(url) = url.sub(/(?<=#)(.{4}).+(.{4})\z/, "\\1…\\2")
 
-      def advice(s)
+      def advice(s, width)
         case s.state
         when :in_use then ["", "  trying again every few seconds; or pick another port with", "  --listen=PORT"]
         when :held then ["", "  this one takes over once that one quits"]
+        when :failed then ["", *Text.wrap(s.error.to_s, width - 2).map { |l| "  " + l }, "", "  restart the inbox once that is fixed"]
         else ["", "  or set CLAUDE_INBOX_LISTEN=lan in your shell; the README's", "  \"Starting sessions from your phone\" has the rest"]
         end
       end

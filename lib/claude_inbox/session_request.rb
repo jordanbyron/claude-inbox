@@ -33,7 +33,7 @@ module ClaudeInbox
     def self.from_params(params, dirs: [])
       params = params.transform_keys(&:to_s)
       unknown = params.keys - KEYS
-      raise Invalid.new(unknown.first.to_sym, "unknown key: #{unknown.first}") if unknown.any?
+      raise Invalid.new(unknown.first.to_sym, "unknown key: #{unknown.first.inspect}") if unknown.any?
       {
         prompt: prompt_param(params["prompt"]),
         name: name_param(params["name"]),
@@ -100,6 +100,7 @@ module ClaudeInbox
     def self.cwd_param(value, dirs)
       cwd = string_param(:cwd, value || "").strip
       raise Invalid.new(:cwd, "a directory is required") if cwd.empty?
+      raise Invalid.new(:cwd, "a directory is one line") if cwd.match?(/[[:cntrl:]\u2028\u2029]/)
       return File.expand_path(cwd) if cwd.match?(%r{\A(/|~(/|\z))})
       found = dirs.select { |dir| dir.end_with?("/#{cwd}") }
       raise Invalid.new(:cwd, "no directory called #{cwd}") if found.empty?

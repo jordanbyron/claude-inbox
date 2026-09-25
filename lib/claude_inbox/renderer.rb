@@ -199,12 +199,12 @@ module ClaudeInbox
       [*chips, listening_chip(listening)].compact.join(compact ? "  " : @p.dim("  ·  "))
     end
 
-    # Red when the listener was asked for and isn't up: the port is taken,
-    # or another inbox holds it. Nothing when it wasn't asked for.
+    # Red when the listener was asked for and isn't up. Nothing when it
+    # wasn't asked for.
     def listening_chip(listening)
       case listening&.state
       when :listening then @theme.blue("◉ #{"lan" if listening.lan}:#{listening.port}")
-      when :in_use, :held then @theme.red("◉ !")
+      when :in_use, :held, :failed then @theme.red("◉ !")
       end
     end
 

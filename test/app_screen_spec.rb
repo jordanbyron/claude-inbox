@@ -3,6 +3,7 @@
 require_relative "test_helper"
 require_relative "../lib/claude_inbox/app"
 require "stringio"
+require "tmpdir"
 
 CTRL_X = "\x18"
 CTRL_S = "\x13"
@@ -43,6 +44,12 @@ describe ClaudeInbox::App do
   def footer = screen.last
 
   def selected_line = screen.find { |l| l.include?("▶") }
+
+  # The selected row's key: the row itself carries a live age and spinner.
+  def cursor
+    app.step
+    app.instance_variable_get(:@selected)&.key
+  end
 
   def row_of(label) = screen.index { |l| l.include?(label) } + 1
 
@@ -238,7 +245,8 @@ describe ClaudeInbox::App do
   describe "a session started from another device" do
     it "says so, without moving the cursor or closing the form someone is typing in" do
       press("j")
-      before = selected_line
+      before = cursor
+      _(before).wont_be_nil
       press("n", *"half a thought".chars)
       queue << [:notice, "remote: starting session…"]
       _(status_line).must_include "remote: starting session…"
@@ -252,8 +260,60 @@ describe ClaudeInbox::App do
       _(client.attached).must_be_empty
 
       press("\e", "y")
-      _(selected_line).must_equal before
+      _(cursor).must_equal before
       _(screen.join("\n")).must_include "from the phone"
+    end
+  end
+
+  describe "N with the listener on" do
+    let(:tmp) { Dir.mktmpdir }
+    let(:gate) { Queue.new }
+    let(:pairing) do
+      ClaudeInbox::Pairing.new(path: File.join(tmp, "listen.json"), local_name: -> { "m" }, addresses: -> { [] }).tap do |p|
+        lookups = gate
+        p.define_singleton_method(:urls) do |**kw|
+          lookups.pop
+          super(**kw)
+        end
+      end
+    end
+    let(:app) do
+      ClaudeInbox::App.new(
+        client: client, store: store, pull_requests: pull_requests,
+        rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
+        terminal: terminal, input: StringIO.new, color: false, queue: queue,
+        listen: {port: 0, pairing: pairing, lock_path: File.join(tmp, "listen.lock"), images_dir: File.join(tmp, "images")}
+      )
+    end
+    let(:listener) { app.instance_variable_get(:@listener) }
+
+    before { listener.start }
+
+    after do
+      gate.close
+      listener.stop
+      FileUtils.remove_entry(tmp)
+    end
+
+    it "shows the port in the header, and the URL once the lookup lands" do
+      _(status_line).must_include "◉ :#{listener.port}"
+      press("N")
+      _(screen.join("\n")).must_include "listening on 127.0.0.1:#{listener.port}"
+      _(screen.join("\n")).must_include "looking up this Mac's addresses…"
+      press("c")
+      _(status_line).must_include "still looking up this Mac's addresses"
+      gate << true
+      _(wait_for { screen.join("\n").include?("http://127.0.0.1:#{listener.port}/#") }).must_equal true
+    end
+
+    it "issues a new token on r then y, and says phones must pair again" do
+      old = pairing.token
+      press("N", "r")
+      _(screen.join("\n")).must_include "rotate? y/n"
+      gate << true << true
+      press("y")
+      _(wait_for { status_line.include?("new token: phones pair again with N") }).must_equal true
+      _(JSON.parse(File.read(File.join(tmp, "listen.json")))["token"]).wont_equal old
     end
   end
 

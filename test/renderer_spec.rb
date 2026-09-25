@@ -204,6 +204,7 @@ describe ClaudeInbox::Renderer do
     _(header.call(snapshot.call(:listening, lan: true))).must_include "◉ lan:7433"
     _(header.call(snapshot.call(:in_use))).must_include "◉ !"
     _(header.call(snapshot.call(:held))).must_include "◉ !"
+    _(header.call(snapshot.call(:failed))).must_include "◉ !"
     _(header.call(snapshot.call(:off))).wont_include "◉"
     _(header.call(nil)).wont_include "◉"
     _(header.call(snapshot.call(:listening), width: 60)).must_include "● 1  ✻ 1  ○ 1  ◉ :7433"

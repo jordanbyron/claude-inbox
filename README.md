@@ -197,9 +197,10 @@ ask for it:
 | `--listen-lan[=PORT]` | `CLAUDE_INBOX_LISTEN=lan` or `lan:7433` | listens on every interface: your LAN, and a VPN into it |
 | `--listen-allow-modes=default,plan` | `CLAUDE_INBOX_LISTEN_ALLOW_MODES=default,plan` | the permission modes a remote start may use (see below) |
 
-The port defaults to 7433. A flag wins over the environment, and
-`--listen-lan` wins over `--listen`, so a shell rc that arms loopback can
-never widen to the LAN by accident. `--fixture` ignores the environment but
+The port defaults to 7433, and a flag wins over the environment. The LAN is
+never reached by accident: only `--listen-lan` or `CLAUDE_INBOX_LISTEN=lan`
+binds every interface, and with both flags given `--listen-lan` wins and
+its own port (or 7433) is used. `--fixture` ignores the environment but
 takes the flags, which is how to try the API without starting anything
 real, and keeps a token of its own. One inbox per user listens; a second
 one says which process has the listener, and takes over when it quits.
@@ -222,13 +223,15 @@ nothing says why; `N` shows the firewall's state.
 **Over ssh.** Plain `--listen` answers only on `127.0.0.1`. From another
 machine, `ssh -L 7433:127.0.0.1:7433 you@your-mac` and use
 `http://localhost:7433`; any free local port works in place of the first
-7433.
+7433. Use plain `--listen` for this, not `--listen-lan`: macOS lets another
+program on this Mac bind `127.0.0.1:7433` next to LAN mode's
+`0.0.0.0:7433` and take the loopback traffic, token and all.
 
 **Pairing.** The token lives in `~/.config/claude-inbox/listen.json`,
 readable by you alone, and stays the same across launches. In the `N`
 dialog, `r` and then `y` replaces it; every paired phone gets 401 until it
 pairs again. The dialog also lists the last five remote starts, refusals
-and rejected tokens. Anyone with the token can start sessions as
+and rejected tokens, counting a repeat rather than listing it again. Anyone with the token can start sessions as
 you, in your projects: treat a leaked URL like a leaked password, and press
 `r`.
 
@@ -237,14 +240,17 @@ wider. `default` means whatever your settings say for that directory, so it
 is worked out first: a project whose settings default to `bypassPermissions`
 is refused with 403 rather than started. `--listen-allow-modes` gives the
 list in full, for example `--listen-allow-modes=default,plan,acceptEdits`.
-Settings files the inbox doesn't read, such as managed settings, aren't
-taken into account.
+The mode that passed is handed to `claude` by name, `--permission-mode
+default` included. Settings files the inbox doesn't read, such as managed
+settings, aren't taken into account when it is worked out.
 
 **The API.** `GET /api/options` lists the models, efforts, permission modes
 and directories a start can use, each directory with a short `label` and the
-defaults its settings give. `POST /api/sessions` starts one:
+defaults its settings give. `POST /api/sessions` starts one. The token is
+the part of the pairing URL after the `#`, or:
 
 ```sh
+TOKEN=$(ruby -rjson -e 'puts JSON.parse(File.read(File.expand_path("~/.config/claude-inbox/listen.json")))["token"]')
 curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"prompt":"fix the flaky spec","cwd":"claude-inbox","remote":true}' \
   http://192.168.1.20:7433/api/sessions
@@ -271,7 +277,8 @@ mode), and a red `◉ !` while it was asked to and can't: another inbox has
 the listener, or something else holds the port. It tries again every few
 seconds and turns blue once it has the port. If an inbox quits while a
 client still has a connection open, the port can stay held for half a
-minute after.
+minute after. Anything else, such as a `~/.config/claude-inbox` it can't
+write to, stays red, and `N` says what went wrong.
 
 ## Pull request state
 

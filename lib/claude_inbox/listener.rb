@@ -27,6 +27,7 @@ module ClaudeInbox
     MAX_UNAUTHENTICATED = 2
     MAX_TURNED_AWAY = 8
     RETRY_EVERY = 5
+    WAITING = %i[in_use held].freeze
     MAX_BODY = 16 * 1024 * 1024
     MAX_IMAGES = 8
     HEAD_TIMEOUT = 10
@@ -54,21 +55,24 @@ module ClaudeInbox
     HTML
 
     # What `N` and the header chip show, as of one moment. `state` is :off,
-    # :listening, :in_use (the bind failed) or :held (another inbox has the
-    # lock, as `held_by`). `urls` and `firewall` are nil until `refresh`.
-    Snapshot = Data.define(:state, :port, :lan, :urls, :firewall, :allowed_modes, :recent, :held_by, :fixture) do
+    # :listening, :in_use (the port is taken), :held (another inbox has the
+    # lock, as `held_by`) or :failed (for good, as `error` says). `urls` and
+    # `firewall` are nil until `refresh`.
+    Snapshot = Data.define(:state, :port, :lan, :urls, :firewall, :allowed_modes, :recent, :held_by, :fixture, :error) do
+      def initialize(error: nil, **) = super
+
       # Over a VPN only an address reaches the Mac: multicast DNS, which
       # the .local name needs, stays on the LAN.
       def pairing_url = (lan && urls&.[](1)) || urls&.first
     end
 
-    Outcome = Data.define(:at, :via, :result)
+    # `count` is how many times `via` got `result`, the last at `at`.
+    Outcome = Data.define(:at, :via, :result, :count) do
+      def initialize(at:, via:, result:, count: 1) = super
+    end
 
-    # --listen[=PORT], --listen-lan[=PORT] and --listen-allow-modes=a,b, or
-    # the CLAUDE_INBOX_LISTEN* variables when no listen flag is given, as
-    # App's `listen:`; nil when nothing asks for it. ArgumentError on a
-    # value that can't be used. --listen-lan wins over --listen: widening to
-    # the LAN is never an accident of which came last.
+    # App's `listen:` from the flags, else the environment; nil when neither
+    # asks for it. --listen-lan wins over --listen, whichever came last.
     def self.options(argv, env)
       flags = argv.filter_map { |arg| arg.match(/\A--listen(-lan)?(?:=(.*))?\z/) }
       lan, port =
@@ -137,8 +141,8 @@ module ClaudeInbox
     # Tries again every few seconds while the port is taken or another
     # inbox has the listener, so this one takes over once it is free.
     def start
-      return if @port.nil? || @accept || @retry
-      @retry = Thread.new { sleep(@retry_every) until claim_port } unless claim_port
+      return if @port.nil? || @accept || @retry || !WAITING.include?(claim_port)
+      @retry = Thread.new { retry_claim }
     end
 
     # Runs after the terminal is restored and can't fail, so a bad socket
@@ -157,13 +161,15 @@ module ClaudeInbox
     def snapshot
       @mutex.synchronize do
         Snapshot.new(state: @state, port: port, lan: @lan, urls: @urls, firewall: @firewall, allowed_modes: @allowed_modes,
-          recent: @recent.dup.freeze, held_by: @held_by, fixture: @fixture)
+          recent: @recent.dup.freeze, held_by: @held_by, fixture: @fixture, error: @error)
       end
     end
 
     # Looks up the pairing URLs and the firewall for the snapshot. It
-    # forks, so it runs off the main thread, when `N` opens.
+    # forks, so it runs off the main thread, when `N` opens; asked for
+    # before the port is ours, it runs once it is.
     def refresh
+      @refresh_wanted = true
       return unless snapshot.state == :listening
       urls = @pairing.urls(port: port, lan: @lan).freeze
       firewall = @pairing.firewall if @lan
@@ -199,12 +205,11 @@ module ClaudeInbox
 
     private
 
-    # One listener per user: the lock file keeps a second inbox from
-    # binding at all. The socket is bound without SO_REUSEADDR, which on
-    # macOS would let another program hold the same port on a different
-    # address and quietly take the loopback traffic.
+    # Without SO_REUSEADDR the bind fails while another program holds the
+    # port on any address, rather than sharing it (macOS gives loopback to
+    # the more specific bind); the cost is a bind refused during TIME_WAIT.
     def claim_port
-      return false unless take_lock
+      return :held unless take_lock
       server = Socket.new(:INET, :STREAM)
       server.bind(Addrinfo.tcp(@lan ? "0.0.0.0" : "127.0.0.1", @port))
       server.listen(8)
@@ -212,12 +217,37 @@ module ClaudeInbox
       @bound_port = server.local_address.ip_port
       @mutex.synchronize { @state = :listening }
       @accept = Thread.new { accept_loop }
-      true
-    rescue SystemCallError
+      refresh_quietly if @refresh_wanted
+      :listening
+    rescue Errno::EADDRINUSE
+      give_up(server, :in_use)
+    rescue SystemCallError => e
+      give_up(server, :failed, e.message)
+    end
+
+    def retry_claim
+      loop do
+        sleep @retry_every
+        break unless WAITING.include?(claim_port)
+      end
+    end
+
+    def give_up(server, state, error = nil)
       quietly { server&.close }
       release_lock
-      @mutex.synchronize { @state = :in_use }
-      false
+      @mutex.synchronize do
+        @state = state
+        @error = error && printable(error)
+      end
+      state
+    end
+
+    # On the retry thread, where nothing would report a failure; the dialog
+    # just goes on saying it is looking the addresses up.
+    def refresh_quietly
+      refresh
+    rescue
+      nil
     end
 
     def take_lock
@@ -268,10 +298,8 @@ module ClaudeInbox
       free(slot)
     end
 
-    # A fifth connection, or a third that hasn't shown a token, gets a 503
-    # rather than a place in a queue. The 503 still gets a thread, since
-    # closing on a request nobody read sends a reset that can reach the
-    # client before the answer does; past a few of those, only a close.
+    # Over the cap, a 503 rather than a queue. It lingers like any answer,
+    # so it isn't lost to a reset; past a few of those, only a close.
     def take_slot
       if @alive < MAX_CONNECTIONS && @unauthenticated < MAX_UNAUTHENTICATED
         @alive += 1
@@ -317,11 +345,8 @@ module ClaudeInbox
       end
     end
 
-    # Waits for the client to close first. Whichever side closes first
-    # keeps the port in TIME_WAIT, and without SO_REUSEADDR that fails the
-    # next inbox's bind for half a minute. Reading also drains a request
-    # the answer didn't need, which would otherwise turn the close into a
-    # reset that can beat the answer to the client.
+    # The client closes first: a close on unread bytes resets the answer,
+    # and a server-side close leaves the TIME_WAIT that refuses a rebind.
     def linger(sock)
       deadline = Http.monotonic + LINGER
       loop do
@@ -402,7 +427,7 @@ module ClaudeInbox
         settle(key, started) if key
       end
     rescue AgentsClient::Error => e
-      reason = Http.utf8(e.message.lines.first).strip
+      reason = printable(e.message.lines.first.to_s.strip)
       @queue << [:notice, "remote start failed: #{reason}"]
       remember(via, reason)
       raise Http::Error.new(500, e.message, source: "claude")
@@ -473,7 +498,7 @@ module ClaudeInbox
       paths = images.each_with_index.map { |bytes, i| Images.save(bytes, dir: @images_dir, index: i + 1) }
       values[:prompt] = SessionRequest.attach(values[:prompt], paths)
       @queue << [:notice, "remote: starting session…"]
-      id = Http.utf8(@spawn_lock.synchronize { @client.spawn(**values) })
+      id = Http.utf8(@spawn_lock.synchronize { @client.spawn(**values, explicit_mode: true) })
       url = remote_url(id)
       @queue << [:remote_started, id, via]
       remember(via, "started #{id}")
@@ -482,10 +507,9 @@ module ClaudeInbox
       raise Http::Error.new(422, e.message, field: e.field)
     end
 
-    # "default" is whatever the settings files say, so the cap applies to
-    # what they say: a project that defaults to bypassPermissions can't
-    # slip through as "default". Settings files Settings doesn't read,
-    # managed ones for instance, can still change it.
+    # "default" is what the settings files say, so a project defaulting to
+    # bypassPermissions can't pass as "default"; the spawn then names the
+    # mode that passed rather than have the CLI work it out again.
     def capped_mode(values)
       mode = values[:permission_mode]
       mode = @settings.call(values[:cwd]).permission_mode || "default" if mode == "default"
@@ -504,9 +528,19 @@ module ClaudeInbox
       end
     end
 
+    # The same outcome from the same place again moves up with a count, so
+    # a host sending bad tokens can't push everything else out of the list.
     def remember(via, result)
-      @mutex.synchronize { @recent = (@recent + [Outcome.new(at: Time.now, via: via, result: result)]).last(RECENT) }
+      result = printable(result)
+      @mutex.synchronize do
+        same = @recent.find { |o| o.via == via && o.result == result }
+        outcome = Outcome.new(at: Time.now, via: via, result: result, count: (same&.count || 0) + 1)
+        @recent = (@recent - [same] + [outcome]).last(RECENT)
+      end
     end
+
+    # These reach the terminal, and they quote what a request sent.
+    def printable(text) = Http.utf8(text).gsub(/[[:cntrl:]]/) { |c| format("\\x%02x", c.ord) }
 
     def quietly
       yield

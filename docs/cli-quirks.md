@@ -42,8 +42,9 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   `--remote-control` reading it as a name (checked on 2.1.282: `--bg --name
   n --remote-control -- "-x …"` keeps the name and records the dash prompt
   as `intent`). The daemon writes `--permission-mode default` into
-  `respawnFlags` on its own, so `default` is a value the flag accepts. A
-  worker that `claude remote-control` spawned carries the same
+  `respawnFlags` on its own, so `default` is a value the flag accepts,
+  though 2.1.282's `--help` lists `manual` in its place and not `default`.
+  A worker that `claude remote-control` spawned carries the same
   bridge id on its command line as `--session-id cse_<id>`, next to
   `--sdk-url`; the JSON row for it has the local conversation uuid as
   `sessionId`. While the worker runs, `claude --bg --resume <uuid>` says the
