@@ -495,6 +495,7 @@ module ClaudeInbox
       field, message = SessionRequest.problem(values)
       raise Http::Error.new(422, message, field: field) if field
       values[:permission_mode] = capped_mode(values)
+      values[:remote] = remote_control(params, values)
       paths = images.each_with_index.map { |bytes, i| Images.save(bytes, dir: @images_dir, index: i + 1) }
       values[:prompt] = SessionRequest.attach(values[:prompt], paths)
       @queue << [:notice, "remote: starting session…"]
@@ -515,6 +516,13 @@ module ClaudeInbox
       mode = @settings.call(values[:cwd]).permission_mode || "default" if mode == "default"
       return mode if @allowed_modes.include?(mode)
       raise Http::Error.new(403, "permission mode #{mode} isn't allowed from another device", field: "permission_mode")
+    end
+
+    # Left out, Remote Control is what /config says for that directory, as
+    # the n form's default is, and is then passed as the flag the form passes.
+    def remote_control(params, values)
+      return values[:remote] if params.key?("remote")
+      @settings.call(values[:cwd]).remote == "yes"
     end
 
     # The session registers its bridge a moment after `claude --bg`

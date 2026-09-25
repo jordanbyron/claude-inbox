@@ -208,6 +208,15 @@ describe ClaudeInbox::Listener do
       _(client.spawns.map { |s| s[:permission_mode] }).must_equal %w[plan]
     end
 
+    it "follows /config's Remote Control setting when the request leaves remote out, as the form does" do
+      settings[project] = ClaudeInbox::Settings::Defaults.new(remote: "yes")
+      start({prompt: "go", cwd: project})
+      start({prompt: "go", cwd: project, remote: false})
+      settings[project] = ClaudeInbox::Settings::Defaults.new(remote: "no")
+      start({prompt: "go", cwd: project})
+      _(client.spawns.map { |s| s[:remote] }).must_equal [true, false, false]
+    end
+
     it "names the mode it let through, so the CLI doesn't work default out again for itself" do
       _(start({prompt: "go", cwd: project}).status).must_equal 201
       _(client.spawns.last.values_at(:permission_mode, :explicit_mode)).must_equal ["default", true]
