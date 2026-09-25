@@ -102,8 +102,9 @@ and anything else (`docs`, `refactor`, `chore`) releases nothing. While the
 version is still 0.x a breaking change bumps minor, per semver. The first
 release, with no tag yet, ships `VERSION` as it stands.
 
-Then it rewrites `VERSION` in `lib/claude_inbox.rb`, commits
-`chore: release vX.Y.Z`, tags, builds and pushes the gem (rubygems asks for
-your OTP here; that prompt is expected), pushes `main` with the tag and opens
-a GitHub release with generated notes. If the gem build or push fails, the
-commit and tag are undone so nothing half-released is left behind.
+Then it rewrites `VERSION` in `lib/claude_inbox.rb`, relocks `Gemfile.lock` to
+the same version, commits both as `chore: release vX.Y.Z`, tags, builds and
+pushes the gem (rubygems asks for your OTP here; that prompt is expected),
+pushes `main` with the tag and opens a GitHub release with generated notes. If
+the gem build or push fails, the commit and tag are undone so nothing
+half-released is left behind.
