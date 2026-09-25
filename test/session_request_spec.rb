@@ -33,13 +33,21 @@ describe ClaudeInbox::SessionRequest do
     end
 
     it "refuses an unknown key rather than dropping it" do
-      _(refusal(base.merge("permissions" => "plan"))).must_equal ["permissions", "unknown key: permissions"]
+      _(refusal(base.merge("permissions" => "plan"))).must_equal [:permissions, "unknown key: permissions"]
     end
 
     it "strips the prompt and keeps it to at most 100,000 characters" do
       _(from(base.merge("prompt" => "  fix the flaky spec \n"))[:prompt]).must_equal "fix the flaky spec"
       _(from(base.merge("prompt" => "x" * 100_000))[:prompt].size).must_equal 100_000
       _(refusal(base.merge("prompt" => "x" * 100_001))).must_equal [:prompt, "the prompt is over 100000 characters"]
+    end
+
+    it "keeps tabs and newlines in the prompt, CRLF as a newline, and no other control character" do
+      _(from(base.merge("prompt" => "one\r\n\ttwo\rthree"))[:prompt]).must_equal "one\n\ttwo\nthree"
+      ["a\e[2Jb", "a\ab", "a\u0085b", "a\x7Fb"].each do |prompt|
+        _(refusal(base.merge("prompt" => prompt)))
+          .must_equal [:prompt, "the prompt has a control character other than tab or newline"]
+      end
     end
 
     it "leaves a missing prompt blank, for problem to report as the form does" do
@@ -49,16 +57,21 @@ describe ClaudeInbox::SessionRequest do
     it "refuses text that is not a string, not UTF-8 or carries a NUL byte" do
       _(refusal(base.merge("prompt" => 42))).must_equal [:prompt, "prompt must be a string"]
       _(refusal(base.merge("prompt" => "\xFF"))).must_equal [:prompt, "prompt is not valid UTF-8"]
+      _(refusal(base.merge("prompt" => "\xFF".b))).must_equal [:prompt, "prompt is not valid UTF-8"]
+      _(from(base.merge("prompt" => "caf\xC3\xA9".b))[:prompt]).must_equal "café"
       _(refusal(base.merge("prompt" => "a\0b"))).must_equal [:prompt, "prompt contains a NUL byte"]
       _(refusal(base.merge("cwd" => "/tmp\0"))).must_equal [:cwd, "cwd contains a NUL byte"]
       _(refusal(base.merge("name" => ["x"]))).must_equal [:name, "name must be a string"]
     end
 
-    it "takes a one-line name of at most 100 characters, blank as none" do
+    it "takes a name of one line, at most 100 characters and no control character, blank as none" do
       _(from(base.merge("name" => "  flaky \n"))[:name]).must_equal "flaky"
       _(from(base.merge("name" => "  "))[:name]).must_be_nil
       _(from(base.merge("name" => nil))[:name]).must_be_nil
-      _(refusal(base.merge("name" => "two\nlines"))).must_equal [:name, "a name is one line"]
+      _(from(base.merge("name" => "fix \u{1F468}\u200D\u{1F469}"))[:name]).must_equal "fix \u{1F468}\u200D\u{1F469}"
+      ["two\nlines", "a\e[2Jb", "a\tb", "a\u0085b", "a\u2028b", "a\u2029b"].each do |name|
+        _(refusal(base.merge("name" => name))).must_equal [:name, "a name is one line"]
+      end
       _(refusal(base.merge("name" => "n" * 101))).must_equal [:name, "the name is over 100 characters"]
     end
 

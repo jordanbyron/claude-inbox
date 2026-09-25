@@ -27,12 +27,13 @@ module ClaudeInbox
 
     # The hash NewSessionForm#values builds, from a request's fields, or
     # Invalid. An unknown key is refused rather than ignored, so a misspelt
-    # setting can't fall back to its default unnoticed. A blank prompt or a
-    # missing directory passes here; `problem` says so, as the form does.
+    # setting can't fall back to its default unnoticed. A blank prompt, or a
+    # directory that does not exist, passes here; `problem` reports it as
+    # the form does.
     def self.from_params(params, dirs: [])
       params = params.transform_keys(&:to_s)
       unknown = params.keys - KEYS
-      raise Invalid.new(unknown.first, "unknown key: #{unknown.first}") if unknown.any?
+      raise Invalid.new(unknown.first.to_sym, "unknown key: #{unknown.first}") if unknown.any?
       {
         prompt: prompt_param(params["prompt"]),
         name: name_param(params["name"]),
@@ -73,16 +74,23 @@ module ClaudeInbox
     # writing over the same files. Fall back to the repo it was cut from.
     def self.strip_worktree(cwd) = cwd.to_s.sub(%r{/\.claude/worktrees/[^/]+(?:/.*)?\z}, "")
 
+    # The daemon's summary line can echo the prompt to the terminal, so no
+    # control character but tab and newline gets that far. A CRLF, the
+    # newline an HTTP client may send, is taken as a newline.
     def self.prompt_param(value)
-      prompt = string_param(:prompt, value || "").strip
+      prompt = string_param(:prompt, value || "").strip.gsub(/\r\n?/, "\n")
       raise Invalid.new(:prompt, "the prompt is over #{MAX_PROMPT} characters") if prompt.length > MAX_PROMPT
+      if prompt.match?(/[[:cntrl:]&&[^\t\n]]/)
+        raise Invalid.new(:prompt, "the prompt has a control character other than tab or newline")
+      end
       prompt
     end
 
+    # The name comes back as the row's label, printed as it is.
     def self.name_param(value)
       return nil if value.nil?
       name = string_param(:name, value).strip
-      raise Invalid.new(:name, "a name is one line") if name.match?(/[\r\n]/)
+      raise Invalid.new(:name, "a name is one line") if name.match?(/[[:cntrl:]\u2028\u2029]/)
       raise Invalid.new(:name, "the name is over #{MAX_NAME} characters") if name.length > MAX_NAME
       name.empty? ? nil : name
     end
@@ -111,11 +119,14 @@ module ClaudeInbox
     end
 
     # Each of these ends up in an argv or a path, where a NUL byte raises.
+    # The bytes are checked as UTF-8 whatever the string's tag says: a
+    # binary string always passes `valid_encoding?`.
     def self.string_param(key, value)
       raise Invalid.new(key, "#{key} must be a string") unless value.is_a?(String)
-      raise Invalid.new(key, "#{key} is not valid UTF-8") unless value.valid_encoding?
-      raise Invalid.new(key, "#{key} contains a NUL byte") if value.include?("\0")
-      value
+      text = String.new(value, encoding: Encoding::UTF_8)
+      raise Invalid.new(key, "#{key} is not valid UTF-8") unless text.valid_encoding?
+      raise Invalid.new(key, "#{key} contains a NUL byte") if text.include?("\0")
+      text
     end
 
     private_class_method :prompt_param, :name_param, :cwd_param, :choice_param, :flag_param, :string_param
