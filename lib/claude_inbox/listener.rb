@@ -2,6 +2,7 @@
 
 require "fileutils"
 require "json"
+require "openssl"
 require "socket"
 require_relative "agents_client"
 require_relative "http"
@@ -403,20 +404,22 @@ module ClaudeInbox
 
     # Checked cheapest first, and nothing is written to disk until every
     # check has passed. A retry with the same Idempotency-Key gets the
-    # first answer instead of a second session.
+    # first answer instead of a second session; the key sent with a
+    # different request is refused, since that answer isn't this one's.
     def post_session(io, request, via)
       params = read_json(io, request)
-      images = take_images(params)
       key = request.headers["idempotency-key"]
       key = nil if key.to_s.empty?
-      earlier = key && claim(key)
+      digest = OpenSSL::Digest.digest("SHA256", JSON.generate(params)) if key
+      images = take_images(params)
+      earlier = key && claim(key, digest)
       return json(200, earlier) if earlier
       started = nil
       begin
         started = launch(params, images, via)
         json(201, started)
       ensure
-        settle(key, started) if key
+        settle(key, digest, started) if key
       end
     rescue AgentsClient::Error => e
       reason = printable(e.message.lines.first.to_s.strip)
@@ -461,22 +464,25 @@ module ClaudeInbox
 
     # The body an earlier request with this key got, or nil once the key
     # is this request's; one still starting is a 409.
-    def claim(key)
+    def claim(key, digest)
       @mutex.synchronize do
-        earlier = @keys[key]
-        raise Http::Error.new(409, "already starting") if earlier == :spawning
-        return earlier if earlier
+        sent, earlier = @keys[key]
+        if sent
+          raise Http::Error.new(422, "this Idempotency-Key was sent with a different request") unless sent == digest
+          raise Http::Error.new(409, "already starting") if earlier == :spawning
+          return earlier
+        end
         @keys.shift while @keys.size >= KEYS_KEPT
-        @keys[key] = :spawning
+        @keys[key] = [digest, :spawning]
         nil
       end
     end
 
     # A failed start frees its key, so a retry goes through rather than
     # getting 409 for ever.
-    def settle(key, started)
+    def settle(key, digest, started)
       @mutex.synchronize do
-        if started then @keys[key] = started
+        if started then @keys[key] = [digest, started]
         else @keys.delete(key)
         end
       end

@@ -243,13 +243,16 @@ whose trust dialog you accepted, and the one you picked last is picked
 again; "another directory…" takes a typed path instead. "default" in a list
 says what that directory's settings make it: `default (opus)`. Where the
 settings make it a permission mode a phone may not use, it reads
-`default (acceptEdits: not from a phone)` and can't be picked. Add image
+`default (acceptEdits: not from a phone)` and can't be picked, and `plan`
+stands in for it until you pick a directory that allows it. Add image
 takes a photo or picks from the library, scales anything larger down to
 2000 pixels on the long edge and sends it as a JPEG, which leaves the
 photo's metadata, location included, on the phone; an `[Image #1]` lands at
 the cursor, as a paste does in the form. What you type is kept on the phone
 until a start goes through, but the photos are not, so after a reload add
-them again. A refusal shows under the field it is about. A start that went
+them again. If a start gets no answer, Start again sends the same request
+under the same key and gets that start's answer rather than a second
+session; change anything first and it is a new start. A refusal shows under the field it is about. A start that went
 through gives the session's id and, with Remote Control on, an Open in
 Claude link to its claude.ai/code page once the session has registered
 there; the inbox waits three seconds for that, and past them the page says
@@ -306,7 +309,7 @@ seldom registers at all. A
 refusal is `{"error", "field"}` with the same message the form would show,
 and a CLI refusal such as "Workspace not trusted" comes back as a 500. Send
 an `Idempotency-Key` header and a retry gets the first answer instead of a
-second session.
+second session; the same key with a different request is refused with 422.
 
 **A Shortcut.** To start a session from the share sheet, with the photos or
 text you shared, a Shortcut can send the same request. In outline:
