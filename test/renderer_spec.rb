@@ -310,6 +310,15 @@ describe "renderer session colors" do
     _(line).must_include "\e[2m"
   end
 
+  it "colors a PR badge by its state and dims a draft or an unknown one" do
+    badge = ->(state) { line_for(session(id: "z", name: "shipit", prs: [ClaudeInbox::PullRequest.new(number: 7, state: state)])) }
+    _(badge.call("OPEN")).must_include "\e[38;5;108m#7 open\e[0m"
+    _(badge.call("DRAFT")).must_include "\e[2m#7 draft\e[0m"
+    _(badge.call("MERGED")).must_include "\e[38;5;176m#7 merged\e[0m"
+    _(badge.call("CLOSED")).must_include "\e[38;5;203m#7 closed\e[0m"
+    _(badge.call(nil)).must_include "\e[2m#7\e[0m"
+  end
+
   it "still pads a colored row to exactly the frame width" do
     sec = Store.sectionize([colored("pink")], {}, now)
     frame(sec, width: 64, height: 12).lines.each { |l| _(Text.width(l)).must_equal 64 }
