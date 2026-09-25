@@ -150,6 +150,17 @@ describe ClaudeInbox::Dialog do
       _(box).must_include "this one takes over once that one quits"
     end
 
+    it "says why the listener failed for good, rather than calling the port taken" do
+      snapshot[0] = listening.with(state: :failed, urls: nil,
+        error: "Permission denied @ rb_sysopen - /Users/me/.config/claude-inbox/listen.lock")
+      lines = dialog.frame(60).map { |l| l.delete("│").strip }
+      _(lines).must_include "127.0.0.1:7433: the listener failed"
+      _(lines.join(" ")).must_include "Permission denied @ rb_sysopen - /Users/me/.config/claude-inbox/listen.lock"
+      _(lines).must_include "restart the inbox once that is fixed"
+      _(lines.join("\n")).wont_include "in use"
+      _(dialog.press("r", "r")).must_be_nil
+    end
+
     it "copies on c, and issues a new token only when y answers r" do
       _(dialog.press("c", "c")).must_equal :copy
       _(dialog.press("r", "r")).must_be_nil
@@ -171,6 +182,13 @@ describe ClaudeInbox::Dialog do
       lines = dialog.frame(120).map { |l| l.delete("│").strip }
       _(lines.each_cons(2).find { |a, _| a == "recent:" }&.last).must_equal "12:03  192.168.1.30  started 31472308"
       _(lines).must_include "12:01  192.168.1.30  token rejected"
+    end
+
+    it "counts an outcome that came again" do
+      snapshot[0] = listening.with(recent: [
+        ClaudeInbox::Listener::Outcome.new(at: Time.local(2026, 9, 24, 12, 1), via: "192.168.1.30", result: "token rejected", count: 12)
+      ])
+      _(box).must_include "12:01  192.168.1.30  token rejected ×12"
     end
 
     it "is 76 columns at most, and fits a narrow terminal" do

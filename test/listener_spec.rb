@@ -82,7 +82,13 @@ describe ClaudeInbox::Listener do
         _(r.headers["www-authenticate"]).must_equal "Bearer"
         _(r.json["error"]).must_include "press N"
       end
-      _(listener.snapshot.recent.map { |o| [o.via, o.result] }.last).must_equal ["192.168.1.30", "token rejected"]
+      _(listener.snapshot.recent.map { |o| [o.via, o.result, o.count] }).must_equal [["192.168.1.30", "token rejected", 3]]
+    end
+
+    it "counts rejected tokens from one place in one entry, so they can't push the starts out of N" do
+      start({prompt: "go", cwd: project})
+      20.times { call("GET", "/api/options", token: "wrong") }
+      _(listener.snapshot.recent.map { |o| [o.result, o.count] }).must_equal [["started deadbeef", 1], ["token rejected", 20]]
     end
 
     it "turns a request without the token away before reading its body or inviting it" do
@@ -165,7 +171,7 @@ describe ClaudeInbox::Listener do
       _(r.status).must_equal 201
       _(r.json).must_equal({"id" => "deadbeef", "name" => "phone", "cwd" => project, "url" => nil})
       _(client.spawns).must_equal [{prompt: "fix it", name: "phone", cwd: project, model: "opus", effort: "default",
-                                    permission_mode: "default", worktree: false, remote: true}]
+                                    permission_mode: "default", worktree: false, remote: true, explicit_mode: true}]
       _(drained).must_equal [[:notice, "remote: starting session…"], [:remote_started, "deadbeef", "192.168.1.30"]]
       _(listener.snapshot.recent.last.result).must_equal "started deadbeef"
     end
@@ -178,7 +184,7 @@ describe ClaudeInbox::Listener do
 
     it "refuses what the form refuses, naming the field, and starts nothing" do
       {
-        {prompt: "go", cwd: project, permissions: "plan"} => ["permissions", "unknown key: permissions"],
+        {prompt: "go", cwd: project, permissions: "plan"} => ["permissions", "unknown key: \"permissions\""],
         {prompt: "  ", cwd: project} => ["prompt", "a prompt is required"],
         {prompt: "go", cwd: "/no/such/dir"} => ["cwd", "no such directory: /no/such/dir"],
         {prompt: "go", cwd: "nowhere"} => ["cwd", "no directory called nowhere"],
@@ -200,6 +206,13 @@ describe ClaudeInbox::Listener do
       settings[project] = ClaudeInbox::Settings::Defaults.new(nil, nil, "plan")
       _(start({prompt: "go", cwd: project}).status).must_equal 201
       _(client.spawns.map { |s| s[:permission_mode] }).must_equal %w[plan]
+    end
+
+    it "names the mode it let through, so the CLI doesn't work default out again for itself" do
+      _(start({prompt: "go", cwd: project}).status).must_equal 201
+      _(client.spawns.last.values_at(:permission_mode, :explicit_mode)).must_equal ["default", true]
+      argv = ClaudeInbox::AgentsClient.spawn_args("claude", **client.spawns.last.except(:cwd))
+      _(argv.each_cons(2).to_a).must_include ["--permission-mode", "default"]
     end
 
     it "takes the wider list it was given" do
@@ -261,6 +274,18 @@ describe ClaudeInbox::Listener do
     it "notes a refused start for N, as it does a failed one" do
       start({prompt: "go", cwd: project, permission_mode: "bypassPermissions"})
       _(listener.snapshot.recent.last.result).must_equal "refused: permission mode bypassPermissions isn't allowed from another device"
+    end
+
+    it "lets nothing a request sent reach the terminal as an escape sequence" do
+      _(start({prompt: "x", cwd: "/tmp/\e]0;PWNED\a\e[2J"}).status).must_equal 422
+      _(start({"\e[31mkey" => 1}).status).must_equal 422
+      client.fail_spawn("claude --bg failed: \e[2Jno such directory")
+      start({prompt: "go", cwd: project})
+      results = listener.snapshot.recent.map(&:result)
+      _(results.size).must_equal 3
+      _(results.join).wont_include "\e"
+      _(results.last).must_equal "claude --bg failed: \\x1b[2Jno such directory"
+      _(drained.last).must_equal [:notice, "remote start failed: claude --bg failed: \\x1b[2Jno such directory"]
     end
 
     it "says 409 while the first request with that key is still starting" do
@@ -352,6 +377,37 @@ describe ClaudeInbox::Listener do
       taken.close
     end
 
+    it "fills in the pairing URLs asked for while it waited, once it binds" do
+      taken = Socket.new(:INET, :STREAM)
+      taken.bind(Addrinfo.tcp("127.0.0.1", 0))
+      taken.listen(1)
+      busy = listener_with(port: taken.local_address.ip_port, retry_every: 0.05)
+      busy.start
+      busy.refresh
+      _(busy.snapshot.urls).must_be_nil
+      taken.close
+      _(wait_for { busy.snapshot.urls }).must_equal ["http://127.0.0.1:#{busy.port}/##{pairing.token}"]
+    ensure
+      busy&.stop
+      taken.close unless taken.closed?
+    end
+
+    it "says what went wrong, and stops trying, when it can't even take the lock" do
+      locked = mkdir("locked")
+      File.chmod(0o500, locked)
+      broken = listener_with(lock_path: File.join(locked, "sub", "listen.lock"), retry_every: 0.05)
+      broken.start
+      s = broken.snapshot
+      _(s.state).must_equal :failed
+      _(s.error).must_include "Permission denied"
+      File.chmod(0o700, locked)
+      sleep 0.2
+      _(broken.snapshot.state).must_equal :failed
+    ensure
+      broken&.stop
+      File.chmod(0o700, locked) if locked
+    end
+
     it "binds once the port is free again" do
       taken = Socket.new(:INET, :STREAM)
       taken.bind(Addrinfo.tcp("127.0.0.1", 0))
@@ -406,8 +462,10 @@ describe ClaudeInbox::Listener do
   end
 
   it "keeps the last five outcomes" do
-    6.times { call("GET", "/api/options", token: "wrong") }
-    _(listener.snapshot.recent.size).must_equal 5
+    (1..6).each do |n|
+      listener.handle(FakeSocket.new("GET /api/options HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"), via: "192.168.1.#{n}")
+    end
+    _(listener.snapshot.recent.map(&:via)).must_equal (2..6).map { |n| "192.168.1.#{n}" }
   end
 
   it "stays off, and says so, when disabled" do
