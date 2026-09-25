@@ -14,7 +14,6 @@ require_relative "keymap"
 require_relative "listener"
 require_relative "mouse"
 require_relative "new_session_form"
-require_relative "pairing"
 require_relative "paste"
 require_relative "pull_requests"
 require_relative "poller"
@@ -29,7 +28,8 @@ module ClaudeInbox
     # thing here that deletes a session and the listener the only way in
     # from another machine, so switching either on is `bin/claude-inbox`'s
     # job and nothing reaches them by forgetting an argument. `listen` is
-    # Listener.options' hash. `queue` is how every other thread reaches App.
+    # Listener.options' hash, or any of Listener.new's options. `queue` is
+    # how every other thread reaches App.
     def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
       rate_limits: RateLimits.new, reaper: Reaper.disabled, listen: nil, out: $stdout, input: $stdin, color: true,
       terminal: Terminal.new(out, input), queue: Queue.new)
@@ -43,7 +43,7 @@ module ClaudeInbox
       @queue = queue
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests,
         reaper: reaper, queue: @queue)
-      @listener = listen ? Listener.new(client: client, store: store, queue: @queue, pairing: Pairing.new, jobs_dir: client.jobs_dir, **listen) : Listener.disabled
+      @listener = listen ? Listener.new(client: client, store: store, queue: @queue, jobs_dir: client.jobs_dir, **listen) : Listener.disabled
       @logs = Logs.new(client)
       @peek = Peek.new(@logs)
       @selected = nil
@@ -146,10 +146,13 @@ module ClaudeInbox
     end
 
     # The form takes a paste whole, images included; the one-line editors
-    # take it as typing, so a pasted PR URL lands where it should.
+    # take it as typing, so a pasted PR URL lands where it should. Anywhere
+    # else a paste is dropped: typed out, its letters would be keys, and a
+    # "y" answers a confirm.
     def handle_paste(text)
       return @modal.paste(text) if @modal.is_a?(NewSessionForm)
-      text.each_char { |c| handle_key(c) }
+      typing = @modal ? @modal.is_a?(Dialog::Prompt) : @filter_editing
+      text.each_char { |c| handle_key(c) } if typing
     end
 
     def render

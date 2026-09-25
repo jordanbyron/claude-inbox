@@ -99,6 +99,12 @@ describe ClaudeInbox::Listener do
       _(call("GET", "/", token: nil, host: nil).status).must_equal 421
       _(call("GET", "/api/options", host: "LOCALHOST:7433").status).must_equal 200
       _(call("GET", "/api/options", host: "127.0.0.1").status).must_equal 200
+      _(call("GET", "/api/options", host: "[::1]:7433").status).must_equal 200
+    end
+
+    it "takes any port with the name, as an ssh tunnel on another local port sends it" do
+      _(call("GET", "/api/options", host: "localhost:8000").status).must_equal 200
+      _(call("GET", "/api/options", host: "evil.example:8000").status).must_equal 421
     end
 
     it "answers to this Mac's names and addresses in LAN mode" do
@@ -247,6 +253,16 @@ describe ClaudeInbox::Listener do
       _(start({prompt: "go", cwd: project}, headers: {"Idempotency-Key" => "k2"}).status).must_equal 201
     end
 
+    it "takes an empty Idempotency-Key as none, so every start is a new one" do
+      2.times { _(start({prompt: "go", cwd: project}, headers: {"Idempotency-Key" => ""}).status).must_equal 201 }
+      _(client.spawns.size).must_equal 2
+    end
+
+    it "notes a refused start for N, as it does a failed one" do
+      start({prompt: "go", cwd: project, permission_mode: "bypassPermissions"})
+      _(listener.snapshot.recent.last.result).must_equal "refused: permission mode bypassPermissions isn't allowed from another device"
+    end
+
     it "says 409 while the first request with that key is still starting" do
       client.hold
       first = Thread.new { start({prompt: "go", cwd: project}, headers: {"Idempotency-Key" => "k1"}) }
@@ -271,6 +287,12 @@ describe ClaudeInbox::Listener do
       r = start({prompt: "go", cwd: project, images: [{data: [PNG].pack("m0")}]})
       _(r.status).must_equal 500
       _(r.json["error"]).must_include "File exists"
+    end
+
+    it "keeps what went wrong to itself until the token checks out" do
+      FileUtils.mkdir_p(File.join(tmp, "listen.json"))
+      r = call("GET", "/api/options", token: "a-guess")
+      _([r.status, r.json]).must_equal [500, {"error" => "internal error"}]
     end
 
     it "says so under --fixture, on the answer as well" do
@@ -300,15 +322,20 @@ describe ClaudeInbox::Listener do
       again = listener_with(port: port)
       again.start
       _(again.snapshot.state).must_equal :listening
-      again.stop
+    ensure
+      again&.stop
     end
 
-    it "leaves a second inbox saying who is listening instead of binding too" do
+    it "leaves a second inbox saying who is listening, and lets it take over once that one quits" do
       listener.start
-      second = listener_with
+      second = listener_with(retry_every: 0.05)
       second.start
       _([second.snapshot.state, second.snapshot.held_by]).must_equal [:held, Process.pid]
-      second.stop
+      listener.stop
+      _(wait_for { second.snapshot.state == :listening }).must_equal true
+      _(second.snapshot.held_by).must_be_nil
+    ensure
+      second&.stop
     end
 
     it "says the port is in use rather than sharing it, and gives the lock back" do
@@ -321,14 +348,39 @@ describe ClaudeInbox::Listener do
       listener.start
       _(listener.snapshot.state).must_equal :listening
     ensure
+      busy&.stop
       taken.close
     end
 
-    it "turns a third connection away while two have yet to show a token" do
+    it "binds once the port is free again" do
+      taken = Socket.new(:INET, :STREAM)
+      taken.bind(Addrinfo.tcp("127.0.0.1", 0))
+      taken.listen(1)
+      busy = listener_with(port: taken.local_address.ip_port, retry_every: 0.05)
+      busy.start
+      _(busy.snapshot.state).must_equal :in_use
+      taken.close
+      _(wait_for { busy.snapshot.state == :listening }).must_equal true
+    ensure
+      busy&.stop
+      taken.close unless taken.closed?
+    end
+
+    # A client sends its whole request before it reads the answer, as
+    # Net::HTTP and a browser do. Closing on that upload unread resets it,
+    # and the client never gets as far as reading the 503.
+    it "turns a third connection away while two have yet to show a token, and lets it hear why" do
       listener.start
       idle = Array.new(2) { TCPSocket.new("127.0.0.1", listener.port) }
       third = TCPSocket.new("127.0.0.1", listener.port)
-      answer = third.read
+      upload = Thread.new do
+        third.write("POST /api/sessions HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 2000000\r\n\r\n" + "x" * 2_000_000)
+        :sent
+      rescue SystemCallError => e
+        e.class
+      end
+      _(upload.value).must_equal :sent
+      answer = third.readpartial(4096)
       _(answer).must_match(/\AHTTP\/1\.1 503 /)
       _(answer).must_include "Retry-After: 2"
     ensure

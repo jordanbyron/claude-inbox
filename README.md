@@ -201,7 +201,8 @@ The port defaults to 7433. A flag wins over the environment, and
 `--listen-lan` wins over `--listen`, so a shell rc that arms loopback can
 never widen to the LAN by accident. `--fixture` ignores the environment but
 takes the flags, which is how to try the API without starting anything
-real. One inbox per user listens; a second one says which process has it.
+real, and keeps a token of its own. One inbox per user listens; a second
+one says which process has the listener, and takes over when it quits.
 
 **Over your VPN.** Start the inbox with `--listen-lan`, or put
 `export CLAUDE_INBOX_LISTEN=lan` in your shell rc. Press `N`. It shows two
@@ -220,13 +221,14 @@ nothing says why; `N` shows the firewall's state.
 
 **Over ssh.** Plain `--listen` answers only on `127.0.0.1`. From another
 machine, `ssh -L 7433:127.0.0.1:7433 you@your-mac` and use
-`http://localhost:7433`.
+`http://localhost:7433`; any free local port works in place of the first
+7433.
 
 **Pairing.** The token lives in `~/.config/claude-inbox/listen.json`,
 readable by you alone, and stays the same across launches. In the `N`
 dialog, `r` and then `y` replaces it; every paired phone gets 401 until it
-pairs again. The dialog also lists the last five remote starts, failed
-starts and rejected tokens. Anyone with the token can start sessions as
+pairs again. The dialog also lists the last five remote starts, refusals
+and rejected tokens. Anyone with the token can start sessions as
 you, in your projects: treat a leaked URL like a leaked password, and press
 `r`.
 
@@ -265,10 +267,11 @@ open. The header says `started 31472308 from 192.168.1.30`, and the row
 turns up on the next poll.
 
 The header shows `◉ :7433` while the inbox listens (`◉ lan:7433` in LAN
-mode), and a red `◉ !` when it was asked to and couldn't: another inbox has
-the listener, or something else holds the port. If the inbox quits while a
+mode), and a red `◉ !` while it was asked to and can't: another inbox has
+the listener, or something else holds the port. It tries again every few
+seconds and turns blue once it has the port. If an inbox quits while a
 client still has a connection open, the port can stay held for half a
-minute after; start it again a little later.
+minute after.
 
 ## Pull request state
 

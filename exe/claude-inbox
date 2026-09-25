@@ -9,6 +9,7 @@ if ARGV.include?("--version")
 end
 
 require "claude_inbox/app"
+require "tmpdir"
 
 fixture = ARGV.include?("--fixture")
 # A fixture run takes the listen flags, for trying the API with curl, but
@@ -30,7 +31,11 @@ if fixture
   opts[:client] = ClaudeInbox::FixtureClient.new(agents, logs: File.binread(File.join(fixtures, "logs_raw.txt")))
   opts[:store] = ClaudeInbox::Store.new(path: nil)
   opts[:pull_requests] = ClaudeInbox::PullRequests.new(cache_path: File.join(fixtures, "gh-pr-status-cache.json"), resolved_path: nil, gh: nil)
-  opts[:listen] = listen&.merge(fixture: true)
+  # Its own token, lock and images, so a test inbox can neither rotate the
+  # token phones are paired with nor hold the real inbox's lock.
+  dir = File.join(Dir.tmpdir, "claude-inbox-fixture")
+  opts[:listen] = listen&.merge(fixture: true, pairing: ClaudeInbox::Pairing.new(path: File.join(dir, "listen.json")),
+    lock_path: File.join(dir, "listen.lock"), images_dir: File.join(dir, "images"))
 else
   # The only place the reaper is armed. Everything else — tests, --fixture,
   # anything embedding App — gets one that deletes nothing. The listener,

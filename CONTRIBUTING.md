@@ -33,7 +33,8 @@ Other switches while developing:
 CLAUDE_INBOX_STDERR=/tmp/err.log bin/claude-inbox   # crash traces off the alt screen
 DEBUG=1 bin/claude-inbox                            # slow-frame notes in /tmp/inbox-debug.log
 CLAUDE_INBOX_NO_REAP=1 bin/claude-inbox             # never delete an idle session
-bin/claude-inbox --fixture test/fixtures/agents.json --listen=0   # the listener on a free port; N shows it
+bin/claude-inbox --fixture test/fixtures/agents.json --listen=0   # the listener on a free port; N shows it,
+                                                    # and the token is in $TMPDIR/claude-inbox-fixture/listen.json
 bin/screens                                         # drive the fixture in a pty, print every screen
 ```
 

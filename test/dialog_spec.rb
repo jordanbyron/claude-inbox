@@ -145,7 +145,9 @@ describe ClaudeInbox::Dialog do
       _(box).must_include "another inbox (pid 4242) is listening"
       snapshot[0] = listening.with(state: :in_use)
       _(box).must_include "127.0.0.1:7433 in use"
-      _(box).must_include "pick another port with --listen=PORT"
+      _(box).must_include "trying again every few seconds"
+      snapshot[0] = listening.with(state: :held, held_by: 4242)
+      _(box).must_include "this one takes over once that one quits"
     end
 
     it "copies on c, and issues a new token only when y answers r" do

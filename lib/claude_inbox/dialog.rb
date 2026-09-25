@@ -109,10 +109,7 @@ module ClaudeInbox
       end
     end
 
-    # `N`: whether the listener is up and how a phone reaches it, drawn
-    # from the Listener#snapshot the lambda returns on each frame, with the
-    # token cut short. `c` copies the pairing URL whole; `r` asks, and `y`
-    # issues a new token.
+    # `N`: whether the listener is up, and how a phone reaches it.
     class Pairing < Dialog
       WIDTH = 76
       FIREWALL = {
@@ -132,7 +129,7 @@ module ClaudeInbox
       def lines(width, _caret)
         s = @snapshot.call
         out = ["  " + state_line(s)]
-        out += (s.state == :listening) ? listening_lines(s) : off_lines(s)
+        out += (s.state == :listening) ? listening_lines(s) : advice(s)
         if s.recent.any?
           out << "" << "  recent:"
           out += s.recent.reverse.map { |o| "    #{o.at.strftime("%H:%M")}  #{o.via}  #{o.result}" }
@@ -181,11 +178,11 @@ module ClaudeInbox
 
       def elide(url) = url.sub(/(?<=#)(.{4}).+(.{4})\z/, "\\1…\\2")
 
-      def off_lines(s)
+      def advice(s)
         case s.state
-        when :off then ["", "  or set CLAUDE_INBOX_LISTEN=lan in your shell; the README's", "  \"Starting sessions from your phone\" has the rest"]
-        when :in_use then ["", "  quit whatever holds it, or pick another port with --listen=PORT"]
-        else []
+        when :in_use then ["", "  trying again every few seconds; or pick another port with", "  --listen=PORT"]
+        when :held then ["", "  this one takes over once that one quits"]
+        else ["", "  or set CLAUDE_INBOX_LISTEN=lan in your shell; the README's", "  \"Starting sessions from your phone\" has the rest"]
         end
       end
 
