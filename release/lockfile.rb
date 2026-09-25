@@ -9,7 +9,7 @@ module Release
 
     # bin/release may itself run under Bundler, whose setup would otherwise
     # pin the child to the Gemfile it was started with.
-    UNBUNDLED = %w[BUNDLE_LOCKFILE BUNDLE_BIN_PATH BUNDLER_SETUP BUNDLER_VERSION RUBYOPT].to_h { [it, nil] }
+    UNBUNDLED = %w[BUNDLE_LOCKFILE BUNDLE_BIN_PATH BUNDLER_SETUP BUNDLER_VERSION RUBYOPT].to_h { |var| [var, nil] }
 
     def initialize(dir)
       @dir = dir

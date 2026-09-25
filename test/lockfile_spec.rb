@@ -10,7 +10,7 @@ describe Release::Lockfile do
 
   before do
     @dir = Dir.mktmpdir
-    FileUtils.cp_r(%w[Gemfile Gemfile.lock claude-inbox.gemspec lib].map { File.join(root, it) }, @dir)
+    FileUtils.cp_r(%w[Gemfile Gemfile.lock claude-inbox.gemspec lib].map { |f| File.join(root, f) }, @dir)
     # The gemspec lists its files with git ls-files.
     system("git", "init", "--quiet", chdir: @dir)
   end
