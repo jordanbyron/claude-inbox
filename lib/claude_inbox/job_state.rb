@@ -73,6 +73,19 @@ module ClaudeInbox
     # True when the agent has stopped and is only waiting on what it started.
     def waiting_on_work? = agent_idle? && in_flight?
 
+    # What the session needs while blocked, what it produced once done,
+    # otherwise its status line; nil before it has said anything.
+    def summary(state)
+      line =
+        case state
+        when "blocked" then needs || detail
+        when "done" then result || detail
+        else detail
+        end
+      line = line.to_s.gsub(/\s+/, " ").strip
+      line.empty? ? nil : line
+    end
+
     # "1 shell", "2 agents · 1 shell". Falls back to a bare count for a state
     # file that counts the open tasks without naming them.
     def in_flight_label
