@@ -39,7 +39,7 @@ module ClaudeInbox
     JSON_TYPE = {"Content-Type" => "application/json"}.freeze
     # The phone's form. Everything it needs is inline, and it talks to
     # nothing but this listener.
-    PAGE = File.read(File.join(__dir__, "remote.html")).freeze
+    PAGE = File.read(File.join(__dir__, "remote.html"), encoding: Encoding::UTF_8).freeze
     PAGE_TYPE = {
       "Content-Type" => "text/html; charset=utf-8",
       "Content-Security-Policy" => "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " \
@@ -492,7 +492,7 @@ module ClaudeInbox
       values[:prompt] = SessionRequest.attach(values[:prompt], paths)
       @queue << [:notice, "remote: starting session…"]
       id = Http.utf8(@spawn_lock.synchronize { @client.spawn(**values, explicit_mode: true) })
-      url = remote_url(id)
+      url = remote_url(id, wait: values[:remote] ? @bridge_wait : 0)
       @queue << [:remote_started, id, via]
       remember(via, "started #{id}")
       {id: id, name: values[:name], cwd: values[:cwd], url: url}
@@ -519,8 +519,10 @@ module ClaudeInbox
 
     # The session registers its bridge a moment after `claude --bg`
     # returns; without it in time the reply has no URL, only the id.
-    def remote_url(id)
-      deadline = Http.monotonic + @bridge_wait
+    # Without --remote-control it seldom registers one (docs/cli-quirks.md),
+    # so that start looks once rather than waits.
+    def remote_url(id, wait:)
+      deadline = Http.monotonic + wait
       loop do
         url = Session.new(id: id, job_state: JobState.read(id, jobs_dir: @jobs_dir)).remote_url
         return url if url || Http.monotonic >= deadline
