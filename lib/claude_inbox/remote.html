@@ -153,6 +153,7 @@ const LONG_EDGE = 2000;
 const FIELDS = ["prompt", "name", "cwd", "model", "effort", "permission_mode", "images"];
 const NO_ANSWER = "no answer from the inbox. Is it open with --listen-lan, and is the Mac awake?";
 const REJECTED = "token rejected: press N in the inbox and pair again";
+const TOKEN = /^[A-Za-z0-9_-]{32,}$/;
 
 const $ = (id) => document.getElementById(id);
 const saved = {
@@ -210,14 +211,16 @@ async function load() {
   show("form");
 }
 
+// Filled again on a new pairing URL or after a 401, with a draft open:
+// what is on screen then stays, where it is still offered.
 function fill() {
   const dirs = options.dirs || [];
+  const refill = $("cwd").options.length > 0;
+  const last = refill ? cwd() : saved.get("cwd");
+  const typed = (refill && $("cwd").value === "") || (Boolean(last) && !dirs.some((d) => d.path === last));
   $("cwd").replaceChildren(...dirs.map((d) => new Option(d.label, d.path)), new Option("another directory…", ""));
-  const last = saved.get("cwd");
-  const typed = last && !dirs.some((d) => d.path === last);
   $("cwd").value = typed || !dirs.length ? "" : last || dirs[0].path;
   if (typed) $("cwd-other").value = last;
-  // Filled again on a new pairing URL or after a 401, with a draft open.
   for (const [id, list] of [["model", options.models], ["effort", options.efforts], ["permission_mode", options.permission_modes]]) {
     const picked = $(id).value;
     $(id).replaceChildren(...(list || []).map((v) => new Option(v, v)));
@@ -229,6 +232,7 @@ function fill() {
 // "default" means what the settings for that directory say, as the n form
 // shows it. The listener caps the mode it resolves to, so in a directory
 // that defaults to acceptEdits, "default" can't start anything from here.
+// The page's own pick away from it is undone where "default" is allowed.
 function relabel() {
   const dir = (options.dirs || []).find((d) => d.path === $("cwd").value);
   $("cwd-other").hidden = $("cwd").value !== "";
@@ -239,9 +243,13 @@ function relabel() {
     const refused = id === "permission_mode" && Boolean(set) && !(options.permission_modes || []).includes(set);
     option.textContent = !set ? "default" : refused ? `default (${set}: not from a phone)` : `default (${set})`;
     option.disabled = refused;
-    if (refused && $(id).value === "default") {
-      const allowed = [...$(id).options].find((o) => !o.disabled);
-      if (allowed) $(id).value = allowed.value;
+    const select = $(id);
+    if (refused && select.value === "default") {
+      const allowed = [...select.options].find((o) => !o.disabled);
+      if (allowed) [select.value, select.dataset.forced] = [allowed.value, "1"];
+    } else if (!refused && select.dataset.forced) {
+      select.value = "default";
+      delete select.dataset.forced;
     }
   }
 }
@@ -364,24 +372,29 @@ async function start() {
   try {
     while (images.some((image) => !image.url)) await shrinking;
     const remote = $("remote").checked;
-    const body = JSON.stringify({
+    const fields = {
       prompt: $("prompt").value, name: $("name").value, cwd: cwd(),
       model: $("model").value, effort: $("effort").value, permission_mode: $("permission_mode").value,
-      worktree: $("worktree").checked, remote: remote,
-      images: images.map((image) => ({data: image.url.slice(image.url.indexOf(",") + 1)}))
-    });
+      worktree: $("worktree").checked, remote: remote
+    };
+    const body = JSON.stringify({...fields, images: images.map((image) => ({data: image.url.slice(image.url.indexOf(",") + 1)}))});
     const size = new Blob([body]).size;
     if (size > MAX_BODY) {
       return fieldError("images", `these come to ${(size / 1048576).toFixed(1)} MB and the inbox takes ${MAX_BODY / 1048576} MB: remove one`);
     }
-    // Kept with the draft, so a retry after a lost answer gets that answer
-    // rather than a second session.
-    draft.key = draft.key || newKey();
+    // Kept with the draft for this request alone, so a retry after a lost
+    // answer gets that answer, and an edited one is a start of its own.
+    // Compared as text: crypto.subtle, like randomUUID, needs https.
+    const sent = JSON.stringify({...fields, images: images.map((image) => `${image.url.length}:${image.url.slice(-24)}`)});
+    if (!draft.key || draft.sent !== sent) Object.assign(draft, {key: newKey(), sent});
     saveDraft();
     saved.set("cwd", cwd());
     button.textContent = "Starting…";
     const r = await api("POST", "/api/sessions", body, {"Content-Type": "application/json", "Idempotency-Key": draft.key});
     if (r.status === 201 || r.status === 200) return started(r.json, remote);
+    // An answer means the listener has let the key go, unless it is still starting.
+    if (r.status !== 0 && r.status !== 409) Object.assign(draft, {key: null, sent: null});
+    saveDraft();
     if (r.status === 401) return showPair(r.error);
     fieldError(r.field, r.error);
   } finally {
@@ -410,7 +423,7 @@ function started(session, remote) {
 function pair() {
   const text = $("token").value.trim();
   const sent = text.includes("#") ? text.slice(text.lastIndexOf("#") + 1) : text;
-  if (!/^[A-Za-z0-9_-]{32,}$/.test(sent)) {
+  if (!TOKEN.test(sent)) {
     $("error-token").textContent = "that isn't a pairing URL: it ends in # and the token";
     return;
   }
@@ -425,10 +438,13 @@ function pair() {
 // fragment, which doesn't load the page again.
 function takeFragment() {
   if (location.hash.length < 2) return false;
-  token = location.hash.slice(1);
-  saved.set("token", token);
+  const sent = location.hash.slice(1);
   // Out of Safari's address bar and history; a home-screen app shows neither.
   if (!navigator.standalone) history.replaceState(null, "", location.pathname + location.search);
+  // A stray or elided (abcd…wxyz) fragment leaves a good token alone.
+  if (!TOKEN.test(sent)) return false;
+  token = sent;
+  saved.set("token", token);
   return true;
 }
 
@@ -440,7 +456,9 @@ $("prompt").value = (draft.prompt || "").replace(/ ?\[Image #\d+\]/gi, "");
 $("name").value = draft.name || "";
 $("prompt").addEventListener("input", saveDraft);
 $("name").addEventListener("input", saveDraft);
-$("cwd").addEventListener("change", () => { saved.set("cwd", $("cwd").value || null); relabel(); });
+$("cwd").addEventListener("change", () => { saved.set("cwd", cwd() || null); relabel(); });
+$("cwd-other").addEventListener("input", () => saved.set("cwd", cwd() || null));
+for (const id of ["model", "effort", "permission_mode"]) $(id).addEventListener("change", () => delete $(id).dataset.forced);
 $("file").addEventListener("change", (e) => { addImages([...e.target.files]); e.target.value = ""; });
 $("start").addEventListener("click", start);
 $("retry").addEventListener("click", load);

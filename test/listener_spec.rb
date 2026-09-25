@@ -150,8 +150,9 @@ describe ClaudeInbox::Listener do
     end
 
     it "sends only the keys a start takes, so none is refused as unknown" do
-      sent = page[/JSON\.stringify\(\{(.*?)\}\);/m, 1].scan(/(\w+):/).flatten - %w[data]
-      _(sent.sort).must_equal (ClaudeInbox::SessionRequest::KEYS + %w[images]).sort
+      fields = page[/const fields = \{(.*?)\};/m, 1].scan(/(\w+):/).flatten
+      _(page).must_match(/const body = JSON\.stringify\(\{\.\.\.fields, images: /)
+      _((fields + %w[images]).sort).must_equal (ClaudeInbox::SessionRequest::KEYS + %w[images]).sort
     end
   end
 
@@ -209,6 +210,15 @@ describe ClaudeInbox::Listener do
       r = start({prompt: "go", cwd: project, remote: false})
       _(r.status).must_equal 201
       _(r.json["url"]).must_be_nil
+      _(Process.clock_gettime(Process::CLOCK_MONOTONIC) - began).must_be :<, 1
+    end
+
+    it "still hands back a bridge that is already there without Remote Control, looking once" do
+      FileUtils.mkdir_p(File.join(tmp, "jobs", "deadbeef"))
+      File.write(File.join(tmp, "jobs", "deadbeef", "state.json"), JSON.generate(bridgeSessionId: "cse_01AbC"))
+      options[:bridge_wait] = 3
+      began = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      _(start({prompt: "go", cwd: project, remote: false}).json["url"]).must_equal "https://claude.ai/code/session_01AbC"
       _(Process.clock_gettime(Process::CLOCK_MONOTONIC) - began).must_be :<, 1
     end
 
@@ -303,6 +313,14 @@ describe ClaudeInbox::Listener do
       _(again.json).must_equal first.json
       _(client.spawns.size).must_equal 1
       _(start({prompt: "go", cwd: project}, headers: {"Idempotency-Key" => "k2"}).status).must_equal 201
+    end
+
+    it "refuses a key sent again with a different request, rather than answer it with the first start" do
+      _(start({prompt: "first task", cwd: project}, headers: {"Idempotency-Key" => "k1"}).status).must_equal 201
+      r = start({prompt: "second task", cwd: project}, headers: {"Idempotency-Key" => "k1"})
+      _([r.status, r.json]).must_equal [422, {"error" => "this Idempotency-Key was sent with a different request"}]
+      _(client.spawns.map { |s| s[:prompt] }).must_equal ["first task"]
+      _(start({prompt: "first task", cwd: project}, headers: {"Idempotency-Key" => "k1"}).status).must_equal 200
     end
 
     it "takes an empty Idempotency-Key as none, so every start is a new one" do
