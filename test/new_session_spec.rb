@@ -9,14 +9,19 @@ require "json"
 describe ClaudeInbox::AgentsClient do
   it "builds claude --bg arguments, leaving defaults off" do
     a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "fix it", model: "default", effort: "default", permission_mode: "default", worktree: false, name: nil)
-    _(a).must_equal ["claude", "--bg", "fix it"]
+    _(a).must_equal ["claude", "--bg", "--", "fix it"]
     a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "fix it", model: "opus", effort: "high", permission_mode: "acceptEdits", worktree: true, name: "flaky")
-    _(a).must_equal ["claude", "--bg", "fix it", "--model", "opus", "--effort", "high", "--permission-mode", "acceptEdits", "--name", "flaky", "--worktree"]
+    _(a).must_equal ["claude", "--bg", "--model", "opus", "--effort", "high", "--permission-mode", "acceptEdits", "--name", "flaky", "--worktree", "--", "fix it"]
   end
 
   it "puts --remote-control last, where its optional name cannot eat the prompt" do
     a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "fix it", name: "flaky", remote: true)
-    _(a).must_equal ["claude", "--bg", "fix it", "--name", "flaky", "--remote-control"]
+    _(a).must_equal ["claude", "--bg", "--name", "flaky", "--remote-control", "--", "fix it"]
+  end
+
+  it "keeps a prompt that starts with a dash a prompt" do
+    a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "-x is not a flag", remote: true)
+    _(a).must_equal ["claude", "--bg", "--remote-control", "--", "-x is not a flag"]
   end
 
   it "mentions a file the way the CLI's own prompt does, spaces escaped" do
