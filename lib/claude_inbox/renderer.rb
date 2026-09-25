@@ -129,8 +129,7 @@ module ClaudeInbox
 
     def header(sections, width, view)
       brand = " " + @theme.cyan_bold("▌ claude-inbox")
-      right = [view.status && @p.dim(view.status), view.usage && usage_meters(view.usage, view.now)].compact.join(@p.dim("  ·  "))
-      right += " " unless right.empty?
+      right = header_right(view, width - Text.width(brand) - 3)
       room = width - Text.width(brand) - Text.width(right) - 3
       chips = view.loading ? "" : header_chips(sections, compact: false)
       chips = header_chips(sections, compact: true) if Text.width(chips) > room
@@ -138,13 +137,24 @@ module ClaudeInbox
       Text.pad(brand + "   " + chips, width - Text.width(right)) + right
     end
 
+    # The notice outranks the usage meters: they shed their reset times, then
+    # go, before the notice itself is cut to fit.
+    def header_right(view, room)
+      meters = view.usage ? [usage_meters(view.usage, view.now), usage_meters(view.usage, view.now, resets: false)] : []
+      (meters + [nil]).each do |m|
+        right = [view.status && @p.dim(view.status), m].compact.join(@p.dim("  ·  "))
+        return right.empty? ? right : right + " " if Text.width(right) < room
+      end
+      (view.status && room > 1) ? @p.dim(Text.truncate(view.status, room - 1)) + " " : ""
+    end
+
     # "session ██░░░░░░░░ 24% · 3h left" per window, drawn and colored the way
     # the context bar in the user's status line is, so the two read alike.
-    def usage_meters(windows, now)
+    def usage_meters(windows, now, resets: true)
       windows.map do |w|
         filled = w.percent / 10
         bar = "█" * filled + "░" * (10 - filled)
-        left = w.resets_at && w.resets_at.to_i - now.to_i
+        left = w.resets_at.to_i - now.to_i if resets && w.resets_at
         figure = left&.positive? ? "#{w.percent}% · #{Text.age(left)} left" : "#{w.percent}%"
         "#{@p.dim(w.label)} #{@theme.public_send(usage_hue(w.percent), bar)} #{@p.dim(figure)}"
       end.join("  ")

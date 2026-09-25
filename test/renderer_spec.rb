@@ -259,6 +259,17 @@ describe ClaudeInbox::Renderer do
     past = ClaudeInbox::RateLimits::Window.new("session", 24, now - 60)
     _(header.call(usage: [past])).must_match(/session ██░░░░░░░░ 24% $/)
   end
+
+  it "sheds the usage reset times, then the meters, then cuts the notice to keep the header on one line" do
+    usage = [ClaudeInbox::RateLimits::Window.new("session", 0, now + 4 * 3600), ClaudeInbox::RateLimits::Window.new("week", 53, now + 4 * 3600)]
+    notice = "settled — u brings it back"
+    header = ->(width) { frame(sections, width: width, height: 10, status: notice, usage: usage).lines.first }
+    _(header.call(140)).must_match(/#{notice}  ·  session ░+ 0% · 4h left  week █+░+ 53% · 4h left $/o)
+    _(header.call(100)).must_match(/\A ▌ claude-inbox .*#{notice}  ·  session ░+ 0%  week █+░+ 53% $/o)
+    _(header.call(60)).must_match(/\A ▌ claude-inbox .*#{notice} $/o)
+    _(header.call(30)).must_match(/\A ▌ claude-inbox   settled — … $/)
+    [140, 100, 60, 30, 16, 5].each { |w| _(Text.width(header.call(w))).must_equal w }
+  end
 end
 
 describe "renderer session colors" do
