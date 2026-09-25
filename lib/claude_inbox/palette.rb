@@ -17,13 +17,10 @@ module ClaudeInbox
 
     INDEXED = {"orange" => 208, "pink" => 205}.freeze
 
-    RESET = "\e[39m"
+    SEQUENCES = ANSI.transform_values { |n| "\e[#{n}m" }
+      .merge(INDEXED.transform_values { |n| "\e[38;5;#{n}m" }).freeze
 
-    def self.sequence(name)
-      return "\e[#{ANSI[name]}m" if ANSI.key?(name)
-      return "\e[38;5;#{INDEXED[name]}m" if INDEXED.key?(name)
-      nil
-    end
+    RESET = "\e[39m"
 
     def initialize(enabled: true)
       @enabled = enabled
@@ -31,7 +28,7 @@ module ClaudeInbox
 
     def paint(text, name)
       return text unless @enabled
-      seq = self.class.sequence(name)
+      seq = SEQUENCES[name]
       seq ? seq + text + RESET : text
     end
   end
