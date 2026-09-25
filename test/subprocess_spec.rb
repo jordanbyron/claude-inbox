@@ -11,9 +11,13 @@ describe ClaudeInbox::Subprocess do
   end
 
   it "starts children without our Bundler environment" do
-    _(ENV["RUBYOPT"]).must_match(/bundler/)
+    saved = ENV.to_h.slice("BUNDLE_GEMFILE", "RUBYOPT")
+    ENV["BUNDLE_GEMFILE"] = "/sentinel/Gemfile"
+    ENV["RUBYOPT"] = "-r/sentinel/bundler/setup"
     r = ClaudeInbox::Subprocess.capture("env")
-    _(r.out.lines.grep(/^(BUNDLE_GEMFILE|RUBYOPT)=/).grep(/bundler|Gemfile/)).must_be_empty
+    _(r.out.lines.grep(/sentinel/)).must_be_empty
+  ensure
+    %w[BUNDLE_GEMFILE RUBYOPT].each { |k| ENV[k] = saved[k] }
   end
 
   it "keeps the rest of the environment" do
