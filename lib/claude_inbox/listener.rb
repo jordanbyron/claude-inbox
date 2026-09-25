@@ -7,6 +7,7 @@ require_relative "agents_client"
 require_relative "http"
 require_relative "images"
 require_relative "job_state"
+require_relative "pairing"
 require_relative "session"
 require_relative "session_request"
 require_relative "settings"
@@ -24,6 +25,8 @@ module ClaudeInbox
     LOCK_PATH = File.join(Dir.home, ".config", "claude-inbox", "listen.lock")
     MAX_CONNECTIONS = 4
     MAX_UNAUTHENTICATED = 2
+    MAX_TURNED_AWAY = 8
+    RETRY_EVERY = 5
     MAX_BODY = 16 * 1024 * 1024
     MAX_IMAGES = 8
     HEAD_TIMEOUT = 10
@@ -102,9 +105,9 @@ module ClaudeInbox
     # App: never binds, and answers :off.
     def self.disabled = new(client: nil, store: nil, queue: nil, pairing: nil, port: nil)
 
-    def initialize(client:, store:, queue:, pairing:, port:, lan: false, allowed_modes: DEFAULT_MODES,
+    def initialize(client:, store:, queue:, port:, pairing: Pairing.new, lan: false, allowed_modes: DEFAULT_MODES,
       images_dir: Images::DEFAULT_DIR, jobs_dir: JobState::DEFAULT_DIR, lock_path: LOCK_PATH, fixture: false,
-      trust: Trust.method(:projects), settings: Settings.method(:defaults), bridge_wait: 3)
+      trust: Trust.method(:projects), settings: Settings.method(:defaults), bridge_wait: 3, retry_every: RETRY_EVERY)
       @client = client
       @store = store
       @queue = queue
@@ -119,6 +122,7 @@ module ClaudeInbox
       @trust = trust
       @settings = settings
       @bridge_wait = bridge_wait
+      @retry_every = retry_every
       @mutex = Mutex.new
       @spawn_lock = Mutex.new
       @state = :off
@@ -127,31 +131,20 @@ module ClaudeInbox
       @threads = Set.new
       @alive = 0
       @unauthenticated = 0
+      @turning_away = 0
     end
 
-    # One listener per user: the lock file keeps a second inbox from
-    # binding at all. The socket is bound without SO_REUSEADDR, which on
-    # macOS would let another program hold the same port on a different
-    # address and quietly take the loopback traffic.
+    # Tries again every few seconds while the port is taken or another
+    # inbox has the listener, so this one takes over once it is free.
     def start
-      return if @port.nil? || @accept
-      return unless take_lock
-      @server = Socket.new(:INET, :STREAM)
-      @server.bind(Addrinfo.tcp(@lan ? "0.0.0.0" : "127.0.0.1", @port))
-      @server.listen(8)
-      @bound_port = @server.local_address.ip_port
-      @mutex.synchronize { @state = :listening }
-      @accept = Thread.new { accept_loop }
-    rescue SystemCallError
-      quietly { @server&.close }
-      @server = nil
-      release_lock
-      @mutex.synchronize { @state = :in_use }
+      return if @port.nil? || @accept || @retry
+      @retry = Thread.new { sleep(@retry_every) until claim_port } unless claim_port
     end
 
     # Runs after the terminal is restored and can't fail, so a bad socket
     # never leaves the terminal raw.
     def stop
+      quietly { @retry&.kill }
       quietly { @accept&.kill }
       quietly { @mutex.synchronize { @threads.to_a }.each(&:kill) }
       quietly { @server&.close }
@@ -189,16 +182,43 @@ module ClaudeInbox
     # the token checks out, which frees the slot the connection held as an
     # unauthenticated one.
     def handle(io, via:, on_auth: -> {})
+      authorized = false
       request = Http.read_head(io, deadline: Http.monotonic + HEAD_TIMEOUT)
-      status, headers, body = route(io, request, via, on_auth)
+      status, headers, body = route(io, request, via, -> {
+        authorized = true
+        on_auth.call
+      })
       Http.write(io, status, headers, body)
     rescue Http::Error => e
       Http.write(io, e.status, JSON_TYPE.merge(e.headers), JSON.generate(e.body))
     rescue => e
-      Http.write(io, 500, JSON_TYPE, JSON.generate(error: Http.utf8(e.message)))
+      # A message can name a path under the home directory, which is
+      # nobody's business before the token checks out.
+      Http.write(io, 500, JSON_TYPE, JSON.generate(error: authorized ? Http.utf8(e.message) : "internal error"))
     end
 
     private
+
+    # One listener per user: the lock file keeps a second inbox from
+    # binding at all. The socket is bound without SO_REUSEADDR, which on
+    # macOS would let another program hold the same port on a different
+    # address and quietly take the loopback traffic.
+    def claim_port
+      return false unless take_lock
+      server = Socket.new(:INET, :STREAM)
+      server.bind(Addrinfo.tcp(@lan ? "0.0.0.0" : "127.0.0.1", @port))
+      server.listen(8)
+      @server = server
+      @bound_port = server.local_address.ip_port
+      @mutex.synchronize { @state = :listening }
+      @accept = Thread.new { accept_loop }
+      true
+    rescue SystemCallError
+      quietly { server&.close }
+      release_lock
+      @mutex.synchronize { @state = :in_use }
+      false
+    end
 
     def take_lock
       FileUtils.mkdir_p(File.dirname(@lock_path))
@@ -207,6 +227,7 @@ module ClaudeInbox
         file.truncate(0)
         file.write(Process.pid.to_s)
         file.flush
+        @mutex.synchronize { @held_by = nil }
         @lock = file
       else
         holder = file.read.to_i
@@ -237,42 +258,56 @@ module ClaudeInbox
       end
     end
 
-    # A fifth connection, or a third that hasn't shown a token, is turned
-    # away rather than queued.
     def admit(sock)
-      slot = @mutex.synchronize do
-        next nil if @alive >= MAX_CONNECTIONS || @unauthenticated >= MAX_UNAUTHENTICATED
+      slot = @mutex.synchronize { take_slot }
+      return quietly { sock.close } unless slot
+      thread = Thread.new { serve(sock, slot) }
+      @mutex.synchronize { @threads << thread if thread.alive? }
+    rescue ThreadError
+      quietly { sock.close }
+      free(slot)
+    end
+
+    # A fifth connection, or a third that hasn't shown a token, gets a 503
+    # rather than a place in a queue. The 503 still gets a thread, since
+    # closing on a request nobody read sends a reset that can reach the
+    # client before the answer does; past a few of those, only a close.
+    def take_slot
+      if @alive < MAX_CONNECTIONS && @unauthenticated < MAX_UNAUTHENTICATED
         @alive += 1
         @unauthenticated += 1
         {authenticated: false}
+      elsif @turning_away < MAX_TURNED_AWAY
+        @turning_away += 1
+        {busy: true}
       end
-      return turn_away(sock) unless slot
-      thread = Thread.new { serve(sock, slot) }
-      @mutex.synchronize { @threads << thread if thread.alive? }
     end
 
-    def turn_away(sock)
-      Http.write(sock, 503, JSON_TYPE.merge("Retry-After" => "2"), JSON.generate(error: "busy: try again in a moment"))
-    rescue IOError, SystemCallError
-      nil
-    ensure
-      quietly { sock.close }
+    def free(slot)
+      @mutex.synchronize do
+        if slot[:busy] then @turning_away -= 1
+        else
+          @alive -= 1
+          @unauthenticated -= 1 unless slot[:authenticated]
+        end
+      end
     end
 
     # `handle` answers every failure it can; what is left is the socket
     # itself going away, and a thread must not report that on stderr.
     def serve(sock, slot)
-      handle(sock, via: sock.remote_address.ip_address, on_auth: -> { authenticated(slot) })
+      if slot[:busy]
+        Http.write(sock, 503, JSON_TYPE.merge("Retry-After" => "2"), JSON.generate(error: "busy: try again in a moment"))
+      else
+        handle(sock, via: sock.remote_address.ip_address, on_auth: -> { authenticated(slot) })
+      end
       linger(sock)
     rescue
       nil
     ensure
       quietly { sock.close }
-      @mutex.synchronize do
-        @alive -= 1
-        @unauthenticated -= 1 unless slot[:authenticated]
-        @threads.delete(Thread.current)
-      end
+      free(slot)
+      @mutex.synchronize { @threads.delete(Thread.current) }
     end
 
     def authenticated(slot)
@@ -284,9 +319,9 @@ module ClaudeInbox
 
     # Waits for the client to close first. Whichever side closes first
     # keeps the port in TIME_WAIT, and without SO_REUSEADDR that fails the
-    # next inbox's bind for half a minute. Reading also drains a body sent
-    # after a refusal, which would otherwise turn the close into a reset
-    # that can beat the response to the client.
+    # next inbox's bind for half a minute. Reading also drains a request
+    # the answer didn't need, which would otherwise turn the close into a
+    # reset that can beat the answer to the client.
     def linger(sock)
       deadline = Http.monotonic + LINGER
       loop do
@@ -298,8 +333,7 @@ module ClaudeInbox
 
     def route(io, request, via, on_auth)
       raise Http::Error.new(405, "only GET and POST", headers: {"Allow" => "GET, POST"}) unless %w[GET POST].include?(request.verb)
-      host = request.headers["host"].to_s.downcase
-      raise Http::Error.new(421, "the Host header isn't a name this inbox answers to") unless @pairing.hosts(port: port, lan: @lan).include?(host)
+      raise Http::Error.new(421, "the Host header isn't a name this inbox answers to") unless @pairing.hosts(lan: @lan).include?(host(request))
       verb = ROUTES[request.path]
       raise Http::Error.new(404, "no such path") unless verb
       raise Http::Error.new(405, "#{request.path} takes #{verb}", headers: {"Allow" => verb}) unless request.verb == verb
@@ -308,6 +342,10 @@ module ClaudeInbox
       on_auth.call
       (request.path == "/api/options") ? json(200, choices) : post_session(io, request, via)
     end
+
+    # The name without its port: a tunnel or a proxy can change the port,
+    # and only the name tells this Mac from a site pointed at it.
+    def host(request) = request.headers["host"].to_s.downcase.sub(/:\d+\z/, "")
 
     def authorize(request, via)
       return if @pairing.matches?(request.headers["authorization"].to_s[/\ABearer +(\S+)\z/i, 1])
@@ -353,6 +391,7 @@ module ClaudeInbox
       params = read_json(io, request)
       images = take_images(params)
       key = request.headers["idempotency-key"]
+      key = nil if key.to_s.empty?
       earlier = key && claim(key)
       return json(200, earlier) if earlier
       started = nil
@@ -367,6 +406,9 @@ module ClaudeInbox
       @queue << [:notice, "remote start failed: #{reason}"]
       remember(via, reason)
       raise Http::Error.new(500, e.message, source: "claude")
+    rescue Http::Error => e
+      remember(via, "refused: #{e.message}")
+      raise
     end
 
     def read_json(io, request)

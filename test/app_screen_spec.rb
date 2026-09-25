@@ -56,6 +56,16 @@ describe ClaudeInbox::App do
     _(prompt.join("\n").strip).must_equal "one\ntwo"
   end
 
+  it "drops a paste that lands where nothing is typed, so its letters never act as keys" do
+    press(CTRL_X, "\e[200~yes, every directory\e[201~")
+    _(screen.join("\n")).must_include "Delete session f23c8673?"
+    _(client.removed).must_be_empty
+    press("\e", "N", "\e[200~query\e[201~")
+    _(screen.join("\n")).must_include "Pair a phone"
+    press("\e", "\e[200~q\e[201~")
+    _(screen.join("\n")).must_include "comma3x not booting"
+  end
+
   it "edits the filter line in the middle, and closes it on a backspace from empty" do
     press("/", "ac", "\e[D", "b")
     _(footer).must_include "/abc"

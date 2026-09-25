@@ -8,9 +8,12 @@ describe ClaudeInbox::Pairing do
   let(:dir) { Dir.mktmpdir }
   let(:path) { File.join(dir, "config", "listen.json") }
   let(:addresses) { [Addrinfo.ip("127.0.0.1"), Addrinfo.ip("192.168.1.20"), Addrinfo.ip("100.100.4.2"), Addrinfo.ip("fe80::1")] }
+  let(:names) { ["Mac-Mini"] }
+  let(:lookups) { [] }
+  let(:now) { [0.0] }
   let(:pairing) do
-    ClaudeInbox::Pairing.new(path: path, local_name: -> { "Mac-Mini" }, hostname: -> { "mac.mini.lan" },
-      addresses: -> { addresses }, firewall: -> { :on })
+    ClaudeInbox::Pairing.new(path: path, local_name: -> { names.first.tap { |n| lookups << n } }, hostname: -> { "mac.mini.lan" },
+      addresses: -> { addresses }, firewall: -> { :on }, clock: -> { now[0] })
   end
 
   after { FileUtils.remove_entry(dir) }
@@ -72,26 +75,43 @@ describe ClaudeInbox::Pairing do
       ]
     end
 
-    it "looks the names and addresses up again on every call" do
+    it "looks the addresses up again on every call" do
       pairing.urls(port: 7433, lan: true)
       addresses.replace([Addrinfo.ip("10.0.0.7")])
       _(pairing.urls(port: 7433, lan: true).last).must_equal "http://10.0.0.7:7433/##{pairing.token}"
     end
+
+    # A rename is followed within seconds, but a stream of requests can't
+    # make every one of them fork scutil.
+    it "asks for the Bonjour name again once it is ten seconds old" do
+      3.times { pairing.hosts(lan: true) }
+      _(lookups.size).must_equal 1
+      names.replace(["Mac-Mini-2"])
+      now[0] += 11
+      _(pairing.hosts(lan: true)).must_include "mac-mini-2.local"
+      _(pairing.urls(port: 7433, lan: true).first).must_equal "http://Mac-Mini-2.local:7433/##{pairing.token}"
+      _(lookups.size).must_equal 2
+    end
   end
 
   describe "hosts" do
-    it "accepts only loopback names on loopback, with and without the port" do
-      _(pairing.hosts(port: 7433, lan: false)).must_equal %w[127.0.0.1 127.0.0.1:7433 localhost localhost:7433 [::1] [::1]:7433]
+    it "accepts only loopback names on loopback" do
+      _(pairing.hosts(lan: false)).must_equal %w[127.0.0.1 localhost [::1]]
+      _(lookups).must_be_empty
     end
 
     it "adds this Mac's names and every IPv4 address in LAN mode, in lower case" do
-      hosts = pairing.hosts(port: 7433, lan: true)
-      %w[mac-mini mac-mini.local mac-mini.local:7433 mac.mini.lan:7433 192.168.1.20:7433 100.100.4.2 localhost:7433].each do |host|
-        _(hosts).must_include host
-      end
-      _(hosts).wont_include "Mac-Mini.local"
-      _(hosts.grep(/fe80/)).must_be_empty
-      _(hosts).wont_include "mac-mini.local:7434"
+      _(pairing.hosts(lan: true)).must_equal %w[127.0.0.1 localhost [::1] mac-mini mac-mini.local mac.mini.lan 192.168.1.20 100.100.4.2]
     end
+  end
+
+  it "lists Ethernet and Wi-Fi addresses ahead of a VM's bridge, so c copies one a phone can reach" do
+    interface = Struct.new(:name, :addr)
+    interfaces = [
+      interface.new("lo0", Addrinfo.ip("127.0.0.1")), interface.new("bridge100", Addrinfo.ip("192.168.64.1")),
+      interface.new("utun3", nil), interface.new("en1", Addrinfo.ip("192.168.1.20"))
+    ]
+    _(ClaudeInbox::Pairing.addresses(interfaces).map(&:ip_address)).must_equal %w[192.168.1.20 127.0.0.1 192.168.64.1]
+    _(ClaudeInbox::Pairing.addresses).wont_be_empty
   end
 end
