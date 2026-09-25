@@ -37,22 +37,14 @@ module ClaudeInbox
     RECENT = 5
     ROUTES = {"/" => "GET", "/api/options" => "GET", "/api/sessions" => "POST"}.freeze
     JSON_TYPE = {"Content-Type" => "application/json"}.freeze
+    # The phone's form. Everything it needs is inline, and it talks to
+    # nothing but this listener.
+    PAGE = File.read(File.join(__dir__, "remote.html")).freeze
     PAGE_TYPE = {
       "Content-Type" => "text/html; charset=utf-8",
-      "Content-Security-Policy" => "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'"
+      "Content-Security-Policy" => "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " \
+        "img-src blob: data:; connect-src 'self'; form-action 'none'; frame-ancestors 'none'"
     }.freeze
-    PAGE = <<~HTML
-      <!doctype html>
-      <html lang="en">
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>claude-inbox</title>
-      <style>body { font: 17px/1.5 -apple-system, system-ui, sans-serif; margin: 2em auto; max-width: 32em; padding: 0 1em; }</style>
-      <h1>claude-inbox is listening</h1>
-      <p>The form for starting a session from this page isn't here yet. Until it is,
-      send <code>POST /api/sessions</code> with your pairing token, as the README shows.</p>
-      </html>
-    HTML
 
     # What `N` and the header chip show, as of one moment. `state` is :off,
     # :listening, :in_use (the port is taken), :held (another inbox has the

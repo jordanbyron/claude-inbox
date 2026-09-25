@@ -41,6 +41,12 @@ bin/screens                                         # drive the fixture in a pty
 `bin/screens` is how a refactor is checked against the real screen: run it on
 `main` and on the branch and diff the two.
 
+The phone's page is `lib/claude_inbox/remote.html`, which the listener reads
+once when the inbox starts, so restart after an edit. To try it, run the
+fixture with `--listen=0`, press `N` and then `c`, and open the copied URL in
+a browser; a phone-sized window and the dark scheme are a toggle away in its
+developer tools. Starts go to the fixture, which starts nothing.
+
 ## Local CI and signoff
 
 There is no GitHub Actions workflow. CI runs on your machine and reports back
