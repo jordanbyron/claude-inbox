@@ -166,6 +166,7 @@ let token = saved.get("token");
 let options = null;
 let images = [];
 let shrinking = Promise.resolve();
+let starting = false;
 let draft = saved.get("draft") || {};
 
 function show(view) {
@@ -192,7 +193,8 @@ async function api(method, path, body, headers) {
     if (!res) return {status: 0, error: NO_ANSWER};
   }
   if (res.status === 401) return {status: 401, error: REJECTED};
-  if (!json || typeof json !== "object") return {status: res.status, error: `the inbox isn't answering (HTTP ${res.status})`};
+  // Status 0 whatever the HTTP status: a captive portal answers 200 with a page of its own.
+  if (!json || typeof json !== "object" || Array.isArray(json)) return {status: 0, error: `the inbox isn't answering (HTTP ${res.status})`};
   return {status: res.status, json, error: json.error || `HTTP ${res.status}`, field: json.field};
 }
 
@@ -215,20 +217,32 @@ function fill() {
   const typed = last && !dirs.some((d) => d.path === last);
   $("cwd").value = typed || !dirs.length ? "" : last || dirs[0].path;
   if (typed) $("cwd-other").value = last;
+  // Filled again on a new pairing URL or after a 401, with a draft open.
   for (const [id, list] of [["model", options.models], ["effort", options.efforts], ["permission_mode", options.permission_modes]]) {
+    const picked = $(id).value;
     $(id).replaceChildren(...(list || []).map((v) => new Option(v, v)));
+    if ((list || []).includes(picked)) $(id).value = picked;
   }
   relabel();
 }
 
-// "default" means what the settings for that directory say, as the n form shows it.
+// "default" means what the settings for that directory say, as the n form
+// shows it. The listener caps the mode it resolves to, so in a directory
+// that defaults to acceptEdits, "default" can't start anything from here.
 function relabel() {
   const dir = (options.dirs || []).find((d) => d.path === $("cwd").value);
   $("cwd-other").hidden = $("cwd").value !== "";
   for (const id of ["model", "effort", "permission_mode"]) {
     const option = [...$(id).options].find((o) => o.value === "default");
+    if (!option) continue;
     const set = dir && dir.defaults && dir.defaults[id];
-    if (option) option.textContent = set ? `default (${set})` : "default";
+    const refused = id === "permission_mode" && Boolean(set) && !(options.permission_modes || []).includes(set);
+    option.textContent = !set ? "default" : refused ? `default (${set}: not from a phone)` : `default (${set})`;
+    option.disabled = refused;
+    if (refused && $(id).value === "default") {
+      const allowed = [...$(id).options].find((o) => !o.disabled);
+      if (allowed) $(id).value = allowed.value;
+    }
   }
 }
 
@@ -325,12 +339,13 @@ function drawImages() {
     remove.type = "button";
     remove.textContent = "×";
     remove.setAttribute("aria-label", `Remove image ${i + 1}`);
+    remove.disabled = starting;
     remove.addEventListener("click", () => dropImage(image));
     figure.append(caption, remove);
     return figure;
   });
   $("images").replaceChildren($("add-image"), ...figures);
-  $("file").disabled = images.length >= MAX_IMAGES;
+  $("file").disabled = starting || images.length >= MAX_IMAGES;
   $("add-image").classList.toggle("off", $("file").disabled);
 }
 
@@ -343,14 +358,16 @@ async function start() {
   const button = $("start");
   if (button.disabled) return;
   clearErrors();
-  button.disabled = true;
+  button.disabled = starting = true;
+  drawImages();
   button.textContent = images.length ? "Preparing images…" : "Starting…";
   try {
-    await shrinking;
+    while (images.some((image) => !image.url)) await shrinking;
+    const remote = $("remote").checked;
     const body = JSON.stringify({
       prompt: $("prompt").value, name: $("name").value, cwd: cwd(),
       model: $("model").value, effort: $("effort").value, permission_mode: $("permission_mode").value,
-      worktree: $("worktree").checked, remote: $("remote").checked,
+      worktree: $("worktree").checked, remote: remote,
       images: images.map((image) => ({data: image.url.slice(image.url.indexOf(",") + 1)}))
     });
     const size = new Blob([body]).size;
@@ -364,16 +381,17 @@ async function start() {
     saved.set("cwd", cwd());
     button.textContent = "Starting…";
     const r = await api("POST", "/api/sessions", body, {"Content-Type": "application/json", "Idempotency-Key": draft.key});
-    if (r.status === 201 || r.status === 200) return started(r.json);
+    if (r.status === 201 || r.status === 200) return started(r.json, remote);
     if (r.status === 401) return showPair(r.error);
     fieldError(r.field, r.error);
   } finally {
-    button.disabled = false;
+    button.disabled = starting = false;
     button.textContent = "Start";
+    drawImages();
   }
 }
 
-function started(session) {
+function started(session, remote) {
   draft = {};
   saved.set("draft", null);
   images = [];
@@ -385,7 +403,7 @@ function started(session) {
   const link = $("done-url");
   link.hidden = !/^https:\/\//.test(session.url || "");
   if (!link.hidden) link.href = session.url;
-  $("done-later").hidden = !link.hidden;
+  $("done-later").hidden = !(remote && link.hidden);
   show("done");
 }
 
@@ -417,7 +435,8 @@ function takeFragment() {
 $("host").textContent = location.host;
 takeFragment();
 window.addEventListener("hashchange", () => { if (takeFragment()) load(); });
-$("prompt").value = draft.prompt || "";
+// The images themselves aren't kept, and a token left behind would name the next one added.
+$("prompt").value = (draft.prompt || "").replace(/ ?\[Image #\d+\]/gi, "");
 $("name").value = draft.name || "";
 $("prompt").addEventListener("input", saveDraft);
 $("name").addEventListener("input", saveDraft);

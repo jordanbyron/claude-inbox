@@ -240,16 +240,23 @@ prompt, name, directory, model, effort, permissions, worktree and Remote
 Control, which starts out on, since you are away from the desk. The
 directories are the ones your sessions ran in lately, then the projects
 whose trust dialog you accepted, and the one you picked last is picked
-again. "default" in a list says what that directory's settings make it:
-`default (opus)`. Add image takes a photo or picks from the library, scales
-it to 2000 pixels on the long edge and sends it as a JPEG, which leaves the
+again; "another directory…" takes a typed path instead. "default" in a list
+says what that directory's settings make it: `default (opus)`. Where the
+settings make it a permission mode a phone may not use, it reads
+`default (acceptEdits: not from a phone)` and can't be picked. Add image
+takes a photo or picks from the library, scales anything larger down to
+2000 pixels on the long edge and sends it as a JPEG, which leaves the
 photo's metadata, location included, on the phone; an `[Image #1]` lands at
 the cursor, as a paste does in the form. What you type is kept on the phone
-until a start goes through, a refusal shows under the field it is about,
-and a start that went through gives the session's id and an Open in Claude
-link to its claude.ai/code page. The page keeps the token and takes it out
-of the address bar. Once the token is rotated it says "token rejected:
-press N in the inbox and pair again" and asks for the new pairing URL.
+until a start goes through, but the photos are not, so after a reload add
+them again. A refusal shows under the field it is about. A start that went
+through gives the session's id and, with Remote Control on, an Open in
+Claude link to its claude.ai/code page once the session has registered
+there; the inbox waits three seconds for that, and past them the page says
+claude.ai/code will list it in a moment. The page keeps the token and takes
+it out of the address bar. Once the token is rotated it says "token
+rejected: press N in the inbox and pair again" and asks for the new pairing
+URL.
 
 **On the home screen.**
 
@@ -293,7 +300,9 @@ or WebP images that the prompt can point at as `[Image #1]`. Left out,
 the form's default does. An unknown key
 is refused, so a misspelt setting can't quietly fall back to its default.
 The answer is `201 {"id", "name", "cwd", "url"}`, where `url` is the
-session's claude.ai/code page, or null if it hasn't registered yet. A
+session's claude.ai/code page, or null if it hasn't registered within three
+seconds; without `remote` the inbox doesn't wait, since such a session
+seldom registers at all. A
 refusal is `{"error", "field"}` with the same message the form would show,
 and a CLI refusal such as "Workspace not trusted" comes back as a 500. Send
 an `Idempotency-Key` header and a retry gets the first answer instead of a
@@ -309,10 +318,15 @@ text you shared, a Shortcut can send the same request. In outline:
    `images`.
 3. Ask for Input for the prompt, with the shared text as its default.
 4. Get Contents of URL `http://192.168.1.20:7433/api/sessions`, method POST,
-   with the headers `Authorization: Bearer <token>` and `Idempotency-Key`
-   (the Current Date will do), and a JSON body: `prompt`, `cwd` as a
-   directory's label from `/api/options` such as `claude-inbox`, `remote`
-   true, and `images` as the variable.
+   with the headers `Authorization: Bearer <token>` and `Idempotency-Key`,
+   and a JSON body: `prompt`, `cwd` as a path such as `~/code/claude-inbox`,
+   `remote` true, and `images` as the variable. The key only has to differ
+   from one start to the next, so make it a Random Number between 1 and
+   1000000000: the Current Date as text goes only to the minute, and a
+   second start with a key the inbox has seen gets the first one's answer
+   and starts nothing. A label from `/api/options` would do for `cwd` today,
+   but it grows a parent directory when another directory of the same name
+   turns up, and the saved Shortcut would then get a 422.
 5. Show the answer, or Open URLs on its `url`.
 
 Put the token in a Text action at the top. If you share the Shortcut, make
