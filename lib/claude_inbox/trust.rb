@@ -12,7 +12,10 @@ module ClaudeInbox
       data = JSON.parse(File.read(path))
       projects = data["projects"] if data.is_a?(Hash)
       return [] unless projects.is_a?(Hash)
-      projects.filter_map { |dir, entry| dir if entry.is_a?(Hash) && entry["hasTrustDialogAccepted"] == true }
+      projects.filter_map do |dir, entry|
+        dir if dir.start_with?("/") && !dir.include?("\0") &&
+          entry.is_a?(Hash) && entry["hasTrustDialogAccepted"] == true
+      end
     rescue SystemCallError, IOError, JSON::ParserError
       []
     end
