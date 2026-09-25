@@ -98,12 +98,14 @@ module ClaudeInbox
     # ----- threads ----------------------------------------------------------
 
     # Runs a block off the main thread; a failure lands in the status line
-    # rather than killing the thread silently.
-    def in_background
+    # rather than killing the thread silently. The pairing dialog's work
+    # fails as a :notice, as the listener's own failures do: an :error is
+    # gone at the next poll, whenever that lands.
+    def in_background(failure: :error)
       Thread.new do
         yield
       rescue => e
-        @queue << [:error, e.message]
+        @queue << [failure, e.message]
       end
     end
 
@@ -520,20 +522,20 @@ module ClaudeInbox
     # and the dialog fills in when they land.
     def open_pairing
       @modal = Dialog::Pairing.new(-> { @listener.snapshot })
-      in_background { @listener.refresh }
+      in_background(failure: :notice) { @listener.refresh }
     end
 
     def copy_pairing_url
       url = @listener.snapshot.pairing_url
       return notice("still looking up this Mac's addresses") unless url
-      in_background do
+      in_background(failure: :notice) do
         r = Subprocess.capture("osascript", "-e", "on run argv", "-e", "set the clipboard to item 1 of argv", "-e", "end run", url)
         @queue << [:notice, r.success? ? "pairing URL copied" : "couldn't copy: #{r.err.strip}"]
       end
     end
 
     def rotate_token
-      in_background do
+      in_background(failure: :notice) do
         @listener.rotate
         @queue << [:notice, "new token: phones pair again with N"]
       end
