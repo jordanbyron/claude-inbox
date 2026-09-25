@@ -146,11 +146,12 @@ module ClaudeInbox
       now = Time.now
       sections = filtered(@store.sections(now))
       width, height = @terminal.size
+      body_h = Renderer.body_height(height)
       ensure_selection(sections)
       @tick += 1
       view = Renderer::View.new(
         width: width, height: height, now: now, selected: @selected&.key, top: @top, expanded: @expanded,
-        peek: @peek.view(sections.row(@selected), height), modal: modal_lines(width), screen: screen_lines(width, height),
+        peek: @peek.view(sections.row(@selected), body_h), modal: modal_lines(width), screen: screen_lines(width, body_h),
         status: status_text(now), usage: @rate_limits.windows(now), filter: @filter, filter_editing: @filter_editing,
         tick: @tick / 2, loading: loading_for
       )
@@ -202,8 +203,9 @@ module ClaudeInbox
 
     # Guard for attach/stop: refuse politely on a terminal or remote row.
     def require_actionable
-      return true if selected_session&.actionable?
-      if (s = selected_session)&.interactive?
+      s = selected_session
+      return true if s&.actionable?
+      if s&.interactive?
         notice(s.remote? ? "that's a remote session — Enter adopts it, w opens it at claude.ai/code" : "that's your own terminal — switch to that window")
       end
       false
@@ -212,8 +214,9 @@ module ClaudeInbox
     # Guard for snooze/wake/alias: anything with a key, since those live in
     # our own store. A terminal you are sitting in is the one exception.
     def require_storable
-      return true if @selected&.row? && !selected_session&.terminal?
-      notice("you're in that terminal right now — nothing to snooze") if selected_session&.terminal?
+      s = selected_session
+      return true if @selected&.row? && !s&.terminal?
+      notice("you're in that terminal right now — nothing to snooze") if s&.terminal?
       false
     end
 
@@ -313,7 +316,7 @@ module ClaudeInbox
       end
     end
 
-    def page = [@terminal.size[1] - 2, 1].max
+    def page = [Renderer.body_height(@terminal.size[1]), 1].max
 
     def move(delta)
       stops = filtered.selections(@expanded)
@@ -461,9 +464,9 @@ module ClaudeInbox
     end
 
     # The new-session form takes the whole body; a Dialog is a box over it.
-    def screen_lines(width, height)
+    def screen_lines(width, body_h)
       return nil unless @modal.is_a?(NewSessionForm)
-      {lines: @modal.screen(width, height - 2), footer: @modal.footer}
+      {lines: @modal.screen(width, body_h), footer: @modal.footer}
     end
 
     def modal_lines(width)

@@ -117,7 +117,8 @@ is macOS only.
 
 Remote Control set to yes starts the session with `--remote-control`, so it
 runs under the daemon like any other row and is also listed at claude.ai/code
-and in the Claude mobile app. See Remote Control below.
+and in the Claude mobile app. It defaults to yes when "Enable Remote Control
+for all sessions" is on in Claude Code's `/config`. See Remote Control below.
 
 Slash commands work as at Claude Code's own prompt. Type `/` at the start of a
 word for a menu of your skills and commands, plugin skills as `plugin:name`,
@@ -164,11 +165,10 @@ reaping off.
 
 ## Remote Control
 
-Every background session has a page at claude.ai/code, where you can follow
-it from a browser or the Claude mobile app; `w` opens it. A session with
-Remote Control on can also be driven from there, the way `claude
---remote-control` and `/rc` allow in a terminal. Its row wears a `⇅` after
-the state. Two kinds of session have it:
+A session with Remote Control on has a page at claude.ai/code, where you can
+follow and drive it from a browser or the Claude mobile app, the way `claude
+--remote-control` and `/rc` allow in a terminal; `w` opens it. Its row
+wears a `⇅` after the state. Two kinds of session have it:
 
 - A background session the `n` form started with Remote Control set to yes,
   or one you ran as `claude --bg "…" --remote-control` yourself. It is a

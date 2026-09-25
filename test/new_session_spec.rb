@@ -219,6 +219,29 @@ describe ClaudeInbox::NewSessionForm do
     end
   end
 
+  it "starts with Remote Control when settings turn it on for all sessions" do
+    Dir.mktmpdir do |home|
+      FileUtils.mkdir_p("#{home}/.claude")
+      File.write("#{home}/.claude/settings.json", {remoteControlAtStartup: true}.to_json)
+      f = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
+      _(f.screen(100, 24).find { |r| r.include?("Remote Control") }).must_include "yes (settings)"
+      _(f.values[:remote]).must_equal true
+      7.times { f.press(:tab, "\t") }
+      f.press("l", "l")
+      _(f.values[:remote]).must_equal false
+    end
+  end
+
+  it "leaves Remote Control off when nothing turns it on" do
+    Dir.mktmpdir do |home|
+      f = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
+      _(f.values[:remote]).must_equal false
+      7.times { f.press(:tab, "\t") }
+      f.press("h", "h")
+      _(f.values[:remote]).must_equal true
+    end
+  end
+
   it "tab-completes the directory" do
     Dir.mktmpdir do |root|
       FileUtils.mkdir_p("#{root}/apple")

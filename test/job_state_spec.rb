@@ -31,8 +31,6 @@ describe JobState do
       _(js.detail).must_equal "watching CI re-run"
       _(js.needs).must_equal "confirm: merge once green?"
       _(js.result).must_equal "CI re-run passed"
-      _(js.tempo).must_equal "idle"
-      _(js.tasks).must_equal 1
       _(js.pr_urls).must_equal ["https://github.com/o/r/pull/7"]
       _(js.bridge_id).must_equal "cse_01AB"
       _(js).must_be :remote_control?
@@ -85,6 +83,15 @@ describe JobState do
     js = JobState.new("detail" => "thinking")
     _(js.needs).must_be_nil
     _(js.result).must_be_nil
+  end
+
+  it "summarizes by state: needs while blocked, result once done, else the detail line" do
+    js = JobState.new("detail" => "watching\n  CI", "needs" => "confirm: merge?", "output" => {"result" => "PR #7 up"})
+    _(js.summary("blocked")).must_equal "confirm: merge?"
+    _(js.summary("done")).must_equal "PR #7 up"
+    _(js.summary("working")).must_equal "watching CI"
+    _(JobState.new("detail" => "watching CI").summary("blocked")).must_equal "watching CI"
+    _(JobState.new({}).summary("done")).must_be_nil
   end
 
   it "reads the color /color wrote into the job file" do

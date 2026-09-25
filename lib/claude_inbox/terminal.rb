@@ -40,10 +40,16 @@ module ClaudeInbox
       @size = nil
     end
 
+    # The tty's mode is kept as found, not assumed: `cooked!` sets a stock
+    # mode that differs from a shell's (istrip on, imaxbel off), and the
+    # shell inherits whatever is left on quit.
     def enter
       @out.print ALT_ON, WHEEL_KEYS_ON, MOUSE_ON, PASTE_ON, TTY::Cursor.hide, TTY::Cursor.clear_screen
       @out.flush
-      @input.raw! if @input.respond_to?(:raw!) && @input.tty?
+      if @input.respond_to?(:raw!) && @input.tty?
+        @mode = @input.console_mode
+        @input.raw!
+      end
       @restored = false
       resized
     end
@@ -52,7 +58,7 @@ module ClaudeInbox
     def restore
       return if @restored
       @restored = true
-      @input.cooked! if @input.respond_to?(:cooked!) && @input.tty?
+      @input.console_mode = @mode if @mode && @input.tty?
       @out.print TTY::Cursor.show, PASTE_OFF, MOUSE_OFF, WHEEL_KEYS_OFF, ALT_OFF
       @out.flush
     rescue

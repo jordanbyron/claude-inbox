@@ -46,7 +46,7 @@ module ClaudeInbox
     # and, the moment it becomes the agents view, terminate it. The user then
     # lands back in the inbox instead of native agent view.
     def attach(id)
-      pid = Process.spawn(@bin, "attach", id)
+      pid = Process.spawn(*Subprocess.command(@bin, "attach", id))
       watchdog = Thread.new { kill_when_agents_view(pid) }
       _, status = Process.wait2(pid)
       status
@@ -64,10 +64,7 @@ module ClaudeInbox
 
     # Start a background session. Returns its short id.
     def spawn(prompt:, cwd:, **opts)
-      argv = self.class.spawn_args(@bin, prompt: prompt, **opts)
-      r = Subprocess.capture(*argv, chdir: cwd)
-      raise Error, "claude --bg failed: #{(r.err + r.out).strip}" unless r.success?
-      r.out[/\b[0-9a-f]{8}\b/] || r.out.strip
+      start_bg(self.class.spawn_args(@bin, prompt: prompt, **opts), cwd, "claude --bg")
     end
 
     # How a prompt attaches a file: the same @ mention the CLI's own prompt
@@ -80,9 +77,9 @@ module ClaudeInbox
     # prompt included, so it goes last.
     def self.spawn_args(bin, prompt:, model: nil, effort: nil, permission_mode: nil, worktree: false, name: nil, remote: false)
       argv = [bin, "--bg", prompt]
-      argv += ["--model", model] if model && model != "default"
-      argv += ["--effort", effort] if effort && effort != "default"
-      argv += ["--permission-mode", permission_mode] if permission_mode && permission_mode != "default"
+      {"--model" => model, "--effort" => effort, "--permission-mode" => permission_mode}.each do |flag, value|
+        argv += [flag, value] if value && value != "default"
+      end
       argv += ["--name", name] if name && !name.strip.empty?
       argv << "--worktree" if worktree
       argv << "--remote-control" if remote
@@ -98,9 +95,7 @@ module ClaudeInbox
       raise Error, "nothing to adopt yet — send it a message from your phone first" if transcript_empty?(cwd, session_id)
       Process.kill("TERM", pid)
       wait_gone(pid)
-      r = Subprocess.capture(*self.class.adopt_args(@bin, session_id), chdir: cwd)
-      raise Error, "claude --bg --resume failed: #{(r.err + r.out).strip}" unless r.success?
-      r.out[/\b[0-9a-f]{8}\b/] || r.out.strip
+      start_bg(self.class.adopt_args(@bin, session_id), cwd, "claude --bg --resume")
     end
 
     def self.adopt_args(bin, session_id) = [bin, "--bg", "--resume", session_id, "--remote-control"]
@@ -111,54 +106,9 @@ module ClaudeInbox
       File.join(home, ".claude", "projects", cwd.gsub(%r{[/.]}, "-"), "#{session_id}.jsonl")
     end
 
-    # A worker nobody has messaged yet has an empty file, and the daemon
-    # reports "source session not found" on resuming it.
-    def transcript_empty?(cwd, session_id)
-      path = self.class.transcript_path(cwd, session_id)
-      File.exist?(path) && File.zero?(path)
-    end
-
-    def wait_gone(pid, timeout: 5)
-      deadline = Time.now + timeout
-      while Time.now < deadline
-        Process.kill(0, pid)
-        sleep 0.1
-      end
-      raise Error, "the worker #{pid} would not exit"
-    rescue Errno::ESRCH
-      nil
-    end
-
-    def parse(json)
-      JSON.parse(json).map { |h| Session.from_hash(h) }
-    end
-
     # Flags that mark a claude process as one a program drives rather than one
     # you type in: the headless print mode and the SDK's stream protocol.
     HEADLESS_FLAGS = %w[-p --print --input-format --output-format].freeze
-
-    # The JSON reports Remote Control workers, local sub-agents and headless
-    # runs as `interactive`, same as a terminal you opened yourself, each named
-    # after its directory. The process tree tells them apart; see `origins`.
-    # Everything but a terminal and a remote worker is dropped here rather than
-    # merely flagged: attach lands on the session that asked for it, so there
-    # is nothing useful to show or act on directly.
-    def classify_origins(sessions)
-      pids = sessions.select { |s| s.interactive? && s.pid }.map(&:pid)
-      return sessions if pids.empty?
-      rows = ps_rows(pids)
-      assign_origins(sessions, origins_from(rows), self.class.bridge_ids(rows))
-    end
-
-    # Tags each interactive session with where it is driven from (pid =>
-    # origin, terminal when unlisted) and the bridge a remote one is served
-    # over, and drops the unattended ones, whose parent is the row worth
-    # showing.
-    def assign_origins(sessions, origins, bridges = {})
-      sessions
-        .map { |s| s.interactive? ? s.with(origin: origins.fetch(s.pid, :terminal), bridge_id: bridges[s.pid]) : s }
-        .reject(&:unattended?)
-    end
 
     # pid => origin, given `ps` for the sessions and for their parents. Pure.
     #
@@ -193,6 +143,53 @@ module ClaudeInbox
       rows.filter_map { |pid, _, cmd| (m = cmd.match(/--session-id[= ](cse_\w+)/)) && [pid, m[1]] }.to_h
     end
 
+    private
+
+    # A worker nobody has messaged yet has an empty file, and the daemon
+    # reports "source session not found" on resuming it.
+    def transcript_empty?(cwd, session_id)
+      path = self.class.transcript_path(cwd, session_id)
+      File.exist?(path) && File.zero?(path)
+    end
+
+    def wait_gone(pid, timeout: 5)
+      deadline = Time.now + timeout
+      while Time.now < deadline
+        Process.kill(0, pid)
+        sleep 0.1
+      end
+      raise Error, "the worker #{pid} would not exit"
+    rescue Errno::ESRCH
+      nil
+    end
+
+    def parse(json)
+      JSON.parse(json).map { |h| Session.from_hash(h) }
+    end
+
+    # The JSON reports Remote Control workers, local sub-agents and headless
+    # runs as `interactive`, same as a terminal you opened yourself, each named
+    # after its directory. The process tree tells them apart; see `origins`.
+    # Everything but a terminal and a remote worker is dropped here rather than
+    # merely flagged: attach lands on the session that asked for it, so there
+    # is nothing useful to show or act on directly.
+    def classify_origins(sessions)
+      pids = sessions.select { |s| s.interactive? && s.pid }.map(&:pid)
+      return sessions if pids.empty?
+      rows = ps_rows(pids)
+      assign_origins(sessions, origins_from(rows), self.class.bridge_ids(rows))
+    end
+
+    # Tags each interactive session with where it is driven from (pid =>
+    # origin, terminal when unlisted) and the bridge a remote one is served
+    # over, and drops the unattended ones, whose parent is the row worth
+    # showing.
+    def assign_origins(sessions, origins, bridges = {})
+      sessions
+        .map { |s| s.interactive? ? s.with(origin: origins.fetch(s.pid, :terminal), bridge_id: bridges[s.pid]) : s }
+        .reject(&:unattended?)
+    end
+
     def origins_from(rows)
       return {} if rows.empty?
       self.class.origins(rows, ps_commands(rows.map { |_, ppid, _| ppid }.uniq))
@@ -220,8 +217,6 @@ module ClaudeInbox
       }
     end
 
-    private
-
     def kill_when_agents_view(pid)
       loop do
         sleep WATCH_INTERVAL
@@ -242,6 +237,12 @@ module ClaudeInbox
       r = Subprocess.capture(*argv)
       raise Error, "#{argv[1]} failed: #{r.err.strip}" unless r.success?
       true
+    end
+
+    def start_bg(argv, cwd, what)
+      r = Subprocess.capture(*argv, chdir: cwd)
+      raise Error, "#{what} failed: #{(r.err + r.out).strip}" unless r.success?
+      r.out[/\b[0-9a-f]{8}\b/] || r.out.strip
     end
   end
 

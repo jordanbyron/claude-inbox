@@ -90,7 +90,7 @@ module ClaudeInbox
       n = nums[0] || 1
       case final
       when "H", "f"
-        @row = ((nums[0] || 1) - 1).clamp(0, @rows - 1)
+        @row = (n - 1).clamp(0, @rows - 1)
         @col = ((nums[1] || 1) - 1).clamp(0, @cols - 1)
       when "A" then @row = [@row - n, 0].max
       when "B" then @row = [@row + n, @rows - 1].min

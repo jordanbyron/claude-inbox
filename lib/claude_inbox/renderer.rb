@@ -20,6 +20,10 @@ module ClaudeInbox
 
     Frame = Struct.new(:lines, :items, :top, :list_width)
 
+    CHROME_ROWS = 2 # header + footer
+
+    def self.body_height(height) = height - CHROME_ROWS
+
     # What App hands Renderer for one frame. `peek` is a Peek::View.
     View = Data.define(:width, :height, :now, :selected, :top, :expanded, :peek, :modal, :screen,
       :status, :usage, :filter, :filter_editing, :tick, :loading) do
@@ -36,6 +40,10 @@ module ClaudeInbox
     }.freeze
 
     SECTION_HUES = {pinned: :cyan, needs_you: :red, active: :yellow, snoozed: :purple}.freeze
+
+    # GitHub's colors. A draft has no hue, so it dims; a state missing from
+    # the table isn't named on the badge at all.
+    PR_HUES = {"OPEN" => :green, "DRAFT" => nil, "MERGED" => :purple, "CLOSED" => :red}.freeze
 
     SPINNER = %w[⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏].freeze
 
@@ -75,7 +83,7 @@ module ClaudeInbox
       return full_screen(sections, view) if view.screen
       width, height, now, selected = view.width, view.height, view.now, view.selected
       list_w = width_for_list(width, view.peek)
-      view_h = height - 2 # header + footer
+      view_h = Renderer.body_height(height)
       body, items =
         if view.loading
           [loading_state(list_w, view_h, view.loading, view.tick), []]
@@ -118,19 +126,18 @@ module ClaudeInbox
 
     def full_screen(sections, view)
       width = view.width
-      view_h = view.height - 2
+      view_h = Renderer.body_height(view.height)
       body = view.screen[:lines].first(view_h)
       body += [""] * (view_h - body.size)
       lines = [header(sections, width, view)] + body.map { |l| Text.pad(l, width) } + [Text.pad(" " + view.screen[:footer], width)]
-      Frame.new(lines, [nil] * (view_h + 2), view.top, width)
+      Frame.new(lines, [nil] * view.height, view.top, width)
     end
 
     # ----- chrome -------------------------------------------------------------
 
     def header(sections, width, view)
       brand = " " + @theme.cyan_bold("▌ claude-inbox")
-      right = [view.status && @p.dim(view.status), view.usage && usage_meters(view.usage, view.now)].compact.join(@p.dim("  ·  "))
-      right += " " unless right.empty?
+      right = header_right(view, width - Text.width(brand) - 3)
       room = width - Text.width(brand) - Text.width(right) - 3
       chips = view.loading ? "" : header_chips(sections, compact: false)
       chips = header_chips(sections, compact: true) if Text.width(chips) > room
@@ -138,13 +145,24 @@ module ClaudeInbox
       Text.pad(brand + "   " + chips, width - Text.width(right)) + right
     end
 
+    # The notice outranks the usage meters: they shed their reset times, then
+    # go, before the notice itself is cut to fit.
+    def header_right(view, room)
+      meters = view.usage ? [usage_meters(view.usage, view.now), usage_meters(view.usage, view.now, resets: false)] : []
+      (meters + [nil]).each do |m|
+        right = [view.status && @p.dim(view.status), m].compact.join(@p.dim("  ·  "))
+        return right.empty? ? right : right + " " if Text.width(right) < room
+      end
+      (view.status && room > 1) ? @p.dim(Text.truncate(view.status, room - 1)) + " " : ""
+    end
+
     # "session ██░░░░░░░░ 24% · 3h left" per window, drawn and colored the way
     # the context bar in the user's status line is, so the two read alike.
-    def usage_meters(windows, now)
+    def usage_meters(windows, now, resets: true)
       windows.map do |w|
         filled = w.percent / 10
         bar = "█" * filled + "░" * (10 - filled)
-        left = w.resets_at && w.resets_at.to_i - now.to_i
+        left = w.resets_at.to_i - now.to_i if resets && w.resets_at
         figure = left&.positive? ? "#{w.percent}% · #{Text.age(left)} left" : "#{w.percent}%"
         "#{@p.dim(w.label)} #{@theme.public_send(usage_hue(w.percent), bar)} #{@p.dim(figure)}"
       end.join("  ")
@@ -203,8 +221,9 @@ module ClaudeInbox
       Text.pad(" " + section_color(name, "▎") + section_color(name, @p.bold(title)) + @p.dim("─" * fill) + @p.dim(count_s), width)
     end
 
-    def section_color(name, s)
-      hue = SECTION_HUES[name]
+    def section_color(name, s) = tint(SECTION_HUES[name], s)
+
+    def tint(hue, s)
       hue ? @theme.public_send(hue, s) : @p.dim(s)
     end
 
@@ -366,19 +385,13 @@ module ClaudeInbox
       pr ? base + @p.dim(" · ") + pr : base
     end
 
-    # "#885 open" in GitHub's colors: green open, dim draft, purple merged,
-    # red closed. Only the first PR is shown; the peek subtitle lists them all.
+    # "#885 open". Only the first PR is shown; the peek subtitle lists them all.
     def pr_badge(s, section)
       pr = s.pr
       return nil unless pr
       return @p.dim("#{pr.short} #{pr.state&.downcase}".strip) if section == :settled
-      case pr.state
-      when "OPEN" then @theme.green("#{pr.short} open")
-      when "DRAFT" then @p.dim("#{pr.short} draft")
-      when "MERGED" then @theme.purple("#{pr.short} merged")
-      when "CLOSED" then @theme.red("#{pr.short} closed")
-      else @p.dim(pr.short)
-      end
+      return @p.dim(pr.short) unless PR_HUES.key?(pr.state)
+      tint(PR_HUES[pr.state], "#{pr.short} #{pr.state.downcase}")
     end
 
     def state_badge(s)

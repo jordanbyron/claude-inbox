@@ -23,6 +23,10 @@ module ClaudeInbox
 
     MENU_ROWS = 6
 
+    # Keys a :choice field answers to, as the step through its choices; an
+    # editable field spends these on its own text instead.
+    CYCLE = {:left => -1, :right => 1, "h" => -1, "l" => 1, " " => 1}.freeze
+
     def initialize(cwd:, pastel:, theme: Theme.new(enabled: pastel.enabled), home: Dir.home, clipboard: Images.method(:from_clipboard))
       @p = pastel
       @theme = theme
@@ -36,7 +40,7 @@ module ClaudeInbox
         Field.new(:effort, "Effort", :choice, DEFAULT, AgentsClient::EFFORTS),
         Field.new(:permission_mode, "Permissions", :choice, DEFAULT, AgentsClient::PERMISSION_MODES),
         Field.new(:worktree, "Worktree", :choice, "no", %w[no yes]),
-        Field.new(:remote, "Remote Control", :choice, "no", %w[no yes])
+        Field.new(:remote, "Remote Control", :choice, DEFAULT, [DEFAULT, "no", "yes"])
       ]
       @focus = 0
       @error = nil
@@ -117,16 +121,17 @@ module ClaudeInbox
       @fields.to_h { |f| [f.key, f.value.to_s] }.tap do |v|
         v[:prompt] = field(:prompt).value.expand { |chip| AgentsClient.mention(chip.path) }.strip
         v[:worktree] = v[:worktree] == "yes"
-        v[:remote] = v[:remote] == "yes"
         v[:name] = nil if v[:name].strip.empty?
         v[:cwd] = directory
+        # Passed explicitly even when settings turn it on, so the daemon
+        # records it in respawnFlags and the row gets its marker.
+        v[:remote] = ((v[:remote] == DEFAULT) ? defaults(v[:cwd]).remote : v[:remote]) == "yes"
       end
     end
 
     # Settings resolve against the directory the session will run in, so
     # they follow the Directory field.
-    def defaults
-      cwd = directory
+    def defaults(cwd = directory)
       return @defaults if @defaults_for == cwd
       @defaults_for = cwd
       @defaults = Settings.defaults(cwd, home: @home)
@@ -351,23 +356,10 @@ module ClaudeInbox
 
     def focus_on(key) = @focus = @fields.index { |f| f.key == key }
 
-    # Keys a :choice field answers to; an editable field spends these on its
-    # own text instead.
     def choose(name, raw)
-      case name
-      when :left then cycle(-1)
-      when :right then cycle(1)
-      else
-        case raw
-        when "h" then cycle(-1)
-        when "l", " " then cycle(1)
-        end
-      end
-    end
-
-    def cycle(d)
+      d = CYCLE[name] || CYCLE[raw]
+      return unless d
       f = focused
-      return unless f.kind == :choice
       f.value = f.choices[(f.choices.index(f.value) + d) % f.choices.size]
     end
 
