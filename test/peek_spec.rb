@@ -92,16 +92,16 @@ describe ClaudeInbox::Peek do
   it "scrolls back from the tail and no further than the history allows" do
     r = row
     fetch(r)
-    _(peek.view(r, 6).lines).must_equal (1..10).map { |i| "line #{i}" }
+    _(peek.view(r, 4).lines).must_equal (1..10).map { |i| "line #{i}" }
 
     peek.scroll(2)
-    _(peek.view(r, 6).lines).must_equal (1..8).map { |i| "line #{i}" }
+    _(peek.view(r, 4).lines).must_equal (1..8).map { |i| "line #{i}" }
 
     peek.scroll(100)
-    _(peek.view(r, 6).lines).must_equal (1..4).map { |i| "line #{i}" }
+    _(peek.view(r, 4).lines).must_equal (1..4).map { |i| "line #{i}" }
 
     peek.scroll(-100)
-    _(peek.view(r, 6).lines).must_equal (1..10).map { |i| "line #{i}" }
+    _(peek.view(r, 4).lines).must_equal (1..10).map { |i| "line #{i}" }
   end
 
   it "forgets the scroll on a new selection" do
@@ -109,7 +109,7 @@ describe ClaudeInbox::Peek do
     fetch(r)
     peek.scroll(3)
     peek.select(on(r.key), r.session)
-    _(peek.view(r, 6).lines).must_equal (1..10).map { |i| "line #{i}" }
+    _(peek.view(r, 4).lines).must_equal (1..10).map { |i| "line #{i}" }
   end
 
   it "closes on demand" do
