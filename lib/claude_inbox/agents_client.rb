@@ -46,7 +46,7 @@ module ClaudeInbox
     # and, the moment it becomes the agents view, terminate it. The user then
     # lands back in the inbox instead of native agent view.
     def attach(id)
-      pid = Process.spawn(@bin, "attach", id)
+      pid = Process.spawn(*Subprocess.command(@bin, "attach", id))
       watchdog = Thread.new { kill_when_agents_view(pid) }
       _, status = Process.wait2(pid)
       status

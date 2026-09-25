@@ -10,7 +10,15 @@ module ClaudeInbox
       def success? = status.success?
     end
 
+    # Children start in the environment from before Bundler, or every ruby a
+    # session runs, in any project, loads our Gemfile. Handed to exec rather
+    # than set on ENV, which the poll and background threads share.
+    CHILD_ENV = defined?(Bundler.unbundled_env) ? Bundler.unbundled_env.freeze : nil
+
     module_function
+
+    # argv as exec and Process.spawn take it, with CHILD_ENV in place of ours.
+    def command(*argv) = CHILD_ENV ? [CHILD_ENV, *argv, {unsetenv_others: true}] : argv
 
     def capture(*argv, chdir: nil)
       out_r, out_w = IO.pipe
@@ -23,7 +31,7 @@ module ClaudeInbox
         out_r.close
         err_r.close
         Dir.chdir(chdir) if chdir
-        exec(*argv)
+        exec(*command(*argv))
       rescue SystemCallError => e
         $stderr.write(e.message)
         exit! 127
