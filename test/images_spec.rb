@@ -80,10 +80,20 @@ describe ClaudeInbox::Images do
         now = Time.at(1_789_400_000, 123, :millisecond)
         samples.each.with_index(1) do |(ext, bytes), i|
           path = ClaudeInbox::Images.save(bytes, dir: dir, now: now, index: i)
-          _(path).must_equal File.join(dir, "#{now.strftime("%Y%m%d-%H%M%S")}-123-#{i}#{ext}")
+          _(File.dirname(path)).must_equal dir
+          _(File.basename(path)).must_match(/\A#{now.strftime("%Y%m%d-%H%M%S")}-123-#{i}-\h{6}#{ext}\z/)
           _(File.binread(path)).must_equal bytes
           _(File.stat(path).mode & 0o777).must_equal 0o600
         end
+      end
+    end
+
+    it "keeps two images saved in the same millisecond apart" do
+      Dir.mktmpdir do |dir|
+        now = Time.at(1_789_400_000)
+        paths = 2.times.map { ClaudeInbox::Images.save(samples[".png"], dir: dir, now: now) }
+        _(paths.uniq.size).must_equal 2
+        _(paths.all? { |path| File.binread(path) == samples[".png"] }).must_equal true
       end
     end
 
