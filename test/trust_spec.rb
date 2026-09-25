@@ -23,6 +23,15 @@ describe ClaudeInbox::Trust do
         end
       end
     end
+
+    it "skips a key that is not an absolute path" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "claude.json")
+        accepted = {"hasTrustDialogAccepted" => true}
+        File.write(path, JSON.generate("projects" => {"code/x" => accepted, "/a\0b" => accepted, "/ok" => accepted}))
+        _(projects(path)).must_equal ["/ok"]
+      end
+    end
   end
 
   describe "covers?" do
