@@ -259,7 +259,9 @@ curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 The fields are those of the `n` form: `prompt`, `name`, `cwd` (a path, or a
 directory's label), `model`, `effort`, `permission_mode`, `worktree` and
 `remote`, plus `images`, up to eight `{"data": "<base64>"}` PNG, JPEG, GIF
-or WebP images that the prompt can point at as `[Image #1]`. An unknown key
+or WebP images that the prompt can point at as `[Image #1]`. Left out,
+`remote` follows "Enable Remote Control for all sessions" in `/config`, as
+the form's default does. An unknown key
 is refused, so a misspelt setting can't quietly fall back to its default.
 The answer is `201 {"id", "name", "cwd", "url"}`, where `url` is the
 session's claude.ai/code page, or null if it hasn't registered yet. A
