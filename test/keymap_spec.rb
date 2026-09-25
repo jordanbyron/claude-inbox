@@ -54,6 +54,7 @@ describe ClaudeInbox::Keymap do
     _(km.press(:ctrl_x, "\x18")).must_equal :delete
     _(km.press("p", "p")).must_equal :toggle_peek
     _(km.press("n", "n")).must_equal :new_session
+    _(km.press("N", "N")).must_equal :remote_pairing
     _(km.press("t", "t")).must_equal :toggle_pin
     _(km.press("o", "o")).must_equal :open_pr
     _(km.press("w", "w")).must_equal :open_remote

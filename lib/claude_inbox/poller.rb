@@ -35,8 +35,10 @@ module ClaudeInbox
 
     def stop = @thread&.kill
 
-    # Skips the poll rather than the timer, so nothing forks `claude` while
-    # another process holds the terminal. A poll already under way finishes.
+    # Only skips polls while another process holds the terminal; a poll
+    # already under way finishes. Forking from another thread meanwhile, as
+    # a remote start does, is fine: Subprocess puts every child in its own
+    # session, away from the tty.
     def pause = @lock.synchronize { @paused = true }
 
     def resume

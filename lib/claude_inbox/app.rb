@@ -11,8 +11,10 @@ require_relative "terminal"
 require_relative "logs"
 require_relative "peek"
 require_relative "keymap"
+require_relative "listener"
 require_relative "mouse"
 require_relative "new_session_form"
+require_relative "pairing"
 require_relative "paste"
 require_relative "pull_requests"
 require_relative "poller"
@@ -23,12 +25,14 @@ module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
   # child process that takes over the terminal.
   class App
-    # The reaper defaults to off. It is the only thing here that deletes a
-    # session, so switching it on is `bin/claude-inbox`'s job and nothing
-    # reaches it by forgetting an argument.
+    # The reaper and the listener default to off. The reaper is the only
+    # thing here that deletes a session and the listener the only way in
+    # from another machine, so switching either on is `bin/claude-inbox`'s
+    # job and nothing reaches them by forgetting an argument. `listen` is
+    # Listener.options' hash. `queue` is how every other thread reaches App.
     def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
-      rate_limits: RateLimits.new, reaper: Reaper.disabled, out: $stdout, input: $stdin, color: true,
-      terminal: Terminal.new(out, input))
+      rate_limits: RateLimits.new, reaper: Reaper.disabled, listen: nil, out: $stdout, input: $stdin, color: true,
+      terminal: Terminal.new(out, input), queue: Queue.new)
       @client = client
       @store = store
       @rate_limits = rate_limits
@@ -36,9 +40,10 @@ module ClaudeInbox
       @color = color
       @renderer = Renderer.new(color: color)
       @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
-      @queue = Queue.new
+      @queue = queue
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests,
         reaper: reaper, queue: @queue)
+      @listener = listen ? Listener.new(client: client, store: store, queue: @queue, pairing: Pairing.new, jobs_dir: client.jobs_dir, **listen) : Listener.disabled
       @logs = Logs.new(client)
       @peek = Peek.new(@logs)
       @selected = nil
@@ -61,12 +66,14 @@ module ClaudeInbox
       install_traps
       @terminal.enter
       @poller.start
+      @listener.start
       @logs.start
       main_loop
     ensure
       @poller.stop
       @logs.stop
       @terminal.restore
+      @listener.stop
     end
 
     def step(input = nil)
@@ -114,6 +121,7 @@ module ClaudeInbox
         when :attach then attach(rest[0])
         when :form_started then @modal = nil if @modal.equal?(rest[0])
         when :form_failed then form_failed(*rest)
+        when :remote_started then remote_started(*rest)
         end
       end
     rescue ThreadError
@@ -154,7 +162,7 @@ module ClaudeInbox
         width: width, height: height, now: now, selected: @selected&.key, top: @top, expanded: @expanded,
         peek: @peek.view(sections.row(@selected), body_h), modal: modal_lines(width), screen: screen_lines(width, body_h),
         status: status_text(now), usage: @rate_limits.windows(now), filter: @filter, filter_editing: @filter_editing,
-        tick: @tick / 2, loading: loading_for
+        tick: @tick / 2, loading: loading_for, listening: @listener.snapshot
       )
       frame = @renderer.frame(sections, view)
       @row_items = frame.items
@@ -312,6 +320,7 @@ module ClaudeInbox
       when :refresh then @poller.soon
       when :toggle_peek then toggle_peek
       when :new_session then open_new_session
+      when :remote_pairing then open_pairing
       when :filter then start_filter
       when :escape then clear_filter
       end
@@ -451,6 +460,13 @@ module ClaudeInbox
       end
     end
 
+    # Someone at the desk may be mid-thought, so a start from another
+    # device never moves the cursor, attaches or closes what is open.
+    def remote_started(id, via)
+      notice("started #{id} from #{via}")
+      @poller.soon
+    end
+
     # A spawn failure hands the form back rather than just logging it, so
     # the composed prompt survives (see NewSessionForm#submission_failed).
     def form_failed(form, message)
@@ -483,6 +499,8 @@ module ClaudeInbox
         when :adopt then adopt_session(id)
         end
       when :save then save_prompt
+      when :copy then copy_pairing_url
+      when :rotate then rotate_token
       end
     end
 
@@ -495,6 +513,29 @@ module ClaudeInbox
       when :cancel then @modal = nil
       when :start then start_session(form, attach: false)
       when :start_and_attach then start_session(form, attach: true)
+      end
+    end
+
+    # The addresses fork scutil, so they are looked up off the main thread
+    # and the dialog fills in when they land.
+    def open_pairing
+      @modal = Dialog::Pairing.new(-> { @listener.snapshot })
+      in_background { @listener.refresh }
+    end
+
+    def copy_pairing_url
+      url = @listener.snapshot.pairing_url
+      return notice("still looking up this Mac's addresses") unless url
+      in_background do
+        r = Subprocess.capture("osascript", "-e", "on run argv", "-e", "set the clipboard to item 1 of argv", "-e", "end run", url)
+        @queue << [:notice, r.success? ? "pairing URL copied" : "couldn't copy: #{r.err.strip}"]
+      end
+    end
+
+    def rotate_token
+      in_background do
+        @listener.rotate
+        @queue << [:notice, "new token: phones pair again with N"]
       end
     end
 
