@@ -25,7 +25,11 @@ describe ClaudeInbox::AgentsClient do
 end
 
 describe ClaudeInbox::NewSessionForm do
-  let(:form) { ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false)) }
+  # An empty home, so the developer's own ~/.claude settings stay out of the defaults.
+  let(:home) { Dir.mktmpdir }
+  after { FileUtils.rm_rf(home) }
+
+  let(:form) { ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home) }
 
   def type(str) = str.each_char { |c| form.press(c, c) }
 
@@ -87,7 +91,7 @@ describe ClaudeInbox::NewSessionForm do
   it "starts and attaches on ^O, starts and stays put on ^S" do
     type("do it")
     _(form.press(:ctrl_o, "\x0f")).must_equal :start_and_attach
-    other = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false))
+    other = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
     type_into(other, "do it")
     _(other.press(:ctrl_s, "\x13")).must_equal :start
   end
@@ -113,7 +117,7 @@ describe ClaudeInbox::NewSessionForm do
 
   describe "images" do
     let(:clip) { ClaudeInbox::Images::Clipboard.new(nil, nil) }
-    let(:form) { ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), clipboard: -> { clip }) }
+    let(:form) { ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), clipboard: -> { clip }, home: home) }
 
     it "attaches the clipboard's image on an empty paste, as a token in the prompt" do
       clip.image = "/tmp/shot.png"
@@ -283,7 +287,7 @@ describe ClaudeInbox::NewSessionForm do
   end
 
   it "draws the cursor on the cell it sits on" do
-    f = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: true))
+    f = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: true), home: home)
     "ab".each_char { |c| f.press(c, c) }
     f.press(:left, "\e[D")
     _(f.screen(80, 24).join("\n")).must_include "a\e[7mb\e[0m"
