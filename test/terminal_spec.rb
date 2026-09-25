@@ -4,6 +4,26 @@ require_relative "test_helper"
 require_relative "../lib/claude_inbox/terminal"
 require "stringio"
 
+# A tty with a mode of its own, as io/console exposes one.
+class ModedInput < StringIO
+  attr_reader :modes
+
+  def initialize
+    super
+    @modes = [:shell]
+  end
+
+  def tty? = true
+
+  def raw! = @modes << :raw
+
+  def console_mode = @modes.last
+
+  def console_mode=(mode)
+    @modes << mode
+  end
+end
+
 describe ClaudeInbox::Terminal do
   let(:out) { StringIO.new }
   let(:terminal) { ClaudeInbox::Terminal.new(out, StringIO.new) }
@@ -63,6 +83,14 @@ describe ClaudeInbox::Terminal do
     terminal.release { order << taken.include?(ClaudeInbox::Terminal::ALT_OFF) }
     _(order).must_equal [true]
     _(taken).must_include ClaudeInbox::Terminal::ALT_ON
+  end
+
+  it "hands the tty back in the mode it found it, not a stock cooked one" do
+    input = ModedInput.new
+    terminal = ClaudeInbox::Terminal.new(out, input)
+    terminal.enter
+    terminal.restore
+    _(input.modes).must_equal [:shell, :raw, :shell]
   end
 
   it "never lets the frame get smaller than the renderer can lay out" do
