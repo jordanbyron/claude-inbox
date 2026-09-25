@@ -57,7 +57,7 @@ module ClaudeInbox
         s = truncate(strip_ansi(s), w)
         cur = width(s)
       end
-      s + (" " * (w - cur))
+      s + (" " * [w - cur, 0].max)
     end
 
     # Greedy word wrap on display width. Words wider than `w` are split.
