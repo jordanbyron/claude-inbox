@@ -252,6 +252,9 @@ function relabel() {
       delete select.dataset.forced;
     }
   }
+  // On, since you are away from the desk, unless /config or the project
+  // turns Remote Control off there. A flip of your own stays put.
+  if (!$("remote").dataset.flipped) $("remote").checked = !(dir && dir.defaults && dir.defaults.remote === "no");
 }
 
 function cwd() {
@@ -459,6 +462,7 @@ $("name").addEventListener("input", saveDraft);
 $("cwd").addEventListener("change", () => { saved.set("cwd", cwd() || null); relabel(); });
 $("cwd-other").addEventListener("input", () => saved.set("cwd", cwd() || null));
 for (const id of ["model", "effort", "permission_mode"]) $(id).addEventListener("change", () => delete $(id).dataset.forced);
+$("remote").addEventListener("change", () => { $("remote").dataset.flipped = "1"; });
 $("file").addEventListener("change", (e) => { addImages([...e.target.files]); e.target.value = ""; });
 $("start").addEventListener("click", start);
 $("retry").addEventListener("click", load);

@@ -237,7 +237,8 @@ you, in your projects: treat a leaked URL like a leaked password, and press
 
 **The page.** The pairing URL opens the `n` form, sized for a phone:
 prompt, name, directory, model, effort, permissions, worktree and Remote
-Control, which starts out on, since you are away from the desk. The
+Control, which starts out on, since you are away from the desk, unless
+`/config` or the project's settings turn it off for that directory. The
 directories are the ones your sessions ran in lately, then the projects
 whose trust dialog you accepted, and the one you picked last is picked
 again; "another directory…" takes a typed path instead. "default" in a list
