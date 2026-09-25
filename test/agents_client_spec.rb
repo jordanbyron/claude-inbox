@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require "fileutils"
+require "tmpdir"
 
 describe ClaudeInbox::AgentsClient do
   let(:sessions) { fixture_sessions }
@@ -95,6 +97,50 @@ describe ClaudeInbox::AgentsClient do
       _(ClaudeInbox::AgentsClient.headless?("claude")).must_equal false
       _(ClaudeInbox::AgentsClient.headless?("/Users/x/.local/bin/claude -p x")).must_equal true
       _(ClaudeInbox::AgentsClient.headless?("claude-p")).must_equal false
+    end
+  end
+
+  describe "starting a background session" do
+    # Stands in for `claude`: prints an id and records the directory it ran
+    # in, or fails when the arguments mention boom.
+    before do
+      @dir = Dir.mktmpdir
+      @bin = File.join(@dir, "claude")
+      File.write(@bin, <<~SH)
+        #!/bin/sh
+        case "$*" in *boom*) echo "no daemon" >&2; echo "see log"; exit 1;; esac
+        pwd > #{@dir}/ran_in
+        echo "started 1a2b3c4d"
+      SH
+      File.chmod(0o755, @bin)
+    end
+
+    after { FileUtils.rm_rf(@dir) }
+
+    let(:client) { ClaudeInbox::AgentsClient.new(bin: @bin) }
+
+    it "spawns in the given directory and returns the short id" do
+      _(client.spawn(prompt: "hi", cwd: @dir)).must_equal "1a2b3c4d"
+      _(File.read(File.join(@dir, "ran_in")).strip).must_equal File.realpath(@dir)
+    end
+
+    it "says what failed, with everything the CLI printed" do
+      e = _ { client.spawn(prompt: "boom", cwd: @dir) }.must_raise ClaudeInbox::AgentsClient::Error
+      _(e.message).must_equal "claude --bg failed: no daemon\nsee log"
+    end
+
+    it "adopts once the worker is gone and returns the short id" do
+      worker = Process.spawn("sleep", "30")
+      Process.detach(worker)
+      _(client.adopt(session_id: "u1", cwd: @dir, pid: worker)).must_equal "1a2b3c4d"
+      _ { Process.kill(0, worker) }.must_raise Errno::ESRCH
+    end
+
+    it "names the resume when adopting fails" do
+      worker = Process.spawn("sleep", "30")
+      Process.detach(worker)
+      e = _ { client.adopt(session_id: "boom", cwd: @dir, pid: worker) }.must_raise ClaudeInbox::AgentsClient::Error
+      _(e.message).must_equal "claude --bg --resume failed: no daemon\nsee log"
     end
   end
 
