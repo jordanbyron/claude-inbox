@@ -518,18 +518,20 @@ module ClaudeInbox
     end
 
     # "default" is what the settings files say, so a project defaulting to
-    # bypassPermissions can't pass as "default"; the spawn then names the
-    # mode that passed rather than have the CLI work it out again.
+    # bypassPermissions can't pass as "default". The spawn always names the
+    # mode that passed: the flag beats every settings file short of managed
+    # policy, so one the inbox doesn't read can't widen it.
     def capped_mode(values)
       mode = values[:permission_mode]
       mode = @settings.call(values[:cwd]).permission_mode || builtin_mode if mode == "default"
-      return mode if mode.nil? || @allowed_modes.include?(mode)
+      return mode if @allowed_modes.include?(mode)
       raise Http::Error.new(403, "permission mode #{mode} isn't allowed from another device", field: "permission_mode")
     end
 
     # Unset in settings, the CLI's own default is auto or manual, never
-    # wider: leave the flag off unless auto is refused.
-    def builtin_mode = @allowed_modes.include?("auto") ? nil : "default"
+    # wider. Passed as "default" the CLI takes manual, so auto is named
+    # outright wherever it is allowed.
+    def builtin_mode = @allowed_modes.include?("auto") ? "auto" : "default"
 
     # Left out, Remote Control is what /config says for that directory, as
     # the n form's default is, and is then passed as the flag the form passes.
