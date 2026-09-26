@@ -1,10 +1,9 @@
 # frozen_string_literal: true
 
-require_relative "test_helper"
 require_relative "../lib/claude_inbox/images"
 require "tmpdir"
 
-describe ClaudeInbox::Images do
+RSpec.describe ClaudeInbox::Images do
   def result(out, ok) = ClaudeInbox::Subprocess::Result.new(out, "", Struct.new(:success?).new(ok))
 
   def touch(dir, name, mtime: Time.now)
@@ -18,17 +17,17 @@ describe ClaudeInbox::Images do
     it "takes an image file, unescaped the way the terminal pasted it" do
       Dir.mktmpdir do |dir|
         shot = touch(dir, "Screen Shot.PNG")
-        _(ClaudeInbox::Images.dropped("#{dir}/Screen\\ Shot.PNG ")).must_equal shot
-        _(ClaudeInbox::Images.dropped("'#{shot}'")).must_equal shot
+        expect(ClaudeInbox::Images.dropped("#{dir}/Screen\\ Shot.PNG ")).to eq(shot)
+        expect(ClaudeInbox::Images.dropped("'#{shot}'")).to eq(shot)
       end
     end
 
     it "leaves anything else as text" do
       Dir.mktmpdir do |dir|
         touch(dir, "notes.md")
-        _(ClaudeInbox::Images.dropped("#{dir}/notes.md ")).must_be_nil
-        _(ClaudeInbox::Images.dropped("#{dir}/missing.png")).must_be_nil
-        _(ClaudeInbox::Images.dropped("look at this")).must_be_nil
+        expect(ClaudeInbox::Images.dropped("#{dir}/notes.md ")).to be_nil
+        expect(ClaudeInbox::Images.dropped("#{dir}/missing.png")).to be_nil
+        expect(ClaudeInbox::Images.dropped("look at this")).to be_nil
       end
     end
   end
@@ -45,12 +44,12 @@ describe ClaudeInbox::Images do
           result("", true)
         }
         clip = ClaudeInbox::Images.from_clipboard(dir: dir, now: now, run: run)
-        _(clip.image).must_equal File.join(dir, now.strftime("%Y%m%d-%H%M%S-%L.png"))
-        _(clip.text).must_be_nil
-        _(calls.first[0..1]).must_equal ["osascript", "-e"]
-        _(calls.first.last).must_equal clip.image
-        _(File.exist?(old)).must_equal false
-        _(File.exist?(kept)).must_equal true
+        expect(clip.image).to eq(File.join(dir, now.strftime("%Y%m%d-%H%M%S-%L.png")))
+        expect(clip.text).to be_nil
+        expect(calls.first[0..1]).to eq(["osascript", "-e"])
+        expect(calls.first.last).to eq(clip.image)
+        expect(File.exist?(old)).to be(false)
+        expect(File.exist?(kept)).to be(true)
       end
     end
 
@@ -58,10 +57,10 @@ describe ClaudeInbox::Images do
       Dir.mktmpdir do |dir|
         run = ->(cmd, *) { (cmd == "pbpaste") ? result("hi\n", true) : result("", false) }
         clip = ClaudeInbox::Images.from_clipboard(dir: dir, run: run)
-        _(clip.image).must_be_nil
-        _(clip.text).must_equal "hi\n"
+        expect(clip.image).to be_nil
+        expect(clip.text).to eq("hi\n")
         empty = ->(*) { result("", false) }
-        _(ClaudeInbox::Images.from_clipboard(dir: dir, run: empty).to_a).must_equal [nil, nil]
+        expect(ClaudeInbox::Images.from_clipboard(dir: dir, run: empty).to_a).to eq([nil, nil])
       end
     end
   end
@@ -80,10 +79,10 @@ describe ClaudeInbox::Images do
         now = Time.at(1_789_400_000, 123, :millisecond)
         samples.each.with_index(1) do |(ext, bytes), i|
           path = ClaudeInbox::Images.save(bytes, dir: dir, now: now, index: i)
-          _(File.dirname(path)).must_equal dir
-          _(File.basename(path)).must_match(/\A#{now.strftime("%Y%m%d-%H%M%S")}-123-#{i}-\h{6}#{ext}\z/)
-          _(File.binread(path)).must_equal bytes
-          _(File.stat(path).mode & 0o777).must_equal 0o600
+          expect(File.dirname(path)).to eq(dir)
+          expect(File.basename(path)).to match(/\A#{now.strftime("%Y%m%d-%H%M%S")}-123-#{i}-\h{6}#{ext}\z/)
+          expect(File.binread(path)).to eq(bytes)
+          expect(File.stat(path).mode & 0o777).to eq(0o600)
         end
       end
     end
@@ -92,8 +91,8 @@ describe ClaudeInbox::Images do
       Dir.mktmpdir do |dir|
         now = Time.at(1_789_400_000)
         paths = 2.times.map { ClaudeInbox::Images.save(samples[".png"], dir: dir, now: now) }
-        _(paths.uniq.size).must_equal 2
-        _(paths.all? { |path| File.binread(path) == samples[".png"] }).must_equal true
+        expect(paths.uniq.size).to eq(2)
+        expect(paths.all? { |path| File.binread(path) == samples[".png"] }).to be(true)
       end
     end
 
@@ -101,9 +100,9 @@ describe ClaudeInbox::Images do
       Dir.mktmpdir do |tmp|
         dir = File.join(tmp, "images")
         [Random.new(7).bytes(64), "BM\x3A\0\0\0".b, "<svg xmlns='http://www.w3.org/2000/svg'/>", ""].each do |bytes|
-          _ { ClaudeInbox::Images.save(bytes, dir: dir) }.must_raise ClaudeInbox::Images::Unsupported
+          expect { ClaudeInbox::Images.save(bytes, dir: dir) }.to raise_error(ClaudeInbox::Images::Unsupported)
         end
-        _(Dir.exist?(dir)).must_equal false
+        expect(Dir.exist?(dir)).to be(false)
       end
     end
 
@@ -114,9 +113,9 @@ describe ClaudeInbox::Images do
         kept = touch(dir, "kept.webp", mtime: now - 60)
         notes = touch(dir, "notes.txt", mtime: now - 15 * 24 * 3600)
         ClaudeInbox::Images.save(samples[".png"], dir: dir, now: now)
-        _(File.exist?(old)).must_equal false
-        _(File.exist?(kept)).must_equal true
-        _(File.exist?(notes)).must_equal true
+        expect(File.exist?(old)).to be(false)
+        expect(File.exist?(kept)).to be(true)
+        expect(File.exist?(notes)).to be(true)
       end
     end
   end

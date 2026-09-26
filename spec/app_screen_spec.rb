@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "test_helper"
 require_relative "../lib/claude_inbox/app"
 require "stringio"
 require "tmpdir"
@@ -9,7 +8,7 @@ CTRL_X = "\x18"
 CTRL_S = "\x13"
 CTRL_U = "\x15"
 
-describe ClaudeInbox::App do
+RSpec.describe ClaudeInbox::App do
   let(:terminal) { ScreenTerminal.new }
 
   let(:client) { RecordingClient.new }
@@ -57,50 +56,50 @@ describe ClaudeInbox::App do
 
   it "hands a paste to the new-session form whole, and types it into the filter" do
     press("/", "\e[200~thi\e[201~")
-    _(footer).must_include "/thi"
+    expect(footer).to include("/thi")
     press("\e", "n", "\e[200~one\ntwo\e[201~")
     prompt = screen.select { |l| l.start_with?("  │") }.map { |l| l.delete("│").strip }
-    _(prompt.join("\n").strip).must_equal "one\ntwo"
+    expect(prompt.join("\n").strip).to eq("one\ntwo")
   end
 
   it "drops a paste that lands where nothing is typed, so its letters never act as keys" do
     press(CTRL_X, "\e[200~yes, every directory\e[201~")
-    _(screen.join("\n")).must_include "Delete session f23c8673?"
-    _(client.removed).must_be_empty
+    expect(screen.join("\n")).to include("Delete session f23c8673?")
+    expect(client.removed).to be_empty
     press("\e", "N", "\e[200~query\e[201~")
-    _(screen.join("\n")).must_include "Pair a phone"
+    expect(screen.join("\n")).to include("Pair a phone")
     press("\e", "\e[200~q\e[201~")
-    _(screen.join("\n")).must_include "comma3x not booting"
+    expect(screen.join("\n")).to include("comma3x not booting")
   end
 
   it "edits the filter line in the middle, and closes it on a backspace from empty" do
     press("/", "ac", "\e[D", "b")
-    _(footer).must_include "/abc"
+    expect(footer).to include("/abc")
     press("\x01", "q")
-    _(footer).must_include "/qabc"
+    expect(footer).to include("/qabc")
     press("\x05", "\x7f", "\x7f", "\x7f", "\x7f")
-    _(footer.strip).must_equal "/"
+    expect(footer.strip).to eq("/")
     press("\x7f")
-    _(footer).must_include "j/k move"
+    expect(footer).to include("j/k move")
   end
 
   describe "clicking a row" do
     it "selects it and attaches, same as landing on it and pressing Enter" do
       click(5, row_of("comma3x led flashing"))
-      _(client.attached).must_equal ["823b882f"]
-      _(selected_line).must_include "comma3x led flashing"
+      expect(client.attached).to eq(["823b882f"])
+      expect(selected_line).to include("comma3x led flashing")
     end
 
     it "refuses on a terminal row instead of attaching, same as Enter" do
       click(5, row_of("claude-inbox-38"))
-      _(client.attached).must_be_empty
-      _(status_line).must_include "terminal"
+      expect(client.attached).to be_empty
+      expect(status_line).to include("terminal")
     end
 
     it "expands a folded section when its toggle line is clicked" do
       store.settle("b03695b1")
       click(5, row_of("… 1 settled"))
-      _(screen.join("\n")).must_include "app store release strategy"
+      expect(screen.join("\n")).to include("app store release strategy")
     end
 
     it "ignores a click past the list column, such as one landing in the peek pane" do
@@ -108,70 +107,70 @@ describe ClaudeInbox::App do
       row = row_of("comma3x not booting")
       col = screen[row - 1].index("│") + 5
       click(col, row)
-      _(client.attached).must_be_empty
+      expect(client.attached).to be_empty
     end
   end
 
   it "moves the selection on a wheel tick, the same way j/k would" do
-    _(selected_line).must_include "comma3x not booting"
+    expect(selected_line).to include("comma3x not booting")
     press("\e[<65;1;1M")
-    _(selected_line).must_include "claude-inbox-38"
+    expect(selected_line).to include("claude-inbox-38")
     press("\e[<64;1;1M")
-    _(selected_line).must_include "comma3x not booting"
+    expect(selected_line).to include("comma3x not booting")
   end
 
   describe "Tab and Shift-Tab" do
     it "walk a section headed by a terminal row like any other, and wrap" do
       store.settle("b03695b1")
       press("\t")
-      _(selected_line).must_include "claude-inbox-38"
+      expect(selected_line).to include("claude-inbox-38")
       press("\t")
-      _(selected_line).must_include "… 1 settled"
+      expect(selected_line).to include("… 1 settled")
       press("\t")
-      _(selected_line).must_include "comma3x not booting"
+      expect(selected_line).to include("comma3x not booting")
       press("\e[Z")
-      _(selected_line).must_include "… 1 settled"
+      expect(selected_line).to include("… 1 settled")
     end
   end
 
   it "opens, closes and toggles the section under the cursor on zo, zc and za" do
     store.settle("b03695b1")
     press("\t", "\t")
-    _(screen.join("\n")).wont_include "app store release strategy"
+    expect(screen.join("\n")).not_to include("app store release strategy")
     press("z", "o")
-    _(screen.join("\n")).must_include "app store release strategy"
+    expect(screen.join("\n")).to include("app store release strategy")
     press("\t", "\t")
-    _(selected_line).must_include "app store release strategy"
+    expect(selected_line).to include("app store release strategy")
     press("z", "c")
-    _(screen.join("\n")).wont_include "app store release strategy"
+    expect(screen.join("\n")).not_to include("app store release strategy")
     press("\t", "\t", "z", "a")
-    _(screen.join("\n")).must_include "app store release strategy"
+    expect(screen.join("\n")).to include("app store release strategy")
   end
 
   describe "ctrl-x deletes a session" do
     it "asks first and deletes once confirmed" do
       press(CTRL_X)
-      _(screen.join("\n")).must_include "Delete session f23c8673?"
-      _(client.removed).must_be_empty
+      expect(screen.join("\n")).to include("Delete session f23c8673?")
+      expect(client.removed).to be_empty
 
       press("y")
-      _(wait_for { client.removed == %w[f23c8673] }).must_equal true
-      _(wait_for { store.entry("f23c8673").nil? }).must_equal true
-      _(screen.join("\n")).wont_include "comma3x not booting"
+      expect(wait_for { client.removed == %w[f23c8673] }).to be(true)
+      expect(wait_for { store.entry("f23c8673").nil? }).to be(true)
+      expect(screen.join("\n")).not_to include("comma3x not booting")
     end
 
     it "keeps the session when the confirm is dismissed" do
       ["\e", "n", "q"].each do |dismiss|
         press(CTRL_X, dismiss)
-        _(screen.join("\n")).wont_include "Delete session"
-        _(client.removed).must_be_empty
+        expect(screen.join("\n")).not_to include("Delete session")
+        expect(client.removed).to be_empty
       end
     end
 
     it "refuses on a terminal row instead of arming a confirm it can't honour" do
       press("\t", CTRL_X)
-      _(screen.join("\n")).wont_include "Delete session"
-      _(status_line).must_include "terminal"
+      expect(screen.join("\n")).not_to include("Delete session")
+      expect(status_line).to include("terminal")
     end
 
     # Waiting for the stop to land is what makes "nothing was deleted" mean
@@ -179,12 +178,12 @@ describe ClaudeInbox::App do
     # passes no matter which way the key was routed.
     it "still stops rather than deletes on X, sharing the one confirm" do
       press("X")
-      _(screen.join("\n")).must_include "Stop session f23c8673?"
+      expect(screen.join("\n")).to include("Stop session f23c8673?")
 
       press("y")
-      _(wait_for { client.stopped == %w[f23c8673] }).must_equal true
-      _(client.removed).must_be_empty
-      _(store.entry("f23c8673")).wont_be_nil
+      expect(wait_for { client.stopped == %w[f23c8673] }).to be(true)
+      expect(client.removed).to be_empty
+      expect(store.entry("f23c8673")).not_to be_nil
     end
   end
 
@@ -208,21 +207,21 @@ describe ClaudeInbox::App do
 
     it "asks on Enter, then pulls the conversation in and attaches to it" do
       press("\t", "\r")
-      _(screen.join("\n")).must_include "Pull this session into the daemon?"
-      _(client.adopted).must_be_empty
+      expect(screen.join("\n")).to include("Pull this session into the daemon?")
+      expect(client.adopted).to be_empty
 
       press("y")
-      _(wait_for {
+      expect(wait_for {
         app.step
         client.attached == %w[adop7ed0]
-      }).must_equal true
-      _(client.adopted).must_equal [{session_id: "4a93393d-1c06-57da-9fb8-12f5b1535d95", cwd: "/Users/byron/code/claude-inbox", pid: 57405}]
+      }).to be(true)
+      expect(client.adopted).to eq([{session_id: "4a93393d-1c06-57da-9fb8-12f5b1535d95", cwd: "/Users/byron/code/claude-inbox", pid: 57405}])
     end
 
     it "leaves it alone when dismissed" do
       press("\t", "\r", "\e")
-      _(screen.join("\n")).wont_include "Pull this session"
-      _(client.adopted).must_be_empty
+      expect(screen.join("\n")).not_to include("Pull this session")
+      expect(client.adopted).to be_empty
     end
   end
 
@@ -232,12 +231,12 @@ describe ClaudeInbox::App do
       # The form defaults to the selected fixture row's cwd, a path from the
       # machine the fixture was captured on, so point it somewhere real.
       press("n", "h", "i", "\e[B", "\e[B", CTRL_U, *Dir.pwd.chars, CTRL_S)
-      _(status_line).must_include "starting session…"
+      expect(status_line).to include("starting session…")
 
       client.release
-      _(wait_for { status_line.include?("started deadbeef") }).must_equal true
+      expect(wait_for { status_line.include?("started deadbeef") }).to be(true)
       store.update(store.sessions + [session(id: "deadbeef", name: "fresh one")])
-      _(selected_line).must_include "fresh one"
+      expect(selected_line).to include("fresh one")
     end
 
     # A directory `claude` has never run in before is exactly where `claude
@@ -247,12 +246,12 @@ describe ClaudeInbox::App do
     it "reopens the form with the prompt and the error, instead of losing it, when the spawn fails" do
       client.fail_spawn("claude --bg failed: not a trusted directory")
       press("n", *"fix the thing".chars, "\e[B", "\e[B", CTRL_U, *Dir.pwd.chars, CTRL_S)
-      _(wait_for { screen.join("\n").include?("not a trusted directory") }).must_equal true
+      expect(wait_for { screen.join("\n").include?("not a trusted directory") }).to be(true)
       lines = screen
-      _(lines.join("\n")).must_include "fix the thing"
-      _(lines.join("\n")).must_include "New session"
+      expect(lines.join("\n")).to include("fix the thing")
+      expect(lines.join("\n")).to include("New session")
       press(CTRL_S)
-      _(status_line).must_include "starting session…"
+      expect(status_line).to include("starting session…")
     end
   end
 
@@ -260,22 +259,22 @@ describe ClaudeInbox::App do
     it "says so, without moving the cursor or closing the form someone is typing in" do
       press("j")
       before = cursor
-      _(before).wont_be_nil
+      expect(before).not_to be_nil
       press("n", *"half a thought".chars)
       queue << [:notice, "remote: starting session…"]
-      _(status_line).must_include "remote: starting session…"
+      expect(status_line).to include("remote: starting session…")
 
       store.update(store.sessions + [session(id: "31472308", name: "from the phone")])
       queue << [:remote_started, "31472308", "192.168.1.30"]
       lines = screen
-      _(lines.first).must_include "started 31472308 from 192.168.1.30"
-      _(lines.join("\n")).must_include "New session"
-      _(lines.join("\n")).must_include "half a thought"
-      _(client.attached).must_be_empty
+      expect(lines.first).to include("started 31472308 from 192.168.1.30")
+      expect(lines.join("\n")).to include("New session")
+      expect(lines.join("\n")).to include("half a thought")
+      expect(client.attached).to be_empty
 
       press("\e", "y")
-      _(cursor).must_equal before
-      _(screen.join("\n")).must_include "from the phone"
+      expect(cursor).to eq(before)
+      expect(screen.join("\n")).to include("from the phone")
     end
   end
 
@@ -310,37 +309,37 @@ describe ClaudeInbox::App do
     end
 
     it "shows the port in the header, and the URL once the lookup lands" do
-      _(status_line).must_include "◉ :#{listener.port}"
+      expect(status_line).to include("◉ :#{listener.port}")
       press("N")
-      _(screen.join("\n")).must_include "listening on 127.0.0.1:#{listener.port}"
-      _(screen.join("\n")).must_include "looking up this Mac's addresses…"
+      expect(screen.join("\n")).to include("listening on 127.0.0.1:#{listener.port}")
+      expect(screen.join("\n")).to include("looking up this Mac's addresses…")
       press("c")
-      _(status_line).must_include "still looking up this Mac's addresses"
+      expect(status_line).to include("still looking up this Mac's addresses")
       gate << true
-      _(wait_for { screen.join("\n").include?("http://127.0.0.1:#{listener.port}/#") }).must_equal true
+      expect(wait_for { screen.join("\n").include?("http://127.0.0.1:#{listener.port}/#") }).to be(true)
     end
 
     it "issues a new token on r then y, and says phones must pair again" do
       old = pairing.token
       press("N", "r")
-      _(screen.join("\n")).must_include "rotate? y/n"
+      expect(screen.join("\n")).to include("rotate? y/n")
       gate << true << true
       press("y")
-      _(wait_for { status_line.include?("new token: phones pair again with N") }).must_equal true
-      _(JSON.parse(File.read(File.join(tmp, "listen.json")))["token"]).wont_equal old
+      expect(wait_for { status_line.include?("new token: phones pair again with N") }).to be(true)
+      expect(JSON.parse(File.read(File.join(tmp, "listen.json")))["token"]).not_to eq(old)
     end
   end
 
   describe "N" do
     it "opens the pairing dialog, which says how to turn the listener on while it is off" do
       press("N")
-      _(screen.join("\n")).must_include "off: start with --listen or --listen-lan"
-      _(screen.join("\n")).must_include "esc close"
+      expect(screen.join("\n")).to include("off: start with --listen or --listen-lan")
+      expect(screen.join("\n")).to include("esc close")
       press("c", "r", "y")
-      _(screen.join("\n")).wont_include "rotate?"
-      _(screen.join("\n")).must_include "Pair a phone"
+      expect(screen.join("\n")).not_to include("rotate?")
+      expect(screen.join("\n")).to include("Pair a phone")
       press("\e")
-      _(screen.join("\n")).wont_include "Pair a phone"
+      expect(screen.join("\n")).not_to include("Pair a phone")
     end
   end
 
@@ -352,7 +351,7 @@ describe ClaudeInbox::App do
       ])
       {"cut from" => "/Users/byron/code/claude-inbox", "deep in" => "/Users/byron/code/claude-inbox", "not booting" => "/Users/byron/code/comma3"}.each do |name, dir|
         press("/", *name.chars, "\r", "n")
-        _(screen.find { |l| l.include?("Directory") }.split("Directory").last.strip).must_equal dir
+        expect(screen.find { |l| l.include?("Directory") }.split("Directory").last.strip).to eq(dir)
         press("\e", "\e")
       end
     end
@@ -362,10 +361,10 @@ describe ClaudeInbox::App do
     it "says so while the worker runs, then confirms once it is gone" do
       client.hold
       press(CTRL_X, "y")
-      _(status_line).must_include "deleting f23c8673…"
+      expect(status_line).to include("deleting f23c8673…")
 
       client.release
-      _(wait_for { status_line.include?("deleted f23c8673") }).must_equal true
+      expect(wait_for { status_line.include?("deleted f23c8673") }).to be(true)
     end
   end
 
@@ -375,9 +374,9 @@ describe ClaudeInbox::App do
       store.set_pr("f23c8673", "https://github.com/o/r/pull/7")
 
       press("a")
-      _(screen.join("\n")).must_include "> auth spike"
+      expect(screen.join("\n")).to include("> auth spike")
       press("\e", "P")
-      _(screen.join("\n")).must_include "> https://github.com/o/r/pull/7"
+      expect(screen.join("\n")).to include("> https://github.com/o/r/pull/7")
     end
   end
 end

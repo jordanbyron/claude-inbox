@@ -1,75 +1,73 @@
 # frozen_string_literal: true
 
-require_relative "test_helper"
-
-describe ClaudeInbox::Keymap do
+RSpec.describe ClaudeInbox::Keymap do
   let(:t) { [Time.at(0)] }
   let(:km) { ClaudeInbox::Keymap.new(clock: -> { t[0] }) }
 
   it "maps vim motion keys and arrows alike" do
-    _(km.press("j", "j")).must_equal :down
-    _(km.press(:down, "\e[B")).must_equal :down
-    _(km.press("k", "k")).must_equal :up
-    _(km.press("G", "G")).must_equal :bottom
-    _(km.press(:ctrl_d, "\x04")).must_equal :half_page_down
-    _(km.press(:ctrl_u, "\x15")).must_equal :half_page_up
+    expect(km.press("j", "j")).to eq(:down)
+    expect(km.press(:down, "\e[B")).to eq(:down)
+    expect(km.press("k", "k")).to eq(:up)
+    expect(km.press("G", "G")).to eq(:bottom)
+    expect(km.press(:ctrl_d, "\x04")).to eq(:half_page_down)
+    expect(km.press(:ctrl_u, "\x15")).to eq(:half_page_up)
   end
 
   it "resolves gg as a chord" do
-    _(km.press("g", "g")).must_be_nil
-    _(km.pending).must_equal "g"
-    _(km.press("g", "g")).must_equal :top
-    _(km.pending).must_be_nil
+    expect(km.press("g", "g")).to be_nil
+    expect(km.pending).to eq("g")
+    expect(km.press("g", "g")).to eq(:top)
+    expect(km.pending).to be_nil
   end
 
   it "drops a chord on an unknown second key" do
     km.press("g", "g")
-    _(km.press("x", "x")).must_be_nil
-    _(km.press("x", "x")).must_equal :settle
+    expect(km.press("x", "x")).to be_nil
+    expect(km.press("x", "x")).to eq(:settle)
   end
 
   it "expires a pending chord after the timeout" do
     km.press("g", "g")
     t[0] += ClaudeInbox::Keymap::CHORD_TIMEOUT + 0.1
-    _(km.press("g", "g")).must_be_nil
-    _(km.pending).must_equal "g"
+    expect(km.press("g", "g")).to be_nil
+    expect(km.pending).to eq("g")
   end
 
   it "folds with z chords" do
     %w[o c a].zip(%i[fold_open fold_close fold_toggle]).each do |k, action|
       km.press("z", "z")
-      _(km.press(k, k)).must_equal action
+      expect(km.press(k, k)).to eq(action)
     end
   end
 
   it "maps actions" do
-    _(km.press(:return, "\r")).must_equal :activate
-    _(km.press("l", "l")).must_equal :activate
-    _(km.press("h", "h")).must_equal :collapse
-    _(km.press("s", "s")).must_equal :snooze
-    _(km.press("u", "u")).must_equal :wake
-    _(km.press("a", "a")).must_equal :alias
-    _(km.press("x", "x")).must_equal :settle
-    _(km.press("X", "X")).must_equal :stop
-    _(km.press(:ctrl_x, "\x18")).must_equal :delete
-    _(km.press("p", "p")).must_equal :toggle_peek
-    _(km.press("n", "n")).must_equal :new_session
-    _(km.press("N", "N")).must_equal :remote_pairing
-    _(km.press("t", "t")).must_equal :toggle_pin
-    _(km.press("o", "o")).must_equal :open_pr
-    _(km.press("w", "w")).must_equal :open_remote
-    _(km.press("P", "P")).must_equal :link_pr
-    _(km.press(:tab, "\t")).must_equal :next_section
-    _(km.press(:back_tab, "\e[Z")).must_equal :prev_section
-    _(km.press("/", "/")).must_equal :filter
-    _(km.press("q", "q")).must_equal :quit
-    _(km.press(:ctrl_c, "\x03")).must_equal :quit
+    expect(km.press(:return, "\r")).to eq(:activate)
+    expect(km.press("l", "l")).to eq(:activate)
+    expect(km.press("h", "h")).to eq(:collapse)
+    expect(km.press("s", "s")).to eq(:snooze)
+    expect(km.press("u", "u")).to eq(:wake)
+    expect(km.press("a", "a")).to eq(:alias)
+    expect(km.press("x", "x")).to eq(:settle)
+    expect(km.press("X", "X")).to eq(:stop)
+    expect(km.press(:ctrl_x, "\x18")).to eq(:delete)
+    expect(km.press("p", "p")).to eq(:toggle_peek)
+    expect(km.press("n", "n")).to eq(:new_session)
+    expect(km.press("N", "N")).to eq(:remote_pairing)
+    expect(km.press("t", "t")).to eq(:toggle_pin)
+    expect(km.press("o", "o")).to eq(:open_pr)
+    expect(km.press("w", "w")).to eq(:open_remote)
+    expect(km.press("P", "P")).to eq(:link_pr)
+    expect(km.press(:tab, "\t")).to eq(:next_section)
+    expect(km.press(:back_tab, "\e[Z")).to eq(:prev_section)
+    expect(km.press("/", "/")).to eq(:filter)
+    expect(km.press("q", "q")).to eq(:quit)
+    expect(km.press(:ctrl_c, "\x03")).to eq(:quit)
   end
 
   it "scrolls the peek pane with J/K and ^e/^y" do
-    _(km.press("J", "J")).must_equal :peek_down
-    _(km.press("K", "K")).must_equal :peek_up
-    _(km.press(:ctrl_e, "\x05")).must_equal :peek_down
-    _(km.press(:ctrl_y, "\x19")).must_equal :peek_up
+    expect(km.press("J", "J")).to eq(:peek_down)
+    expect(km.press("K", "K")).to eq(:peek_up)
+    expect(km.press(:ctrl_e, "\x05")).to eq(:peek_down)
+    expect(km.press(:ctrl_y, "\x19")).to eq(:peek_up)
   end
 end

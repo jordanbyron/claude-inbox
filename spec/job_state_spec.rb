@@ -1,11 +1,10 @@
 # frozen_string_literal: true
 
 require "tmpdir"
-require_relative "test_helper"
 
 JobState = ClaudeInbox::JobState
 
-describe JobState do
+RSpec.describe JobState do
   def write_job(dir, id, hash)
     FileUtils.mkdir_p(File.join(dir, id))
     File.write(File.join(dir, id, "state.json"), JSON.generate(hash))
@@ -28,15 +27,15 @@ describe JobState do
           {"kind" => "issue", "href" => "https://github.com/o/r/issues/8"}
         ])
       js = JobState.read("aaa11111", jobs_dir: dir)
-      _(js.detail).must_equal "watching CI re-run"
-      _(js.needs).must_equal "confirm: merge once green?"
-      _(js.result).must_equal "CI re-run passed"
-      _(js.pr_urls).must_equal ["https://github.com/o/r/pull/7"]
-      _(js.bridge_id).must_equal "cse_01AB"
-      _(js).must_be :remote_control?
-      _(JobState.new({})).wont_be :remote_control?
-      _(js).must_be :waiting_on_work?
-      _(js.in_flight_label).must_equal "1 shell"
+      expect(js.detail).to eq("watching CI re-run")
+      expect(js.needs).to eq("confirm: merge once green?")
+      expect(js.result).to eq("CI re-run passed")
+      expect(js.pr_urls).to eq(["https://github.com/o/r/pull/7"])
+      expect(js.bridge_id).to eq("cse_01AB")
+      expect(js).to be_remote_control
+      expect(JobState.new({})).not_to be_remote_control
+      expect(js).to be_waiting_on_work
+      expect(js.in_flight_label).to eq("1 shell")
     end
   end
 
@@ -44,66 +43,66 @@ describe JobState do
     Dir.mktmpdir do |dir|
       FileUtils.mkdir_p(File.join(dir, "bad00000"))
       File.write(File.join(dir, "bad00000", "state.json"), "{not json")
-      _(JobState.read("bad00000", jobs_dir: dir)).must_be_nil
-      _(JobState.read("gone0000", jobs_dir: dir)).must_be_nil
-      _(JobState.read(nil, jobs_dir: dir)).must_be_nil
+      expect(JobState.read("bad00000", jobs_dir: dir)).to be_nil
+      expect(JobState.read("gone0000", jobs_dir: dir)).to be_nil
+      expect(JobState.read(nil, jobs_dir: dir)).to be_nil
     end
   end
 
   it "counts each open task, translating the daemon's names" do
     js = JobState.new("inFlight" => {"tasks" => 3},
       "fan" => [{"kind" => "in_process_teammate"}, {"kind" => "in_process_teammate"}, {"kind" => "local_bash"}])
-    _(js.in_flight_label).must_equal "2 agents · 1 shell"
+    expect(js.in_flight_label).to eq("2 agents · 1 shell")
   end
 
   it "keeps a name it does not know rather than inventing one" do
     js = JobState.new("inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "sidecar"}])
-    _(js.in_flight_label).must_equal "1 sidecar"
+    expect(js.in_flight_label).to eq("1 sidecar")
   end
 
   it "falls back to a bare count when the file does not name the work" do
     js = JobState.new("tempo" => "idle", "inFlight" => {"tasks" => 2})
-    _(js.in_flight_label).must_equal "2 tasks"
-    _(js).must_be :waiting_on_work?
+    expect(js.in_flight_label).to eq("2 tasks")
+    expect(js).to be_waiting_on_work
   end
 
   it "says nothing about work when the agent is thinking or nothing is open" do
     thinking = JobState.new("tempo" => "active", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}])
-    _(thinking).wont_be :waiting_on_work?
-    _(thinking.in_flight_label).must_equal "1 shell"
+    expect(thinking).not_to be_waiting_on_work
+    expect(thinking.in_flight_label).to eq("1 shell")
 
     # A session whose process died leaves an idle pulse behind with nothing in
     # flight; that is not the same as waiting, so it claims nothing.
     stalled = JobState.new("tempo" => "idle", "inFlight" => {"tasks" => 0})
-    _(stalled).wont_be :waiting_on_work?
-    _(stalled.in_flight_label).must_be_nil
+    expect(stalled).not_to be_waiting_on_work
+    expect(stalled.in_flight_label).to be_nil
   end
 
   it "has no needs or result when the file carries neither" do
     js = JobState.new("detail" => "thinking")
-    _(js.needs).must_be_nil
-    _(js.result).must_be_nil
+    expect(js.needs).to be_nil
+    expect(js.result).to be_nil
   end
 
   it "summarizes by state: needs while blocked, result once done, else the detail line" do
     js = JobState.new("detail" => "watching\n  CI", "needs" => "confirm: merge?", "output" => {"result" => "PR #7 up"})
-    _(js.summary("blocked")).must_equal "confirm: merge?"
-    _(js.summary("done")).must_equal "PR #7 up"
-    _(js.summary("working")).must_equal "watching CI"
-    _(JobState.new("detail" => "watching CI").summary("blocked")).must_equal "watching CI"
-    _(JobState.new({}).summary("done")).must_be_nil
+    expect(js.summary("blocked")).to eq("confirm: merge?")
+    expect(js.summary("done")).to eq("PR #7 up")
+    expect(js.summary("working")).to eq("watching CI")
+    expect(JobState.new("detail" => "watching CI").summary("blocked")).to eq("watching CI")
+    expect(JobState.new({}).summary("done")).to be_nil
   end
 
   it "reads the color /color wrote into the job file" do
-    _(JobState.read("b0b18338", jobs_dir: fixture_path("jobs")).color).must_equal "orange"
-    _(JobState.read("b03695b1", jobs_dir: fixture_path("jobs")).color).must_be_nil
-    _(JobState.new({}).color).must_be_nil
+    expect(JobState.read("b0b18338", jobs_dir: fixture_path("jobs")).color).to eq("orange")
+    expect(JobState.read("b03695b1", jobs_dir: fixture_path("jobs")).color).to be_nil
+    expect(JobState.new({}).color).to be_nil
   end
 
   it "reads the prompt the session was started with" do
     js = JobState.new({"intent" => "Look into the TIAA gateway 403s"})
-    _(js.intent).must_equal "Look into the TIAA gateway 403s"
-    _(JobState.new({}).intent).must_be_nil
+    expect(js.intent).to eq("Look into the TIAA gateway 403s")
+    expect(JobState.new({}).intent).to be_nil
   end
 
   it "enriches background sessions only" do
@@ -113,9 +112,9 @@ describe JobState do
         session(id: "aaa11111"),
         session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "u1")
       ], jobs_dir: dir)
-      _(bg.job_state.in_flight_label).must_equal "1 shell"
-      _(bg).must_be :waiting_on_work?
-      _(term.job_state).must_be_nil
+      expect(bg.job_state.in_flight_label).to eq("1 shell")
+      expect(bg).to be_waiting_on_work
+      expect(term.job_state).to be_nil
     end
   end
 end

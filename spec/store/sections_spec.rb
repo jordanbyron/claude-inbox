@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "../test_helper"
-
 Store = ClaudeInbox::Store unless defined?(Store)
 
-describe ClaudeInbox::Store::Sections do
+RSpec.describe ClaudeInbox::Store::Sections do
   let(:now) { Time.at(1_789_600_000) }
 
   def sections(sessions, entries = {}, at = now) = Store.sectionize(sessions, entries, at)
@@ -20,50 +18,50 @@ describe ClaudeInbox::Store::Sections do
   def fold(name) = Store::Selection.fold(name)
 
   it "finds a row by its selection, or nothing" do
-    _(sec.row(row("a")).id).must_equal "a"
-    _(sec.row(row("uuid")).session.session_id).must_equal "uuid"
-    _(sec.row(row("nope"))).must_be_nil
-    _(sec.row(fold(:settled))).must_be_nil
-    _(sec.row(nil)).must_be_nil
+    expect(sec.row(row("a")).id).to eq("a")
+    expect(sec.row(row("uuid")).session.session_id).to eq("uuid")
+    expect(sec.row(row("nope"))).to be_nil
+    expect(sec.row(fold(:settled))).to be_nil
+    expect(sec.row(nil)).to be_nil
   end
 
   it "lists where the cursor can land, a fold standing in for its rows" do
-    _(sec.selections({})).must_equal [row("b"), row("a"), row("uuid"), row("c"), fold(:settled)]
-    _(sec.selections({settled: true})).must_equal %w[b a uuid c z].map { |k| row(k) }
+    expect(sec.selections({})).to eq([row("b"), row("a"), row("uuid"), row("c"), fold(:settled)])
+    expect(sec.selections({settled: true})).to eq(%w[b a uuid c z].map { |k| row(k) })
   end
 
   it "leaves an empty fold out of the landable selections" do
-    _(sections([session(id: "a")]).selections({})).must_equal [row("a")]
+    expect(sections([session(id: "a")]).selections({})).to eq([row("a")])
   end
 
   it "skips rows with no key" do
     keyless = session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: nil)
-    _(sections([keyless, session(id: "a")]).selections({})).must_equal [row("a")]
+    expect(sections([keyless, session(id: "a")]).selections({})).to eq([row("a")])
   end
 
   it "names the section a selection lives in, and a fold answers itself" do
-    _(sec.section_of(row("b"))).must_equal :pinned
-    _(sec.section_of(row("a"))).must_equal :needs_you
-    _(sec.section_of(row("uuid"))).must_equal :active
-    _(sec.section_of(row("z"))).must_equal :settled
-    _(sec.section_of(fold(:snoozed))).must_equal :snoozed
-    _(sec.section_of(row("nope"))).must_be_nil
-    _(sec.section_of(nil)).must_be_nil
+    expect(sec.section_of(row("b"))).to eq(:pinned)
+    expect(sec.section_of(row("a"))).to eq(:needs_you)
+    expect(sec.section_of(row("uuid"))).to eq(:active)
+    expect(sec.section_of(row("z"))).to eq(:settled)
+    expect(sec.section_of(fold(:snoozed))).to eq(:snoozed)
+    expect(sec.section_of(row("nope"))).to be_nil
+    expect(sec.section_of(nil)).to be_nil
   end
 
   it "heads each section with its fold, or its first selectable row" do
     heads = sec.heads({})
-    _(heads.map(&:first)).must_equal %i[pinned needs_you active settled]
-    _(heads.map(&:last)).must_equal [row("b"), row("a"), row("uuid"), fold(:settled)]
-    _(sec.heads({settled: true}).map(&:last)).must_equal %w[b a uuid z].map { |k| row(k) }
+    expect(heads.map(&:first)).to eq(%i[pinned needs_you active settled])
+    expect(heads.map(&:last)).to eq([row("b"), row("a"), row("uuid"), fold(:settled)])
+    expect(sec.heads({settled: true}).map(&:last)).to eq(%w[b a uuid z].map { |k| row(k) })
   end
 
   it "filters by label or cwd, case-insensitively, and keeps rows in their sections" do
-    _(sec.matching("OTHER").active.map(&:key)).must_equal %w[c]
-    _(sec.matching("/tmp/term").active.map(&:key)).must_equal %w[uuid]
-    _(sec.matching("thing").all.map(&:key)).must_equal %w[b a uuid z]
-    _(sec.matching("zzz").all).must_be_empty
-    _(sec.matching("")).must_be_same_as sec
-    _(sec.matching(nil)).must_be_same_as sec
+    expect(sec.matching("OTHER").active.map(&:key)).to eq(%w[c])
+    expect(sec.matching("/tmp/term").active.map(&:key)).to eq(%w[uuid])
+    expect(sec.matching("thing").all.map(&:key)).to eq(%w[b a uuid z])
+    expect(sec.matching("zzz").all).to be_empty
+    expect(sec.matching("")).to equal(sec)
+    expect(sec.matching(nil)).to equal(sec)
   end
 end

@@ -1,35 +1,34 @@
 # frozen_string_literal: true
 
-require_relative "test_helper"
 require "claude_inbox/new_session_form"
 require "tmpdir"
 require "fileutils"
 require "json"
 
-describe ClaudeInbox::AgentsClient do
+RSpec.describe ClaudeInbox::AgentsClient do
   it "builds claude --bg arguments, leaving unset ones off" do
     a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "fix it", model: nil, effort: nil, permission_mode: nil, worktree: false, name: nil)
-    _(a).must_equal ["claude", "--bg", "--", "fix it"]
+    expect(a).to eq(["claude", "--bg", "--", "fix it"])
     a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "fix it", model: "opus", effort: "high", permission_mode: "acceptEdits", worktree: true, name: "flaky")
-    _(a).must_equal ["claude", "--bg", "--model", "opus", "--effort", "high", "--permission-mode", "acceptEdits", "--name", "flaky", "--worktree", "--", "fix it"]
+    expect(a).to eq(["claude", "--bg", "--model", "opus", "--effort", "high", "--permission-mode", "acceptEdits", "--name", "flaky", "--worktree", "--", "fix it"])
   end
 
   it "puts --remote-control last, where its optional name cannot eat the prompt" do
     a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "fix it", name: "flaky", remote: true)
-    _(a).must_equal ["claude", "--bg", "--name", "flaky", "--remote-control", "--", "fix it"]
+    expect(a).to eq(["claude", "--bg", "--name", "flaky", "--remote-control", "--", "fix it"])
   end
 
   it "keeps a prompt that starts with a dash a prompt" do
     a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "-x is not a flag", remote: true)
-    _(a).must_equal ["claude", "--bg", "--remote-control", "--", "-x is not a flag"]
+    expect(a).to eq(["claude", "--bg", "--remote-control", "--", "-x is not a flag"])
   end
 
   it "mentions a file the way the CLI's own prompt does, spaces escaped" do
-    _(ClaudeInbox::AgentsClient.mention("/tmp/Screen Shot.png")).must_equal "@/tmp/Screen\\ Shot.png"
+    expect(ClaudeInbox::AgentsClient.mention("/tmp/Screen Shot.png")).to eq("@/tmp/Screen\\ Shot.png")
   end
 end
 
-describe ClaudeInbox::NewSessionForm do
+RSpec.describe ClaudeInbox::NewSessionForm do
   # An empty home, so the developer's own ~/.claude settings stay out of the defaults.
   let(:home) { Dir.mktmpdir }
   after { FileUtils.rm_rf(home) }
@@ -39,26 +38,26 @@ describe ClaudeInbox::NewSessionForm do
   def type(str) = str.each_char { |c| form.press(c, c) }
 
   it "starts on the prompt and types into it, spaces included" do
-    _(form.focused.key).must_equal :prompt
+    expect(form.focused.key).to eq(:prompt)
     "fix the".each_char { |c| form.press((c == " ") ? :space : c, c) }
-    _(form.values[:prompt]).must_equal "fix the"
+    expect(form.values[:prompt]).to eq("fix the")
   end
 
   it "moves between fields with tab and cycles choices with h/l" do
     3.times { form.press(:tab, "\t") }
-    _(form.focused.key).must_equal :model
+    expect(form.focused.key).to eq(:model)
     form.press("l", "l")
-    _(form.values[:model]).must_equal "fable"
+    expect(form.values[:model]).to eq("fable")
     form.press("h", "h")
     form.press("h", "h")
-    _(form.values[:model]).must_equal "haiku"
+    expect(form.values[:model]).to eq("haiku")
     form.press(:back_tab, "\e[Z")
-    _(form.focused.key).must_equal :cwd
+    expect(form.focused.key).to eq(:cwd)
   end
 
   it "refuses to submit without a prompt" do
-    _(form.press(:ctrl_s, "\x13")).must_equal :changed
-    _(form.footer).must_include "a prompt is required"
+    expect(form.press(:ctrl_s, "\x13")).to eq(:changed)
+    expect(form.footer).to include("a prompt is required")
   end
 
   it "refuses a missing directory" do
@@ -66,58 +65,58 @@ describe ClaudeInbox::NewSessionForm do
     2.times { form.press(:tab, "\t") }
     form.press(:ctrl_u, "\x15")
     type("/nope/nowhere")
-    _(form.press(:ctrl_s, "\x13")).must_equal :changed
-    _(form.footer).must_include "no such directory"
+    expect(form.press(:ctrl_s, "\x13")).to eq(:changed)
+    expect(form.footer).to include("no such directory")
     form.press(:tab, "\t")
-    _(form.focused.key).must_equal :model
+    expect(form.focused.key).to eq(:model)
   end
 
   it "submits with expanded values" do
     type("do it")
     6.times { form.press(:tab, "\t") }
     form.press(:space, " ")
-    _(form.press(:ctrl_s, "\x13")).must_equal :start
+    expect(form.press(:ctrl_s, "\x13")).to eq(:start)
     v = form.values
-    _(v[:worktree]).must_equal true
-    _(v[:remote]).must_equal false
-    _(v[:name]).must_be_nil
-    _(v[:cwd]).must_equal Dir.pwd
+    expect(v[:worktree]).to be(true)
+    expect(v[:remote]).to be(false)
+    expect(v[:name]).to be_nil
+    expect(v[:cwd]).to eq(Dir.pwd)
   end
 
   it "moves to the next field on enter instead of starting" do
     type("do it")
     3.times { form.press(:tab, "\t") }
     form.press("l", "l")
-    _(form.press(:return, "\r")).must_equal :changed
-    _(form.focused.key).must_equal :effort
-    _(form.values[:model]).must_equal "fable"
+    expect(form.press(:return, "\r")).to eq(:changed)
+    expect(form.focused.key).to eq(:effort)
+    expect(form.values[:model]).to eq("fable")
   end
 
   it "starts and attaches on ^O, starts and stays put on ^S" do
     type("do it")
-    _(form.press(:ctrl_o, "\x0f")).must_equal :start_and_attach
+    expect(form.press(:ctrl_o, "\x0f")).to eq(:start_and_attach)
     other = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
     type_into(other, "do it")
-    _(other.press(:ctrl_s, "\x13")).must_equal :start
+    expect(other.press(:ctrl_s, "\x13")).to eq(:start)
   end
 
   def type_into(f, str) = str.each_char { |c| f.press((c == " ") ? :space : c, c) }
 
   it "goes busy on ^S and ignores keys until the App reports back" do
     type("do it")
-    _(form.press(:ctrl_s, "\x13")).must_equal :start
-    _(form.footer).must_include "starting session…"
-    _(form.press("x", "x")).must_equal :changed
-    _(form.values[:prompt]).must_equal "do it"
+    expect(form.press(:ctrl_s, "\x13")).to eq(:start)
+    expect(form.footer).to include("starting session…")
+    expect(form.press("x", "x")).to eq(:changed)
+    expect(form.values[:prompt]).to eq("do it")
   end
 
   it "hands the prompt back with the failure once the App reports it failed" do
     type("do it")
     form.press(:ctrl_s, "\x13")
     form.submission_failed("claude --bg failed: not a trusted directory")
-    _(form.footer).must_include "not a trusted directory"
-    _(form.values[:prompt]).must_equal "do it"
-    _(form.press(:ctrl_s, "\x13")).must_equal :start
+    expect(form.footer).to include("not a trusted directory")
+    expect(form.values[:prompt]).to eq("do it")
+    expect(form.press(:ctrl_s, "\x13")).to eq(:start)
   end
 
   describe "images" do
@@ -127,33 +126,33 @@ describe ClaudeInbox::NewSessionForm do
     it "attaches the clipboard's image on an empty paste, as a token in the prompt" do
       clip.image = "/tmp/shot.png"
       type("match ")
-      _(form.paste("")).must_equal :changed
-      _(form.values[:prompt]).must_equal "match @/tmp/shot.png"
+      expect(form.paste("")).to eq(:changed)
+      expect(form.values[:prompt]).to eq("match @/tmp/shot.png")
       rows = form.screen(80, 24)
-      _(rows.find { |r| r.include?("match") }).must_include "[Image #1]"
+      expect(rows.find { |r| r.include?("match") }).to include("[Image #1]")
     end
 
     it "attaches it on ^V too, for terminals without bracketed paste" do
       clip.image = "/tmp/shot.png"
       form.press(:ctrl_v, "\x16")
-      _(form.values[:prompt]).must_equal "@/tmp/shot.png"
+      expect(form.values[:prompt]).to eq("@/tmp/shot.png")
     end
 
     it "pastes text from the clipboard when that is what is there" do
       clip.text = "fix it"
       form.press(:ctrl_v, "\x16")
-      _(form.values[:prompt]).must_equal "fix it"
+      expect(form.values[:prompt]).to eq("fix it")
       clip.text = nil
       form.press(:ctrl_v, "\x16")
-      _(form.footer).must_include "nothing on the clipboard"
+      expect(form.footer).to include("nothing on the clipboard")
     end
 
     it "keeps an image out of the one-line fields" do
       clip.image = "/tmp/shot.png"
       form.press(:tab, "\t")
       form.paste("")
-      _(form.footer).must_include "images go in the prompt"
-      _(form.values[:name]).must_be_nil
+      expect(form.footer).to include("images go in the prompt")
+      expect(form.values[:name]).to be_nil
     end
 
     it "attaches a dropped image file and keeps any other drop as text" do
@@ -162,16 +161,16 @@ describe ClaudeInbox::NewSessionForm do
         type("see ")
         form.paste("#{dir}/a\\ b.png ")
         form.paste(" not #{dir}/nope.txt")
-        _(form.values[:prompt]).must_equal "see @#{dir}/a\\ b.png not #{dir}/nope.txt"
+        expect(form.values[:prompt]).to eq("see @#{dir}/a\\ b.png not #{dir}/nope.txt")
       end
     end
 
     it "pastes multi-line text into the prompt, and flattens it into a one-line field" do
       form.paste("one\r\ntwo\rthree")
-      _(form.values[:prompt]).must_equal "one\ntwo\nthree"
+      expect(form.values[:prompt]).to eq("one\ntwo\nthree")
       form.press(:tab, "\t")
       form.paste("my\nname")
-      _(form.values[:name]).must_equal "my name"
+      expect(form.values[:name]).to eq("my name")
     end
   end
 
@@ -179,12 +178,12 @@ describe ClaudeInbox::NewSessionForm do
     type("first")
     form.press(:return, "\r")
     type("second")
-    _(form.press(:ctrl_s, "\x13")).must_equal :start
-    _(form.values[:prompt]).must_equal "first\nsecond"
+    expect(form.press(:ctrl_s, "\x13")).to eq(:start)
+    expect(form.values[:prompt]).to eq("first\nsecond")
     rows = form.screen(80, 24)
     box = rows.index { |r| r.include?("first") }
-    _(rows[box + 1]).must_include "second"
-    _(rows.find { |r| r.include?("Name") }).wont_be_nil
+    expect(rows[box + 1]).to include("second")
+    expect(rows.find { |r| r.include?("Name") }).not_to be_nil
   end
 
   it "shows the last rows of a long prompt, counting the rest in the border" do
@@ -194,10 +193,10 @@ describe ClaudeInbox::NewSessionForm do
     }
     rows = form.screen(80, 21)
     top = rows.index { |r| r.include?("┌") }
-    _(rows[top]).must_include "↑ 4 more"
-    _(rows[top + 1]).must_include "line4"
-    _(rows[top + 6]).must_include "line9"
-    _(rows[top + 8]).must_include "└"
+    expect(rows[top]).to include("↑ 4 more")
+    expect(rows[top + 1]).to include("line4")
+    expect(rows[top + 6]).to include("line9")
+    expect(rows[top + 8]).to include("└")
   end
 
   it "shows what the defaults resolve to" do
@@ -206,10 +205,10 @@ describe ClaudeInbox::NewSessionForm do
       File.write("#{home}/.claude/settings.json", {model: "opus", effortLevel: "high"}.to_json)
       f = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
       rows = f.screen(100, 24)
-      _(rows.find { |r| r.include?("Model") }).must_include "opus (settings)"
-      _(rows.find { |r| r.include?("Effort") }).must_include "high (settings)"
-      _(rows.find { |r| r.include?("Permissions") }).must_include "auto (cli default)"
-      _(f.values[:model]).must_be_nil
+      expect(rows.find { |r| r.include?("Model") }).to include("opus (settings)")
+      expect(rows.find { |r| r.include?("Effort") }).to include("high (settings)")
+      expect(rows.find { |r| r.include?("Permissions") }).to include("auto (cli default)")
+      expect(f.values[:model]).to be_nil
     end
   end
 
@@ -222,8 +221,8 @@ describe ClaudeInbox::NewSessionForm do
         File.write("#{proj}/.claude/settings.local.json", {permissions: {defaultMode: "plan"}}.to_json)
         f = ClaudeInbox::NewSessionForm.new(cwd: proj, pastel: Pastel.new(enabled: false), home: home)
         rows = f.screen(100, 24)
-        _(rows.find { |r| r.include?("Model") }).must_include "opus (settings)"
-        _(rows.find { |r| r.include?("Permissions") }).must_include "plan (settings)"
+        expect(rows.find { |r| r.include?("Model") }).to include("opus (settings)")
+        expect(rows.find { |r| r.include?("Permissions") }).to include("plan (settings)")
       end
     end
   end
@@ -233,21 +232,21 @@ describe ClaudeInbox::NewSessionForm do
       FileUtils.mkdir_p("#{home}/.claude")
       File.write("#{home}/.claude/settings.json", {remoteControlAtStartup: true}.to_json)
       f = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
-      _(f.screen(100, 24).find { |r| r.include?("Remote Control") }).must_include "yes (settings)"
-      _(f.values[:remote]).must_equal true
+      expect(f.screen(100, 24).find { |r| r.include?("Remote Control") }).to include("yes (settings)")
+      expect(f.values[:remote]).to be(true)
       7.times { f.press(:tab, "\t") }
       f.press("l", "l")
-      _(f.values[:remote]).must_equal false
+      expect(f.values[:remote]).to be(false)
     end
   end
 
   it "leaves Remote Control off when nothing turns it on" do
     Dir.mktmpdir do |home|
       f = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
-      _(f.values[:remote]).must_equal false
+      expect(f.values[:remote]).to be(false)
       7.times { f.press(:tab, "\t") }
       f.press("h", "h")
-      _(f.values[:remote]).must_equal true
+      expect(f.values[:remote]).to be(true)
     end
   end
 
@@ -260,20 +259,20 @@ describe ClaudeInbox::NewSessionForm do
       form.press(:ctrl_u, "\x15")
       type("#{root}/b")
       form.press(:tab, "\t")
-      _(form.focused.value.to_s).must_equal "#{root}/banana/"
+      expect(form.focused.value.to_s).to eq("#{root}/banana/")
       form.press(:ctrl_u, "\x15")
       type("#{root}/a")
       form.press(:tab, "\t")
-      _(form.focused.value.to_s).must_equal "#{root}/ap"
-      _(form.footer).must_include "apple  apricot"
+      expect(form.focused.value.to_s).to eq("#{root}/ap")
+      expect(form.footer).to include("apple  apricot")
       form.press(:tab, "\t")
-      _(form.focused.key).must_equal :cwd
-      _(form.footer).must_include "apple  apricot"
+      expect(form.focused.key).to eq(:cwd)
+      expect(form.footer).to include("apple  apricot")
       type("pl")
       form.press(:tab, "\t")
-      _(form.focused.value.to_s).must_equal "#{root}/apple/"
+      expect(form.focused.value.to_s).to eq("#{root}/apple/")
       form.press(:tab, "\t")
-      _(form.focused.key).must_equal :model
+      expect(form.focused.key).to eq(:model)
     end
   end
 
@@ -281,36 +280,36 @@ describe ClaudeInbox::NewSessionForm do
     type("abd")
     form.press(:left, "\e[D")
     type("c")
-    _(form.values[:prompt]).must_equal "abcd"
+    expect(form.values[:prompt]).to eq("abcd")
     form.press(:backspace, "\x7f")
     form.press(:home, "\e[H")
     type("A")
-    _(form.values[:prompt]).must_equal "Aabd"
+    expect(form.values[:prompt]).to eq("Aabd")
     3.times { form.press(:tab, "\t") }
     form.press(:right, "\e[C")
-    _(form.values[:model]).must_equal "fable"
+    expect(form.values[:model]).to eq("fable")
   end
 
   it "draws the cursor on the cell it sits on" do
     f = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: true), home: home)
     "ab".each_char { |c| f.press(c, c) }
     f.press(:left, "\e[D")
-    _(f.screen(80, 24).join("\n")).must_include "a\e[7mb\e[0m"
+    expect(f.screen(80, 24).join("\n")).to include("a\e[7mb\e[0m")
   end
 
   it "cancels on escape when the prompt is empty" do
-    _(form.press(:escape, "\e")).must_equal :cancel
+    expect(form.press(:escape, "\e")).to eq(:cancel)
   end
 
   it "asks to confirm on escape once the prompt has text, then honors the answer" do
     form.press("h", "h")
-    _(form.press(:escape, "\e")).must_equal :changed
-    _(form.screen(80, 24).join("\n")).must_include "Discard this session?"
-    _(form.footer).must_include "discard"
-    _(form.press("n", "n")).must_equal :changed
-    _(form.screen(80, 24).join("\n")).must_include "New session"
-    _(form.press(:escape, "\e")).must_equal :changed
-    _(form.press("y", "y")).must_equal :cancel
+    expect(form.press(:escape, "\e")).to eq(:changed)
+    expect(form.screen(80, 24).join("\n")).to include("Discard this session?")
+    expect(form.footer).to include("discard")
+    expect(form.press("n", "n")).to eq(:changed)
+    expect(form.screen(80, 24).join("\n")).to include("New session")
+    expect(form.press(:escape, "\e")).to eq(:changed)
+    expect(form.press("y", "y")).to eq(:cancel)
   end
 
   describe "slash commands" do
@@ -334,32 +333,32 @@ describe ClaudeInbox::NewSessionForm do
     it "opens a menu on a leading slash and narrows it as you type" do
       with_commands do |f|
         type(f, "/")
-        _(f.menu.map(&:name)).must_equal %w[babysit deploy unslop unsplit]
-        _(f.footer).must_include "pick"
+        expect(f.menu.map(&:name)).to eq(%w[babysit deploy unslop unsplit])
+        expect(f.footer).to include("pick")
         type(f, "uns")
-        _(f.menu.map(&:name)).must_equal %w[unslop unsplit]
+        expect(f.menu.map(&:name)).to eq(%w[unslop unsplit])
         rows = f.screen(80, 24)
-        _(rows.find { |r| r.include?("/unsplit") }).must_include "unsplit does things"
-        _(rows.find { |r| r.include?("/unslop") }).wont_be_nil
-        _(rows.find { |r| r.include?("Worktree") }).wont_be_nil
+        expect(rows.find { |r| r.include?("/unsplit") }).to include("unsplit does things")
+        expect(rows.find { |r| r.include?("/unslop") }).not_to be_nil
+        expect(rows.find { |r| r.include?("Worktree") }).not_to be_nil
         type(f, "zz")
-        _(f.menu).must_be_nil
+        expect(f.menu).to be_nil
       end
     end
 
     it "picks with tab or enter, leaving the cursor after the command and a space" do
       with_commands do |f|
         type(f, "/unsl")
-        _(f.press(:tab, "\t")).must_equal :changed
-        _(f.values[:prompt]).must_equal "/unslop"
-        _(f.focused.value.to_s).must_equal "/unslop "
-        _(f.menu).must_be_nil
+        expect(f.press(:tab, "\t")).to eq(:changed)
+        expect(f.values[:prompt]).to eq("/unslop")
+        expect(f.focused.value.to_s).to eq("/unslop ")
+        expect(f.menu).to be_nil
         type(f, "the readme")
-        _(f.press(:return, "\r")).must_equal :changed
+        expect(f.press(:return, "\r")).to eq(:changed)
         type(f, "/dep")
-        _(f.menu.map(&:name)).must_equal %w[deploy]
+        expect(f.menu.map(&:name)).to eq(%w[deploy])
         f.press(:return, "\r")
-        _(f.values[:prompt]).must_equal "/unslop the readme\n/deploy"
+        expect(f.values[:prompt]).to eq("/unslop the readme\n/deploy")
       end
     end
 
@@ -367,30 +366,30 @@ describe ClaudeInbox::NewSessionForm do
       with_commands do |f|
         type(f, "/")
         f.press(:down, "\e[B")
-        _(f.picked.name).must_equal "deploy"
+        expect(f.picked.name).to eq("deploy")
         f.press(:up, "\e[A")
         f.press(:up, "\e[A")
-        _(f.picked.name).must_equal "unsplit"
+        expect(f.picked.name).to eq("unsplit")
         f.press(:return, "\r")
-        _(f.values[:prompt]).must_equal "/unsplit"
-        _(f.focused.key).must_equal :prompt
+        expect(f.values[:prompt]).to eq("/unsplit")
+        expect(f.focused.key).to eq(:prompt)
       end
     end
 
     it "closes the menu on escape without leaving the form, until the query changes" do
       with_commands do |f|
         type(f, "/un")
-        _(f.press(:escape, "\e")).must_equal :changed
-        _(f.menu).must_be_nil
-        _(f.press(:tab, "\t")).must_equal :changed
-        _(f.focused.key).must_equal :name
+        expect(f.press(:escape, "\e")).to eq(:changed)
+        expect(f.menu).to be_nil
+        expect(f.press(:tab, "\t")).to eq(:changed)
+        expect(f.focused.key).to eq(:name)
         f.press(:back_tab, "\e[Z")
-        _(f.menu).must_be_nil
+        expect(f.menu).to be_nil
         type(f, "s")
-        _(f.menu.map(&:name)).must_equal %w[unslop unsplit]
-        _(f.press(:escape, "\e")).must_equal :changed
-        _(f.press(:escape, "\e")).must_equal :changed
-        _(f.footer).must_include "discard"
+        expect(f.menu.map(&:name)).to eq(%w[unslop unsplit])
+        expect(f.press(:escape, "\e")).to eq(:changed)
+        expect(f.press(:escape, "\e")).to eq(:changed)
+        expect(f.footer).to include("discard")
       end
     end
 
@@ -399,19 +398,19 @@ describe ClaudeInbox::NewSessionForm do
         type(f, "first do")
         f.press(:return, "\r")
         type(f, "then /uns")
-        _(f.menu.map(&:name)).must_equal %w[unslop unsplit]
+        expect(f.menu.map(&:name)).to eq(%w[unslop unsplit])
         f.press(:tab, "\t")
-        _(f.values[:prompt]).must_equal "first do\nthen /unslop"
+        expect(f.values[:prompt]).to eq("first do\nthen /unslop")
         type(f, "a/b")
-        _(f.menu).must_be_nil
+        expect(f.menu).to be_nil
         f.press(:ctrl_u, "\x15")
         type(f, "/unslop x")
-        _(f.menu).must_be_nil
+        expect(f.menu).to be_nil
         f.press(:left, "\e[D")
         f.press(:left, "\e[D")
-        _(f.menu.map(&:name)).must_equal %w[unslop]
+        expect(f.menu.map(&:name)).to eq(%w[unslop])
         f.press(:tab, "\t")
-        _(f.focused.value.to_s).must_equal "/unslop  x"
+        expect(f.focused.value.to_s).to eq("/unslop  x")
       end
     end
 
@@ -424,13 +423,13 @@ describe ClaudeInbox::NewSessionForm do
         f = ClaudeInbox::NewSessionForm.new(cwd: home, pastel: Pastel.new(enabled: false), home: home)
         type(f, "/")
         rows = f.screen(80, 24)
-        _(rows.count { |r| r.include?("/cmd-") }).must_equal 6
-        _(rows.find { |r| r.include?("/cmd-f") }).must_include "+4 more"
+        expect(rows.count { |r| r.include?("/cmd-") }).to eq(6)
+        expect(rows.find { |r| r.include?("/cmd-f") }).to include("+4 more")
         7.times { f.press(:down, "\e[B") }
         rows = f.screen(80, 24)
-        _(rows.find { |r| r.include?("/cmd-b") }).must_be_nil
-        _(rows.find { |r| r.include?("/cmd-c") }).wont_be_nil
-        _(rows.find { |r| r.include?("/cmd-h") }).must_include "+2 more"
+        expect(rows.find { |r| r.include?("/cmd-b") }).to be_nil
+        expect(rows.find { |r| r.include?("/cmd-c") }).not_to be_nil
+        expect(rows.find { |r| r.include?("/cmd-h") }).to include("+2 more")
       end
     end
   end

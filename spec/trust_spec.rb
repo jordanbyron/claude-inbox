@@ -1,24 +1,23 @@
 # frozen_string_literal: true
 
-require_relative "test_helper"
 require_relative "../lib/claude_inbox/trust"
 require "tmpdir"
 
-describe ClaudeInbox::Trust do
+RSpec.describe ClaudeInbox::Trust do
   describe "projects" do
     def projects(path) = ClaudeInbox::Trust.projects(path: path)
 
     it "lists the directories whose trust dialog was accepted" do
-      _(projects(fixture_path("claude.json"))).must_equal ["/Users/me/code/claude-inbox", "/Users/me/code/comma3"]
+      expect(projects(fixture_path("claude.json"))).to eq(["/Users/me/code/claude-inbox", "/Users/me/code/comma3"])
     end
 
     it "lists none when the file is missing, unparsable or another shape" do
       Dir.mktmpdir do |dir|
         path = File.join(dir, "claude.json")
-        _(projects(path)).must_equal []
+        expect(projects(path)).to eq([])
         ["{", "[]", '"projects"', '{"projects": []}', '{"projects": {"/x": true}}'].each do |body|
           File.write(path, body)
-          _(projects(path)).must_equal []
+          expect(projects(path)).to eq([])
         end
       end
     end
@@ -28,7 +27,7 @@ describe ClaudeInbox::Trust do
         path = File.join(dir, "claude.json")
         accepted = {"hasTrustDialogAccepted" => true}
         File.write(path, JSON.generate("projects" => {"code/x" => accepted, "/a\0b" => accepted, "/ok" => accepted}))
-        _(projects(path)).must_equal ["/ok"]
+        expect(projects(path)).to eq(["/ok"])
       end
     end
   end

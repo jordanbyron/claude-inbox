@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "test_helper"
 require "claude_inbox/text_buffer"
 
-describe ClaudeInbox::TextBuffer do
+RSpec.describe ClaudeInbox::TextBuffer do
   let(:mark) { ->(cell) { "[#{cell}]" } }
 
   def buffer(text = "")
@@ -16,89 +15,89 @@ describe ClaudeInbox::TextBuffer do
     b = buffer("ad")
     b.press(:left, "\e[D")
     type(b, "bc")
-    _(b.to_s).must_equal "abcd"
-    _(b.cursor).must_equal 3
+    expect(b.to_s).to eq("abcd")
+    expect(b.cursor).to eq(3)
   end
 
   it "stops at both ends instead of wrapping around" do
     b = buffer("ab")
     5.times { b.press(:left, "\e[D") }
-    _(b.cursor).must_equal 0
+    expect(b.cursor).to eq(0)
     b.press(:backspace, "\x7f")
-    _(b.to_s).must_equal "ab"
+    expect(b.to_s).to eq("ab")
     5.times { b.press(:right, "\e[C") }
-    _(b.cursor).must_equal 2
+    expect(b.cursor).to eq(2)
     b.press(:delete, "\e[3~")
-    _(b.to_s).must_equal "ab"
+    expect(b.to_s).to eq("ab")
   end
 
   it "deletes backwards, forwards, by word and by line" do
     b = buffer("one two")
     b.press(:ctrl_w, "\x17")
-    _(b.to_s).must_equal "one "
+    expect(b.to_s).to eq("one ")
     b.press(:backspace, "\x7f")
-    _(b.to_s).must_equal "one"
+    expect(b.to_s).to eq("one")
     b.press(:home, "\e[H")
     b.press(:delete, "\e[3~")
-    _(b.to_s).must_equal "ne"
+    expect(b.to_s).to eq("ne")
     b.press(:ctrl_k, "\v")
-    _(b.to_s).must_equal ""
+    expect(b.to_s).to eq("")
     type(b, "keep this")
     b.press(:ctrl_u, "\x15")
-    _(b.to_s).must_equal ""
+    expect(b.to_s).to eq("")
   end
 
   it "keeps whole emoji together" do
     b = buffer("a👍b")
     b.press(:left, "\e[D")
     b.press(:backspace, "\x7f")
-    _(b.to_s).must_equal "ab"
+    expect(b.to_s).to eq("ab")
   end
 
   it "hands back keys it has no use for" do
     b = buffer
-    _(b.press(:tab, "\t")).must_equal false
-    _(b.press(:escape, "\e")).must_equal false
-    _(b.press("x", "x")).must_equal true
+    expect(b.press(:tab, "\t")).to be(false)
+    expect(b.press(:escape, "\e")).to be(false)
+    expect(b.press("x", "x")).to be(true)
   end
 
   it "scrolls a single row to keep the cursor in view" do
     b = buffer("abcdefgh")
-    _(b.row(4, cursor: mark)).must_equal "fgh[ ]"
+    expect(b.row(4, cursor: mark)).to eq("fgh[ ]")
     5.times { b.press(:left, "\e[D") }
-    _(b.row(4, cursor: mark)).must_equal "abc[d]"
-    _(b.row(4)).must_equal "abc…"
+    expect(b.row(4, cursor: mark)).to eq("abc[d]")
+    expect(b.row(4)).to eq("abc…")
   end
 
   it "wraps a multi-line view and marks the cursor's row" do
     b = buffer("hello world\nbye")
     rows, hidden = b.view(6, 3, cursor: mark)
-    _(rows).must_equal ["hello ", "world", "bye[ ]"]
-    _(hidden).must_equal 0
+    expect(rows).to eq(["hello ", "world", "bye[ ]"])
+    expect(hidden).to eq(0)
   end
 
   it "follows the cursor up out of the visible window" do
     b = buffer((0..4).map { |i| "line#{i}" }.join("\n"))
     rows, hidden = b.view(10, 2, cursor: mark)
-    _(rows).must_equal ["line3", "line4[ ]"]
-    _(hidden).must_equal 3
+    expect(rows).to eq(["line3", "line4[ ]"])
+    expect(hidden).to eq(3)
     18.times { b.press(:left, "\e[D") }
     rows, hidden = b.view(10, 2, cursor: mark)
-    _(rows).must_equal ["line1[ ]", "line2"]
-    _(hidden).must_equal 1
+    expect(rows).to eq(["line1[ ]", "line2"])
+    expect(hidden).to eq(1)
     b.press(:left, "\e[D")
     rows, = b.view(10, 2, cursor: mark)
-    _(rows).must_equal ["line[1]", "line2"]
+    expect(rows).to eq(["line[1]", "line2"])
   end
 
   it "gives the cursor a row of its own at the right margin" do
     b = buffer("abcd")
     rows, = b.view(4, 3, cursor: mark)
-    _(rows).must_equal ["abcd", "[ ]"]
+    expect(rows).to eq(["abcd", "[ ]"])
   end
 end
 
-describe ClaudeInbox::TextBuffer, "with an image attached" do
+RSpec.describe ClaudeInbox::TextBuffer, "with an image attached" do
   let(:mark) { ->(cell) { "[#{cell}]" } }
   let(:chip) { ->(cell) { "<#{cell}>" } }
 
@@ -109,9 +108,9 @@ describe ClaudeInbox::TextBuffer, "with an image attached" do
     b.attach("/tmp/a.png")
     type(b, " and ")
     b.attach("/tmp/b.png")
-    _(b.to_s).must_equal "see [Image #1] and [Image #2]"
-    _(b.chips.map(&:path)).must_equal ["/tmp/a.png", "/tmp/b.png"]
-    _(b.expand { |c| "@#{c.path}" }).must_equal "see @/tmp/a.png and @/tmp/b.png"
+    expect(b.to_s).to eq("see [Image #1] and [Image #2]")
+    expect(b.chips.map(&:path)).to eq(["/tmp/a.png", "/tmp/b.png"])
+    expect(b.expand { |c| "@#{c.path}" }).to eq("see @/tmp/a.png and @/tmp/b.png")
   end
 
   it "moves over and deletes the token as one cell" do
@@ -119,13 +118,13 @@ describe ClaudeInbox::TextBuffer, "with an image attached" do
     b.attach("/tmp/a.png")
     type(b, "b")
     2.times { b.press(:left, "\e[D") }
-    _(b.cursor).must_equal 1
+    expect(b.cursor).to eq(1)
     b.press(:delete, "\e[3~")
-    _(b.to_s).must_equal "ab"
+    expect(b.to_s).to eq("ab")
     b.attach("/tmp/c.png")
-    _(b.to_s).must_equal "a[Image #2]b"
+    expect(b.to_s).to eq("a[Image #2]b")
     b.press(:backspace, "\x7f")
-    _(b.to_s).must_equal "ab"
+    expect(b.to_s).to eq("ab")
   end
 
   it "keeps numbering past a deleted image" do
@@ -133,7 +132,7 @@ describe ClaudeInbox::TextBuffer, "with an image attached" do
     b.attach("/tmp/a.png")
     b.press(:backspace, "\x7f")
     b.attach("/tmp/b.png")
-    _(b.to_s).must_equal "[Image #2]"
+    expect(b.to_s).to eq("[Image #2]")
   end
 
   it "wraps the token whole and paints it, the cursor over all of it" do
@@ -141,8 +140,8 @@ describe ClaudeInbox::TextBuffer, "with an image attached" do
     b.attach("/tmp/a.png")
     b.press(:left, "\e[D")
     rows, = b.view(12, 3, cursor: mark, chip: chip)
-    _(rows).must_equal ["look ", "[<[Image #1]>]"]
+    expect(rows).to eq(["look ", "[<[Image #1]>]"])
     rows, = b.view(12, 3, chip: chip)
-    _(rows).must_equal ["look ", "<[Image #1]>"]
+    expect(rows).to eq(["look ", "<[Image #1]>"])
   end
 end

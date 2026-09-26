@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "test_helper"
 require_relative "../lib/claude_inbox/logs"
 
-describe ClaudeInbox::Logs do
+RSpec.describe ClaudeInbox::Logs do
   let(:replay) { (1..10).map { |i| "line #{i}" }.join("\r\n") }
   let(:client) do
     Class.new(ClaudeInbox::FixtureClient) {
@@ -30,23 +29,23 @@ describe ClaudeInbox::Logs do
                        client.asked)
 
   def settle(id)
-    _(wait_for { logs.cached(id) }).must_equal lines
+    expect(wait_for { logs.cached(id) }).to eq(lines)
   end
 
   it "knows nothing until asked, then answers from the cache" do
-    _(logs.cached("abc12345")).must_be_nil
+    expect(logs.cached("abc12345")).to be_nil
     logs.want("abc12345")
     @elapsed += ClaudeInbox::Logs::DEBOUNCE
     logs.tick
     settle("abc12345")
-    _(client.asked).must_equal %w[abc12345]
+    expect(client.asked).to eq(%w[abc12345])
   end
 
   it "waits out the debounce before asking" do
     logs.want("abc12345")
     logs.tick
-    _(logs.cached("abc12345")).must_be_nil
-    _(client.asked).must_be_empty
+    expect(logs.cached("abc12345")).to be_nil
+    expect(client.asked).to be_empty
   end
 
   it "only keeps the latest request" do
@@ -55,8 +54,8 @@ describe ClaudeInbox::Logs do
     @elapsed += ClaudeInbox::Logs::DEBOUNCE
     logs.tick
     settle("f23c8673")
-    _(logs.cached("abc12345")).must_be_nil
-    _(client.asked).must_equal %w[f23c8673]
+    expect(logs.cached("abc12345")).to be_nil
+    expect(client.asked).to eq(%w[f23c8673])
   end
 
   it "does not ask again while the cache is fresh" do
@@ -67,13 +66,13 @@ describe ClaudeInbox::Logs do
     logs.want("abc12345")
     @elapsed += ClaudeInbox::Logs::DEBOUNCE
     logs.tick
-    _(settled_asked).must_equal %w[abc12345]
+    expect(settled_asked).to eq(%w[abc12345])
   end
 
   it "ignores a request with nothing to fetch" do
     logs.want(nil)
     @elapsed += ClaudeInbox::Logs::DEBOUNCE
     logs.tick
-    _(settled_asked).must_be_empty
+    expect(settled_asked).to be_empty
   end
 end

@@ -1,12 +1,11 @@
 # frozen_string_literal: true
 
-require_relative "test_helper"
 require "claude_inbox/slash_commands"
 require "tmpdir"
 require "fileutils"
 require "json"
 
-describe ClaudeInbox::SlashCommands do
+RSpec.describe ClaudeInbox::SlashCommands do
   def skill(root, name, description, extra = "")
     FileUtils.mkdir_p("#{root}/#{name}")
     File.write("#{root}/#{name}/SKILL.md", "---\nname: #{name}\ndescription: #{description}\n#{extra}---\n\nbody\n")
@@ -26,12 +25,12 @@ describe ClaudeInbox::SlashCommands do
         command("#{proj}/.claude/commands", "deploy", "---\ndescription: Ship it\n---\nDeploy $ARGUMENTS")
         command("#{home}/.claude/commands", "frontend/component", "Make a component")
         list = ClaudeInbox::SlashCommands.list(cwd: proj, home: home)
-        _(list.map(&:name)).must_equal %w[component deploy shared unslop]
-        _(list.map(&:source)).must_equal %w[user project project user]
-        _(list.find { |c| c.name == "shared" }.description).must_equal "from project"
-        _(list.find { |c| c.name == "deploy" }.description).must_equal "Ship it"
-        _(list.find { |c| c.name == "component" }.description).must_equal ""
-        _(list.first.to_s).must_equal "/component"
+        expect(list.map(&:name)).to eq(%w[component deploy shared unslop])
+        expect(list.map(&:source)).to eq(%w[user project project user])
+        expect(list.find { |c| c.name == "shared" }.description).to eq("from project")
+        expect(list.find { |c| c.name == "deploy" }.description).to eq("Ship it")
+        expect(list.find { |c| c.name == "component" }.description).to eq("")
+        expect(list.first.to_s).to eq("/component")
       end
     end
   end
@@ -44,10 +43,10 @@ describe ClaudeInbox::SlashCommands do
       skill(root, "dq", '"Double quoted"')
       skill(root, "hidden", "Not for the menu", "user-invocable: false\n")
       by = ClaudeInbox::SlashCommands.list(cwd: home, home: home).to_h { |c| [c.name, c.description] }
-      _(by["folded"]).must_equal "Send a push notification"
-      _(by["quoted"]).must_equal "It's quoted: with a colon"
-      _(by["dq"]).must_equal "Double quoted"
-      _(by).wont_include "hidden"
+      expect(by["folded"]).to eq("Send a push notification")
+      expect(by["quoted"]).to eq("It's quoted: with a colon")
+      expect(by["dq"]).to eq("Double quoted")
+      expect(by).not_to include("hidden")
     end
   end
 
@@ -63,22 +62,22 @@ describe ClaudeInbox::SlashCommands do
       }.to_json)
       skill("#{home}/.claude/skills/synced/bucket-1", "docs", "Living docs")
       list = ClaudeInbox::SlashCommands.list(cwd: home, home: home)
-      _(list.map(&:name)).must_equal %w[anthropic-skills:docs skill-creator:eval skill-creator:skill-creator]
-      _(list.map(&:source)).must_equal %w[synced plugin plugin]
+      expect(list.map(&:name)).to eq(%w[anthropic-skills:docs skill-creator:eval skill-creator:skill-creator])
+      expect(list.map(&:source)).to eq(%w[synced plugin plugin])
     end
   end
 
   it "copes with nothing installed at all" do
     Dir.mktmpdir do |home|
-      _(ClaudeInbox::SlashCommands.list(cwd: home, home: home)).must_equal []
+      expect(ClaudeInbox::SlashCommands.list(cwd: home, home: home)).to eq([])
     end
   end
 
   it "matches by prefix first, then anywhere in the name, ignoring case" do
     cmds = %w[review code-review unslop Babysit].map { |n| ClaudeInbox::SlashCommands::Command.new(n, "", "user") }
-    _(ClaudeInbox::SlashCommands.match(cmds, "re").map(&:name)).must_equal %w[review code-review]
-    _(ClaudeInbox::SlashCommands.match(cmds, "b").map(&:name)).must_equal %w[Babysit]
-    _(ClaudeInbox::SlashCommands.match(cmds, "").map(&:name)).must_equal %w[review code-review unslop Babysit]
-    _(ClaudeInbox::SlashCommands.match(cmds, "zz")).must_equal []
+    expect(ClaudeInbox::SlashCommands.match(cmds, "re").map(&:name)).to eq(%w[review code-review])
+    expect(ClaudeInbox::SlashCommands.match(cmds, "b").map(&:name)).to eq(%w[Babysit])
+    expect(ClaudeInbox::SlashCommands.match(cmds, "").map(&:name)).to eq(%w[review code-review unslop Babysit])
+    expect(ClaudeInbox::SlashCommands.match(cmds, "zz")).to eq([])
   end
 end

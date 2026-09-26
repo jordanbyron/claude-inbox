@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "test_helper"
 require_relative "../lib/claude_inbox/poller"
 
-describe ClaudeInbox::Poller do
+RSpec.describe ClaudeInbox::Poller do
   let(:client) do
     Class.new(ClaudeInbox::FixtureClient) {
       def removed = (@removed ||= [])
@@ -35,21 +34,21 @@ describe ClaudeInbox::Poller do
   it "hands the list over as sessions on the queue" do
     poller.once
     msgs = messages
-    _(msgs.map(&:first)).must_equal [:sessions]
-    _(published_ids(msgs).first).must_include "f23c8673"
+    expect(msgs.map(&:first)).to eq([:sessions])
+    expect(published_ids(msgs).first).to include("f23c8673")
   end
 
   it "reports a failed poll as an error instead of raising" do
     client.define_singleton_method(:list) { raise "daemon gone" }
     poller.once
-    _(messages).must_equal [[:error, "daemon gone"]]
+    expect(messages).to eq([[:error, "daemon gone"]])
   end
 
   describe "the reaper" do
     it "is off unless something arms it, so a poll on its own deletes nothing" do
       poller.once
-      _(client.removed).must_be_empty
-      _(published_ids(messages).first).must_include "f23c8673"
+      expect(client.removed).to be_empty
+      expect(published_ids(messages).first).to include("f23c8673")
     end
 
     def drain = messages.each { |kind, list| store.update(list) if kind == :sessions }
@@ -66,12 +65,12 @@ describe ClaudeInbox::Poller do
       }.new
       poller(reaper: reaper).once
       msgs = messages
-      _(msgs.assoc(:notice)[1]).must_equal "reaped f23c8673"
+      expect(msgs.assoc(:notice)[1]).to eq("reaped f23c8673")
 
       store.update(msgs.first[1])
-      _(shown).wont_include "f23c8673"
+      expect(shown).not_to include("f23c8673")
       msgs.each { |kind, list| store.update(list) if kind == :sessions }
-      _(shown).wont_include "f23c8673"
+      expect(shown).not_to include("f23c8673")
     end
 
     it "brings a row back when its reap was refused" do
@@ -84,7 +83,7 @@ describe ClaudeInbox::Poller do
       }.new
       poller(reaper: reaper).once
       drain
-      _(shown).must_include "f23c8673"
+      expect(shown).to include("f23c8673")
     end
 
     it "releases what it hid when the sweep itself fails" do
@@ -97,9 +96,9 @@ describe ClaudeInbox::Poller do
       }.new
       poller(reaper: reaper).once
       msgs = messages
-      _(msgs.assoc(:error)[1]).must_include "reaped.log"
+      expect(msgs.assoc(:error)[1]).to include("reaped.log")
       msgs.each { |kind, list| store.update(list) if kind == :sessions }
-      _(shown).must_include "f23c8673"
+      expect(shown).to include("f23c8673")
     end
 
     it "keeps a row the user deleted hidden even when the reaper let it go the same poll" do
@@ -117,7 +116,7 @@ describe ClaudeInbox::Poller do
       }.new(store)
       poller(reaper: reaper).once
       drain
-      _(shown).wont_include "f23c8673"
+      expect(shown).not_to include("f23c8673")
     end
 
     # Every hand-over after the sweep carries the reaped key; a list without
@@ -137,16 +136,16 @@ describe ClaudeInbox::Poller do
       drain
       refused = client.instance_variable_get(:@refused)
       reaped = client.removed.dup
-      _(reaped.size).must_equal 1
-      _(shown).must_include refused
-      _(shown).wont_include reaped.first
+      expect(reaped.size).to eq(1)
+      expect(shown).to include(refused)
+      expect(shown).not_to include(reaped.first)
 
       2.times do
         poller(reaper: reaper).once
         drain
       end
-      _(shown).wont_include reaped.first
-      _(client.removed).must_equal reaped
+      expect(shown).not_to include(reaped.first)
+      expect(client.removed).to eq(reaped)
     end
   end
 
@@ -159,16 +158,16 @@ describe ClaudeInbox::Poller do
     it "does not bring the row back until the daemon has dropped it" do
       poller.once
       drain_into_store(messages)
-      _(store.sections.all.map(&:id)).must_include "f23c8673"
+      expect(store.sections.all.map(&:id)).to include("f23c8673")
 
       client.rm("f23c8673")
       store.forget("f23c8673")
       poller.once
       msgs = messages
-      _(published_ids(msgs).first).must_include "f23c8673"
+      expect(published_ids(msgs).first).to include("f23c8673")
       drain_into_store(msgs)
-      _(store.sections.all.map(&:id)).wont_include "f23c8673"
-      _(store.sessions.map(&:id)).wont_include "f23c8673"
+      expect(store.sections.all.map(&:id)).not_to include("f23c8673")
+      expect(store.sessions.map(&:id)).not_to include("f23c8673")
     end
   end
 
@@ -200,7 +199,7 @@ describe ClaudeInbox::Poller do
     it "polls once when started" do
       @poller = poller(interval: 60)
       @poller.start
-      _(wait_for_polls(1)).must_equal 1
+      expect(wait_for_polls(1)).to eq(1)
     end
 
     it "collapses a burst of wake-ups into one poll" do
@@ -208,15 +207,15 @@ describe ClaudeInbox::Poller do
       @poller.soon
       @poller.soon
       @poller.start
-      _(wait_for_polls(1)).must_equal 1
+      expect(wait_for_polls(1)).to eq(1)
       sleep 0.2
-      _(polls).must_equal 1
+      expect(polls).to eq(1)
     end
 
     it "polls again on the interval" do
       @poller = poller(interval: 0.05)
       @poller.start
-      _(wait_for_polls(2)).must_be :>=, 2
+      expect(wait_for_polls(2)).to be >= 2
     end
 
     it "skips the poll while paused and catches up on resume" do
@@ -225,10 +224,10 @@ describe ClaudeInbox::Poller do
       @poller.start
       @poller.soon
       sleep 0.2
-      _(polls).must_equal 0
+      expect(polls).to eq(0)
 
       @poller.resume
-      _(wait_for_polls(1)).must_equal 1
+      expect(wait_for_polls(1)).to eq(1)
     end
 
     it "can be stopped before it was started" do
@@ -239,9 +238,9 @@ describe ClaudeInbox::Poller do
       @poller = poller(interval: 60)
       @poller.start
       @poller.start
-      _(wait_for_polls(1)).must_equal 1
+      expect(wait_for_polls(1)).to eq(1)
       sleep 0.2
-      _(polls).must_equal 1
+      expect(polls).to eq(1)
     end
 
     it "reports a poll that blew the stack and keeps polling" do
@@ -251,13 +250,13 @@ describe ClaudeInbox::Poller do
       end
       @poller = poller(interval: 60)
       @poller.start
-      _(wait_for_polls(1)).must_equal 1
-      _(queue.pop).must_equal [:error, "stack level too deep"]
+      expect(wait_for_polls(1)).to eq(1)
+      expect(queue.pop).to eq([:error, "stack level too deep"])
       client.singleton_class.remove_method(:list)
 
       @poller.soon
-      _(wait_for_polls(2)).must_equal 2
-      _(queue.pop.first).must_equal :sessions
+      expect(wait_for_polls(2)).to eq(2)
+      expect(queue.pop.first).to eq(:sessions)
     end
   end
 end
