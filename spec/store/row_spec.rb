@@ -59,7 +59,14 @@ RSpec.describe ClaudeInbox::Store::Row do
   end
 
   it "reads the entry through its accessors" do
-    r = described_class.new(session(id: "a"), ClaudeInbox::Store::Entry.new("wake_at" => ClaudeInbox::Store::UNTIL_WOKEN, "state_since" => 5, "pinned" => true, "pinned_at" => 6, "reap_failed_at" => 7))
+    entry = ClaudeInbox::Store::Entry.new(
+      "wake_at" => ClaudeInbox::Store::UNTIL_WOKEN,
+      "state_since" => 5,
+      "pinned" => true,
+      "pinned_at" => 6,
+      "reap_failed_at" => 7
+    )
+    r = described_class.new(session(id: "a"), entry)
     expect(r.wake_at).to eq(ClaudeInbox::Store::UNTIL_WOKEN)
     expect(r.parked?).to be(true)
     expect(r.state_since).to eq(5)

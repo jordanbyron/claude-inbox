@@ -3,8 +3,10 @@
 RSpec.describe ClaudeInbox::Remote::PairingDialog do
   let(:token) { "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcde" }
   let(:listening) do
-    ClaudeInbox::Remote::Listener::Snapshot.new(state: :listening, port: 7433, lan: false, urls: ["http://127.0.0.1:7433/##{token}"],
-      firewall: nil, allowed_modes: %w[default plan], recent: [], held_by: nil, fixture: false)
+    ClaudeInbox::Remote::Listener::Snapshot.new(
+      state: :listening, port: 7433, lan: false, urls: ["http://127.0.0.1:7433/##{token}"],
+      firewall: nil, allowed_modes: %w[default plan], recent: [], held_by: nil, fixture: false
+    )
   end
   let(:snapshot) { [listening] }
   let(:dialog) { described_class.new(-> { snapshot[0] }) }
@@ -18,7 +20,11 @@ RSpec.describe ClaudeInbox::Remote::PairingDialog do
   end
 
   it "says LAN mode is cleartext, and lists each address and the firewall" do
-    snapshot[0] = listening.with(lan: true, firewall: :on, urls: ["http://mac-mini.local:7433/##{token}", "http://192.168.1.20:7433/##{token}"])
+    snapshot[0] = listening.with(
+      lan: true,
+      firewall: :on,
+      urls: ["http://mac-mini.local:7433/##{token}", "http://192.168.1.20:7433/##{token}"]
+    )
     expect(dialog.frame(120).join("\n")).to include "listening on 0.0.0.0:7433 · LAN, cleartext"
     expect(dialog.frame(120).join("\n")).to include "http://mac-mini.local:7433/#AbCd…bcde"
     expect(dialog.frame(120).join("\n")).to include "http://192.168.1.20:7433/#AbCd…bcde"
@@ -88,7 +94,9 @@ RSpec.describe ClaudeInbox::Remote::PairingDialog do
 
   it "counts an outcome that came again" do
     snapshot[0] = listening.with(recent: [
-      ClaudeInbox::Remote::Listener::Outcome.new(at: Time.local(2026, 9, 24, 12, 1), via: "192.168.1.30", result: "token rejected", count: 12)
+      ClaudeInbox::Remote::Listener::Outcome.new(
+        at: Time.local(2026, 9, 24, 12, 1), via: "192.168.1.30", result: "token rejected", count: 12
+      )
     ])
     expect(dialog.frame(120).join("\n")).to include "12:01  192.168.1.30  token rejected ×12"
   end

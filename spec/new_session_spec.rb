@@ -93,7 +93,9 @@ RSpec.describe ClaudeInbox::NewSessionForm do
 
   describe "images" do
     let(:clip) { ClaudeInbox::Images::Clipboard.new(nil, nil) }
-    let(:form) { described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), clipboard: -> { clip }, home: home) }
+    let(:form) do
+      described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), clipboard: -> { clip }, home: home)
+    end
 
     it "attaches the clipboard's image on an empty paste, as a token in the prompt" do
       clip.image = "/tmp/shot.png"

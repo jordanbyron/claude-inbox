@@ -7,6 +7,7 @@ RSpec.describe ClaudeInbox::Reaper do
   # merge_entries dates a finished session with no process from `started_at`,
   # so an old `started_at` is the whole of the setup needed to look long idle.
   let(:quiet_since) { now.to_i - ClaudeInbox::Store::REAP_AFTER - 86_400 }
+  let(:quiet) { {state: "done", started_at: Time.at(quiet_since)} }
   let(:client) { RecordingClient.new }
   let(:dir) { Dir.mktmpdir }
   let(:log_path) { File.join(dir, "reaped.log") }
@@ -16,7 +17,7 @@ RSpec.describe ClaudeInbox::Reaper do
   after { FileUtils.remove_entry(dir) if Dir.exist?(dir) }
 
   it "removes the sessions that are due, forgets them, and logs each one" do
-    sessions = [session(id: "old1", state: "done", started_at: Time.at(quiet_since)), session(id: "old2", state: "done", started_at: Time.at(quiet_since), name: "auth spike")]
+    sessions = [session(id: "old1", **quiet), session(id: "old2", **quiet, name: "auth spike")]
     store.update(sessions)
 
     expect(reaper.sweep(sessions, now).sort).to eq(%w[old1 old2])
@@ -30,7 +31,7 @@ RSpec.describe ClaudeInbox::Reaper do
   end
 
   it "names what it is about to take without taking anything" do
-    sessions = [session(id: "old1", state: "done", started_at: Time.at(quiet_since)), session(id: "busy", state: "working")]
+    sessions = [session(id: "old1", **quiet), session(id: "busy", state: "working")]
     store.update(sessions)
 
     expect(reaper.due(sessions, now)).to eq(%w[old1])
@@ -52,7 +53,7 @@ RSpec.describe ClaudeInbox::Reaper do
   it "dates idleness from the last state change, not from when the session started" do
     long_run = session(id: "long", state: "working", started_at: Time.at(quiet_since))
     store.update([long_run])
-    just_finished = session(id: "long", state: "done", started_at: Time.at(quiet_since))
+    just_finished = session(id: "long", **quiet)
     store.update([just_finished])
 
     expect(reaper.sweep([just_finished], now)).to be_empty
@@ -60,7 +61,7 @@ RSpec.describe ClaudeInbox::Reaper do
   end
 
   it "keeps a session whose worktree refuses, and carries on with the rest" do
-    sessions = [session(id: "unpushed", state: "done", started_at: Time.at(quiet_since)), session(id: "clean", state: "done", started_at: Time.at(quiet_since))]
+    sessions = [session(id: "unpushed", **quiet), session(id: "clean", **quiet)]
     store.update(sessions)
 
     reaper = described_class.new(RecordingClient.new(refuse: %w[unpushed]), store, log_path: log_path)
@@ -72,7 +73,7 @@ RSpec.describe ClaudeInbox::Reaper do
   end
 
   it "backs off a refused session for RETRY_AFTER, then tries once more" do
-    sessions = [session(id: "unpushed", state: "done", started_at: Time.at(quiet_since))]
+    sessions = [session(id: "unpushed", **quiet)]
     store.update(sessions)
     refusing = RecordingClient.new(refuse: %w[unpushed])
     reaper = described_class.new(refusing, store, log_path: log_path)
@@ -87,7 +88,7 @@ RSpec.describe ClaudeInbox::Reaper do
 
   it "refuses to reap anything it cannot write an audit line for" do
     File.write(File.join(dir, "blocked"), "not a directory")
-    sessions = [session(id: "old1", state: "done", started_at: Time.at(quiet_since))]
+    sessions = [session(id: "old1", **quiet)]
     store.update(sessions)
     reaper = described_class.new(client, store, log_path: File.join(dir, "blocked", "reaped.log"))
 
@@ -104,7 +105,7 @@ RSpec.describe ClaudeInbox::Reaper do
   end
 
   it "does nothing at all when disabled" do
-    sessions = [session(id: "old1", state: "done", started_at: Time.at(quiet_since))]
+    sessions = [session(id: "old1", **quiet)]
     expect(described_class.disabled.sweep(sessions, now)).to be_empty
   end
 

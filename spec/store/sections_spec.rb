@@ -4,10 +4,19 @@ RSpec.describe ClaudeInbox::Store::Sections do
   let(:selection) { ClaudeInbox::Store::Selection }
   let(:now) { Time.at(1_789_600_000) }
 
-  let(:terminal) { session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "uuid", cwd: "/tmp/term") }
+  let(:terminal) do
+    session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "uuid", cwd: "/tmp/term")
+  end
   let(:sec) do
     entries = {"b" => {"pinned" => true}, "z" => {"settled_at" => now.to_i}}
-    ClaudeInbox::Store.sectionize([terminal, session(id: "a", state: "blocked"), session(id: "b"), session(id: "c", name: "Other", cwd: "/srv/other"), session(id: "z", state: "done")], entries, now)
+    sessions = [
+      terminal,
+      session(id: "a", state: "blocked"),
+      session(id: "b"),
+      session(id: "c", name: "Other", cwd: "/srv/other"),
+      session(id: "z", state: "done")
+    ]
+    ClaudeInbox::Store.sectionize(sessions, entries, now)
   end
 
   it "finds a row by its selection, or nothing" do

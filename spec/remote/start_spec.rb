@@ -31,7 +31,11 @@ RSpec.describe ClaudeInbox::Remote::Start do
         session(id: "b", cwd: tree, started_at: Time.at(3_000)),
         session(id: "c", cwd: project, started_at: Time.at(2_000))
       ])
-      trusted.replace([File.join(tmp, "code", "trusted").tap { |dir| FileUtils.mkdir_p(dir) }, project, File.join(tmp, "gone")])
+      trusted.replace([
+        File.join(tmp, "code", "trusted").tap { |dir| FileUtils.mkdir_p(dir) },
+        project,
+        File.join(tmp, "gone")
+      ])
       settings[project] = ClaudeInbox::Settings::Defaults.new("opus", nil, "plan")
       body = phone.get("/api/options").json
       expect(body["models"]).to eq(ClaudeInbox::AgentsClient::MODELS)
@@ -43,7 +47,10 @@ RSpec.describe ClaudeInbox::Remote::Start do
     end
 
     it "labels a directory by as many trailing names as it takes to tell it apart" do
-      trusted.replace([File.join(tmp, "a", "x", "app").tap { |dir| FileUtils.mkdir_p(dir) }, File.join(tmp, "b", "x", "app").tap { |dir| FileUtils.mkdir_p(dir) }])
+      trusted.replace([
+        File.join(tmp, "a", "x", "app").tap { |dir| FileUtils.mkdir_p(dir) },
+        File.join(tmp, "b", "x", "app").tap { |dir| FileUtils.mkdir_p(dir) }
+      ])
       expect(phone.get("/api/options").json["dirs"].map { |d| d["label"] }).to eq(%w[code/app a/x/app b/x/app])
     end
 
