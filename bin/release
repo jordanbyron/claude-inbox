@@ -5,9 +5,9 @@
 # bumps VERSION from the conventional commits since the last tag, pushes the
 # gem and opens a GitHub release. See CONTRIBUTING.md.
 
+require "bundler"
 require "fileutils"
 require "open3"
-require_relative "../release/lockfile"
 require_relative "../release/next_version"
 
 Dir.chdir(File.expand_path("..", __dir__))
@@ -53,22 +53,21 @@ if version.nil?
 end
 
 tag = "v#{version}"
-lockfile = Release::Lockfile.new(Dir.pwd)
-relock = lockfile.version != version
 
 if DRY_RUN
   puts "would release #{tag}: #{reason}"
-  puts "would record #{version} in Gemfile.lock, which has #{lockfile.version}" if relock
   exit
 end
 
-# The first release ships VERSION as it stands, so it commits only if the lock
-# had drifted from it.
+# The lock records the gem's own version, so it is relocked into the release
+# commit; otherwise the next bundle install rewrites it and dirties the tree.
+# Unbundled, because a bundle exec parent would pin the relock to its Gemfile.
 File.write(VERSION_FILE, File.read(VERSION_FILE).sub(VERSION_LINE, %(VERSION = "#{version}"))) if version != current
-if relock && !lockfile.sync
+unless Bundler.with_unbundled_env { system("bundle", "lock", "--local", out: File::NULL) }
   system "git", "checkout", "--quiet", "--", "."
   abort "bundle lock failed; VERSION and Gemfile.lock are left as they were"
 end
+# The first release ships VERSION as it stands, so there may be nothing to commit.
 committed = !capture("git", "status", "--porcelain").empty?
 step "git", "commit", "--quiet", "--all", "--message", "chore: release #{tag}" if committed
 step "git", "tag", "--annotate", tag, "--message", tag
