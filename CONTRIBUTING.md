@@ -87,24 +87,14 @@ GitHub won't merge a PR without it. Run it once per repo. It needs admin access.
 
 ## Cutting a release
 
-Releases are cut from your machine too, by `bin/release`, once the PRs you want
-in it are merged. Run it on `main` with a clean tree at `origin/main`:
+You need push rights to the `claude-inbox` gem on rubygems.org (`gem signin`,
+with your OTP at hand) and `gh` signed in to this repo. Then, on `main` with a
+clean tree at `origin/main`:
 
 ```sh
-bin/release --dry-run   # say what would be released, change nothing
+bin/release --dry-run   # show the version it would release
 bin/release
 ```
 
-It reads the commits since the last `v*` tag (squash merges, so each is a PR
-title) and picks the bump from their conventional-commit prefixes: a `!` or a
-`BREAKING CHANGE:` footer bumps major, `feat` bumps minor, `fix` bumps patch,
-and anything else (`docs`, `refactor`, `chore`) releases nothing. While the
-version is still 0.x a breaking change bumps minor, per semver. The first
-release, with no tag yet, ships `VERSION` as it stands.
-
-Then it rewrites `VERSION` in `lib/claude_inbox.rb`, relocks `Gemfile.lock` to
-the same version, commits both as `chore: release vX.Y.Z`, tags, builds and
-pushes the gem (rubygems asks for your OTP here; that prompt is expected),
-pushes `main` with the tag and opens a GitHub release with generated notes. If
-the gem build or push fails, the commit and tag are undone so nothing
-half-released is left behind.
+The version comes from the conventional-commit prefixes of the PRs merged since
+the last tag; if none of them is a `feat` or `fix`, there is nothing to release.
