@@ -27,9 +27,9 @@ module ClaudeInbox
     # editable field spends these on its own text instead.
     CYCLE = {:left => -1, :right => 1, "h" => -1, "l" => 1, " " => 1}.freeze
 
-    def initialize(cwd:, pastel:, theme: Theme.new(enabled: pastel.enabled), home: Dir.home, clipboard: Images.method(:from_clipboard))
+    def initialize(cwd:, pastel:, home: Dir.home, clipboard: Images.method(:from_clipboard))
       @p = pastel
-      @theme = theme
+      @theme = Theme.new(enabled: pastel.enabled)
       @home = home
       @clipboard = clipboard
       @fields = [
