@@ -25,7 +25,7 @@ module ClaudeInbox
     def self.body_height(height) = height - CHROME_ROWS
 
     # What App hands Renderer for one frame. `peek` is a Peek::View and
-    # `listening` a Listener::Snapshot.
+    # `listening` a Remote::Listener::Snapshot.
     View = Data.define(:width, :height, :now, :selected, :top, :expanded, :peek, :modal, :screen,
       :status, :usage, :filter, :filter_editing, :tick, :loading, :listening) do
       def initialize(width:, height:, now:, selected: nil, top: 0, expanded: {}, peek: nil, modal: nil, screen: nil,

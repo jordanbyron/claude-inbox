@@ -4,7 +4,7 @@ require_relative "../test_helper"
 require_relative "../../lib/claude_inbox/remote/pairing"
 require "tmpdir"
 
-describe ClaudeInbox::Pairing do
+describe ClaudeInbox::Remote::Pairing do
   let(:dir) { Dir.mktmpdir }
   let(:path) { File.join(dir, "config", "listen.json") }
   let(:addresses) { [Addrinfo.ip("127.0.0.1"), Addrinfo.ip("192.168.1.20"), Addrinfo.ip("100.100.4.2"), Addrinfo.ip("fe80::1")] }
@@ -12,7 +12,7 @@ describe ClaudeInbox::Pairing do
   let(:lookups) { [] }
   let(:now) { [0.0] }
   let(:pairing) do
-    ClaudeInbox::Pairing.new(path: path, local_name: -> { names.first.tap { |n| lookups << n } }, hostname: -> { "mac.mini.lan" },
+    ClaudeInbox::Remote::Pairing.new(path: path, local_name: -> { names.first.tap { |n| lookups << n } }, hostname: -> { "mac.mini.lan" },
       addresses: -> { addresses }, firewall: -> { :on }, clock: -> { now[0] })
   end
 
@@ -24,7 +24,7 @@ describe ClaudeInbox::Pairing do
       _(token.size).must_be :>=, 43
       _(pairing.token).must_equal token
       _(File.stat(path).mode & 0o777).must_equal 0o600
-      _(ClaudeInbox::Pairing.new(path: path).token).must_equal token
+      _(ClaudeInbox::Remote::Pairing.new(path: path).token).must_equal token
     end
 
     # A temp file left by a crash already exists, so opening it with a mode
@@ -52,7 +52,7 @@ describe ClaudeInbox::Pairing do
       pairing.rotate!
       _(pairing.token).wont_equal old
       _(pairing.matches?(old)).must_equal false
-      _(ClaudeInbox::Pairing.new(path: path).token).must_equal pairing.token
+      _(ClaudeInbox::Remote::Pairing.new(path: path).token).must_equal pairing.token
     end
 
     it "is issued afresh when the file holds something that isn't one" do
@@ -60,7 +60,7 @@ describe ClaudeInbox::Pairing do
       File.write(path, JSON.generate(token: "short"))
       _(pairing.token).wont_equal "short"
       File.write(path, "[1, 2]")
-      _(ClaudeInbox::Pairing.new(path: path).token.size).must_be :>=, 43
+      _(ClaudeInbox::Remote::Pairing.new(path: path).token.size).must_be :>=, 43
     end
   end
 
@@ -111,7 +111,7 @@ describe ClaudeInbox::Pairing do
       interface.new("lo0", Addrinfo.ip("127.0.0.1")), interface.new("bridge100", Addrinfo.ip("192.168.64.1")),
       interface.new("utun3", nil), interface.new("en1", Addrinfo.ip("192.168.1.20"))
     ]
-    _(ClaudeInbox::Pairing.addresses(interfaces).map(&:ip_address)).must_equal %w[192.168.1.20 127.0.0.1 192.168.64.1]
-    _(ClaudeInbox::Pairing.addresses).wont_be_empty
+    _(ClaudeInbox::Remote::Pairing.addresses(interfaces).map(&:ip_address)).must_equal %w[192.168.1.20 127.0.0.1 192.168.64.1]
+    _(ClaudeInbox::Remote::Pairing.addresses).wont_be_empty
   end
 end

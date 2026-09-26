@@ -269,7 +269,7 @@ describe ClaudeInbox::App do
     let(:tmp) { Dir.mktmpdir }
     let(:gate) { Queue.new }
     let(:pairing) do
-      ClaudeInbox::Pairing.new(path: File.join(tmp, "listen.json"), local_name: -> { "m" }, addresses: -> { [] }).tap do |p|
+      ClaudeInbox::Remote::Pairing.new(path: File.join(tmp, "listen.json"), local_name: -> { "m" }, addresses: -> { [] }).tap do |p|
         lookups = gate
         p.define_singleton_method(:urls) do |**kw|
           lookups.pop

@@ -4,9 +4,9 @@ require_relative "../test_helper"
 require_relative "../../lib/claude_inbox/remote/http"
 require "socket"
 
-Http = ClaudeInbox::Http
+Http = ClaudeInbox::Remote::Http
 
-describe ClaudeInbox::Http do
+describe ClaudeInbox::Remote::Http do
   let(:deadline) { Http.monotonic + 5 }
 
   def head(text) = Http.read_head(StringIO.new(text.b), deadline: deadline)

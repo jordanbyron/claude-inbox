@@ -13,7 +13,7 @@ end
 
 PNG = "\x89PNG\r\n\x1A\n#{"\0" * 16}".b
 
-describe ClaudeInbox::Listener do
+describe ClaudeInbox::Remote::Listener do
   let(:tmp) { File.realpath(Dir.mktmpdir) }
   let(:project) { mkdir("code", "app") }
   let(:client) { RecordingClient.new }
@@ -23,7 +23,7 @@ describe ClaudeInbox::Listener do
   let(:settings) { {} }
   let(:options) { {} }
   let(:pairing) do
-    ClaudeInbox::Pairing.new(path: File.join(tmp, "listen.json"), local_name: -> { "mac-mini" },
+    ClaudeInbox::Remote::Pairing.new(path: File.join(tmp, "listen.json"), local_name: -> { "mac-mini" },
       hostname: -> { "mac-mini" }, addresses: -> { [Addrinfo.ip("192.168.1.20")] }, firewall: -> { :off })
   end
   let(:listener) { listener_with }
@@ -34,7 +34,7 @@ describe ClaudeInbox::Listener do
   end
 
   def listener_with(**overrides)
-    ClaudeInbox::Listener.new(client: client, store: store, queue: queue, pairing: pairing, port: 7433,
+    ClaudeInbox::Remote::Listener.new(client: client, store: store, queue: queue, pairing: pairing, port: 7433,
       images_dir: File.join(tmp, "images"), jobs_dir: File.join(tmp, "jobs"), lock_path: File.join(tmp, "listen.lock"),
       trust: -> { trusted }, settings: ->(dir) { settings.fetch(dir) { ClaudeInbox::Settings::Defaults.new } },
       bridge_wait: 0, **options, **overrides)
@@ -147,11 +147,11 @@ describe ClaudeInbox::Listener do
   end
 
   describe "the phone page" do
-    let(:page) { ClaudeInbox::Listener::PAGE }
+    let(:page) { ClaudeInbox::Remote::Listener::PAGE }
 
     it "refuses what the listener would, before sending it" do
-      _(page).must_include "const MAX_IMAGES = #{ClaudeInbox::Listener::MAX_IMAGES};"
-      _(page).must_include "const MAX_BODY = #{ClaudeInbox::Listener::MAX_BODY};"
+      _(page).must_include "const MAX_IMAGES = #{ClaudeInbox::Remote::Listener::MAX_IMAGES};"
+      _(page).must_include "const MAX_BODY = #{ClaudeInbox::Remote::Listener::MAX_BODY};"
     end
 
     it "loads nothing from anywhere else, which the CSP would block without a word" do
@@ -538,7 +538,7 @@ describe ClaudeInbox::Listener do
       first = listener.snapshot.urls
       _(first).must_equal ["http://127.0.0.1:#{listener.port}/##{pairing.token}"]
       _(listener.snapshot.pairing_url).must_equal first.first
-      listener.rotate
+      listener.rotate.join
       _(listener.snapshot.urls).wont_equal first
     end
   end
@@ -551,7 +551,7 @@ describe ClaudeInbox::Listener do
   end
 
   it "stays off, and says so, when disabled" do
-    off = ClaudeInbox::Listener.disabled
+    off = ClaudeInbox::Remote::Listener.disabled
     off.start
     off.refresh
     off.stop
@@ -560,7 +560,7 @@ describe ClaudeInbox::Listener do
   end
 
   describe ".options" do
-    def options_for(*argv, **env) = ClaudeInbox::Listener.options(argv, env.transform_keys(&:to_s))
+    def options_for(*argv, **env) = ClaudeInbox::Remote::Listener.options(argv, env.transform_keys(&:to_s))
 
     it "is nil unless a flag or the environment asks for the listener" do
       _(options_for("--fixture", "x.json")).must_be_nil
