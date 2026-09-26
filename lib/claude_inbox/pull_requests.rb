@@ -85,11 +85,6 @@ module ClaudeInbox
       [fresh, changed]
     end
 
-    # Best known state for a url without asking gh.
-    def known(url)
-      @mutex.synchronize { @known[url] ||= seed(url) }
-    end
-
     # Best known state for a url, refreshed through gh when due.
     def status(url)
       @mutex.synchronize do
@@ -118,6 +113,11 @@ module ClaudeInbox
     end
 
     private
+
+    # Best known state for a url without asking gh.
+    def known(url)
+      @mutex.synchronize { @known[url] ||= seed(url) }
+    end
 
     def due?(url)
       @gh && @clock.call.to_i - @checked_at.fetch(url, 0) >= REFRESH_AFTER
