@@ -40,36 +40,6 @@ module Drivers
   end
 
   def type(input, text) = text.each_char { |c| input.press(c, c) }
-
-  # Sends raw HTTP to a Listener, or to Start the way Listener hands it on,
-  # and parses what comes back. A String body goes as is; anything else as JSON.
-  def request(server, verb, path, body = nil, token: nil, host: "127.0.0.1:7433", type: "application/json", headers: {})
-    body = JSON.generate(body) if body && !body.is_a?(String)
-    lines = ["#{verb} #{path} HTTP/1.1"]
-    lines << "Host: #{host}" if host
-    lines << "Authorization: Bearer #{token}" if token
-    lines << "Content-Type: #{type}" if body && type
-    lines << "Content-Length: #{body.bytesize}" if body
-    headers.each { |name, value| lines << "#{name}: #{value}" }
-    request_raw(server, lines.join("\r\n") + "\r\n\r\n" + body.to_s)
-  end
-
-  def request_raw(server, text)
-    sock = FakeSocket.new(text)
-    if server.respond_to?(:handle)
-      server.handle(sock, via: "192.168.1.30")
-      head, body = sock.written.sub("HTTP/1.1 100 Continue\r\n\r\n", "").split("\r\n\r\n", 2)
-      status, *lines = head.split("\r\n")
-      headers = lines.to_h { |line| line.split(": ", 2).then { |k, v| [k.downcase, v] } }
-      return Reply.new(status.split[1].to_i, headers, body, sock.written)
-    end
-
-    request = ClaudeInbox::Remote::Http.read_head(sock, deadline: ClaudeInbox::Remote::Http.monotonic + 5)
-    status, headers, body, note = server.call(request, sock, "192.168.1.30")
-    Reply.new(status, headers, body, sock.written, note)
-  rescue ClaudeInbox::Remote::Http::Error => e
-    Reply.new(e.status, e.headers, JSON.generate(e.body), sock.written, e.note)
-  end
 end
 
 PNG = "\x89PNG\r\n\x1A\n#{"\0" * 16}".b
