@@ -3,7 +3,7 @@
 require "io/console"
 require "tty-cursor"
 require "tty-screen"
-require_relative "renderer"
+require_relative "painter"
 
 module ClaudeInbox
   # The screen the inbox draws on: the alt screen and the mouse and wheel
