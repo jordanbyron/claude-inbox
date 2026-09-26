@@ -16,7 +16,7 @@ fixture = ARGV.include?("--fixture")
 # not the environment: a shell rc that arms the real inbox must not arm a
 # test one too.
 begin
-  listen = ClaudeInbox::Listener.options(ARGV, fixture ? {} : ENV)
+  listen = ClaudeInbox::Remote::Listener.options(ARGV, fixture ? {} : ENV)
 rescue ArgumentError => e
   abort "claude-inbox: #{e.message}"
 end
@@ -34,7 +34,7 @@ if fixture
   # Its own token, lock and images, so a test inbox can neither rotate the
   # token phones are paired with nor hold the real inbox's lock.
   dir = File.join(Dir.tmpdir, "claude-inbox-fixture")
-  opts[:listen] = listen&.merge(fixture: true, pairing: ClaudeInbox::Pairing.new(path: File.join(dir, "listen.json")),
+  opts[:listen] = listen&.merge(fixture: true, pairing: ClaudeInbox::Remote::Pairing.new(path: File.join(dir, "listen.json")),
     lock_path: File.join(dir, "listen.lock"), images_dir: File.join(dir, "images"))
 else
   # The only place the reaper is armed. Everything else — tests, --fixture,

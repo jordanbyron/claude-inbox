@@ -11,7 +11,7 @@ require_relative "terminal"
 require_relative "logs"
 require_relative "peek"
 require_relative "keymap"
-require_relative "listener"
+require_relative "remote"
 require_relative "mouse"
 require_relative "new_session_form"
 require_relative "paste"
@@ -39,7 +39,7 @@ module ClaudeInbox
       @queue = queue
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests,
         reaper: reaper, queue: @queue)
-      @listener = listen ? Listener.new(client: client, store: store, queue: @queue, jobs_dir: client.jobs_dir, **listen) : Listener.disabled
+      @listener = listen ? Remote::Listener.new(client: client, store: store, queue: @queue, jobs_dir: client.jobs_dir, **listen) : Remote::Listener.disabled
       @logs = Logs.new(client)
       @peek = Peek.new(@logs)
       @selected = nil
@@ -94,14 +94,12 @@ module ClaudeInbox
     # ----- threads ----------------------------------------------------------
 
     # Runs a block off the main thread; a failure lands in the status line
-    # rather than killing the thread silently. The pairing dialog's work
-    # fails as a :notice, as the listener's own failures do: an :error is
-    # gone at the next poll, whenever that lands.
-    def in_background(failure: :error)
+    # rather than killing the thread silently.
+    def in_background
       Thread.new do
         yield
       rescue => e
-        @queue << [failure, e.message]
+        @queue << [:error, e.message]
       end
     end
 
@@ -321,7 +319,7 @@ module ClaudeInbox
       when :refresh then @poller.soon
       when :toggle_peek then toggle_peek
       when :new_session then open_new_session
-      when :remote_pairing then open_pairing
+      when :remote_pairing then @modal = @listener.pairing_dialog
       when :filter then start_filter
       when :escape then clear_filter
       end
@@ -500,8 +498,8 @@ module ClaudeInbox
         when :adopt then adopt_session(id)
         end
       when :save then save_prompt
-      when :copy then copy_pairing_url
-      when :rotate then rotate_token
+      when :copy then @listener.copy_pairing_url
+      when :rotate then @listener.rotate
       end
     end
 
@@ -514,29 +512,6 @@ module ClaudeInbox
       when :cancel then @modal = nil
       when :start then start_session(form, attach: false)
       when :start_and_attach then start_session(form, attach: true)
-      end
-    end
-
-    # The addresses fork scutil, so they are looked up off the main thread
-    # and the dialog fills in when they land.
-    def open_pairing
-      @modal = Dialog::Pairing.new(-> { @listener.snapshot })
-      in_background(failure: :notice) { @listener.refresh }
-    end
-
-    def copy_pairing_url
-      url = @listener.snapshot.pairing_url
-      return notice("still looking up this Mac's addresses") unless url
-      in_background(failure: :notice) do
-        r = Subprocess.capture("osascript", "-e", "on run argv", "-e", "set the clipboard to item 1 of argv", "-e", "end run", url)
-        @queue << [:notice, r.success? ? "pairing URL copied" : "couldn't copy: #{r.err.strip}"]
-      end
-    end
-
-    def rotate_token
-      in_background(failure: :notice) do
-        @listener.rotate
-        @queue << [:notice, "new token: phones pair again with N"]
       end
     end
 
