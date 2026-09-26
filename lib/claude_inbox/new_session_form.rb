@@ -2,6 +2,7 @@
 
 require_relative "agents_client"
 require_relative "images"
+require_relative "session_request"
 require_relative "settings"
 require_relative "slash_commands"
 require_relative "text"
@@ -364,15 +365,10 @@ module ClaudeInbox
     end
 
     def submit(attach:)
-      v = values
-      if v[:prompt].empty?
-        @error = "a prompt is required"
-        focus_on(:prompt)
-        return :changed
-      end
-      unless File.directory?(v[:cwd])
-        @error = "no such directory: #{v[:cwd]}"
-        focus_on(:cwd)
+      field, message = SessionRequest.problem(values)
+      if field
+        @error = message
+        focus_on(field)
         return :changed
       end
       @busy = true

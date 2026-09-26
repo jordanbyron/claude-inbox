@@ -17,6 +17,7 @@ require_relative "paste"
 require_relative "pull_requests"
 require_relative "poller"
 require_relative "rate_limits"
+require_relative "session_request"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
@@ -430,14 +431,7 @@ module ClaudeInbox
 
     def open_new_session
       cwd = selected_session&.cwd || Dir.pwd
-      @modal = NewSessionForm.new(cwd: strip_worktree(cwd), pastel: Pastel.new(enabled: @color))
-    end
-
-    # A session's cwd may sit inside a worktree another agent is using; carrying
-    # that into a new prompt would spawn the new agent there too, writing over
-    # the same files. Fall back to the repo the worktree was cut from.
-    def strip_worktree(cwd)
-      cwd.to_s.sub(%r{/\.claude/worktrees/[^/]+(?:/.*)?\z}, "")
+      @modal = NewSessionForm.new(cwd: SessionRequest.strip_worktree(cwd), pastel: Pastel.new(enabled: @color))
     end
 
     # `attach:` hands the terminal over as soon as the session starts. Without
