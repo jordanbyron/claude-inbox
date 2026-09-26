@@ -36,7 +36,6 @@ module ClaudeInbox
     LINGER = 2
     KEYS_KEPT = 16
     RECENT = 5
-    ROUTES = {"/" => "GET", "/api/options" => "GET", "/api/sessions" => "POST"}.freeze
     JSON_TYPE = {"Content-Type" => "application/json"}.freeze
     # The phone's form. Everything it needs is inline, and it talks to
     # nothing but this listener.
@@ -44,8 +43,20 @@ module ClaudeInbox
     PAGE_TYPE = {
       "Content-Type" => "text/html; charset=utf-8",
       "Content-Security-Policy" => "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " \
-        "img-src blob: data:; connect-src 'self'; form-action 'none'; frame-ancestors 'none'"
+        "img-src blob: data:; connect-src 'self'; manifest-src 'self'; form-action 'none'; frame-ancestors 'none'"
     }.freeze
+    # What Add to Home Screen reads to open the page as an app of its own.
+    # The icon is drawn by icon.svg: rsvg-convert -w 512 icon.svg -o icon.png
+    MANIFEST = JSON.generate(name: "claude-inbox", short_name: "Inbox", start_url: "/", scope: "/", display: "standalone",
+      icons: [{src: "/icon.png", sizes: "512x512", type: "image/png"}]).freeze
+    ICON = File.binread(File.join(__dir__, "icon.png")).freeze
+    # Served to anyone, like the page itself: none of it is a secret.
+    FILES = {
+      "/" => [PAGE_TYPE, PAGE],
+      "/manifest.webmanifest" => [{"Content-Type" => "application/manifest+json"}, MANIFEST],
+      "/icon.png" => [{"Content-Type" => "image/png"}, ICON]
+    }.freeze
+    ROUTES = FILES.transform_values { "GET" }.merge("/api/options" => "GET", "/api/sessions" => "POST").freeze
 
     # What `N` and the header chip show, as of one moment. `state` is :off,
     # :listening, :in_use (the port is taken), :held (another inbox has the
@@ -355,7 +366,7 @@ module ClaudeInbox
       verb = ROUTES[request.path]
       raise Http::Error.new(404, "no such path") unless verb
       raise Http::Error.new(405, "#{request.path} takes #{verb}", headers: {"Allow" => verb}) unless request.verb == verb
-      return [200, PAGE_TYPE, PAGE] if request.path == "/"
+      return [200, *FILES[request.path]] if FILES.key?(request.path)
       authorize(request, via)
       on_auth.call
       (request.path == "/api/options") ? json(200, choices) : post_session(io, request, via)
