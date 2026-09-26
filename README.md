@@ -195,7 +195,7 @@ ask for it:
 |---|---|---|
 | `--listen[=PORT]` | `CLAUDE_INBOX_LISTEN=7433` | listens on `127.0.0.1` only, for an ssh tunnel or scripts on this Mac |
 | `--listen-lan[=PORT]` | `CLAUDE_INBOX_LISTEN=lan` or `lan:7433` | listens on every interface: your LAN, and a VPN into it |
-| `--listen-allow-modes=default,plan` | `CLAUDE_INBOX_LISTEN_ALLOW_MODES=default,plan` | the permission modes a remote start may use (see below) |
+| `--listen-allow-modes=default,auto,plan` | `CLAUDE_INBOX_LISTEN_ALLOW_MODES=default,auto,plan` | the permission modes a remote start may use (see below) |
 
 The port defaults to 7433, and a flag wins over the environment. The LAN is
 never reached by accident: only `--listen-lan` or `CLAUDE_INBOX_LISTEN=lan`
@@ -275,14 +275,17 @@ URL.
 The page comes from the inbox itself, so with the inbox closed or the Mac
 asleep the icon has nothing to open.
 
-**Permission modes.** A remote start may use `default` and `plan`, nothing
-wider. `default` means whatever your settings say for that directory, so it
-is worked out first: a project whose settings default to `bypassPermissions`
-is refused with 403 rather than started. `--listen-allow-modes` gives the
-list in full, for example `--listen-allow-modes=default,plan,acceptEdits`.
-The mode that passed is handed to `claude` by name, `--permission-mode
-default` included. Settings files the inbox doesn't read, such as managed
-settings, aren't taken into account when it is worked out.
+**Permission modes.** A remote start may use `default`, `auto` and `plan`,
+nothing wider. `default` means whatever your settings say for that
+directory, so it is worked out first: a project whose settings default to
+`bypassPermissions` is refused with 403 rather than started. `--listen-allow-modes`
+gives the list in full, for example `--listen-allow-modes=default,plan,acceptEdits`.
+The mode that passed is handed to `claude` by name. Where no settings file
+names a mode, the flag is left off and `claude` uses its own default (`auto`
+if you opted in, otherwise `manual`); with `auto` left out of the list,
+`--permission-mode default` is passed instead. Settings files the inbox
+doesn't read, such as managed settings, aren't taken into account when it is
+worked out.
 
 **The API.** `GET /api/options` lists the models, efforts, permission modes
 and directories a start can use, each directory with a short `label` and the

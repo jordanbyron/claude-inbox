@@ -170,7 +170,7 @@ describe ClaudeInbox::Listener do
       body = call("GET", "/api/options").json
       _(body["models"]).must_equal ClaudeInbox::AgentsClient::MODELS
       _(body["efforts"]).must_equal ClaudeInbox::AgentsClient::EFFORTS
-      _(body["permission_modes"]).must_equal %w[default plan]
+      _(body["permission_modes"]).must_equal %w[default auto plan]
       _(body["dirs"].map { |d| d["label"] }).must_equal %w[tree app older trusted]
       _(body["dirs"][1]).must_equal({"path" => project, "label" => "app", "defaults" => {"model" => "opus", "effort" => nil, "permission_mode" => "plan", "remote" => nil}})
       _(body).wont_include "fixture"
@@ -193,7 +193,7 @@ describe ClaudeInbox::Listener do
       _(r.status).must_equal 201
       _(r.json).must_equal({"id" => "deadbeef", "name" => "phone", "cwd" => project, "url" => nil})
       _(client.spawns).must_equal [{prompt: "fix it", name: "phone", cwd: project, model: "opus", effort: "default",
-                                    permission_mode: "default", worktree: false, remote: true, explicit_mode: true}]
+                                    permission_mode: nil, worktree: false, remote: true, explicit_mode: true}]
       _(drained).must_equal [[:notice, "remote: starting session…"], [:remote_started, "deadbeef", "192.168.1.30"]]
       _(listener.snapshot.recent.last.result).must_equal "started deadbeef"
     end
@@ -258,8 +258,21 @@ describe ClaudeInbox::Listener do
     end
 
     it "names the mode it let through, so the CLI doesn't work default out again for itself" do
+      settings[project] = ClaudeInbox::Settings::Defaults.new(nil, nil, "plan")
+      start({prompt: "go", cwd: project})
+      argv = ClaudeInbox::AgentsClient.spawn_args("claude", **client.spawns.last.except(:cwd))
+      _(argv.each_cons(2).to_a).must_include ["--permission-mode", "plan"]
+    end
+
+    it "leaves the CLI's own default, auto included, to a directory whose settings name no mode" do
       _(start({prompt: "go", cwd: project}).status).must_equal 201
-      _(client.spawns.last.values_at(:permission_mode, :explicit_mode)).must_equal ["default", true]
+      argv = ClaudeInbox::AgentsClient.spawn_args("claude", **client.spawns.last.except(:cwd))
+      _(argv).wont_include "--permission-mode"
+    end
+
+    it "names default there instead when auto isn't allowed, rather than let the CLI pick auto" do
+      options[:allowed_modes] = %w[default plan]
+      _(start({prompt: "go", cwd: project}).status).must_equal 201
       argv = ClaudeInbox::AgentsClient.spawn_args("claude", **client.spawns.last.except(:cwd))
       _(argv.each_cons(2).to_a).must_include ["--permission-mode", "default"]
     end
@@ -544,22 +557,22 @@ describe ClaudeInbox::Listener do
     end
 
     it "listens on loopback at 7433 for phone-safe modes unless told otherwise" do
-      _(options_for("--listen")).must_equal({port: 7433, lan: false, allowed_modes: %w[default plan]})
+      _(options_for("--listen")).must_equal({port: 7433, lan: false, allowed_modes: %w[default auto plan]})
       _(options_for("--listen=8080")[:port]).must_equal 8080
-      _(options_for("--listen-lan")).must_equal({port: 7433, lan: true, allowed_modes: %w[default plan]})
+      _(options_for("--listen-lan")).must_equal({port: 7433, lan: true, allowed_modes: %w[default auto plan]})
       _(options_for("--listen-lan=9000")[:port]).must_equal 9000
       _(options_for("--listen=0")[:port]).must_equal 0
     end
 
     it "widens to the LAN only when --listen-lan says so, whatever order the flags came in" do
-      _(options_for("--listen-lan", "--listen=8080")).must_equal({port: 7433, lan: true, allowed_modes: %w[default plan]})
+      _(options_for("--listen-lan", "--listen=8080")).must_equal({port: 7433, lan: true, allowed_modes: %w[default auto plan]})
       _(options_for("--listen=8080", "--listen-lan=9000")[:lan]).must_equal true
     end
 
     it "reads the environment when no flag is given, and a flag over it" do
-      _(options_for(CLAUDE_INBOX_LISTEN: "7500")).must_equal({port: 7500, lan: false, allowed_modes: %w[default plan]})
-      _(options_for(CLAUDE_INBOX_LISTEN: "lan")).must_equal({port: 7433, lan: true, allowed_modes: %w[default plan]})
-      _(options_for(CLAUDE_INBOX_LISTEN: "lan:7500")).must_equal({port: 7500, lan: true, allowed_modes: %w[default plan]})
+      _(options_for(CLAUDE_INBOX_LISTEN: "7500")).must_equal({port: 7500, lan: false, allowed_modes: %w[default auto plan]})
+      _(options_for(CLAUDE_INBOX_LISTEN: "lan")).must_equal({port: 7433, lan: true, allowed_modes: %w[default auto plan]})
+      _(options_for(CLAUDE_INBOX_LISTEN: "lan:7500")).must_equal({port: 7500, lan: true, allowed_modes: %w[default auto plan]})
       _(options_for("--listen", CLAUDE_INBOX_LISTEN: "lan")[:lan]).must_equal false
       _(options_for(CLAUDE_INBOX_LISTEN: "lan", CLAUDE_INBOX_LISTEN_ALLOW_MODES: "plan")[:allowed_modes]).must_equal %w[plan]
       _(options_for("--listen", "--listen-allow-modes=default, acceptEdits")[:allowed_modes]).must_equal %w[default acceptEdits]
