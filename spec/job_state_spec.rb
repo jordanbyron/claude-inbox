@@ -2,10 +2,11 @@
 
 require "tmpdir"
 
-RSpec.describe ClaudeInbox::JobState, :job_state do
+RSpec.describe ClaudeInbox::JobState do
   it "reads the detail line, the pulse, the open work and the PR links" do
     Dir.mktmpdir do |dir|
-      write_job(dir, "aaa11111",
+      FileUtils.mkdir_p(File.join(dir, "aaa11111"))
+      File.write(File.join(dir, "aaa11111", "state.json"), JSON.generate(
         "state" => "working",
         "detail" => "watching CI re-run",
         "needs" => "confirm: merge once green?",
@@ -18,7 +19,8 @@ RSpec.describe ClaudeInbox::JobState, :job_state do
         "children" => [
           {"kind" => "pr", "href" => "https://github.com/o/r/pull/7"},
           {"kind" => "issue", "href" => "https://github.com/o/r/issues/8"}
-        ])
+        ]
+      ))
       js = described_class.read("aaa11111", jobs_dir: dir)
       expect(js.detail).to eq("watching CI re-run")
       expect(js.needs).to eq("confirm: merge once green?")
@@ -100,7 +102,9 @@ RSpec.describe ClaudeInbox::JobState, :job_state do
 
   it "enriches background sessions only" do
     Dir.mktmpdir do |dir|
-      write_job(dir, "aaa11111", "tempo" => "idle", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}])
+      FileUtils.mkdir_p(File.join(dir, "aaa11111"))
+      File.write(File.join(dir, "aaa11111", "state.json"),
+        JSON.generate("tempo" => "idle", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}]))
       bg, term = described_class.enrich([
         session(id: "aaa11111"),
         session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "u1")

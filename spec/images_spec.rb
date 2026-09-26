@@ -3,20 +3,21 @@
 require "fileutils"
 require "tmpdir"
 
-RSpec.describe ClaudeInbox::Images, :images do
+RSpec.describe ClaudeInbox::Images do
   let(:dir) { Dir.mktmpdir }
 
   after { FileUtils.rm_rf(dir) }
 
   describe "a dropped path" do
     it "takes an image file, unescaped the way the terminal pasted it" do
-      shot = touch(dir, "Screen Shot.PNG")
+      shot = File.join(dir, "Screen Shot.PNG")
+      FileUtils.touch(shot)
       expect(described_class.dropped("#{dir}/Screen\\ Shot.PNG ")).to eq(shot)
       expect(described_class.dropped("'#{shot}'")).to eq(shot)
     end
 
     it "leaves anything else as text" do
-      touch(dir, "notes.md")
+      FileUtils.touch(File.join(dir, "notes.md"))
       expect(described_class.dropped("#{dir}/notes.md ")).to be_nil
       expect(described_class.dropped("#{dir}/missing.png")).to be_nil
       expect(described_class.dropped("look at this")).to be_nil
@@ -24,14 +25,20 @@ RSpec.describe ClaudeInbox::Images, :images do
   end
 
   describe "the clipboard" do
+    let(:succeeded) { ClaudeInbox::Subprocess::Result.new("", "", instance_double(Process::Status, success?: true)) }
+    let(:pasted) { ClaudeInbox::Subprocess::Result.new("hi\n", "", instance_double(Process::Status, success?: true)) }
+    let(:failed) { ClaudeInbox::Subprocess::Result.new("", "", instance_double(Process::Status, success?: false)) }
+
     it "saves an image to a file of its own and prunes stale ones" do
       now = Time.at(1_789_400_000)
-      old = touch(dir, "old.png", mtime: now - described_class::KEEP_FOR - 1)
-      kept = touch(dir, "kept.png", mtime: now - 60)
+      old = File.join(dir, "old.png")
+      kept = File.join(dir, "kept.png")
+      FileUtils.touch(old, mtime: now - described_class::KEEP_FOR - 1)
+      FileUtils.touch(kept, mtime: now - 60)
       calls = []
       run = ->(*argv) {
         calls << argv
-        result("", true)
+        succeeded
       }
       clip = described_class.from_clipboard(dir: dir, now: now, run: run)
       expect(clip.image).to eq(File.join(dir, now.strftime("%Y%m%d-%H%M%S-%L.png")))
@@ -43,11 +50,11 @@ RSpec.describe ClaudeInbox::Images, :images do
     end
 
     it "falls back to the clipboard's text, or nothing" do
-      run = ->(cmd, *) { (cmd == "pbpaste") ? result("hi\n", true) : result("", false) }
+      run = ->(cmd, *) { (cmd == "pbpaste") ? pasted : failed }
       clip = described_class.from_clipboard(dir: dir, run: run)
       expect(clip.image).to be_nil
       expect(clip.text).to eq("hi\n")
-      empty = ->(*) { result("", false) }
+      empty = ->(*) { failed }
       expect(described_class.from_clipboard(dir: dir, run: empty).to_a).to eq([nil, nil])
     end
   end
@@ -91,9 +98,9 @@ RSpec.describe ClaudeInbox::Images, :images do
 
     it "prunes stale images of every type on the way in, and nothing else" do
       now = Time.at(1_789_400_000)
-      old = touch(dir, "old.jpg", mtime: now - 15 * 24 * 3600)
-      kept = touch(dir, "kept.webp", mtime: now - 60)
-      notes = touch(dir, "notes.txt", mtime: now - 15 * 24 * 3600)
+      old, kept, notes = %w[old.jpg kept.webp notes.txt].map { |name| File.join(dir, name) }
+      FileUtils.touch([old, notes], mtime: now - 15 * 24 * 3600)
+      FileUtils.touch(kept, mtime: now - 60)
       described_class.save(samples[".png"], dir: dir, now: now)
       expect(File.exist?(old)).to be(false)
       expect(File.exist?(kept)).to be(true)

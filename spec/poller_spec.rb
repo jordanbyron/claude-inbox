@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe ClaudeInbox::Poller, :poller do
+RSpec.describe ClaudeInbox::Poller do
   let(:client) { RecordingClient.new }
 
   # Pinned: the reaper's 14-day cutoff against the fixture's startedAt
@@ -8,18 +8,23 @@ RSpec.describe ClaudeInbox::Poller, :poller do
   let(:clock) { -> { Time.at(1_789_604_500) } }
   let(:store) { ClaudeInbox::Store.new(path: nil, clock: clock) }
   let(:queue) { Queue.new }
+  let(:poller_args) do
+    {client: client, store: store, reaper: ClaudeInbox::Reaper.disabled, queue: queue, interval: described_class::INTERVAL,
+     clock: clock, pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil)}
+  end
+  let(:poller) { described_class.new(**poller_args) }
 
   it "hands the list over as sessions on the queue" do
     poller.once
-    msgs = messages
+    msgs = drain(queue)
     expect(msgs.map(&:first)).to eq([:sessions])
-    expect(published_ids(msgs).first).to include("f23c8673")
+    expect(msgs.filter_map { |kind, list| list.map(&:id) if kind == :sessions }.first).to include("f23c8673")
   end
 
   it "reports a failed poll as an error instead of raising" do
     allow(client).to receive(:list).and_raise("daemon gone")
     poller.once
-    expect(messages).to eq([[:error, "daemon gone"]])
+    expect(drain(queue)).to eq([[:error, "daemon gone"]])
   end
 
   describe "the reaper" do
@@ -30,34 +35,34 @@ RSpec.describe ClaudeInbox::Poller, :poller do
     it "is off unless something arms it, so a poll on its own deletes nothing" do
       poller.once
       expect(client.removed).to be_empty
-      expect(published_ids(messages).first).to include("f23c8673")
+      expect(drain(queue).filter_map { |kind, list| list.map(&:id) if kind == :sessions }.first).to include("f23c8673")
     end
 
     it "keeps what it reaped out of the frame, from the first hand-over on" do
-      poller(reaper: reaper).once
-      msgs = messages
+      described_class.new(**poller_args, reaper: reaper).once
+      msgs = drain(queue)
       expect(msgs.assoc(:notice)[1]).to eq("reaped f23c8673")
 
       store.update(msgs.first[1])
-      expect(shown).not_to include("f23c8673")
+      expect(store.sessions.map(&:id)).not_to include("f23c8673")
       msgs.each { |kind, list| store.update(list) if kind == :sessions }
-      expect(shown).not_to include("f23c8673")
+      expect(store.sessions.map(&:id)).not_to include("f23c8673")
     end
 
     it "brings a row back when its reap was refused" do
       allow(reaper).to receive(:sweep).and_return([])
-      poller(reaper: reaper).once
-      drain
-      expect(shown).to include("f23c8673")
+      described_class.new(**poller_args, reaper: reaper).once
+      drain(queue).each { |kind, list| store.update(list) if kind == :sessions }
+      expect(store.sessions.map(&:id)).to include("f23c8673")
     end
 
     it "releases what it hid when the sweep itself fails" do
       allow(reaper).to receive(:sweep).and_raise(Errno::EACCES, "reaped.log")
-      poller(reaper: reaper).once
-      msgs = messages
+      described_class.new(**poller_args, reaper: reaper).once
+      msgs = drain(queue)
       expect(msgs.assoc(:error)[1]).to include("reaped.log")
       msgs.each { |kind, list| store.update(list) if kind == :sessions }
-      expect(shown).to include("f23c8673")
+      expect(store.sessions.map(&:id)).to include("f23c8673")
     end
 
     it "keeps a row the user deleted hidden even when the reaper let it go the same poll" do
@@ -65,9 +70,9 @@ RSpec.describe ClaudeInbox::Poller, :poller do
         store.forget("f23c8673")
         []
       end
-      poller(reaper: reaper).once
-      drain
-      expect(shown).not_to include("f23c8673")
+      described_class.new(**poller_args, reaper: reaper).once
+      drain(queue).each { |kind, list| store.update(list) if kind == :sessions }
+      expect(store.sessions.map(&:id)).not_to include("f23c8673")
     end
 
     # Every hand-over after the sweep carries the reaped key; a list without
@@ -81,20 +86,20 @@ RSpec.describe ClaudeInbox::Poller, :poller do
       end
       reaper = ClaudeInbox::Reaper.new(client, store, log_path: File::NULL, enabled: true)
 
-      poller(reaper: reaper).once
-      drain
-      poller(reaper: reaper).once
-      drain
+      described_class.new(**poller_args, reaper: reaper).once
+      drain(queue).each { |kind, list| store.update(list) if kind == :sessions }
+      described_class.new(**poller_args, reaper: reaper).once
+      drain(queue).each { |kind, list| store.update(list) if kind == :sessions }
       reaped = client.removed.dup
       expect(reaped.size).to eq(1)
-      expect(shown).to include(refused)
-      expect(shown).not_to include(reaped.first)
+      expect(store.sessions.map(&:id)).to include(refused)
+      expect(store.sessions.map(&:id)).not_to include(reaped.first)
 
       2.times do
-        poller(reaper: reaper).once
-        drain
+        described_class.new(**poller_args, reaper: reaper).once
+        drain(queue).each { |kind, list| store.update(list) if kind == :sessions }
       end
-      expect(shown).not_to include(reaped.first)
+      expect(store.sessions.map(&:id)).not_to include(reaped.first)
       expect(client.removed).to eq(reaped)
     end
   end
@@ -105,15 +110,15 @@ RSpec.describe ClaudeInbox::Poller, :poller do
   describe "a delete while a poll is in flight" do
     it "does not bring the row back until the daemon has dropped it" do
       poller.once
-      drain(messages)
+      drain(queue).each { |kind, list| store.update(list) if kind == :sessions }
       expect(store.sections.all.map(&:id)).to include("f23c8673")
 
       client.rm("f23c8673")
       store.forget("f23c8673")
       poller.once
-      msgs = messages
-      expect(published_ids(msgs).first).to include("f23c8673")
-      drain(msgs)
+      msgs = drain(queue)
+      expect(msgs.filter_map { |kind, list| list.map(&:id) if kind == :sessions }.first).to include("f23c8673")
+      msgs.each { |kind, list| store.update(list) if kind == :sessions }
       expect(store.sections.all.map(&:id)).not_to include("f23c8673")
       expect(store.sessions.map(&:id)).not_to include("f23c8673")
     end
@@ -123,7 +128,7 @@ RSpec.describe ClaudeInbox::Poller, :poller do
   # assume it has, and only ever assert that something did *not* happen after
   # giving it far longer than it needs.
   describe "the worker" do
-    subject(:worker) { poller(interval: interval) }
+    subject(:worker) { described_class.new(**poller_args, interval: interval) }
 
     let(:client) { PollerCountingClient.new(fixture_path("agents.json")) }
     let(:interval) { 60 }
@@ -132,16 +137,18 @@ RSpec.describe ClaudeInbox::Poller, :poller do
 
     it "polls once when started" do
       worker.start
-      expect(wait_for_polls(1)).to eq(1)
+      wait_for { client.polls.size >= 1 }
+      expect(client.polls.size).to eq(1)
     end
 
     it "collapses a burst of wake-ups into one poll" do
       worker.soon
       worker.soon
       worker.start
-      expect(wait_for_polls(1)).to eq(1)
+      wait_for { client.polls.size >= 1 }
+      expect(client.polls.size).to eq(1)
       sleep 0.2
-      expect(polls).to eq(1)
+      expect(client.polls.size).to eq(1)
     end
 
     context "with a short interval" do
@@ -149,7 +156,8 @@ RSpec.describe ClaudeInbox::Poller, :poller do
 
       it "polls again on the interval" do
         worker.start
-        expect(wait_for_polls(2)).to be >= 2
+        wait_for { client.polls.size >= 2 }
+        expect(client.polls.size).to be >= 2
       end
     end
 
@@ -158,10 +166,11 @@ RSpec.describe ClaudeInbox::Poller, :poller do
       worker.start
       worker.soon
       sleep 0.2
-      expect(polls).to eq(0)
+      expect(client.polls.size).to eq(0)
 
       worker.resume
-      expect(wait_for_polls(1)).to eq(1)
+      wait_for { client.polls.size >= 1 }
+      expect(client.polls.size).to eq(1)
     end
 
     it "can be stopped before it was started" do
@@ -171,9 +180,10 @@ RSpec.describe ClaudeInbox::Poller, :poller do
     it "starts one worker however many times start is called" do
       worker.start
       worker.start
-      expect(wait_for_polls(1)).to eq(1)
+      wait_for { client.polls.size >= 1 }
+      expect(client.polls.size).to eq(1)
       sleep 0.2
-      expect(polls).to eq(1)
+      expect(client.polls.size).to eq(1)
     end
 
     it "reports a poll that blew the stack and keeps polling" do
@@ -182,12 +192,14 @@ RSpec.describe ClaudeInbox::Poller, :poller do
         raise SystemStackError, "stack level too deep"
       end
       worker.start
-      expect(wait_for_polls(1)).to eq(1)
+      wait_for { client.polls.size >= 1 }
+      expect(client.polls.size).to eq(1)
       expect(queue.pop).to eq([:error, "stack level too deep"])
       allow(client).to receive(:list).and_call_original
 
       worker.soon
-      expect(wait_for_polls(2)).to eq(2)
+      wait_for { client.polls.size >= 2 }
+      expect(client.polls.size).to eq(2)
       expect(queue.pop.first).to eq(:sessions)
     end
   end

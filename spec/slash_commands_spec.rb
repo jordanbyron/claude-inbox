@@ -4,15 +4,17 @@ require "tmpdir"
 require "fileutils"
 require "json"
 
-RSpec.describe ClaudeInbox::SlashCommands, :slash_commands do
+RSpec.describe ClaudeInbox::SlashCommands do
   it "lists project and user skills and commands, project first on a clash" do
     Dir.mktmpdir do |home|
       Dir.mktmpdir do |proj|
-        skill("#{home}/.claude/skills", "unslop", "Cut AI tells.")
-        skill("#{home}/.claude/skills", "shared", "from home")
-        skill("#{proj}/.claude/skills", "shared", "from project")
-        command("#{proj}/.claude/commands", "deploy", "---\ndescription: Ship it\n---\nDeploy $ARGUMENTS")
-        command("#{home}/.claude/commands", "frontend/component", "Make a component")
+        {
+          "#{home}/.claude/skills/unslop/SKILL.md" => "---\ndescription: Cut AI tells.\n---\n",
+          "#{home}/.claude/skills/shared/SKILL.md" => "---\ndescription: from home\n---\n",
+          "#{proj}/.claude/skills/shared/SKILL.md" => "---\ndescription: from project\n---\n",
+          "#{proj}/.claude/commands/deploy.md" => "---\ndescription: Ship it\n---\nDeploy $ARGUMENTS",
+          "#{home}/.claude/commands/frontend/component.md" => "Make a component"
+        }.each { |path, body| FileUtils.mkdir_p(File.dirname(path)) && File.write(path, body) }
         list = described_class.list(cwd: proj, home: home)
         expect(list.map(&:name)).to eq(%w[component deploy shared unslop])
         expect(list.map(&:source)).to eq(%w[user project project user])
@@ -26,11 +28,15 @@ RSpec.describe ClaudeInbox::SlashCommands, :slash_commands do
 
   it "reads folded, quoted and multi-line descriptions up to their first line" do
     Dir.mktmpdir do |home|
-      root = "#{home}/.claude/skills"
-      skill(root, "folded", ">-\n  Send a push notification\n  when something happens.")
-      skill(root, "quoted", "'It''s quoted: with a colon'")
-      skill(root, "dq", '"Double quoted"')
-      skill(root, "hidden", "Not for the menu", "user-invocable: false\n")
+      {
+        "folded" => "description: >-\n  Send a push notification\n  when something happens.\n",
+        "quoted" => "description: 'It''s quoted: with a colon'\n",
+        "dq" => "description: \"Double quoted\"\n",
+        "hidden" => "description: Not for the menu\nuser-invocable: false\n"
+      }.each do |name, frontmatter|
+        FileUtils.mkdir_p("#{home}/.claude/skills/#{name}")
+        File.write("#{home}/.claude/skills/#{name}/SKILL.md", "---\n#{frontmatter}---\n")
+      end
       by = described_class.list(cwd: home, home: home).to_h { |c| [c.name, c.description] }
       expect(by["folded"]).to eq("Send a push notification")
       expect(by["quoted"]).to eq("It's quoted: with a colon")
@@ -42,14 +48,15 @@ RSpec.describe ClaudeInbox::SlashCommands, :slash_commands do
   it "namespaces plugin and synced skills the way the CLI does" do
     Dir.mktmpdir do |home|
       plugin = "#{home}/.claude/plugins/cache/official/skill-creator/abc"
-      skill("#{plugin}/skills", "skill-creator", "Make skills")
-      command("#{plugin}/commands", "eval", "---\ndescription: Run evals\n---")
-      FileUtils.mkdir_p("#{home}/.claude/plugins")
-      File.write("#{home}/.claude/plugins/installed_plugins.json", {
-        version: 2,
-        plugins: {"skill-creator@official" => [{scope: "user", installPath: plugin}]}
-      }.to_json)
-      skill("#{home}/.claude/skills/synced/bucket-1", "docs", "Living docs")
+      {
+        "#{plugin}/skills/skill-creator/SKILL.md" => "---\ndescription: Make skills\n---\n",
+        "#{plugin}/commands/eval.md" => "---\ndescription: Run evals\n---",
+        "#{home}/.claude/skills/synced/bucket-1/docs/SKILL.md" => "---\ndescription: Living docs\n---\n",
+        "#{home}/.claude/plugins/installed_plugins.json" => {
+          version: 2,
+          plugins: {"skill-creator@official" => [{scope: "user", installPath: plugin}]}
+        }.to_json
+      }.each { |path, body| FileUtils.mkdir_p(File.dirname(path)) && File.write(path, body) }
       list = described_class.list(cwd: home, home: home)
       expect(list.map(&:name)).to eq(%w[anthropic-skills:docs skill-creator:eval skill-creator:skill-creator])
       expect(list.map(&:source)).to eq(%w[synced plugin plugin])

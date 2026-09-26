@@ -2,12 +2,12 @@
 
 require "socket"
 
-RSpec.describe ClaudeInbox::Remote::Http, :http_head do
+RSpec.describe ClaudeInbox::Remote::Http do
   let(:deadline) { described_class.monotonic + 5 }
 
   describe "reading a request head" do
     it "splits the request line and keys the headers in lower case" do
-      request = head("POST /api/sessions?x=1 HTTP/1.1\r\nHost: 127.0.0.1:7433\r\nContent-Type:  application/json \r\n\r\n")
+      request = described_class.read_head(StringIO.new("POST /api/sessions?x=1 HTTP/1.1\r\nHost: 127.0.0.1:7433\r\nContent-Type:  application/json \r\n\r\n".b), deadline: deadline)
       expect(request.verb).to eq("POST")
       expect(request.path).to eq("/api/sessions")
       expect(request.query).to eq("x=1")
@@ -16,27 +16,33 @@ RSpec.describe ClaudeInbox::Remote::Http, :http_head do
     end
 
     it "takes a bare newline as a line end" do
-      expect(head("GET / HTTP/1.0\nHost: x\n\n").headers).to eq({"host" => "x"})
+      expect(described_class.read_head(StringIO.new("GET / HTTP/1.0\nHost: x\n\n".b), deadline: deadline).headers).to eq({"host" => "x"})
     end
 
     it "joins a repeated header, so a second Content-Length can't pass for the first" do
-      request = head("POST / HTTP/1.1\r\nContent-Length: 5\r\ncontent-length: 50\r\n\r\n")
+      request = described_class.read_head(StringIO.new("POST / HTTP/1.1\r\nContent-Length: 5\r\ncontent-length: 50\r\n\r\n".b), deadline: deadline)
       expect(request.headers["content-length"]).to eq("5, 50")
       expect { request.read_body(StringIO.new, max: 100, deadline: deadline) }.to be_http_refused_with(400)
     end
 
     it "refuses a line over 8 KiB, more than 64 headers, and anything that isn't HTTP/1.x" do
-      expect { head("GET /#{"a" * 9000} HTTP/1.1\r\n\r\n") }.to be_http_refused_with(400)
-      expect { head("GET / HTTP/1.1\r\nX-Long: #{"a" * 9000}\r\n\r\n") }.to be_http_refused_with(400)
-      expect { head("GET / HTTP/1.1\r\nX-Long: #{"a" * 70_000}") }.to be_http_refused_with(400)
-      expect(head("GET / HTTP/1.1\r\nX-Long: #{"a" * (8192 - 9)}\r\n\r\n").headers["x-long"].bytesize).to eq(8183)
-      expect { head("GET / HTTP/1.1\r\nX-Long: #{"a" * (8192 - 8)}\r\n\r\n") }.to be_http_refused_with(400)
-      expect { head("GET / HTTP/1.1\r\n" + "X-A: 1\r\n" * 65 + "\r\n") }.to be_http_refused_with(400)
-      expect(head("GET / HTTP/1.1\r\n" + "X-A: 1\r\n" * 64 + "\r\n").headers["x-a"]).to match(/\A1(, 1){63}\z/)
-      expect { head("HELLO\r\n\r\n") }.to be_http_refused_with(400)
-      expect { head("GET / HTTP/2.0\r\n\r\n") }.to be_http_refused_with(400)
-      expect { head("GET / HTTP/1.1\r\nno colon here\r\n\r\n") }.to be_http_refused_with(400)
-      expect { head("GET / HTTP/1.1\r\nHost: x") }.to be_http_refused_with(400)
+      [
+        "GET /#{"a" * 9000} HTTP/1.1\r\n\r\n",
+        "GET / HTTP/1.1\r\nX-Long: #{"a" * 9000}\r\n\r\n",
+        "GET / HTTP/1.1\r\nX-Long: #{"a" * 70_000}",
+        "GET / HTTP/1.1\r\nX-Long: #{"a" * (8192 - 8)}\r\n\r\n",
+        "GET / HTTP/1.1\r\n" + "X-A: 1\r\n" * 65 + "\r\n",
+        "HELLO\r\n\r\n",
+        "GET / HTTP/2.0\r\n\r\n",
+        "GET / HTTP/1.1\r\nno colon here\r\n\r\n",
+        "GET / HTTP/1.1\r\nHost: x"
+      ].each do |text|
+        expect { described_class.read_head(StringIO.new(text.b), deadline: deadline) }.to be_http_refused_with(400)
+      end
+      longest = "GET / HTTP/1.1\r\nX-Long: #{"a" * (8192 - 9)}\r\n\r\n"
+      expect(described_class.read_head(StringIO.new(longest.b), deadline: deadline).headers["x-long"].bytesize).to eq(8183)
+      most = "GET / HTTP/1.1\r\n" + "X-A: 1\r\n" * 64 + "\r\n"
+      expect(described_class.read_head(StringIO.new(most.b), deadline: deadline).headers["x-a"]).to match(/\A1(, 1){63}\z/)
     end
 
     # One byte every 20ms would satisfy any per-read timeout for ever.
@@ -91,11 +97,17 @@ RSpec.describe ClaudeInbox::Remote::Http, :http_head do
     end
 
     it "wants a Content-Length within the limit, and nothing chunked" do
-      expect { head("POST / HTTP/1.1\r\n\r\n").read_body(StringIO.new, max: 10, deadline: deadline) }.to be_http_refused_with(411)
-      expect { head("POST / HTTP/1.1\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n").read_body(StringIO.new, max: 10, deadline: deadline) }.to be_http_refused_with(400)
-      expect { head("POST / HTTP/1.1\r\nContent-Length: -1\r\n\r\n").read_body(StringIO.new, max: 10, deadline: deadline) }.to be_http_refused_with(400)
+      {
+        "POST / HTTP/1.1\r\n\r\n" => 411,
+        "POST / HTTP/1.1\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n" => 400,
+        "POST / HTTP/1.1\r\nContent-Length: -1\r\n\r\n" => 400
+      }.each do |text, status|
+        request = described_class.read_head(StringIO.new(text.b), deadline: deadline)
+        expect { request.read_body(StringIO.new, max: 10, deadline: deadline) }.to be_http_refused_with(status)
+      end
       out = StringIO.new
-      expect { head("POST / HTTP/1.1\r\nContent-Length: 11\r\nExpect: 100-continue\r\n\r\n").read_body(out, max: 10, deadline: deadline) }.to be_http_refused_with(413)
+      request = described_class.read_head(StringIO.new("POST / HTTP/1.1\r\nContent-Length: 11\r\nExpect: 100-continue\r\n\r\n".b), deadline: deadline)
+      expect { request.read_body(out, max: 10, deadline: deadline) }.to be_http_refused_with(413)
       expect(out.string).to be_empty
     end
   end

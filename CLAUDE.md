@@ -18,8 +18,10 @@ shared checkout: other sessions commit there concurrently.
 
 - Tests are RSpec (`RSpec.describe` / `it` / `expect(x).to eq`) in
   `spec/**/*_spec.rb`, one spec file per class. A spec file holds no `def`
-  and no top-level constant: helpers and fakes live in `spec/support`,
-  included by a metadata tag on the group.
+  and no top-level constant. `spec/support/drivers.rb` holds the few
+  helpers every spec shares, each taking what it drives as an argument;
+  everything else there is a fake or a matcher. A spec that wants a helper
+  of its own inlines it or uses a `let` instead.
 - The UI is keyboard-only with vim bindings; a new action needs a key in
   `Keymap::BINDINGS` and a row in the README key table.
 - Commit subjects are `type: what changed` (`fix:`, `feat:`, `refactor:`,
