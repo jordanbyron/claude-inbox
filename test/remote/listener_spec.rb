@@ -317,6 +317,25 @@ describe ClaudeInbox::Remote::Listener do
       [*idle, third].compact.each(&:close)
     end
 
+    # Every test connection comes from 127.0.0.1, so `peer` names the host.
+    it "lets another host in while one holds its two unauthenticated slots" do
+      hosts = Queue.new
+      listener.define_singleton_method(:peer) { |_| hosts.pop }
+      listener.start
+      idle = Array.new(2) do
+        hosts << "192.168.1.30"
+        TCPSocket.new("127.0.0.1", listener.port)
+      end
+      get = "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
+      statuses = %w[192.168.1.30 192.168.1.31].map do |host|
+        hosts << host
+        TCPSocket.open("127.0.0.1", listener.port) { |sock| sock.write(get) && sock.readpartial(4096)[/\AHTTP\/1\.1 (\d+)/, 1] }
+      end
+      _(statuses).must_equal %w[503 200]
+    ensure
+      idle&.each(&:close)
+    end
+
     it "stops counting a connection as unauthenticated once its token checks out" do
       listener.start
       held = TCPSocket.new("127.0.0.1", listener.port)
