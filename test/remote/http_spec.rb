@@ -40,6 +40,9 @@ describe ClaudeInbox::Remote::Http do
     it "refuses a line over 8 KiB, more than 64 headers, and anything that isn't HTTP/1.x" do
       refused(400) { head("GET /#{"a" * 9000} HTTP/1.1\r\n\r\n") }
       refused(400) { head("GET / HTTP/1.1\r\nX-Long: #{"a" * 9000}\r\n\r\n") }
+      refused(400) { head("GET / HTTP/1.1\r\nX-Long: #{"a" * 70_000}") }
+      _(head("GET / HTTP/1.1\r\nX-Long: #{"a" * (8192 - 9)}\r\n\r\n").headers["x-long"].bytesize).must_equal 8183
+      refused(400) { head("GET / HTTP/1.1\r\nX-Long: #{"a" * (8192 - 8)}\r\n\r\n") }
       refused(400) { head("GET / HTTP/1.1\r\n" + "X-A: 1\r\n" * 65 + "\r\n") }
       _(head("GET / HTTP/1.1\r\n" + "X-A: 1\r\n" * 64 + "\r\n").headers["x-a"]).must_match(/\A1(, 1){63}\z/)
       refused(400) { head("HELLO\r\n\r\n") }

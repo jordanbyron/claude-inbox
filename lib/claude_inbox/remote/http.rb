@@ -112,12 +112,12 @@ module ClaudeInbox
       end
 
       def self.read_line(io, rest, deadline)
-        until (i = rest.index("\n"))
-          raise Error.new(400, "a line of the request head is over #{MAX_LINE} bytes") if rest.bytesize > MAX_LINE
+        loop do
+          i = rest.index("\n")
+          raise Error.new(400, "a line of the request head is over #{MAX_LINE} bytes") if (i || rest.bytesize) > MAX_LINE
+          return rest.slice!(0..i).chomp if i
           fill(io, rest, deadline)
         end
-        raise Error.new(400, "a line of the request head is over #{MAX_LINE} bytes") if i > MAX_LINE
-        rest.slice!(0..i).chomp
       end
 
       def self.fill(io, rest, deadline)
