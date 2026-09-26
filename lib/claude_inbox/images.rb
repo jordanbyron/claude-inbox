@@ -43,7 +43,7 @@ module ClaudeInbox
     # owner only: a photo can be anything.
     def self.save(bytes, dir: DEFAULT_DIR, now: Time.now, index: 1)
       data = bytes.b
-      ext = MAGIC.find { |_, magic| magic.match?(data) }&.first
+      ext = extension(data)
       raise Unsupported, "not a PNG, JPEG, GIF or WebP image" unless ext
       FileUtils.mkdir_p(dir)
       prune(dir, now)
@@ -51,6 +51,9 @@ module ClaudeInbox
       File.open(path, File::WRONLY | File::CREAT | File::EXCL | File::BINARY, 0o600) { |f| f.write(data) }
       path
     end
+
+    # ".png", ".jpg", ".gif" or ".webp" by the magic number, or nil.
+    def self.extension(bytes) = MAGIC.find { |_, magic| magic.match?(bytes.b) }&.first
 
     CLIPBOARD_PNG = <<~APPLESCRIPT
       on run argv

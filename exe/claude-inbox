@@ -9,23 +9,41 @@ if ARGV.include?("--version")
 end
 
 require "claude_inbox/app"
+require "tmpdir"
+
+fixture = ARGV.include?("--fixture")
+# A fixture run takes the listen flags, for trying the API with curl, but
+# not the environment: a shell rc that arms the real inbox must not arm a
+# test one too.
+begin
+  listen = ClaudeInbox::Listener.options(ARGV, fixture ? {} : ENV)
+rescue ArgumentError => e
+  abort "claude-inbox: #{e.message}"
+end
 
 # Crash traces go here instead of the alt screen when set.
 $stderr.reopen(ENV["CLAUDE_INBOX_STDERR"], "a") if ENV["CLAUDE_INBOX_STDERR"]
 
 opts = {}
-if (i = ARGV.index("--fixture"))
-  agents = ARGV[i + 1]
+if fixture
+  agents = ARGV[ARGV.index("--fixture") + 1]
   fixtures = File.dirname(agents)
   opts[:client] = ClaudeInbox::FixtureClient.new(agents, logs: File.binread(File.join(fixtures, "logs_raw.txt")))
   opts[:store] = ClaudeInbox::Store.new(path: nil)
   opts[:pull_requests] = ClaudeInbox::PullRequests.new(cache_path: File.join(fixtures, "gh-pr-status-cache.json"), resolved_path: nil, gh: nil)
+  # Its own token, lock and images, so a test inbox can neither rotate the
+  # token phones are paired with nor hold the real inbox's lock.
+  dir = File.join(Dir.tmpdir, "claude-inbox-fixture")
+  opts[:listen] = listen&.merge(fixture: true, pairing: ClaudeInbox::Pairing.new(path: File.join(dir, "listen.json")),
+    lock_path: File.join(dir, "listen.lock"), images_dir: File.join(dir, "images"))
 else
   # The only place the reaper is armed. Everything else — tests, --fixture,
-  # anything embedding App — gets one that deletes nothing.
+  # anything embedding App — gets one that deletes nothing. The listener,
+  # likewise, comes only from this file, and only when asked for.
   opts[:client] = ClaudeInbox::AgentsClient.new
   opts[:store] = ClaudeInbox::Store.new
   opts[:reaper] = ClaudeInbox::Reaper.new(opts[:client], opts[:store])
+  opts[:listen] = listen
 end
 opts[:color] = false if ARGV.include?("--no-color")
 

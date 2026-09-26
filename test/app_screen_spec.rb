@@ -3,6 +3,7 @@
 require_relative "test_helper"
 require_relative "../lib/claude_inbox/app"
 require "stringio"
+require "tmpdir"
 
 CTRL_X = "\x18"
 CTRL_S = "\x13"
@@ -11,49 +12,16 @@ CTRL_U = "\x15"
 describe ClaudeInbox::App do
   let(:terminal) { ScreenTerminal.new }
 
-  let(:client) do
-    Class.new(ClaudeInbox::FixtureClient) {
-      def removed = (@removed ||= [])
-
-      def stopped = (@stopped ||= [])
-
-      def attached = (@attached ||= [])
-
-      def hold = @gate = Queue.new
-
-      def release = @gate&.push(true)
-
-      def rm(id)
-        @gate&.pop
-        removed << id
-        true
-      end
-
-      def stop(id)
-        stopped << id
-        true
-      end
-
-      def attach(id) = attached << id
-
-      def fail_spawn(message) = @spawn_error = message
-
-      def spawn(**)
-        @gate&.pop
-        raise ClaudeInbox::AgentsClient::Error, @spawn_error if @spawn_error
-        "deadbeef"
-      end
-    }.new(fixture_path("agents.json"))
-  end
-
+  let(:client) { RecordingClient.new }
   let(:store) { ClaudeInbox::Store.new(path: nil) }
   let(:pull_requests) { ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil) }
+  let(:queue) { Queue.new }
 
   let(:app) do
     ClaudeInbox::App.new(
       client: client, store: store, pull_requests: pull_requests,
       rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
-      terminal: terminal, input: StringIO.new, color: false
+      terminal: terminal, input: StringIO.new, color: false, queue: queue
     )
   end
 
@@ -77,6 +45,12 @@ describe ClaudeInbox::App do
 
   def selected_line = screen.find { |l| l.include?("▶") }
 
+  # The selected row's key: the row itself carries a live age and spinner.
+  def cursor
+    app.step
+    app.instance_variable_get(:@selected)&.key
+  end
+
   def row_of(label) = screen.index { |l| l.include?(label) } + 1
 
   def click(col, row) = press("\e[<0;#{col};#{row}M")
@@ -87,6 +61,16 @@ describe ClaudeInbox::App do
     press("\e", "n", "\e[200~one\ntwo\e[201~")
     prompt = screen.select { |l| l.start_with?("  │") }.map { |l| l.delete("│").strip }
     _(prompt.join("\n").strip).must_equal "one\ntwo"
+  end
+
+  it "drops a paste that lands where nothing is typed, so its letters never act as keys" do
+    press(CTRL_X, "\e[200~yes, every directory\e[201~")
+    _(screen.join("\n")).must_include "Delete session f23c8673?"
+    _(client.removed).must_be_empty
+    press("\e", "N", "\e[200~query\e[201~")
+    _(screen.join("\n")).must_include "Pair a phone"
+    press("\e", "\e[200~q\e[201~")
+    _(screen.join("\n")).must_include "comma3x not booting"
   end
 
   it "edits the filter line in the middle, and closes it on a backspace from empty" do
@@ -255,6 +239,94 @@ describe ClaudeInbox::App do
       _(lines.join("\n")).must_include "New session"
       press(CTRL_S)
       _(status_line).must_include "starting session…"
+    end
+  end
+
+  describe "a session started from another device" do
+    it "says so, without moving the cursor or closing the form someone is typing in" do
+      press("j")
+      before = cursor
+      _(before).wont_be_nil
+      press("n", *"half a thought".chars)
+      queue << [:notice, "remote: starting session…"]
+      _(status_line).must_include "remote: starting session…"
+
+      store.update(store.sessions + [session(id: "31472308", name: "from the phone")])
+      queue << [:remote_started, "31472308", "192.168.1.30"]
+      lines = screen
+      _(lines.first).must_include "started 31472308 from 192.168.1.30"
+      _(lines.join("\n")).must_include "New session"
+      _(lines.join("\n")).must_include "half a thought"
+      _(client.attached).must_be_empty
+
+      press("\e", "y")
+      _(cursor).must_equal before
+      _(screen.join("\n")).must_include "from the phone"
+    end
+  end
+
+  describe "N with the listener on" do
+    let(:tmp) { Dir.mktmpdir }
+    let(:gate) { Queue.new }
+    let(:pairing) do
+      ClaudeInbox::Pairing.new(path: File.join(tmp, "listen.json"), local_name: -> { "m" }, addresses: -> { [] }).tap do |p|
+        lookups = gate
+        p.define_singleton_method(:urls) do |**kw|
+          lookups.pop
+          super(**kw)
+        end
+      end
+    end
+    let(:app) do
+      ClaudeInbox::App.new(
+        client: client, store: store, pull_requests: pull_requests,
+        rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
+        terminal: terminal, input: StringIO.new, color: false, queue: queue,
+        listen: {port: 0, pairing: pairing, lock_path: File.join(tmp, "listen.lock"), images_dir: File.join(tmp, "images")}
+      )
+    end
+    let(:listener) { app.instance_variable_get(:@listener) }
+
+    before { listener.start }
+
+    after do
+      gate.close
+      listener.stop
+      FileUtils.remove_entry(tmp)
+    end
+
+    it "shows the port in the header, and the URL once the lookup lands" do
+      _(status_line).must_include "◉ :#{listener.port}"
+      press("N")
+      _(screen.join("\n")).must_include "listening on 127.0.0.1:#{listener.port}"
+      _(screen.join("\n")).must_include "looking up this Mac's addresses…"
+      press("c")
+      _(status_line).must_include "still looking up this Mac's addresses"
+      gate << true
+      _(wait_for { screen.join("\n").include?("http://127.0.0.1:#{listener.port}/#") }).must_equal true
+    end
+
+    it "issues a new token on r then y, and says phones must pair again" do
+      old = pairing.token
+      press("N", "r")
+      _(screen.join("\n")).must_include "rotate? y/n"
+      gate << true << true
+      press("y")
+      _(wait_for { status_line.include?("new token: phones pair again with N") }).must_equal true
+      _(JSON.parse(File.read(File.join(tmp, "listen.json")))["token"]).wont_equal old
+    end
+  end
+
+  describe "N" do
+    it "opens the pairing dialog, which says how to turn the listener on while it is off" do
+      press("N")
+      _(screen.join("\n")).must_include "off: start with --listen or --listen-lan"
+      _(screen.join("\n")).must_include "esc close"
+      press("c", "r", "y")
+      _(screen.join("\n")).wont_include "rotate?"
+      _(screen.join("\n")).must_include "Pair a phone"
+      press("\e")
+      _(screen.join("\n")).wont_include "Pair a phone"
     end
   end
 

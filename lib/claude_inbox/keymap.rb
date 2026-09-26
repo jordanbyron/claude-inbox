@@ -27,7 +27,7 @@ module ClaudeInbox
       "s" => :snooze, "u" => :wake, "a" => :alias, "x" => :settle, "X" => :stop,
       :ctrl_x => :delete,
       "o" => :open_pr, "P" => :link_pr, "t" => :toggle_pin, "w" => :open_remote,
-      "R" => :refresh, "p" => :toggle_peek, "n" => :new_session,
+      "R" => :refresh, "p" => :toggle_peek, "n" => :new_session, "N" => :remote_pairing,
       :tab => :next_section, :back_tab => :prev_section,
       "/" => :filter, :escape => :escape,
       "q" => :quit, :ctrl_c => :quit

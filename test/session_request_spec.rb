@@ -33,7 +33,11 @@ describe ClaudeInbox::SessionRequest do
     end
 
     it "refuses an unknown key rather than dropping it" do
-      _(refusal(base.merge("permissions" => "plan"))).must_equal [:permissions, "unknown key: permissions"]
+      _(refusal(base.merge("permissions" => "plan"))).must_equal [:permissions, "unknown key: \"permissions\""]
+    end
+
+    it "quotes an unknown key, escapes and all, so its message prints as plain text" do
+      _(refusal(base.merge("\e[31mkey" => 1)).last).must_equal "unknown key: \"\\e[31mkey\""
     end
 
     it "strips the prompt and keeps it to at most 100,000 characters" do
@@ -81,6 +85,12 @@ describe ClaudeInbox::SessionRequest do
       _(from(base.merge("cwd" => "~/code"))[:cwd]).must_equal File.join(Dir.home, "code")
       _(refusal(base.merge("cwd" => "  "))).must_equal [:cwd, "a directory is required"]
       _(refusal({"prompt" => "go"})).must_equal [:cwd, "a directory is required"]
+    end
+
+    it "refuses a directory with a control character in it" do
+      ["/tmp/\e]0;x\a", "/tmp/a\nb", "app\e[2J", "/tmp/a\u2028b"].each do |cwd|
+        _(refusal(base.merge("cwd" => cwd))).must_equal [:cwd, "a directory is one line"]
+      end
     end
 
     it "takes a directory by the label it was offered under, when only one fits" do

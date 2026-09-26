@@ -76,6 +76,7 @@ scrolls its own history and clicks do nothing.
 | `p` | toggle the read-only peek pane |
 | `J` `K` (`Ctrl-e` `Ctrl-y`) | scroll the peek pane |
 | `n` | new session (see below) |
+| `N` | pair a phone: whether the inbox is listening, and the URL to pair with (see Starting sessions from your phone) |
 | `t` | pin / unpin |
 | `s` | snooze: `1` 15m · `2` 1h · `3` tomorrow 9am · `4` until woken |
 | `u` | wake a snoozed session now, or bring back one you settled |
@@ -184,6 +185,103 @@ wears a `⇅` after the state. Two kinds of session have it:
   running for the next request. A worker nobody has messaged yet has
   nothing to adopt, and Enter says so.
 
+## Starting sessions from your phone
+
+The inbox can also listen for HTTP requests to start a session, so a phone
+can do what `n` does while you are away from the desk. It is off unless you
+ask for it:
+
+| Flag | Environment | What it does |
+|---|---|---|
+| `--listen[=PORT]` | `CLAUDE_INBOX_LISTEN=7433` | listens on `127.0.0.1` only, for an ssh tunnel or scripts on this Mac |
+| `--listen-lan[=PORT]` | `CLAUDE_INBOX_LISTEN=lan` or `lan:7433` | listens on every interface: your LAN, and a VPN into it |
+| `--listen-allow-modes=default,plan` | `CLAUDE_INBOX_LISTEN_ALLOW_MODES=default,plan` | the permission modes a remote start may use (see below) |
+
+The port defaults to 7433, and a flag wins over the environment. The LAN is
+never reached by accident: only `--listen-lan` or `CLAUDE_INBOX_LISTEN=lan`
+binds every interface, and with both flags given `--listen-lan` wins and
+its own port (or 7433) is used. `--fixture` ignores the environment but
+takes the flags, which is how to try the API without starting anything
+real, and keeps a token of its own. One inbox per user listens; a second
+one says which process has the listener, and takes over when it quits.
+
+**Over your VPN.** Start the inbox with `--listen-lan`, or put
+`export CLAUDE_INBOX_LISTEN=lan` in your shell rc. Press `N`. It shows two
+pairing URLs with the token cut short: `http://mac-mini.local:7433/#…` for
+when the phone is on your Wi-Fi, and `http://192.168.1.20:7433/#…` for over
+the VPN, since `.local` names don't cross a tunnel. `c` copies the address
+form in full, token included, and Universal Clipboard takes it to the phone.
+LAN mode is plain HTTP: the token and every prompt cross the network
+readable by anyone on it, so use it only on a network you control.
+
+The first time, macOS asks whether `ruby` may accept incoming connections;
+allow it. It asks again after a Ruby upgrade, because the binary's path
+changes. With the firewall set to block all incoming connections, or with
+stealth mode on and `ruby` denied, the phone gets no answer at all and
+nothing says why; `N` shows the firewall's state.
+
+**Over ssh.** Plain `--listen` answers only on `127.0.0.1`. From another
+machine, `ssh -L 7433:127.0.0.1:7433 you@your-mac` and use
+`http://localhost:7433`; any free local port works in place of the first
+7433. Use plain `--listen` for this, not `--listen-lan`: macOS lets another
+program on this Mac bind `127.0.0.1:7433` next to LAN mode's
+`0.0.0.0:7433` and take the loopback traffic, token and all.
+
+**Pairing.** The token lives in `~/.config/claude-inbox/listen.json`,
+readable by you alone, and stays the same across launches. In the `N`
+dialog, `r` and then `y` replaces it; every paired phone gets 401 until it
+pairs again. The dialog also lists the last five remote starts, refusals
+and rejected tokens, counting a repeat rather than listing it again. Anyone with the token can start sessions as
+you, in your projects: treat a leaked URL like a leaked password, and press
+`r`.
+
+**Permission modes.** A remote start may use `default`, `auto` and `plan`,
+nothing wider. `default` means whatever your settings say for that
+directory, so it is worked out first: a project whose settings default to
+`bypassPermissions` is refused with 403 rather than started.
+`--listen-allow-modes` gives the list in full, for example
+`--listen-allow-modes=default,plan,acceptEdits`. Settings files the inbox
+doesn't read, such as managed settings, aren't taken into account when it is
+worked out.
+
+**The API.** `GET /api/options` lists the models, efforts, permission modes
+and directories a start can use, each directory with a short `label` and the
+defaults its settings give. `POST /api/sessions` starts one. The token is
+the part of the pairing URL after the `#`, or:
+
+```sh
+TOKEN=$(ruby -rjson -e 'puts JSON.parse(File.read(File.expand_path("~/.config/claude-inbox/listen.json")))["token"]')
+curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"prompt":"fix the flaky spec","cwd":"claude-inbox","remote":true}' \
+  http://192.168.1.20:7433/api/sessions
+```
+
+The fields are those of the `n` form: `prompt`, `name`, `cwd` (a path, or a
+directory's label), `model`, `effort`, `permission_mode`, `worktree` and
+`remote`, plus `images`, up to eight `{"data": "<base64>"}` PNG, JPEG, GIF
+or WebP images that the prompt can point at as `[Image #1]`. Left out,
+`remote` follows "Enable Remote Control for all sessions" in `/config`, as
+the form's default does. An unknown key
+is refused, so a misspelt setting can't quietly fall back to its default.
+The answer is `201 {"id", "name", "cwd", "url"}`, where `url` is the
+session's claude.ai/code page, or null if it hasn't registered yet. A
+refusal is `{"error", "field"}` with the same message the form would show,
+and a CLI refusal such as "Workspace not trusted" comes back as a 500. Send
+an `Idempotency-Key` header and a retry gets the first answer instead of a
+second session.
+
+A remote start never moves the cursor, attaches, or closes what you have
+open. The header says `started 31472308 from 192.168.1.30`, and the row
+turns up on the next poll.
+
+The header shows `◉ :7433` while the inbox listens (`◉ lan:7433` in LAN
+mode), and a red `◉ !` while it was asked to and can't: another inbox has
+the listener, or something else holds the port. It tries again every few
+seconds and turns blue once it has the port. If an inbox quits while a
+client still has a connection open, the port can stay held for half a
+minute after. Anything else, such as a `~/.config/claude-inbox` it can't
+write to, stays red, and `N` says what went wrong.
+
 ## Pull request state
 
 The daemon scans each background session's transcript for PR links, so a
@@ -227,6 +325,8 @@ blank the file.
 
 The bars stay off until the file exists, and goes off again once the file
 is more than fifteen minutes old.
+
+To start sessions from your phone as well, see [Starting sessions from your phone](#starting-sessions-from-your-phone).
 
 ## Contributing
 

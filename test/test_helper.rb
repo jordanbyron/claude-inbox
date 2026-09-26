@@ -3,6 +3,7 @@
 require "bundler/setup"
 require "minitest/autorun"
 require "minitest/spec"
+require "stringio"
 require_relative "../lib/claude_inbox"
 require_relative "../lib/claude_inbox/renderer"
 require_relative "../lib/claude_inbox/vt_screen"
@@ -51,6 +52,66 @@ class ScreenTerminal
   def resized = nil
 
   def invalidate = nil
+end
+
+# The fixture's sessions, with every action recorded rather than run.
+# `hold` makes the next spawn or rm wait for `release`; `fail_spawn` makes
+# spawns raise the way a refusing CLI does, until it is given nil; `rm`
+# refuses the ids in `refuse`, the way the CLI refuses a worktree holding
+# unpushed commits.
+class RecordingClient < ClaudeInbox::FixtureClient
+  attr_reader :removed, :stopped, :attached, :spawns
+
+  def initialize(path = File.join(Fixtures::DIR, "agents.json"), refuse: [], **opts)
+    super(path, **opts)
+    @refuse = refuse
+    @removed = []
+    @stopped = []
+    @attached = []
+    @spawns = []
+  end
+
+  def hold = @gate = Queue.new
+
+  def release = @gate&.push(true)
+
+  def fail_spawn(message) = @spawn_error = message
+
+  def rm(id)
+    @gate&.pop
+    raise ClaudeInbox::AgentsClient::Error, "rm failed: worktree has unpushed commits" if @refuse.include?(id)
+    removed << id
+    true
+  end
+
+  def stop(id)
+    stopped << id
+    true
+  end
+
+  def attach(id) = attached << id
+
+  def spawn(**opts)
+    spawns << opts
+    @gate&.pop
+    raise ClaudeInbox::AgentsClient::Error, @spawn_error if @spawn_error
+    "deadbeef"
+  end
+end
+
+# A connection for the Http and Listener specs: it reads the request it
+# was given and keeps whatever is written back.
+class FakeSocket
+  attr_reader :written
+
+  def initialize(request)
+    @input = StringIO.new(request.b)
+    @written = +"".b
+  end
+
+  def read_nonblock(size, exception: true) = @input.read_nonblock(size, exception: exception)
+
+  def write(data) = @written << data.b
 end
 
 Minitest::Spec.include Fixtures

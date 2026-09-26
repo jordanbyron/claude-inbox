@@ -18,10 +18,15 @@ module ClaudeInbox
       {}
     end
 
-    def save(path, data)
+    # `perm` is set on the temp file before anything is written to it, so
+    # a secret is never readable at a wider mode, not even briefly.
+    def save(path, data, perm: nil)
       FileUtils.mkdir_p(File.dirname(path))
       tmp = File.join(File.dirname(path), ".#{File.basename(path)}.#{Process.pid}.tmp")
-      File.write(tmp, JSON.pretty_generate(data))
+      File.open(tmp, "w", perm || 0o666) do |f|
+        f.chmod(perm) if perm
+        f.write(JSON.pretty_generate(data))
+      end
       File.rename(tmp, path)
     end
   end

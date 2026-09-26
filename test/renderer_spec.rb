@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
+require_relative "../lib/claude_inbox/listener"
 
 Text = ClaudeInbox::Text
 
@@ -191,6 +192,27 @@ describe ClaudeInbox::Renderer do
   it "falls back to compact header chips when narrow, full when wide" do
     _(frame(sections, width: 100, height: 10).lines.first).must_include "1 needs you"
     _(frame(sections, width: 60, height: 10).lines.first).must_include "● 1  ✻ 1"
+  end
+
+  it "shows the listener in the header: its port, red when it couldn't listen, nothing when off" do
+    snapshot = ->(state, lan: false) {
+      ClaudeInbox::Listener::Snapshot.new(state: state, port: 7433, lan: lan, urls: nil, firewall: nil, allowed_modes: [],
+        recent: [], held_by: nil, fixture: false)
+    }
+    header = ->(listening, width: 120) { frame(sections, width: width, height: 10, listening: listening).lines.first }
+    _(header.call(snapshot.call(:listening))).must_match(/1 needs you  ·  .*  ·  ◉ :7433/)
+    _(header.call(snapshot.call(:listening, lan: true))).must_include "◉ lan:7433"
+    _(header.call(snapshot.call(:in_use))).must_include "◉ !"
+    _(header.call(snapshot.call(:held))).must_include "◉ !"
+    _(header.call(snapshot.call(:failed))).must_include "◉ !"
+    _(header.call(snapshot.call(:off))).wont_include "◉"
+    _(header.call(nil)).wont_include "◉"
+    _(header.call(snapshot.call(:listening), width: 60)).must_include "● 1  ✻ 1  ○ 1  ◉ :7433"
+
+    colored = ClaudeInbox::Renderer.new(color: true, home: "/Users/byron")
+    chip = ->(state) { colored.frame(sections, view(width: 140, height: 10, listening: snapshot.call(state))).lines.first }
+    _(chip.call(:listening)).must_include "\e[38;5;#{ClaudeInbox::Theme::HUES[:blue]}m◉ :7433"
+    _(chip.call(:held)).must_include "\e[38;5;#{ClaudeInbox::Theme::HUES[:red]}m◉ !"
   end
 
   it "keeps the header's settled chip distinct from the chip separator" do
