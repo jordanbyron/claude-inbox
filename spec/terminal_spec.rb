@@ -2,18 +2,18 @@
 
 require "stringio"
 
-RSpec.describe ClaudeInbox::Terminal, :terminal do
+RSpec.describe ClaudeInbox::Terminal do
   let(:out) { StringIO.new }
   let(:terminal) { described_class.new(out, StringIO.new) }
 
   it "takes the wheel for the duration of the alt screen and hands it back" do
     terminal.enter
-    entered = taken
+    entered = drain(out)
     expect(entered).to include(described_class::ALT_ON)
     expect(entered).to include(described_class::WHEEL_KEYS_ON)
 
     terminal.restore
-    left = taken
+    left = drain(out)
     expect(left).to include(described_class::WHEEL_KEYS_OFF)
     # The mode belongs to the alt screen, so it has to go first.
     expect(left.index(described_class::WHEEL_KEYS_OFF)).to be < left.index(described_class::ALT_OFF)
@@ -21,40 +21,40 @@ RSpec.describe ClaudeInbox::Terminal, :terminal do
 
   it "takes over the mouse for the duration of the alt screen and hands it back" do
     terminal.enter
-    entered = taken
+    entered = drain(out)
     expect(entered).to include(described_class::MOUSE_ON)
 
     terminal.restore
-    left = taken
+    left = drain(out)
     expect(left).to include(described_class::MOUSE_OFF)
     expect(left.index(described_class::MOUSE_OFF)).to be < left.index(described_class::ALT_OFF)
   end
 
   it "asks for bracketed paste for the duration of the alt screen and hands it back" do
     terminal.enter
-    expect(taken).to include(described_class::PASTE_ON)
+    expect(drain(out)).to include(described_class::PASTE_ON)
 
     terminal.restore
-    left = taken
+    left = drain(out)
     expect(left).to include(described_class::PASTE_OFF)
     expect(left.index(described_class::PASTE_OFF)).to be < left.index(described_class::ALT_OFF)
   end
 
   it "restores once, however many times it is asked" do
     terminal.enter
-    taken
+    drain(out)
     terminal.restore
     terminal.restore
-    expect(taken.scan(described_class::ALT_OFF).size).to eq(1)
+    expect(drain(out).scan(described_class::ALT_OFF).size).to eq(1)
   end
 
   it "hands the screen to a child and takes it back afterwards" do
     terminal.enter
-    taken
+    drain(out)
     order = []
-    terminal.release { order << taken.include?(described_class::ALT_OFF) }
+    terminal.release { order << drain(out).include?(described_class::ALT_OFF) }
     expect(order).to eq([true])
-    expect(taken).to include(described_class::ALT_ON)
+    expect(drain(out)).to include(described_class::ALT_ON)
   end
 
   it "hands the tty back in the mode it found it, not a stock cooked one" do

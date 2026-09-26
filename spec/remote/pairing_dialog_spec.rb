@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe ClaudeInbox::Remote::PairingDialog, :pairing_dialog do
+RSpec.describe ClaudeInbox::Remote::PairingDialog do
   let(:token) { "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcde" }
   let(:listening) do
     ClaudeInbox::Remote::Listener::Snapshot.new(state: :listening, port: 7433, lan: false, urls: ["http://127.0.0.1:7433/##{token}"],
@@ -10,46 +10,46 @@ RSpec.describe ClaudeInbox::Remote::PairingDialog, :pairing_dialog do
   let(:dialog) { described_class.new(-> { snapshot[0] }) }
 
   it "says where it listens, and shows the pairing URL with the token cut short" do
-    expect(box).to include "listening on 127.0.0.1:7433"
-    expect(box).to include "http://127.0.0.1:7433/#AbCd…bcde"
-    expect(box).not_to include token
-    expect(box).to include "phone may use: default, plan"
-    expect(box).to include "c copy  r new token  esc close"
+    expect(dialog.frame(120).join("\n")).to include "listening on 127.0.0.1:7433"
+    expect(dialog.frame(120).join("\n")).to include "http://127.0.0.1:7433/#AbCd…bcde"
+    expect(dialog.frame(120).join("\n")).not_to include token
+    expect(dialog.frame(120).join("\n")).to include "phone may use: default, plan"
+    expect(dialog.frame(120).join("\n")).to include "c copy  r new token  esc close"
   end
 
   it "says LAN mode is cleartext, and lists each address and the firewall" do
     snapshot[0] = listening.with(lan: true, firewall: :on, urls: ["http://mac-mini.local:7433/##{token}", "http://192.168.1.20:7433/##{token}"])
-    expect(box).to include "listening on 0.0.0.0:7433 · LAN, cleartext"
-    expect(box).to include "http://mac-mini.local:7433/#AbCd…bcde"
-    expect(box).to include "http://192.168.1.20:7433/#AbCd…bcde"
-    expect(box).to include "firewall: on"
+    expect(dialog.frame(120).join("\n")).to include "listening on 0.0.0.0:7433 · LAN, cleartext"
+    expect(dialog.frame(120).join("\n")).to include "http://mac-mini.local:7433/#AbCd…bcde"
+    expect(dialog.frame(120).join("\n")).to include "http://192.168.1.20:7433/#AbCd…bcde"
+    expect(dialog.frame(120).join("\n")).to include "firewall: on"
   end
 
   it "fills in the addresses from each frame's snapshot once they are known" do
     snapshot[0] = listening.with(urls: nil)
-    expect(box).to include "looking up this Mac's addresses…"
+    expect(dialog.frame(120).join("\n")).to include "looking up this Mac's addresses…"
     snapshot[0] = listening
-    expect(box).to include "#AbCd…bcde"
+    expect(dialog.frame(120).join("\n")).to include "#AbCd…bcde"
   end
 
   it "says how to turn the listener on while it is off, and then only closes" do
     snapshot[0] = listening.with(state: :off, urls: nil)
-    expect(box).to include "off: start with --listen or --listen-lan"
-    expect(box).to include "esc close"
+    expect(dialog.frame(120).join("\n")).to include "off: start with --listen or --listen-lan"
+    expect(dialog.frame(120).join("\n")).to include "esc close"
     expect(dialog.press("c", "c")).to be_nil
     expect(dialog.press("r", "r")).to be_nil
-    expect(box).not_to include "rotate?"
+    expect(dialog.frame(120).join("\n")).not_to include "rotate?"
     expect(dialog.press(:escape, "\e")).to eq(:cancel)
   end
 
   it "names the inbox that holds the listener, or the port that is taken" do
     snapshot[0] = listening.with(state: :held, held_by: 4242)
-    expect(box).to include "another inbox (pid 4242) is listening"
+    expect(dialog.frame(120).join("\n")).to include "another inbox (pid 4242) is listening"
     snapshot[0] = listening.with(state: :in_use)
-    expect(box).to include "127.0.0.1:7433 in use"
-    expect(box).to include "trying again every few seconds"
+    expect(dialog.frame(120).join("\n")).to include "127.0.0.1:7433 in use"
+    expect(dialog.frame(120).join("\n")).to include "trying again every few seconds"
     snapshot[0] = listening.with(state: :held, held_by: 4242)
-    expect(box).to include "this one takes over once that one quits"
+    expect(dialog.frame(120).join("\n")).to include "this one takes over once that one quits"
   end
 
   it "says why the listener failed for good, rather than calling the port taken" do
@@ -66,13 +66,13 @@ RSpec.describe ClaudeInbox::Remote::PairingDialog, :pairing_dialog do
   it "copies on c, and issues a new token only when y answers r" do
     expect(dialog.press("c", "c")).to eq(:copy)
     expect(dialog.press("r", "r")).to be_nil
-    expect(box).to include "paired phones get 401 until they pair again"
-    expect(box).to include "rotate? y/n"
+    expect(dialog.frame(120).join("\n")).to include "paired phones get 401 until they pair again"
+    expect(dialog.frame(120).join("\n")).to include "rotate? y/n"
     expect(dialog.press("y", "y")).to eq(:rotate)
-    expect(box).not_to include "rotate?"
+    expect(dialog.frame(120).join("\n")).not_to include "rotate?"
     dialog.press("r", "r")
     expect(dialog.press(:escape, "\e")).to be_nil
-    expect(box).to include "c copy"
+    expect(dialog.frame(120).join("\n")).to include "c copy"
     expect(dialog.press("q", "q")).to eq(:cancel)
   end
 
@@ -90,7 +90,7 @@ RSpec.describe ClaudeInbox::Remote::PairingDialog, :pairing_dialog do
     snapshot[0] = listening.with(recent: [
       ClaudeInbox::Remote::Listener::Outcome.new(at: Time.local(2026, 9, 24, 12, 1), via: "192.168.1.30", result: "token rejected", count: 12)
     ])
-    expect(box).to include "12:01  192.168.1.30  token rejected ×12"
+    expect(dialog.frame(120).join("\n")).to include "12:01  192.168.1.30  token rejected ×12"
   end
 
   it "is 76 columns at most, and fits a narrow terminal" do

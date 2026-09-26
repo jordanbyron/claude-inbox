@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe ClaudeInbox::TextBuffer, :text_buffer do
+RSpec.describe ClaudeInbox::TextBuffer do
   let(:mark) { ->(cell) { "[#{cell}]" } }
 
   it "types where the cursor is" do

@@ -4,7 +4,7 @@ require "fileutils"
 require "tmpdir"
 
 RSpec.describe ClaudeInbox::AgentsClient do
-  let(:sessions) { fixture_sessions }
+  let(:sessions) { ClaudeInbox::FixtureClient.new(fixture_path("agents.json")).list }
 
   it "parses every documented field from the fixture" do
     expect(sessions.size).to eq(7)

@@ -2,18 +2,18 @@
 
 require "tmpdir"
 
-RSpec.describe ClaudeInbox::Store, :store do
+RSpec.describe ClaudeInbox::Store do
   let(:now) { Time.at(1_789_600_000) }
 
   describe "sectioning" do
     it "puts blocked and failed in Needs you" do
-      sec = sections([session(id: "a", state: "blocked"), session(id: "b", state: "failed"), session(id: "c")])
-      expect(ids(sec.needs_you).sort).to eq(%w[a b])
-      expect(ids(sec.active)).to eq(%w[c])
+      sec = described_class.sectionize([session(id: "a", state: "blocked"), session(id: "b", state: "failed"), session(id: "c")], {}, now)
+      expect(sec.needs_you.map(&:id).sort).to eq(%w[a b])
+      expect(sec.active.map(&:id)).to eq(%w[c])
     end
 
     it "shows a busy terminal in Active, selectable but not actionable" do
-      sec = sections([session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "uuid")])
+      sec = described_class.sectionize([session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "uuid")], {}, now)
       expect(sec.active.size).to eq(1)
       expect(sec.active.first).to be_selectable
       expect(sec.active.first.session).not_to be_actionable
@@ -21,11 +21,11 @@ RSpec.describe ClaudeInbox::Store, :store do
     end
 
     it "settles an idle remote session with a resolved PR, and lets it snooze" do
-      r = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9", origin: :remote, started_at: now - 3600, prs: [pr("MERGED")])
+      r = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9", origin: :remote, started_at: now - 3600, prs: [ClaudeInbox::PullRequest.new(state: "MERGED")])
       entries = {"u9" => {"last_state" => "done", "state_since" => now.to_i - 5}}
-      expect(sections([r], entries).settled.map(&:key)).to eq(%w[u9])
+      expect(described_class.sectionize([r], entries, now).settled.map(&:key)).to eq(%w[u9])
       snoozed = {"u9" => {"wake_at" => now.to_i + 900, "last_state" => "done", "state_since" => now.to_i - 3600}}
-      expect(sections([r], snoozed).snoozed.map(&:key)).to eq(%w[u9])
+      expect(described_class.sectionize([r], snoozed, now).snoozed.map(&:key)).to eq(%w[u9])
     end
 
     it "tracks remote sessions in merge_entries by session uuid" do
@@ -39,46 +39,46 @@ RSpec.describe ClaudeInbox::Store, :store do
 
     it "never settles or snoozes a terminal, even when idle for ages" do
       s = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "uuid", started_at: now - 86_400)
-      sec = sections([s], {}, now)
+      sec = described_class.sectionize([s], {}, now)
       expect(sec.active.map(&:key)).to eq(%w[uuid])
       expect(sec.settled).to be_empty
     end
 
     it "keeps a freshly finished session in Active" do
       entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 60}}
-      sec = sections([session(id: "a", state: "done")], entries)
-      expect(ids(sec.active)).to eq(%w[a])
+      sec = described_class.sectionize([session(id: "a", state: "done")], entries, now)
+      expect(sec.active.map(&:id)).to eq(%w[a])
       expect(sec.settled).to be_empty
     end
 
     it "never settles a finished session with no pull request, however long it has been quiet" do
       entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 86_400}}
-      sec = sections([session(id: "a", state: "done")], entries)
-      expect(ids(sec.active)).to eq(%w[a])
+      sec = described_class.sectionize([session(id: "a", state: "done")], entries, now)
+      expect(sec.active.map(&:id)).to eq(%w[a])
       expect(sec.settled).to be_empty
     end
 
     it "keeps a finished session up while its PR is open, however long it has been quiet" do
       entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 86_400}}
       %w[OPEN DRAFT].each do |st|
-        sec = sections([session(id: "a", state: "done", prs: [pr(st)])], entries)
-        expect(ids(sec.active)).to eq(%w[a])
+        sec = described_class.sectionize([session(id: "a", state: "done", prs: [ClaudeInbox::PullRequest.new(state: st)])], entries, now)
+        expect(sec.active.map(&:id)).to eq(%w[a])
       end
     end
 
     it "settles a finished session the moment its PR is merged or closed" do
       entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 5}}
       %w[MERGED CLOSED].each do |st|
-        sec = sections([session(id: "a", state: "done", prs: [pr(st)])], entries)
-        expect(ids(sec.settled)).to eq(%w[a])
+        sec = described_class.sectionize([session(id: "a", state: "done", prs: [ClaudeInbox::PullRequest.new(state: st)])], entries, now)
+        expect(sec.settled.map(&:id)).to eq(%w[a])
       end
     end
 
     it "waits for every known PR, and never settles on an unknown PR state" do
       entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 5}}
-      expect(ids(sections([session(id: "a", state: "done", prs: [pr("MERGED"), pr("OPEN")])], entries).active)).to eq(%w[a])
-      expect(ids(sections([session(id: "a", state: "done", prs: [pr(nil)])], entries).active)).to eq(%w[a])
-      expect(ids(sections([session(id: "a", state: "working", prs: [pr("MERGED")])], entries).active)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a", state: "done", prs: [ClaudeInbox::PullRequest.new(state: "MERGED"), ClaudeInbox::PullRequest.new(state: "OPEN")])], entries, now).active.map(&:id)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a", state: "done", prs: [ClaudeInbox::PullRequest.new(state: nil)])], entries, now).active.map(&:id)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a", state: "working", prs: [ClaudeInbox::PullRequest.new(state: "MERGED")])], entries, now).active.map(&:id)).to eq(%w[a])
     end
 
     # A session that opens a PR ends its turn `blocked` on "anything need
@@ -86,8 +86,8 @@ RSpec.describe ClaudeInbox::Store, :store do
     it "settles a blocked session the moment its PR is merged or closed" do
       entries = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 5}}
       %w[MERGED CLOSED].each do |st|
-        sec = sections([session(id: "a", state: "blocked", prs: [pr(st)])], entries)
-        expect(ids(sec.settled)).to eq(%w[a])
+        sec = described_class.sectionize([session(id: "a", state: "blocked", prs: [ClaudeInbox::PullRequest.new(state: st)])], entries, now)
+        expect(sec.settled.map(&:id)).to eq(%w[a])
         expect(sec.needs_you).to be_empty
       end
     end
@@ -95,21 +95,21 @@ RSpec.describe ClaudeInbox::Store, :store do
     it "keeps a blocked session in Needs you while its PR is still open" do
       entries = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 86_400}}
       %w[OPEN DRAFT].each do |st|
-        expect(ids(sections([session(id: "a", state: "blocked", prs: [pr(st)])], entries).needs_you)).to eq(%w[a])
+        expect(described_class.sectionize([session(id: "a", state: "blocked", prs: [ClaudeInbox::PullRequest.new(state: st)])], entries, now).needs_you.map(&:id)).to eq(%w[a])
       end
     end
 
     it "settles a merged blocked session you had already attached to" do
       entries = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 30, "acknowledged_at" => now.to_i - 10}}
-      sec = sections([session(id: "a", state: "blocked", prs: [pr("MERGED")])], entries)
-      expect(ids(sec.settled)).to eq(%w[a])
+      sec = described_class.sectionize([session(id: "a", state: "blocked", prs: [ClaudeInbox::PullRequest.new(state: "MERGED")])], entries, now)
+      expect(sec.settled.map(&:id)).to eq(%w[a])
       expect(sec.active).to be_empty
     end
 
     it "keeps a failed session loud even once its PR merged" do
       entries = {"a" => {"last_state" => "failed", "state_since" => now.to_i - 5}}
-      sec = sections([session(id: "a", state: "failed", prs: [pr("MERGED")])], entries)
-      expect(ids(sec.needs_you)).to eq(%w[a])
+      sec = described_class.sectionize([session(id: "a", state: "failed", prs: [ClaudeInbox::PullRequest.new(state: "MERGED")])], entries, now)
+      expect(sec.needs_you.map(&:id)).to eq(%w[a])
       expect(sec.settled).to be_empty
     end
   end
@@ -117,25 +117,25 @@ RSpec.describe ClaudeInbox::Store, :store do
   describe "pinning" do
     it "parks a pinned session at the top regardless of state" do
       entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i, "last_state" => "working"}}
-      sec = sections([session(id: "a")], entries)
-      expect(ids(sec.pinned)).to eq(%w[a])
+      sec = described_class.sectionize([session(id: "a")], entries, now)
+      expect(sec.pinned.map(&:id)).to eq(%w[a])
       expect(sec.active).to be_empty
     end
 
     it "overrides needs_you, snoozed and settled" do
       entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i, "last_state" => "blocked"}}
-      expect(ids(sections([session(id: "a", state: "blocked")], entries).pinned)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a", state: "blocked")], entries, now).pinned.map(&:id)).to eq(%w[a])
 
       entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i, "wake_at" => now.to_i + 900, "last_state" => "working"}}
-      expect(ids(sections([session(id: "a")], entries).pinned)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a")], entries, now).pinned.map(&:id)).to eq(%w[a])
 
       entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i, "settled_at" => now.to_i, "last_state" => "done", "state_since" => now.to_i - 60}}
-      expect(ids(sections([session(id: "a", state: "done")], entries).pinned)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a", state: "done")], entries, now).pinned.map(&:id)).to eq(%w[a])
     end
 
     it "sorts Pinned with the most recently pinned first" do
       entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i - 60}, "b" => {"pinned" => true, "pinned_at" => now.to_i}}
-      expect(ids(sections(%w[a b].map { |i| session(id: i) }, entries).pinned)).to eq(%w[b a])
+      expect(described_class.sectionize(%w[a b].map { |i| session(id: i) }, entries, now).pinned.map(&:id)).to eq(%w[b a])
     end
 
     it "toggle_pin sets and clears pinned via the store" do
@@ -154,19 +154,19 @@ RSpec.describe ClaudeInbox::Store, :store do
   describe "settle rule" do
     it "settles a done session by hand" do
       entries = {"a" => {"settled_at" => now.to_i, "last_state" => "done", "state_since" => now.to_i - 60}}
-      expect(ids(sections([session(id: "a", state: "done")], entries).settled)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a", state: "done")], entries, now).settled.map(&:id)).to eq(%w[a])
     end
 
     it "settles a stopped session with a resolved PR" do
       entries = {"a" => {"last_state" => "stopped", "state_since" => now.to_i - 3600}}
-      expect(ids(sections([session(id: "a", state: "stopped", prs: [pr("MERGED")])], entries).settled)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a", state: "stopped", prs: [ClaudeInbox::PullRequest.new(state: "MERGED")])], entries, now).settled.map(&:id)).to eq(%w[a])
     end
 
     it "never settles failed" do
       entries = {"a" => {"last_state" => "failed", "state_since" => now.to_i - 86_400 * 3}}
-      sec = sections([session(id: "a", state: "failed")], entries)
+      sec = described_class.sectionize([session(id: "a", state: "failed")], entries, now)
       expect(sec.settled).to be_empty
-      expect(ids(sec.needs_you)).to eq(%w[a])
+      expect(sec.needs_you.map(&:id)).to eq(%w[a])
     end
 
     it "seeds state_since from started_at for a first-seen finished session whose process was reaped" do
@@ -185,16 +185,16 @@ RSpec.describe ClaudeInbox::Store, :store do
   describe "snooze and wake" do
     it "hides a snoozed session in Snoozed" do
       entries = {"a" => {"wake_at" => now.to_i + 900, "last_state" => "working"}}
-      sec = sections([session(id: "a")], entries)
-      expect(ids(sec.snoozed)).to eq(%w[a])
+      sec = described_class.sectionize([session(id: "a")], entries, now)
+      expect(sec.snoozed.map(&:id)).to eq(%w[a])
       expect(sec.active).to be_empty
     end
 
     it "wakes when the session becomes blocked after the snooze" do
       entries = {"a" => {"wake_at" => now.to_i + 900, "snoozed_at" => now.to_i - 300, "last_state" => "working", "state_since" => now.to_i - 400}}
       entries = described_class.merge_entries(entries, [session(id: "a", state: "blocked")], now)
-      sec = sections([session(id: "a", state: "blocked")], entries)
-      expect(ids(sec.needs_you)).to eq(%w[a])
+      sec = described_class.sectionize([session(id: "a", state: "blocked")], entries, now)
+      expect(sec.needs_you.map(&:id)).to eq(%w[a])
       expect(sec.snoozed).to be_empty
       expect(entries["a"]).not_to include("wake_at")
     end
@@ -202,51 +202,51 @@ RSpec.describe ClaudeInbox::Store, :store do
     it "wakes a parked session when it fails" do
       entries = {"a" => {"wake_at" => described_class::UNTIL_WOKEN, "snoozed_at" => now.to_i - 300, "last_state" => "working", "state_since" => now.to_i - 400}}
       entries = described_class.merge_entries(entries, [session(id: "a", state: "failed")], now)
-      expect(ids(sections([session(id: "a", state: "failed")], entries).needs_you)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a", state: "failed")], entries, now).needs_you.map(&:id)).to eq(%w[a])
     end
 
     it "keeps an already-blocked session snoozed" do
       entries = described_class.merge_entries({"a" => {"last_state" => "blocked", "state_since" => now.to_i - 600}}, [session(id: "a", state: "blocked")], now)
       snoozed = entries.merge("a" => entries["a"].merge("wake_at" => now.to_i + 900, "snoozed_at" => now.to_i))
       later = described_class.merge_entries(snoozed, [session(id: "a", state: "blocked")], now + 60)
-      sec = sections([session(id: "a", state: "blocked")], later, now + 60)
-      expect(ids(sec.snoozed)).to eq(%w[a])
+      sec = described_class.sectionize([session(id: "a", state: "blocked")], later, now + 60)
+      expect(sec.snoozed.map(&:id)).to eq(%w[a])
       expect(sec.needs_you).to be_empty
     end
 
     it "wakes when wake_at has elapsed" do
       entries = {"a" => {"wake_at" => now.to_i - 1, "last_state" => "working"}}
-      expect(ids(sections([session(id: "a")], entries).active)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a")], entries, now).active.map(&:id)).to eq(%w[a])
     end
 
     it "never wakes until_woken on its own" do
       entries = {"a" => {"wake_at" => described_class::UNTIL_WOKEN, "last_state" => "working"}}
-      sec = sections([session(id: "a")], entries, now + 86_400 * 30)
-      expect(ids(sec.snoozed)).to eq(%w[a])
+      sec = described_class.sectionize([session(id: "a")], entries, now + 86_400 * 30)
+      expect(sec.snoozed.map(&:id)).to eq(%w[a])
       expect(sec.snoozed.first).to be_parked
     end
 
     it "sorts Snoozed by wake_at with parked last" do
       entries = {"a" => {"wake_at" => described_class::UNTIL_WOKEN}, "b" => {"wake_at" => now.to_i + 3600}, "c" => {"wake_at" => now.to_i + 60}}
-      expect(ids(sections(%w[a b c].map { |i| session(id: i) }, entries).snoozed)).to eq(%w[c b a])
+      expect(described_class.sectionize(%w[a b c].map { |i| session(id: i) }, entries, now).snoozed.map(&:id)).to eq(%w[c b a])
     end
 
     it "lets snooze win over settle even with a resolved PR" do
       entries = {"a" => {"wake_at" => now.to_i + 900, "last_state" => "done", "state_since" => now.to_i - 3600}}
-      expect(ids(sections([session(id: "a", state: "done", prs: [pr("MERGED")])], entries).snoozed)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a", state: "done", prs: [ClaudeInbox::PullRequest.new(state: "MERGED")])], entries, now).snoozed.map(&:id)).to eq(%w[a])
     end
   end
 
   describe "hand settle" do
     it "settles a working session at once" do
       entries = {"a" => {"settled_at" => now.to_i, "last_state" => "working", "state_since" => now.to_i - 60}}
-      expect(ids(sections([session(id: "a")], entries).settled)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a")], entries, now).settled.map(&:id)).to eq(%w[a])
     end
 
     it "settles a blocked session and keeps it settled while still blocked" do
       entries = {"a" => {"settled_at" => now.to_i, "last_state" => "blocked", "state_since" => now.to_i - 60}}
-      sec = sections([session(id: "a", state: "blocked")], entries, now + 3600)
-      expect(ids(sec.settled)).to eq(%w[a])
+      sec = described_class.sectionize([session(id: "a", state: "blocked")], entries, now + 3600)
+      expect(sec.settled.map(&:id)).to eq(%w[a])
       expect(sec.needs_you).to be_empty
     end
 
@@ -254,21 +254,21 @@ RSpec.describe ClaudeInbox::Store, :store do
       entries = {"a" => {"settled_at" => now.to_i, "last_state" => "working", "state_since" => now.to_i - 60}}
       later = described_class.merge_entries(entries, [session(id: "a", state: "done")], now + 30)
       expect(later["a"]["settled_at"]).to eq(now.to_i)
-      expect(ids(sections([session(id: "a", state: "done")], later, now + 30).settled)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a", state: "done")], later, now + 30).settled.map(&:id)).to eq(%w[a])
     end
 
     it "comes back when the session starts working again" do
       entries = {"a" => {"settled_at" => now.to_i, "last_state" => "blocked", "state_since" => now.to_i - 60}}
       later = described_class.merge_entries(entries, [session(id: "a", state: "working")], now + 30)
       expect(later["a"]).not_to include("settled_at")
-      expect(ids(sections([session(id: "a", state: "working")], later, now + 30).active)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a", state: "working")], later, now + 30).active.map(&:id)).to eq(%w[a])
     end
 
     it "comes back when the session becomes blocked afterwards" do
       entries = {"a" => {"settled_at" => now.to_i, "last_state" => "working", "state_since" => now.to_i - 60}}
       later = described_class.merge_entries(entries, [session(id: "a", state: "blocked")], now + 30)
       expect(later["a"]).not_to include("settled_at")
-      expect(ids(sections([session(id: "a", state: "blocked")], later, now + 30).needs_you)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a", state: "blocked")], later, now + 30).needs_you.map(&:id)).to eq(%w[a])
     end
 
     it "is lifted by wake and replaces a snooze" do
@@ -297,22 +297,22 @@ RSpec.describe ClaudeInbox::Store, :store do
   describe "revive rule" do
     it "brings back a session settled by a resolved PR" do
       entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 5, "revived_at" => now.to_i}}
-      sec = sections([session(id: "a", state: "done", prs: [pr("MERGED")])], entries)
-      expect(ids(sec.active)).to eq(%w[a])
+      sec = described_class.sectionize([session(id: "a", state: "done", prs: [ClaudeInbox::PullRequest.new(state: "MERGED")])], entries, now)
+      expect(sec.active.map(&:id)).to eq(%w[a])
       expect(sec.settled).to be_empty
     end
 
     it "brings back a hand-settled session that would otherwise stay settled" do
       entries = {"a" => {"settled_at" => now.to_i, "last_state" => "done", "state_since" => now.to_i - 60, "revived_at" => now.to_i + 1}}
-      sec = sections([session(id: "a", state: "done")], entries)
-      expect(ids(sec.active)).to eq(%w[a])
+      sec = described_class.sectionize([session(id: "a", state: "done")], entries, now)
+      expect(sec.active.map(&:id)).to eq(%w[a])
       expect(sec.settled).to be_empty
     end
 
     it "routes a revived needs-you session to Needs You, not Active" do
       entries = {"a" => {"settled_at" => now.to_i, "last_state" => "blocked", "state_since" => now.to_i - 60, "revived_at" => now.to_i + 1}}
-      sec = sections([session(id: "a", state: "blocked")], entries)
-      expect(ids(sec.needs_you)).to eq(%w[a])
+      sec = described_class.sectionize([session(id: "a", state: "blocked")], entries, now)
+      expect(sec.needs_you.map(&:id)).to eq(%w[a])
     end
 
     it "clears once the state actually changes again" do
@@ -324,7 +324,7 @@ RSpec.describe ClaudeInbox::Store, :store do
     it "wake un-settles a resolved-PR session via the store" do
       Dir.mktmpdir do |dir|
         store = described_class.new(path: File.join(dir, "state.json"), clock: -> { now })
-        store.update([session(id: "a", state: "done", prs: [pr("MERGED")])])
+        store.update([session(id: "a", state: "done", prs: [ClaudeInbox::PullRequest.new(state: "MERGED")])])
         expect(store.sections.settled.map(&:id)).to eq(%w[a])
         store.wake("a")
         expect(store.sections.active.map(&:id)).to eq(%w[a])
@@ -335,8 +335,8 @@ RSpec.describe ClaudeInbox::Store, :store do
   describe "acknowledge rule" do
     it "moves an acknowledged blocked session to Active, not Settled" do
       entries = {"a" => {"acknowledged_at" => now.to_i, "last_state" => "blocked", "state_since" => now.to_i - 60}}
-      sec = sections([session(id: "a", state: "blocked")], entries)
-      expect(ids(sec.active)).to eq(%w[a])
+      sec = described_class.sectionize([session(id: "a", state: "blocked")], entries, now)
+      expect(sec.active.map(&:id)).to eq(%w[a])
       expect(sec.needs_you).to be_empty
       expect(sec.settled).to be_empty
     end
@@ -346,7 +346,7 @@ RSpec.describe ClaudeInbox::Store, :store do
       later = described_class.merge_entries(entries, [session(id: "a", state: "working")], now + 30)
       later = described_class.merge_entries(later, [session(id: "a", state: "blocked")], now + 60)
       expect(later["a"]).not_to include("acknowledged_at")
-      expect(ids(sections([session(id: "a", state: "blocked")], later, now + 60).needs_you)).to eq(%w[a])
+      expect(described_class.sectionize([session(id: "a", state: "blocked")], later, now + 60).needs_you.map(&:id)).to eq(%w[a])
     end
 
     it "acknowledge sets acknowledged_at via the store" do
@@ -403,11 +403,11 @@ RSpec.describe ClaudeInbox::Store, :store do
 
   describe "fixture end to end" do
     it "sections the captured sessions" do
-      sessions = fixture_sessions
+      sessions = ClaudeInbox::FixtureClient.new(fixture_path("agents.json")).list
       at = Time.at(1_789_604_500)
       sec = described_class.sectionize(sessions, described_class.merge_entries({}, sessions, at), at)
-      expect(ids(sec.needs_you)).to eq(%w[f23c8673])
-      expect(ids(sec.active)).to eq([nil, "823b882f", "dcbc1d98", "b0b18338", "fbf5253a", "b03695b1"])
+      expect(sec.needs_you.map(&:id)).to eq(%w[f23c8673])
+      expect(sec.active.map(&:id)).to eq([nil, "823b882f", "dcbc1d98", "b0b18338", "fbf5253a", "b03695b1"])
       expect(sec.settled).to be_empty
     end
   end
