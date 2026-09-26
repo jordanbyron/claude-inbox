@@ -18,6 +18,9 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature. Versions
 are published to rubygems and listed under GitHub Releases.
 `claude-inbox --version` prints the installed version.
 
+Arguments in `~/.config/claude-inbox/config` are added to every launch,
+ahead of the ones you type. `#` starts a comment.
+
 ## Sections
 
 1. **Pinned.** Parked at the top by hand, whatever its state. `t` toggles it.
@@ -175,8 +178,9 @@ With `--listen-lan`, a phone on your Wi-Fi or VPN can start sessions the way
 
 ![The inbox beside the phone form, pairing and then starting a session](docs/remote-start.gif)
 
-1. Start the inbox with `claude-inbox --listen-lan`, or put
-   `export CLAUDE_INBOX_LISTEN=lan` in your shell rc.
+1. Start the inbox with `claude-inbox --listen-lan`, or put `--listen-lan`
+   in `~/.config/claude-inbox/config` or `export CLAUDE_INBOX_LISTEN=lan` in
+   your shell rc.
 2. Press `N`, then `c` to copy the pairing URL. Universal Clipboard takes it
    to the phone.
 3. Open it in Safari. To keep it, tap Share, then Add to Home Screen.

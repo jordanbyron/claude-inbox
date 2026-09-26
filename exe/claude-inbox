@@ -9,14 +9,16 @@ if ARGV.include?("--version")
 end
 
 require "claude_inbox/app"
+require "claude_inbox/config"
 require "tmpdir"
 
 fixture = ARGV.include?("--fixture")
 # A fixture run takes the listen flags, for trying the API with curl, but
-# not the environment: a shell rc that arms the real inbox must not arm a
-# test one too.
+# not the environment or the config file: what arms the real inbox must not
+# arm a test one too.
 begin
-  listen = ClaudeInbox::Remote::Listener.options(ARGV, fixture ? {} : ENV)
+  argv = fixture ? ARGV : ClaudeInbox::Config.argv(ARGV)
+  listen = ClaudeInbox::Remote::Listener.options(argv, fixture ? {} : ENV)
 rescue ArgumentError => e
   abort "claude-inbox: #{e.message}"
 end
@@ -26,7 +28,7 @@ $stderr.reopen(ENV["CLAUDE_INBOX_STDERR"], "a") if ENV["CLAUDE_INBOX_STDERR"]
 
 opts = {}
 if fixture
-  agents = ARGV[ARGV.index("--fixture") + 1]
+  agents = argv[argv.index("--fixture") + 1]
   fixtures = File.dirname(agents)
   opts[:client] = ClaudeInbox::FixtureClient.new(agents, logs: File.binread(File.join(fixtures, "logs_raw.txt")))
   opts[:store] = ClaudeInbox::Store.new(path: nil)
@@ -45,6 +47,6 @@ else
   opts[:reaper] = ClaudeInbox::Reaper.new(opts[:client], opts[:store])
   opts[:listen] = listen
 end
-opts[:color] = false if ARGV.include?("--no-color")
+opts[:color] = false if argv.include?("--no-color")
 
 ClaudeInbox::App.new(**opts).run
