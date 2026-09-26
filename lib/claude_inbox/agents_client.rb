@@ -72,18 +72,15 @@ module ClaudeInbox
     # its path completion escapes them; a quoted path is not recognized.
     def self.mention(path) = "@" + path.gsub(" ", "\\ ")
 
-    # Pure so it can be tested: "default" means leave the flag off, unless
-    # `explicit_mode` asks for the permission mode as given. The prompt goes
-    # after "--", where a leading dash is text rather than an unknown option,
-    # and --remote-control sits just before it: its optional name would
-    # otherwise eat the prompt (both checked on 2.1.282).
-    def self.spawn_args(bin, prompt:, model: nil, effort: nil, permission_mode: nil, worktree: false, name: nil, remote: false,
-      explicit_mode: false)
+    # Pure so it can be tested: a setting left nil leaves its flag off. The
+    # prompt goes after "--", where a leading dash is text rather than an
+    # unknown option, and --remote-control sits just before it: its optional
+    # name would otherwise eat the prompt (both checked on 2.1.282).
+    def self.spawn_args(bin, prompt:, model: nil, effort: nil, permission_mode: nil, worktree: false, name: nil, remote: false)
       argv = [bin, "--bg"]
-      {"--model" => [model, false], "--effort" => [effort, false], "--permission-mode" => [permission_mode, explicit_mode]}
-        .each do |flag, (value, keep_default)|
-          argv += [flag, value] if value && (keep_default || value != "default")
-        end
+      {"--model" => model, "--effort" => effort, "--permission-mode" => permission_mode}.each do |flag, value|
+        argv += [flag, value] if value
+      end
       argv += ["--name", name] if name && !name.strip.empty?
       argv << "--worktree" if worktree
       argv << "--remote-control" if remote

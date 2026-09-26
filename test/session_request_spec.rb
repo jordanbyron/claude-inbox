@@ -17,12 +17,19 @@ describe ClaudeInbox::SessionRequest do
   end
 
   describe "from_params" do
-    it "builds the same hash the form's values do, with the same defaults" do
+    it "builds the same hash the form's values do, once resolved against the same settings" do
       # An empty home, so the developer's own ~/.claude settings stay out of the form's defaults.
       Dir.mktmpdir do |home|
         form = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
-        _(from({"prompt" => "", "cwd" => Dir.pwd})).must_equal form.values
+        values = from({"prompt" => "", "cwd" => Dir.pwd})
+        _(ClaudeInbox::SessionRequest.resolve(values, form.defaults)).must_equal form.values
       end
+    end
+
+    it "leaves a setting sent as default unset, the same as one left out" do
+      sent = base.merge("model" => "default", "effort" => "default", "permission_mode" => "default")
+      _(from(sent)).must_equal from(base)
+      _(from(base).values_at(:model, :effort, :permission_mode, :remote)).must_equal [nil, nil, nil, nil]
     end
 
     it "takes every setting the form has, by string or symbol key" do
@@ -104,7 +111,7 @@ describe ClaudeInbox::SessionRequest do
     end
 
     it "takes model, effort and permissions from the choices the form offers" do
-      ClaudeInbox::AgentsClient::PERMISSION_MODES.each do |mode|
+      (ClaudeInbox::AgentsClient::PERMISSION_MODES - ["default"]).each do |mode|
         _(from(base.merge("permission_mode" => mode))[:permission_mode]).must_equal mode
       end
       _(from(base.merge("model" => "haiku", "effort" => "max"))).must_equal(
@@ -116,11 +123,38 @@ describe ClaudeInbox::SessionRequest do
     end
 
     it "takes worktree and remote as true or false, yes or no" do
-      {true => true, false => false, "yes" => true, "no" => false, nil => false}.each do |sent, taken|
+      {true => true, false => false, "yes" => true, "no" => false}.each do |sent, taken|
         _(from(base.merge("worktree" => sent, "remote" => sent)).values_at(:worktree, :remote)).must_equal [taken, taken]
       end
+      _(from(base.merge("worktree" => nil, "remote" => nil)).values_at(:worktree, :remote)).must_equal [false, nil]
       _(refusal(base.merge("remote" => "on"))).must_equal [:remote, "remote is true, false, yes or no"]
       _(refusal(base.merge("worktree" => 1)).first).must_equal :worktree
+    end
+  end
+
+  describe "resolve" do
+    let(:defaults) { ->(remote) { ClaudeInbox::Settings::Defaults.new(model: "opus", permission_mode: "plan", remote: remote) } }
+
+    it "follows /config for Remote Control left unset, and passes it either way" do
+      values = from(base)
+      _(ClaudeInbox::SessionRequest.resolve(values, defaults.call("yes"))[:remote]).must_equal true
+      _(ClaudeInbox::SessionRequest.resolve(values, defaults.call("no"))[:remote]).must_equal false
+      _(ClaudeInbox::SessionRequest.resolve(values, defaults.call(nil))[:remote]).must_equal false
+      _(ClaudeInbox::SessionRequest.resolve(values.merge(remote: false), defaults.call("yes"))[:remote]).must_equal false
+    end
+
+    it "leaves the other settings to the CLI" do
+      resolved = ClaudeInbox::SessionRequest.resolve(from(base), defaults.call(nil))
+      _(resolved.values_at(:model, :effort, :permission_mode)).must_equal [nil, nil, nil]
+    end
+  end
+
+  describe "label" do
+    it "names a directory by as few trailing names as tell it apart, and from_params takes it back" do
+      dirs = ["/Users/me/code/app", "/Users/me/work/x/app", "/Users/me/code/claude-inbox"]
+      labels = dirs.map { |dir| ClaudeInbox::SessionRequest.label(dir, dirs) }
+      _(labels).must_equal %w[code/app x/app claude-inbox]
+      _(labels.map { |label| from(base.merge("cwd" => label), dirs: dirs)[:cwd] }).must_equal dirs
     end
   end
 

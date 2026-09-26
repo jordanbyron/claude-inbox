@@ -7,8 +7,8 @@ require "fileutils"
 require "json"
 
 describe ClaudeInbox::AgentsClient do
-  it "builds claude --bg arguments, leaving defaults off" do
-    a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "fix it", model: "default", effort: "default", permission_mode: "default", worktree: false, name: nil)
+  it "builds claude --bg arguments, leaving unset ones off" do
+    a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "fix it", model: nil, effort: nil, permission_mode: nil, worktree: false, name: nil)
     _(a).must_equal ["claude", "--bg", "--", "fix it"]
     a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "fix it", model: "opus", effort: "high", permission_mode: "acceptEdits", worktree: true, name: "flaky")
     _(a).must_equal ["claude", "--bg", "--model", "opus", "--effort", "high", "--permission-mode", "acceptEdits", "--name", "flaky", "--worktree", "--", "fix it"]
@@ -209,7 +209,7 @@ describe ClaudeInbox::NewSessionForm do
       _(rows.find { |r| r.include?("Model") }).must_include "opus (settings)"
       _(rows.find { |r| r.include?("Effort") }).must_include "high (settings)"
       _(rows.find { |r| r.include?("Permissions") }).must_include "auto (cli default)"
-      _(f.values[:model]).must_equal "default"
+      _(f.values[:model]).must_be_nil
     end
   end
 

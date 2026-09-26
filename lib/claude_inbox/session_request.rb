@@ -25,11 +25,11 @@ module ClaudeInbox
     MAX_PROMPT = 100_000
     MAX_NAME = 100
 
-    # The hash NewSessionForm#values builds, from a request's fields, or
-    # Invalid. An unknown key is refused rather than ignored, so a misspelt
-    # setting can't fall back to its default unnoticed. A blank prompt, or a
-    # directory that does not exist, passes here; `problem` reports it as
-    # the form does.
+    # The hash NewSessionForm#values builds, before `resolve`, from a
+    # request's fields, or Invalid. "default" is nil. An unknown key is
+    # refused rather than ignored, so a misspelt setting can't fall back to
+    # its default unnoticed. A blank prompt, or a directory that does not
+    # exist, passes here; `problem` reports it as the form does.
     def self.from_params(params, dirs: [])
       params = params.transform_keys(&:to_s)
       unknown = params.keys - KEYS
@@ -41,9 +41,15 @@ module ClaudeInbox
         model: choice_param(:model, params["model"]),
         effort: choice_param(:effort, params["effort"]),
         permission_mode: choice_param(:permission_mode, params["permission_mode"]),
-        worktree: flag_param(:worktree, params["worktree"]),
+        worktree: flag_param(:worktree, params["worktree"]) || false,
         remote: flag_param(:remote, params["remote"])
       }
+    end
+
+    # Unset Remote Control follows /config, then is passed either way so
+    # the daemon records it in respawnFlags. The rest stay nil, for the CLI.
+    def self.resolve(values, defaults)
+      values[:remote].nil? ? values.merge(remote: defaults.remote == "yes") : values
     end
 
     # What stops these values from starting a session, as [field, message]
@@ -95,8 +101,18 @@ module ClaudeInbox
       name.empty? ? nil : name
     end
 
+    # The fewest trailing components that name `path` alone among `dirs`.
+    def self.label(path, dirs)
+      parts = path.split("/").reject(&:empty?)
+      (1..parts.size).each do |n|
+        label = parts.last(n).join("/")
+        return label if dirs.one? { |other| other.end_with?("/#{label}") }
+      end
+      path
+    end
+
     # A path is taken as given. Anything else names one of `dirs` by its
-    # last components, the label a remote client picks it by.
+    # `label`.
     def self.cwd_param(value, dirs)
       cwd = string_param(:cwd, value || "").strip
       raise Invalid.new(:cwd, "a directory is required") if cwd.empty?
@@ -109,13 +125,13 @@ module ClaudeInbox
     end
 
     def self.choice_param(key, value)
-      value = "default" if value.nil?
+      return nil if value.nil? || value == "default"
       return value if CHOICES[key].include?(value)
       raise Invalid.new(key, "#{key} is one of #{CHOICES[key].join(", ")}")
     end
 
     def self.flag_param(key, value)
-      return false if value.nil?
+      return nil if value.nil?
       FLAGS.fetch(value) { raise Invalid.new(key, "#{key} is true, false, yes or no") }
     end
 

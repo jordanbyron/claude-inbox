@@ -119,15 +119,13 @@ module ClaudeInbox
     def picked = menu&.fetch(@pick.clamp(0, menu.size - 1))
 
     def values
-      @fields.to_h { |f| [f.key, f.value.to_s] }.tap do |v|
-        v[:prompt] = field(:prompt).value.expand { |chip| AgentsClient.mention(chip.path) }.strip
-        v[:worktree] = v[:worktree] == "yes"
-        v[:name] = nil if v[:name].strip.empty?
-        v[:cwd] = directory
-        # Passed explicitly even when settings turn it on, so the daemon
-        # records it in respawnFlags and the row gets its marker.
-        v[:remote] = ((v[:remote] == DEFAULT) ? defaults(v[:cwd]).remote : v[:remote]) == "yes"
-      end
+      v = @fields.to_h { |f| [f.key, (f.kind == :choice && f.value == DEFAULT) ? nil : f.value.to_s] }
+      v[:prompt] = field(:prompt).value.expand { |chip| AgentsClient.mention(chip.path) }.strip
+      v[:worktree] = v[:worktree] == "yes"
+      v[:name] = nil if v[:name].strip.empty?
+      v[:cwd] = directory
+      v[:remote] = SessionRequest::FLAGS[v[:remote]]
+      SessionRequest.resolve(v, defaults(v[:cwd]))
     end
 
     # Settings resolve against the directory the session will run in, so
