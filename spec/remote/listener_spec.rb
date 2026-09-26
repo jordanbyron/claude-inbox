@@ -16,7 +16,7 @@ RSpec.describe ClaudeInbox::Remote::Listener do
     ClaudeInbox::Remote::Pairing.new(path: File.join(tmp, "listen.json"), local_name: -> { "mac-mini" },
       hostname: -> { "mac-mini" }, addresses: -> { [Addrinfo.ip("192.168.1.20")] }, firewall: -> { :off })
   end
-  let(:token) { pairing.token }
+  let(:phone) { Phone.new(listener, token: pairing.token) }
   let(:listener_args) do
     {client: client, store: store, queue: queue, pairing: pairing, port: 7433,
      images_dir: File.join(tmp, "images"), jobs_dir: File.join(tmp, "jobs"), lock_path: File.join(tmp, "listen.lock"),
@@ -32,7 +32,7 @@ RSpec.describe ClaudeInbox::Remote::Listener do
 
   describe "routing and the token" do
     it "serves the phone page at / to anyone, as HTML that reaches only this listener and can't be framed" do
-      r = request(listener, "GET", "/", token: nil)
+      r = phone.get("/", token: nil)
       expect(r.status).to eq(200)
       expect(r.headers["content-type"]).to eq("text/html; charset=utf-8")
       expect(r.headers["content-security-policy"]).to eq("default-src 'none'; script-src 'unsafe-inline'; " \
@@ -44,18 +44,18 @@ RSpec.describe ClaudeInbox::Remote::Listener do
     end
 
     it "serves what Add to Home Screen reads to anyone, so the page opens as an app with its own icon" do
-      manifest = request(listener, "GET", "/manifest.webmanifest", token: nil)
+      manifest = phone.get("/manifest.webmanifest", token: nil)
       expect([manifest.status, manifest.headers["content-type"]]).to eq([200, "application/manifest+json"])
       expect(manifest.json.values_at("start_url", "display")).to eq(["/", "standalone"])
       expect(manifest.json["icons"].map { |icon| icon["src"] }).to eq(["/icon.png"])
-      icon = request(listener, "GET", "/icon.png", token: nil)
+      icon = phone.get("/icon.png", token: nil)
       expect([icon.status, icon.headers["content-type"]]).to eq([200, "image/png"])
       expect(icon.body.b).to eq(File.binread(File.expand_path("../../lib/claude_inbox/remote/icon.png", __dir__)))
     end
 
     it "asks for the token, says how to get one, and notes who was turned away" do
       [nil, "wrong", pairing.token + "x"].each do |token|
-        r = request(listener, "GET", "/api/options", token: token)
+        r = phone.get("/api/options", token: token)
         expect(r.status).to eq(401)
         expect(r.headers["www-authenticate"]).to eq("Bearer")
         expect(r.json["error"]).to include("press N")
@@ -64,13 +64,13 @@ RSpec.describe ClaudeInbox::Remote::Listener do
     end
 
     it "counts rejected tokens from one place in one entry, so they can't push the starts out of N" do
-      request(listener, "POST", "/api/sessions", {prompt: "go", cwd: project}, token: token)
-      20.times { request(listener, "GET", "/api/options", token: "wrong") }
+      phone.start({prompt: "go", cwd: project})
+      20.times { phone.get("/api/options", token: "wrong") }
       expect(listener.snapshot.recent.map { |o| [o.result, o.count] }).to eq([["started deadbeef", 1], ["token rejected", 20]])
     end
 
     it "turns a request without the token away before reading its body or inviting it" do
-      r = request_raw(listener, "POST /api/sessions HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer wrong\r\n" \
+      r = phone.send_raw("POST /api/sessions HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer wrong\r\n" \
         "Content-Type: application/json\r\nContent-Length: 999999999\r\nExpect: 100-continue\r\n\r\n")
       expect(r.status).to eq(401)
       expect(r.written).not_to include("100 Continue")
@@ -78,17 +78,17 @@ RSpec.describe ClaudeInbox::Remote::Listener do
     end
 
     it "answers only to the names it was reached by, so a rebound DNS name gets nowhere" do
-      expect(request(listener, "GET", "/api/options", host: "evil.example:7433", token: token).status).to eq(421)
-      expect(request(listener, "GET", "/api/options", host: "192.168.1.20:7433", token: token).status).to eq(421)
-      expect(request(listener, "GET", "/", token: nil, host: nil).status).to eq(421)
-      expect(request(listener, "GET", "/api/options", host: "LOCALHOST:7433", token: token).status).to eq(200)
-      expect(request(listener, "GET", "/api/options", host: "127.0.0.1", token: token).status).to eq(200)
-      expect(request(listener, "GET", "/api/options", host: "[::1]:7433", token: token).status).to eq(200)
+      expect(phone.get("/api/options", host: "evil.example:7433").status).to eq(421)
+      expect(phone.get("/api/options", host: "192.168.1.20:7433").status).to eq(421)
+      expect(phone.get("/", token: nil, host: nil).status).to eq(421)
+      expect(phone.get("/api/options", host: "LOCALHOST:7433").status).to eq(200)
+      expect(phone.get("/api/options", host: "127.0.0.1").status).to eq(200)
+      expect(phone.get("/api/options", host: "[::1]:7433").status).to eq(200)
     end
 
     it "takes any port with the name, as an ssh tunnel on another local port sends it" do
-      expect(request(listener, "GET", "/api/options", host: "localhost:8000", token: token).status).to eq(200)
-      expect(request(listener, "GET", "/api/options", host: "evil.example:8000", token: token).status).to eq(421)
+      expect(phone.get("/api/options", host: "localhost:8000").status).to eq(200)
+      expect(phone.get("/api/options", host: "evil.example:8000").status).to eq(421)
     end
 
     it "answers to this Mac's names and addresses in LAN mode" do
@@ -101,14 +101,14 @@ RSpec.describe ClaudeInbox::Remote::Listener do
     end
 
     it "takes GET and POST only, each on its own path, and knows no other path" do
-      put = request(listener, "PUT", "/api/sessions", "{}", token: token)
+      put = phone.request("PUT", "/api/sessions", "{}")
       expect([put.status, put.headers["allow"]]).to eq([405, "GET, POST"])
-      expect(request(listener, "OPTIONS", "/api/sessions", token: nil).status).to eq(405)
-      get = request(listener, "GET", "/api/sessions", token: token)
+      expect(phone.request("OPTIONS", "/api/sessions", token: nil).status).to eq(405)
+      get = phone.get("/api/sessions")
       expect([get.status, get.headers["allow"]]).to eq([405, "POST"])
-      expect(request(listener, "POST", "/api/options", "{}", token: token).headers["allow"]).to eq("GET")
-      expect(request(listener, "GET", "/api/nope", token: token).status).to eq(404)
-      expect(request_raw(listener, "garbage\r\n\r\n").status).to eq(400)
+      expect(phone.request("POST", "/api/options", "{}").headers["allow"]).to eq("GET")
+      expect(phone.get("/api/nope").status).to eq(404)
+      expect(phone.send_raw("garbage\r\n\r\n").status).to eq(400)
     end
   end
 
@@ -136,17 +136,17 @@ RSpec.describe ClaudeInbox::Remote::Listener do
 
   describe "handing a request to Start" do
     it "starts a session once the token checks out, and lists it for N" do
-      r = request(listener, "POST", "/api/sessions", {prompt: "fix it", cwd: project}, token: token)
+      r = phone.start({prompt: "fix it", cwd: project})
       expect(r.status).to eq(201)
       expect(client.spawns.size).to eq(1)
       expect(listener.snapshot.recent.last.result).to eq("started deadbeef")
     end
 
     it "lets nothing a request sent reach the terminal as an escape sequence" do
-      expect(request(listener, "POST", "/api/sessions", {prompt: "x", cwd: "/tmp/\e]0;PWNED\a\e[2J"}, token: token).status).to eq(422)
-      expect(request(listener, "POST", "/api/sessions", {"\e[31mkey" => 1}, token: token).status).to eq(422)
+      expect(phone.start({prompt: "x", cwd: "/tmp/\e]0;PWNED\a\e[2J"}).status).to eq(422)
+      expect(phone.start({"\e[31mkey" => 1}).status).to eq(422)
       client.fail_spawn("claude --bg failed: \e[2Jno such directory")
-      request(listener, "POST", "/api/sessions", {prompt: "go", cwd: project}, token: token)
+      phone.start({prompt: "go", cwd: project})
       results = listener.snapshot.recent.map(&:result)
       expect(results.size).to eq(3)
       expect(results.join).not_to include("\e")
@@ -155,20 +155,20 @@ RSpec.describe ClaudeInbox::Remote::Listener do
     end
 
     it "notes a refused start for N, as it does a failed one" do
-      request(listener, "POST", "/api/sessions", {prompt: "go", cwd: project, permission_mode: "bypassPermissions"}, token: token)
+      phone.start({prompt: "go", cwd: project, permission_mode: "bypassPermissions"})
       expect(listener.snapshot.recent.last.result).to eq("refused: permission mode bypassPermissions isn't allowed from another device")
     end
 
     it "answers anything else that goes wrong with a 500 and its message" do
       options[:images_dir] = File.join(tmp, "listen.json").tap { |f| File.write(f, "") }
-      r = request(listener, "POST", "/api/sessions", {prompt: "go", cwd: project, images: [{data: [PNG].pack("m0")}]}, token: token)
+      r = phone.start({prompt: "go", cwd: project, images: [{data: [PNG].pack("m0")}]})
       expect(r.status).to eq(500)
       expect(r.json["error"]).to include("File exists")
     end
 
     it "keeps what went wrong to itself until the token checks out" do
       FileUtils.mkdir_p(File.join(tmp, "listen.json"))
-      r = request(listener, "GET", "/api/options", token: "a-guess")
+      r = Phone.new(listener, token: "a-guess").get("/api/options")
       expect([r.status, r.json]).to eq([500, {"error" => "internal error"}])
     end
   end
