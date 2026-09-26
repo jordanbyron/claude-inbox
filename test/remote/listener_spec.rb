@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "test_helper"
-require_relative "../lib/claude_inbox/listener"
-require_relative "../lib/claude_inbox/pairing"
+require_relative "../test_helper"
+require_relative "../../lib/claude_inbox/remote/listener"
+require_relative "../../lib/claude_inbox/remote/pairing"
 require "net/http"
 require "tmpdir"
 
@@ -72,7 +72,7 @@ describe ClaudeInbox::Listener do
       _(r.headers["content-security-policy"]).must_equal "default-src 'none'; script-src 'unsafe-inline'; " \
         "style-src 'unsafe-inline'; img-src blob: data:; connect-src 'self'; manifest-src 'self'; form-action 'none'; " \
         "frame-ancestors 'none'"
-      _(r.body.b).must_equal File.binread(File.expand_path("../lib/claude_inbox/remote.html", __dir__))
+      _(r.body.b).must_equal File.binread(File.expand_path("../../lib/claude_inbox/remote/page.html", __dir__))
       _(r.headers.values_at("connection", "cache-control", "x-content-type-options", "referrer-policy"))
         .must_equal ["close", "no-store", "nosniff", "no-referrer"]
     end
@@ -84,7 +84,7 @@ describe ClaudeInbox::Listener do
       _(manifest.json["icons"].map { |icon| icon["src"] }).must_equal ["/icon.png"]
       icon = call("GET", "/icon.png", token: nil)
       _([icon.status, icon.headers["content-type"]]).must_equal [200, "image/png"]
-      _(icon.body.b).must_equal File.binread(File.expand_path("../lib/claude_inbox/icon.png", __dir__))
+      _(icon.body.b).must_equal File.binread(File.expand_path("../../lib/claude_inbox/remote/icon.png", __dir__))
     end
 
     it "asks for the token, says how to get one, and notes who was turned away" do

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "test_helper"
-require_relative "../lib/claude_inbox/listener"
+require_relative "../lib/claude_inbox/remote/listener"
 
 Text = ClaudeInbox::Text
 

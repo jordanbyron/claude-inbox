@@ -2,7 +2,7 @@
 
 require_relative "test_helper"
 require_relative "../lib/claude_inbox/dialog"
-require_relative "../lib/claude_inbox/listener"
+require_relative "../lib/claude_inbox/remote/listener"
 
 describe ClaudeInbox::Dialog do
   describe "snooze" do

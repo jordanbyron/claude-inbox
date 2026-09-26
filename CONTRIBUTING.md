@@ -36,7 +36,7 @@ on your branch and diff the two.
 Read [docs/cli-quirks.md](docs/cli-quirks.md) before touching `lib/`. It
 records what the daemon and CLI actually do, which `claude --help` doesn't.
 
-The phone's page is `lib/claude_inbox/remote.html`. The listener reads it
+The phone's page is `lib/claude_inbox/remote/page.html`. The listener reads it
 once at startup, so restart after an edit. To try it, run
 `bin/claude-inbox --fixture test/fixtures/agents.json --listen=0`, press `N`
 then `c`, and open the copied URL in a browser. The fixture keeps its token

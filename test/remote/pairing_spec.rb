@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require_relative "test_helper"
-require_relative "../lib/claude_inbox/pairing"
+require_relative "../test_helper"
+require_relative "../../lib/claude_inbox/remote/pairing"
 require "tmpdir"
 
 describe ClaudeInbox::Pairing do

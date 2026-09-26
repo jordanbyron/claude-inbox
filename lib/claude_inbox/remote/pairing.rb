@@ -3,8 +3,8 @@
 require "openssl"
 require "securerandom"
 require "socket"
-require_relative "records"
-require_relative "subprocess"
+require_relative "../records"
+require_relative "../subprocess"
 
 module ClaudeInbox
   # The token a phone pairs with, and the names and addresses it can reach

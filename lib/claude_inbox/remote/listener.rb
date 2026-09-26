@@ -4,15 +4,15 @@ require "fileutils"
 require "json"
 require "openssl"
 require "socket"
-require_relative "agents_client"
+require_relative "../agents_client"
 require_relative "http"
-require_relative "images"
-require_relative "job_state"
+require_relative "../images"
+require_relative "../job_state"
 require_relative "pairing"
-require_relative "session"
-require_relative "session_request"
-require_relative "settings"
-require_relative "trust"
+require_relative "../session"
+require_relative "../session_request"
+require_relative "../settings"
+require_relative "../trust"
 
 module ClaudeInbox
   # Starts sessions for another device: an opt-in HTTP listener, gated by
@@ -39,7 +39,7 @@ module ClaudeInbox
     JSON_TYPE = {"Content-Type" => "application/json"}.freeze
     # The phone's form. Everything it needs is inline, and it talks to
     # nothing but this listener.
-    PAGE = File.read(File.join(__dir__, "remote.html"), encoding: Encoding::UTF_8).freeze
+    PAGE = File.read(File.join(__dir__, "page.html"), encoding: Encoding::UTF_8).freeze
     PAGE_TYPE = {
       "Content-Type" => "text/html; charset=utf-8",
       "Content-Security-Policy" => "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " \
