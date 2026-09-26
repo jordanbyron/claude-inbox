@@ -56,8 +56,6 @@ module ClaudeInbox
 
     DEFAULT_PATH = File.join(Dir.home, ".config", "claude-inbox", "state.json")
 
-    attr_reader :path
-
     def initialize(path: DEFAULT_PATH, clock: -> { Time.now })
       @path = path
       @clock = clock
