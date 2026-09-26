@@ -9,8 +9,9 @@ RSpec.describe ClaudeInbox::Poller do
   let(:store) { ClaudeInbox::Store.new(path: nil, clock: clock) }
   let(:queue) { Queue.new }
   let(:poller_args) do
-    {client: client, store: store, reaper: ClaudeInbox::Reaper.disabled, queue: queue, interval: described_class::INTERVAL,
-     clock: clock, pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil)}
+    {client: client, store: store, reaper: ClaudeInbox::Reaper.disabled, queue: queue,
+     interval: described_class::INTERVAL, clock: clock,
+     pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil)}
   end
   let(:poller) { described_class.new(**poller_args) }
 

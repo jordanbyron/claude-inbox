@@ -148,7 +148,9 @@ RSpec.describe ClaudeInbox::SessionRequest do
   end
 
   describe "resolve" do
-    let(:defaults) { ->(remote) { ClaudeInbox::Settings::Defaults.new(model: "opus", permission_mode: "plan", remote: remote) } }
+    let(:defaults) do
+      ->(remote) { ClaudeInbox::Settings::Defaults.new(model: "opus", permission_mode: "plan", remote: remote) }
+    end
 
     it "follows /config for Remote Control left unset, and passes it either way" do
       values = described_class.from_params(base)

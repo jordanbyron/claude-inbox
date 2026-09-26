@@ -6,6 +6,7 @@ RSpec.describe ClaudeInbox::Renderer do
   let(:sections) { ClaudeInbox::Store.sectionize(sessions, ClaudeInbox::Store.merge_entries({}, sessions, now), now) }
   let(:renderer) { described_class.new(color: false, home: "/Users/byron") }
   let(:view) { described_class::View.new(width: 80, height: 24, now: now) }
+  let(:terminal) { {id: nil, kind: "interactive", state: nil} }
 
   it "makes every line exactly width wide" do
     f = renderer.frame(sections, view.with(selected: "f23c8673"))
@@ -14,7 +15,8 @@ RSpec.describe ClaudeInbox::Renderer do
   end
 
   it "leaves one column between a row's project and the right edge, like the header and section rules" do
-    rows = renderer.frame(sections, view.with(selected: "f23c8673")).lines.grep(/  (comma3|claude-inbox|parks_genie) *$/)
+    rows = renderer.frame(sections, view.with(selected: "f23c8673"))
+      .lines.grep(/  (comma3|claude-inbox|parks_genie) *$/)
     expect(rows).not_to be_empty
     rows.each { |l| expect(l).to match(/\S $/) }
   end
@@ -63,7 +65,7 @@ RSpec.describe ClaudeInbox::Renderer do
   end
 
   it "badges remote sessions and counts them in the header" do
-    r = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9", name: "web", origin: :remote)
+    r = session(**terminal, status: "idle", session_id: "u9", name: "web", origin: :remote)
     sec = ClaudeInbox::Store.sectionize([r], {}, now)
     text = renderer.frame(sec, view.with(width: 90, height: 12)).lines.join("\n")
     expect(text).to match(/✓ web\s+done · remote/)
@@ -72,7 +74,8 @@ RSpec.describe ClaudeInbox::Renderer do
 
   it "marks a background session with Remote Control on, and only that one" do
     rc = session(state: "done", job_state: ClaudeInbox::JobState.new("respawnFlags" => ["--remote-control"]))
-    plain = session(id: "def45678", name: "other", state: "done", job_state: ClaudeInbox::JobState.new("bridgeSessionId" => "cse_01AB"))
+    bridged = ClaudeInbox::JobState.new("bridgeSessionId" => "cse_01AB")
+    plain = session(id: "def45678", name: "other", state: "done", job_state: bridged)
     sec = ClaudeInbox::Store.sectionize([rc, plain], {}, now)
     text = renderer.frame(sec, view.with(width: 90, height: 12)).lines.join("\n")
     expect(text).to match(/✓ thing\s+done ⇅/)
@@ -84,7 +87,10 @@ RSpec.describe ClaudeInbox::Renderer do
       "fan" => [{"kind" => "in_process_teammate"}, {"kind" => "in_process_teammate"}])
     waiting = ClaudeInbox::JobState.new("tempo" => "idle", "inFlight" => {"tasks" => 1},
       "fan" => [{"kind" => "local_bash"}])
-    rows = [session(id: "t1", name: "thinking", job_state: thinking), session(id: "t2", name: "watching", job_state: waiting)]
+    rows = [
+      session(id: "t1", name: "thinking", job_state: thinking),
+      session(id: "t2", name: "watching", job_state: waiting)
+    ]
     sec = ClaudeInbox::Store.sectionize(rows, ClaudeInbox::Store.merge_entries({}, rows, now), now)
     text = renderer.frame(sec, view.with(width: 90, height: 12, tick: 0)).lines.join("\n")
     expect(text).to match(/⠋ thinking\s+working · 2 agents/)
@@ -93,8 +99,8 @@ RSpec.describe ClaudeInbox::Renderer do
   end
 
   it "renders an idle terminal as done and a waiting one as needing you" do
-    idle = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u1", name: "shell")
-    waiting = session(id: nil, kind: "interactive", state: nil, status: "waiting", waiting_for: "permission prompt", session_id: "u2", name: "shell2")
+    idle = session(**terminal, status: "idle", session_id: "u1", name: "shell")
+    waiting = session(**terminal, status: "waiting", waiting_for: "permission prompt", session_id: "u2", name: "shell2")
     sec = ClaudeInbox::Store.sectionize([idle, waiting], {}, now)
     expect(sec.needs_you.map(&:key)).to eq(%w[u2])
     expect(sec.active.map(&:key)).to eq(%w[u1])
@@ -111,7 +117,11 @@ RSpec.describe ClaudeInbox::Renderer do
 
   it "lists snoozed rows when expanded, and folds them by default" do
     entries = {"823b882f" => {"wake_at" => now.to_i + 900, "snoozed_at" => now.to_i}}
-    snoozed_sections = ClaudeInbox::Store.sectionize(sessions, ClaudeInbox::Store.merge_entries(entries, sessions, now), now)
+    snoozed_sections = ClaudeInbox::Store.sectionize(
+      sessions,
+      ClaudeInbox::Store.merge_entries(entries, sessions, now),
+      now
+    )
 
     folded = renderer.frame(snoozed_sections, view.with(width: 80, height: 30))
     expect(folded.items.compact.map(&:key)).to include(:snoozed)
@@ -130,13 +140,17 @@ RSpec.describe ClaudeInbox::Renderer do
 
   it "scrolls to keep the selection visible" do
     sess = (1..30).map { |i| session(id: "s#{i}", name: "n#{i}", started_at: now - i) }
-    f = renderer.frame(ClaudeInbox::Store.sectionize(sess, {}, now), view.with(width: 60, height: 12, selected: "s30", top: 0))
+    f = renderer.frame(
+      ClaudeInbox::Store.sectionize(sess, {}, now),
+      view.with(width: 60, height: 12, selected: "s30", top: 0)
+    )
     expect(f.items.compact.map(&:key)).to include("s30")
     expect(f.top).to be > 0
   end
 
   it "splits the frame for the peek pane" do
-    f = renderer.frame(sections, view.with(width: 100, height: 12, selected: "f23c8673", peek: ClaudeInbox::Peek::View.new(["line one", "line two"], "t")))
+    peek = ClaudeInbox::Peek::View.new(["line one", "line two"], "t")
+    f = renderer.frame(sections, view.with(width: 100, height: 12, selected: "f23c8673", peek: peek))
     f.lines.each { |l| expect(ClaudeInbox::Text.width(l)).to eq(100) }
     expect(f.lines[1]).to match(/│/)
     expect(f.lines.join("\n")).to include("line two")
@@ -156,10 +170,12 @@ RSpec.describe ClaudeInbox::Renderer do
 
   it "shows the listener in the header: its port, red when it couldn't listen, nothing when off" do
     snapshot = ->(state, lan: false) {
-      ClaudeInbox::Remote::Listener::Snapshot.new(state: state, port: 7433, lan: lan, urls: nil, firewall: nil, allowed_modes: [],
-        recent: [], held_by: nil, fixture: false)
+      ClaudeInbox::Remote::Listener::Snapshot.new(state: state, port: 7433, lan: lan, urls: nil, firewall: nil,
+        allowed_modes: [], recent: [], held_by: nil, fixture: false)
     }
-    header = ->(listening, width: 120) { renderer.frame(sections, view.with(width: width, height: 10, listening: listening)).lines.first }
+    header = ->(listening, width: 120) {
+      renderer.frame(sections, view.with(width: width, height: 10, listening: listening)).lines.first
+    }
     expect(header.call(snapshot.call(:listening))).to match(/1 needs you  ·  .*  ·  ◉ :7433/)
     expect(header.call(snapshot.call(:listening, lan: true))).to include("◉ lan:7433")
     expect(header.call(snapshot.call(:in_use))).to include("◉ !")
@@ -170,17 +186,21 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(header.call(snapshot.call(:listening), width: 60)).to include("● 1  ✻ 1  ○ 1  ◉ :7433")
 
     colored = ClaudeInbox::Renderer.new(color: true, home: "/Users/byron")
-    chip = ->(state) { colored.frame(sections, view.with(width: 140, height: 10, listening: snapshot.call(state))).lines.first }
+    chip = ->(state) {
+      colored.frame(sections, view.with(width: 140, height: 10, listening: snapshot.call(state))).lines.first
+    }
     expect(chip.call(:listening)).to include("\e[38;5;#{ClaudeInbox::Theme::HUES[:blue]}m◉ :7433")
     expect(chip.call(:held)).to include("\e[38;5;#{ClaudeInbox::Theme::HUES[:red]}m◉ !")
   end
 
   it "puts N in the footer only while listening on the LAN" do
     snapshot = ->(lan) {
-      ClaudeInbox::Remote::Listener::Snapshot.new(state: :listening, port: 7433, lan: lan, urls: nil, firewall: nil, allowed_modes: [],
-        recent: [], held_by: nil, fixture: false)
+      ClaudeInbox::Remote::Listener::Snapshot.new(state: :listening, port: 7433, lan: lan, urls: nil, firewall: nil,
+        allowed_modes: [], recent: [], held_by: nil, fixture: false)
     }
-    footer = ->(listening) { renderer.frame(sections, view.with(width: 200, height: 10, listening: listening)).lines.last }
+    footer = ->(listening) {
+      renderer.frame(sections, view.with(width: 200, height: 10, listening: listening)).lines.last
+    }
     expect(footer.call(snapshot.call(true))).to include("n new  N pair  t pin")
     expect(footer.call(snapshot.call(false))).not_to include("N pair")
     expect(footer.call(nil)).not_to include("N pair")
@@ -226,11 +246,13 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(text).to include(ClaudeInbox::Renderer::QUIPS[0])
     expect(text).to include("waiting on claude agents · 3s")
     expect(text).not_to include("claude daemon status")
-    later = renderer.frame(sec, view.with(width: 60, height: 12, loading: 3.2, tick: 7, status: "polling…")).lines.join("\n")
+    later = renderer.frame(sec, view.with(width: 60, height: 12, loading: 3.2, tick: 7, status: "polling…"))
+      .lines.join("\n")
     expect(later).to include(ClaudeInbox::Renderer::QUIPS[1])
     expect(later).not_to eq(text)
 
-    stuck = renderer.frame(sec, view.with(width: 60, height: 12, loading: 12, tick: 0, status: "polling…")).lines.join("\n")
+    stuck = renderer.frame(sec, view.with(width: 60, height: 12, loading: 12, tick: 0, status: "polling…"))
+      .lines.join("\n")
     expect(stuck).to include("claude daemon status")
   end
 
@@ -254,9 +276,14 @@ RSpec.describe ClaudeInbox::Renderer do
   end
 
   it "sheds the usage reset times, then the meters, then cuts the notice to keep the header on one line" do
-    usage = [ClaudeInbox::RateLimits::Window.new("session", 0, now + 4 * 3600), ClaudeInbox::RateLimits::Window.new("week", 53, now + 4 * 3600)]
+    usage = [
+      ClaudeInbox::RateLimits::Window.new("session", 0, now + 4 * 3600),
+      ClaudeInbox::RateLimits::Window.new("week", 53, now + 4 * 3600)
+    ]
     notice = "settled — u brings it back"
-    header = ->(width) { renderer.frame(sections, view.with(width: width, height: 10, status: notice, usage: usage)).lines.first }
+    header = ->(width) {
+      renderer.frame(sections, view.with(width: width, height: 10, status: notice, usage: usage)).lines.first
+    }
     expect(header.call(140)).to match(/#{notice}  ·  session ░+ 0% · 4h left  week █+░+ 53% · 4h left $/o)
     expect(header.call(100)).to match(/\A ▌ claude-inbox .*#{notice}  ·  session ░+ 0%  week █+░+ 53% $/o)
     expect(header.call(60)).to match(/\A ▌ claude-inbox .*#{notice} $/o)
@@ -270,22 +297,28 @@ RSpec.describe "renderer session colors" do
   let(:renderer) { ClaudeInbox::Renderer.new(color: true, home: "/Users/byron") }
   let(:orange) { "\e[38;5;208m" }
   let(:view) { ClaudeInbox::Renderer::View.new(width: 80, height: 14, now: now) }
+  let(:line_of) do
+    ->(s, label) {
+      sec = ClaudeInbox::Store.sectionize([s], ClaudeInbox::Store.merge_entries({}, [s], now), now)
+      renderer.frame(sec, view).lines.find { |l| l.include?(label) }
+    }
+  end
 
   it "paints the label of a session /color gave a color" do
     s = session(id: "z", name: "tinted", job_state: ClaudeInbox::JobState.new("color" => "orange"))
-    line = renderer.frame(ClaudeInbox::Store.sectionize([s], ClaudeInbox::Store.merge_entries({}, [s], now), now), view).lines.find { |l| l.include?("tinted") }
+    line = line_of.call(s, "tinted")
     expect(line).to include("#{orange}tinted")
   end
 
   it "leaves a session with no color exactly as it was" do
     s = session(id: "z", name: "plain")
-    line = renderer.frame(ClaudeInbox::Store.sectionize([s], ClaudeInbox::Store.merge_entries({}, [s], now), now), view).lines.find { |l| l.include?("plain") }
+    line = line_of.call(s, "plain")
     expect(line).not_to match(/\e\[38;5;(208|205)mplain/)
   end
 
   it "keeps the glyph in the state's color while the label takes the session's" do
     s = session(id: "z", name: "tinted", state: "blocked", job_state: ClaudeInbox::JobState.new("color" => "green"))
-    line = renderer.frame(ClaudeInbox::Store.sectionize([s], ClaudeInbox::Store.merge_entries({}, [s], now), now), view).lines.find { |l| l.include?("tinted") }
+    line = line_of.call(s, "tinted")
     expect(line).to include("\e[38;5;203;1m●")
     expect(line).to include("\e[38;5;203;1mneeds you")
     expect(line).to include("\e[32mtinted\e[39m")
@@ -293,7 +326,8 @@ RSpec.describe "renderer session colors" do
 
   it "dims a settled row instead of coloring it" do
     s = session(id: "z", name: "tinted", state: "done", job_state: ClaudeInbox::JobState.new("color" => "orange"))
-    sec = ClaudeInbox::Store.sectionize([s], ClaudeInbox::Store.merge_entries({"z" => {"settled_at" => now.to_i}}, [s], now), now)
+    entries = ClaudeInbox::Store.merge_entries({"z" => {"settled_at" => now.to_i}}, [s], now)
+    sec = ClaudeInbox::Store.sectionize([s], entries, now)
     line = renderer.frame(sec, view.with(expanded: {settled: true})).lines.find { |l| l.include?("tinted") }
     expect(line).not_to include(orange)
     expect(line).to include("\e[2m")
@@ -302,7 +336,7 @@ RSpec.describe "renderer session colors" do
   it "colors a PR badge by its state and dims a draft or an unknown one" do
     badge = ->(state) {
       s = session(id: "z", name: "shipit", prs: [ClaudeInbox::PullRequest.new(number: 7, state: state)])
-      renderer.frame(ClaudeInbox::Store.sectionize([s], ClaudeInbox::Store.merge_entries({}, [s], now), now), view).lines.find { |l| l.include?("shipit") }
+      line_of.call(s, "shipit")
     }
     expect(badge.call("OPEN")).to include("\e[38;5;108m#7 open\e[0m")
     expect(badge.call("DRAFT")).to include("\e[2m#7 draft\e[0m")
@@ -312,12 +346,19 @@ RSpec.describe "renderer session colors" do
   end
 
   it "still pads a colored row to exactly the frame width" do
-    sec = ClaudeInbox::Store.sectionize([session(id: "z", name: "tinted", job_state: ClaudeInbox::JobState.new("color" => "pink"))], {}, now)
-    renderer.frame(sec, view.with(width: 64, height: 12)).lines.each { |l| expect(ClaudeInbox::Text.width(l)).to eq(64) }
+    s = session(id: "z", name: "tinted", job_state: ClaudeInbox::JobState.new("color" => "pink"))
+    sec = ClaudeInbox::Store.sectionize([s], {}, now)
+    renderer.frame(sec, view.with(width: 64, height: 12)).lines.each do |l|
+      expect(ClaudeInbox::Text.width(l)).to eq(64)
+    end
   end
 
   it "turns a usage bar yellow from 70% and red from 90%" do
-    bar = ->(pct) { renderer.frame(ClaudeInbox::Store.sectionize([], {}, now), view.with(width: 100, height: 5, usage: [ClaudeInbox::RateLimits::Window.new("session", pct)])).lines.first }
+    bar = ->(pct) {
+      usage = [ClaudeInbox::RateLimits::Window.new("session", pct)]
+      renderer.frame(ClaudeInbox::Store.sectionize([], {}, now), view.with(width: 100, height: 5, usage: usage))
+        .lines.first
+    }
     expect(bar.call(69)).to include("\e[38;5;108m██████░░░░")
     expect(bar.call(70)).to include("\e[38;5;179m███████░░░")
     expect(bar.call(90)).to include("\e[38;5;203m█████████░")

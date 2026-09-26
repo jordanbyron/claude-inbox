@@ -80,7 +80,11 @@ RSpec.describe ClaudeInbox::JobState do
   end
 
   it "summarizes by state: needs while blocked, result once done, else the detail line" do
-    js = described_class.new("detail" => "watching\n  CI", "needs" => "confirm: merge?", "output" => {"result" => "PR #7 up"})
+    js = described_class.new(
+      "detail" => "watching\n  CI",
+      "needs" => "confirm: merge?",
+      "output" => {"result" => "PR #7 up"}
+    )
     expect(js.summary("blocked")).to eq("confirm: merge?")
     expect(js.summary("done")).to eq("PR #7 up")
     expect(js.summary("working")).to eq("watching CI")

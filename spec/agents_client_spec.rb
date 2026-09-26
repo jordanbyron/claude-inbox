@@ -36,7 +36,11 @@ RSpec.describe ClaudeInbox::AgentsClient do
   end
 
   it "classifies fixture interactive rows as remote when told their pids" do
-    c = ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), origins: {57405 => :remote}, bridges: {57405 => "cse_01AB"})
+    c = ClaudeInbox::FixtureClient.new(
+      fixture_path("agents.json"),
+      origins: {57405 => :remote},
+      bridges: {57405 => "cse_01AB"}
+    )
     s = c.list.find(&:interactive?)
     expect(s).to be_remote
     expect(s.remote_url).to eq("https://claude.ai/code/session_01AB")
@@ -160,9 +164,15 @@ RSpec.describe ClaudeInbox::AgentsClient do
   end
 
   it "builds claude --bg arguments, leaving unset ones off" do
-    a = described_class.spawn_args("claude", prompt: "fix it", model: nil, effort: nil, permission_mode: nil, worktree: false, name: nil)
+    a = described_class.spawn_args(
+      "claude",
+      prompt: "fix it", model: nil, effort: nil, permission_mode: nil, worktree: false, name: nil
+    )
     expect(a).to eq(["claude", "--bg", "--", "fix it"])
-    a = described_class.spawn_args("claude", prompt: "fix it", model: "opus", effort: "high", permission_mode: "acceptEdits", worktree: true, name: "flaky")
+    a = described_class.spawn_args(
+      "claude",
+      prompt: "fix it", model: "opus", effort: "high", permission_mode: "acceptEdits", worktree: true, name: "flaky"
+    )
     expect(a).to eq(["claude", "--bg", "--model", "opus", "--effort", "high", "--permission-mode", "acceptEdits", "--name", "flaky", "--worktree", "--", "fix it"])
   end
 

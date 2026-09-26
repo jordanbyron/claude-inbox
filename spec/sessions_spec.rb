@@ -4,7 +4,9 @@ RSpec.describe ClaudeInbox::Sessions do
   subject(:sessions) { described_class.load(client: client, pull_requests: pull_requests, overrides: overrides) }
 
   let(:client) { ClaudeInbox::FixtureClient.new(fixture_path("agents.json")) }
-  let(:pull_requests) { ClaudeInbox::PullRequests.new(cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: nil) }
+  let(:pull_requests) do
+    ClaudeInbox::PullRequests.new(cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: nil)
+  end
   let(:overrides) { {} }
 
   # The PR numbers can only come out if JobState was past before

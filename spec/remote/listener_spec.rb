@@ -184,7 +184,11 @@ RSpec.describe ClaudeInbox::Remote::Listener do
       Net::HTTP.start("127.0.0.1", port) do |http|
         auth = {"Authorization" => "Bearer #{pairing.token}"}
         expect(http.get("/api/options", auth).code).to eq("200")
-        posted = http.post("/api/sessions", JSON.generate(prompt: "go", cwd: "app"), auth.merge("Content-Type" => "application/json"))
+        posted = http.post(
+          "/api/sessions",
+          JSON.generate(prompt: "go", cwd: "app"),
+          auth.merge("Content-Type" => "application/json")
+        )
         expect([posted.code, JSON.parse(posted.body)["id"]]).to eq(["201", "deadbeef"])
       end
       expect(drain(queue).last).to eq([:remote_started, "deadbeef", "127.0.0.1"])
@@ -242,7 +246,11 @@ RSpec.describe ClaudeInbox::Remote::Listener do
     it "says what went wrong, and stops trying, when it can't even take the lock" do
       locked = File.join(tmp, "locked").tap { |dir| FileUtils.mkdir_p(dir) }
       File.chmod(0o500, locked)
-      broken = described_class.new(**listener_args, lock_path: File.join(locked, "sub", "listen.lock"), retry_every: 0.05)
+      broken = described_class.new(
+        **listener_args,
+        lock_path: File.join(locked, "sub", "listen.lock"),
+        retry_every: 0.05
+      )
       broken.start
       s = broken.snapshot
       expect(s.state).to eq(:failed)
@@ -302,7 +310,9 @@ RSpec.describe ClaudeInbox::Remote::Listener do
       get = "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
       statuses = %w[192.168.1.30 192.168.1.31].map do |host|
         hosts << host
-        TCPSocket.open("127.0.0.1", listener.port) { |sock| sock.write(get) && sock.readpartial(4096)[/\AHTTP\/1\.1 (\d+)/, 1] }
+        TCPSocket.open("127.0.0.1", listener.port) do |sock|
+          sock.write(get) && sock.readpartial(4096)[/\AHTTP\/1\.1 (\d+)/, 1]
+        end
       end
       expect(statuses).to eq(%w[503 200])
     ensure
