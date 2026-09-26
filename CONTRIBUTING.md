@@ -7,6 +7,9 @@ bundle install
 gh extension install basecamp/gh-signoff
 ```
 
+`bin/ci` uses gh-signoff to mark your PR as passing, so install it before you
+open one.
+
 For tab completion of `gh signoff`, add `eval "$(gh signoff completion)"` to
 `~/.zshrc`.
 
@@ -67,9 +70,6 @@ bundle exec standardrb --fix
 bundle exec bundle-audit check --update
 gh signoff status        # is HEAD signed off?
 ```
-
-`gh signoff install` makes `signoff` a required check on `main`. Run it once
-per repo, with admin access.
 
 ## Cutting a release
 
