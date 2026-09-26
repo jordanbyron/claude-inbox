@@ -23,6 +23,8 @@ module ClaudeInbox
       DEFAULT_MODES = %w[default auto plan].freeze
       LOCK_PATH = File.join(Dir.home, ".config", "claude-inbox", "listen.lock")
       MAX_CONNECTIONS = 4
+      # Per host, so one host's idle sockets can't shut the others out. Two,
+      # so a phone loading the page doesn't turn its own requests away.
       MAX_UNAUTHENTICATED = 2
       MAX_TURNED_AWAY = 8
       RETRY_EVERY = 5
@@ -124,7 +126,7 @@ module ClaudeInbox
         @recent = []
         @threads = Set.new
         @alive = 0
-        @unauthenticated = 0
+        @unauthenticated = Hash.new(0)
         @turning_away = 0
       end
 
@@ -287,8 +289,8 @@ module ClaudeInbox
       # say, is waited out.
       def accept_loop
         loop do
-          sock, = @server.accept
-          admit(sock)
+          sock, addr = @server.accept
+          admit(sock, peer(addr))
         rescue IOError
           break
         rescue
@@ -296,8 +298,10 @@ module ClaudeInbox
         end
       end
 
-      def admit(sock)
-        slot = @mutex.synchronize { take_slot }
+      def peer(addr) = addr.ip_address
+
+      def admit(sock, via)
+        slot = @mutex.synchronize { take_slot(via) }
         return quietly { sock.close } unless slot
         thread = Thread.new { serve(sock, slot) }
         @mutex.synchronize { @threads << thread if thread.alive? }
@@ -308,11 +312,11 @@ module ClaudeInbox
 
       # Over the cap, a 503 rather than a queue. It lingers like any answer,
       # so it isn't lost to a reset; past a few of those, only a close.
-      def take_slot
-        if @alive < MAX_CONNECTIONS && @unauthenticated < MAX_UNAUTHENTICATED
+      def take_slot(via)
+        if @alive < MAX_CONNECTIONS && @unauthenticated[via] < MAX_UNAUTHENTICATED
           @alive += 1
-          @unauthenticated += 1
-          {authenticated: false}
+          @unauthenticated[via] += 1
+          {via: via, authenticated: false}
         elsif @turning_away < MAX_TURNED_AWAY
           @turning_away += 1
           {busy: true}
@@ -324,9 +328,16 @@ module ClaudeInbox
           if slot[:busy] then @turning_away -= 1
           else
             @alive -= 1
-            @unauthenticated -= 1 unless slot[:authenticated]
+            release_unauthenticated(slot[:via]) unless slot[:authenticated]
           end
         end
+      end
+
+      # Under the mutex. A host leaves the hash at zero, so it holds only
+      # hosts connected now.
+      def release_unauthenticated(via)
+        @unauthenticated[via] -= 1
+        @unauthenticated.delete(via) if @unauthenticated[via].zero?
       end
 
       # `handle` answers every failure it can; what is left is the socket
@@ -335,7 +346,7 @@ module ClaudeInbox
         if slot[:busy]
           Http.write(sock, 503, Http::JSON_TYPE.merge("Retry-After" => "2"), JSON.generate(error: "busy: try again in a moment"))
         else
-          handle(sock, via: sock.remote_address.ip_address, slot: slot)
+          handle(sock, via: slot[:via], slot: slot)
         end
         linger(sock)
       rescue
@@ -348,7 +359,7 @@ module ClaudeInbox
 
       def authenticated(slot)
         @mutex.synchronize do
-          @unauthenticated -= 1 unless slot[:authenticated]
+          release_unauthenticated(slot[:via]) unless slot[:authenticated]
           slot[:authenticated] = true
         end
       end
