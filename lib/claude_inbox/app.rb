@@ -350,7 +350,8 @@ module ClaudeInbox
       name if Store::FOLDABLE_SECTIONS.include?(name)
     end
 
-    def set_expanded(value, name: current_fold_section)
+    def set_expanded(value)
+      name = current_fold_section
       @expanded[name] = value if name
     end
 
