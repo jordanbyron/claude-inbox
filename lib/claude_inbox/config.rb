@@ -3,9 +3,8 @@
 require "shellwords"
 
 module ClaudeInbox
-  # Launch arguments the user wants every time, read from
-  # ~/.config/claude-inbox/config. They go before the typed ones, so a flag
-  # on the command line still wins.
+  # Arguments for every launch. They go before the typed ones, so a typed
+  # flag wins.
   module Config
     PATH = File.join(Dir.home, ".config", "claude-inbox", "config")
 

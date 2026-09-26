@@ -14,8 +14,7 @@ require "tmpdir"
 
 fixture = ARGV.include?("--fixture")
 # A fixture run takes the listen flags, for trying the API with curl, but
-# not the environment or the config file: what arms the real inbox must not
-# arm a test one too.
+# not the environment or the config file, which are for the real inbox.
 begin
   argv = fixture ? ARGV : ClaudeInbox::Config.argv(ARGV)
   listen = ClaudeInbox::Remote::Listener.options(argv, fixture ? {} : ENV)

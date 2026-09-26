@@ -18,8 +18,7 @@ Requires Ruby 3.2+ and a `claude` on PATH with the agents feature. Versions
 are published to rubygems and listed under GitHub Releases.
 `claude-inbox --version` prints the installed version.
 
-Arguments in `~/.config/claude-inbox/config` are added to every launch,
-ahead of the ones you type. `#` starts a comment.
+Put arguments you want on every launch in `~/.config/claude-inbox/config`.
 
 ## Sections
 
