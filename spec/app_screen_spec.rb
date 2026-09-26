@@ -32,7 +32,7 @@ RSpec.describe ClaudeInbox::App do
 
   it "hands a paste to the new-session form whole, and types it into the filter" do
     press(app, "/", "\e[200~thi\e[201~")
-    expect(screen(app).last).to include("/thi")
+    expect(app).to paint("/thi").in_footer
     press(app, "\e", "n", "\e[200~one\ntwo\e[201~")
     prompt = screen(app).select { |l| l.start_with?("  │") }.map { |l| l.delete("│").strip }
     expect(prompt.join("\n").strip).to eq("one\ntwo")
@@ -40,23 +40,23 @@ RSpec.describe ClaudeInbox::App do
 
   it "drops a paste that lands where nothing is typed, so its letters never act as keys" do
     press(app, ctrl_x, "\e[200~yes, every directory\e[201~")
-    expect(screen(app).join("\n")).to include("Delete session f23c8673?")
+    expect(app).to paint("Delete session f23c8673?")
     expect(client.removed).to be_empty
     press(app, "\e", "N", "\e[200~query\e[201~")
-    expect(screen(app).join("\n")).to include("Pair a phone")
+    expect(app).to paint("Pair a phone")
     press(app, "\e", "\e[200~q\e[201~")
-    expect(screen(app).join("\n")).to include("comma3x not booting")
+    expect(app).to paint("comma3x not booting")
   end
 
   it "edits the filter line in the middle, and closes it on a backspace from empty" do
     press(app, "/", "ac", "\e[D", "b")
-    expect(screen(app).last).to include("/abc")
+    expect(app).to paint("/abc").in_footer
     press(app, "\x01", "q")
-    expect(screen(app).last).to include("/qabc")
+    expect(app).to paint("/qabc").in_footer
     press(app, "\x05", "\x7f", "\x7f", "\x7f", "\x7f")
     expect(screen(app).last.strip).to eq("/")
     press(app, "\x7f")
-    expect(screen(app).last).to include("j/k move")
+    expect(app).to paint("j/k move").in_footer
   end
 
   describe "clicking a row" do
@@ -64,21 +64,21 @@ RSpec.describe ClaudeInbox::App do
       row = screen(app).index { |l| l.include?("comma3x led flashing") } + 1
       press(app, "\e[<0;5;#{row}M")
       expect(client.attached).to eq(["823b882f"])
-      expect(screen(app)).to include(/▶.*comma3x led flashing/)
+      expect(app).to paint("comma3x led flashing").on_selected_row
     end
 
     it "refuses on a terminal row instead of attaching, same as Enter" do
       row = screen(app).index { |l| l.include?("claude-inbox-38") } + 1
       press(app, "\e[<0;5;#{row}M")
       expect(client.attached).to be_empty
-      expect(screen(app).first).to include("terminal")
+      expect(app).to paint("terminal").in_status_line
     end
 
     it "expands a folded section when its toggle line is clicked" do
       store.settle("b03695b1")
       row = screen(app).index { |l| l.include?("… 1 settled") } + 1
       press(app, "\e[<0;5;#{row}M")
-      expect(screen(app).join("\n")).to include("app store release strategy")
+      expect(app).to paint("app store release strategy")
     end
 
     it "ignores a click past the list column, such as one landing in the peek pane" do
@@ -91,65 +91,65 @@ RSpec.describe ClaudeInbox::App do
   end
 
   it "moves the selection on a wheel tick, the same way j/k would" do
-    expect(screen(app)).to include(/▶.*comma3x not booting/)
+    expect(app).to paint("comma3x not booting").on_selected_row
     press(app, "\e[<65;1;1M")
-    expect(screen(app)).to include(/▶.*claude-inbox-38/)
+    expect(app).to paint("claude-inbox-38").on_selected_row
     press(app, "\e[<64;1;1M")
-    expect(screen(app)).to include(/▶.*comma3x not booting/)
+    expect(app).to paint("comma3x not booting").on_selected_row
   end
 
   describe "Tab and Shift-Tab" do
     it "walk a section headed by a terminal row like any other, and wrap" do
       store.settle("b03695b1")
       press(app, "\t")
-      expect(screen(app)).to include(/▶.*claude-inbox-38/)
+      expect(app).to paint("claude-inbox-38").on_selected_row
       press(app, "\t")
-      expect(screen(app)).to include(/▶.*… 1 settled/)
+      expect(app).to paint("… 1 settled").on_selected_row
       press(app, "\t")
-      expect(screen(app)).to include(/▶.*comma3x not booting/)
+      expect(app).to paint("comma3x not booting").on_selected_row
       press(app, "\e[Z")
-      expect(screen(app)).to include(/▶.*… 1 settled/)
+      expect(app).to paint("… 1 settled").on_selected_row
     end
   end
 
   it "opens, closes and toggles the section under the cursor on zo, zc and za" do
     store.settle("b03695b1")
     press(app, "\t", "\t")
-    expect(screen(app).join("\n")).not_to include("app store release strategy")
+    expect(app).not_to paint("app store release strategy")
     press(app, "z", "o")
-    expect(screen(app).join("\n")).to include("app store release strategy")
+    expect(app).to paint("app store release strategy")
     press(app, "\t", "\t")
-    expect(screen(app)).to include(/▶.*app store release strategy/)
+    expect(app).to paint("app store release strategy").on_selected_row
     press(app, "z", "c")
-    expect(screen(app).join("\n")).not_to include("app store release strategy")
+    expect(app).not_to paint("app store release strategy")
     press(app, "\t", "\t", "z", "a")
-    expect(screen(app).join("\n")).to include("app store release strategy")
+    expect(app).to paint("app store release strategy")
   end
 
   describe "ctrl-x deletes a session" do
     it "asks first and deletes once confirmed" do
       press(app, ctrl_x)
-      expect(screen(app).join("\n")).to include("Delete session f23c8673?")
+      expect(app).to paint("Delete session f23c8673?")
       expect(client.removed).to be_empty
 
       press(app, "y")
       expect(wait_for { client.removed == %w[f23c8673] }).to be(true)
       expect(wait_for { store.entry("f23c8673").nil? }).to be(true)
-      expect(screen(app).join("\n")).not_to include("comma3x not booting")
+      expect(app).not_to paint("comma3x not booting")
     end
 
     it "keeps the session when the confirm is dismissed" do
       ["\e", "n", "q"].each do |dismiss|
         press(app, ctrl_x, dismiss)
-        expect(screen(app).join("\n")).not_to include("Delete session")
+        expect(app).not_to paint("Delete session")
         expect(client.removed).to be_empty
       end
     end
 
     it "refuses on a terminal row instead of arming a confirm it can't honour" do
       press(app, "\t", ctrl_x)
-      expect(screen(app).join("\n")).not_to include("Delete session")
-      expect(screen(app).first).to include("terminal")
+      expect(app).not_to paint("Delete session")
+      expect(app).to paint("terminal").in_status_line
     end
 
     # Waiting for the stop to land is what makes "nothing was deleted" mean
@@ -157,7 +157,7 @@ RSpec.describe ClaudeInbox::App do
     # passes no matter which way the key was routed.
     it "still stops rather than deletes on X, sharing the one confirm" do
       press(app, "X")
-      expect(screen(app).join("\n")).to include("Stop session f23c8673?")
+      expect(app).to paint("Stop session f23c8673?")
 
       press(app, "y")
       expect(wait_for { client.stopped == %w[f23c8673] }).to be(true)
@@ -173,7 +173,7 @@ RSpec.describe ClaudeInbox::App do
 
     it "asks on Enter, then pulls the conversation in and attaches to it" do
       press(app, "\t", "\r")
-      expect(screen(app).join("\n")).to include("Pull this session into the daemon?")
+      expect(app).to paint("Pull this session into the daemon?")
       expect(client).not_to have_received(:adopt)
 
       press(app, "y")
@@ -186,7 +186,7 @@ RSpec.describe ClaudeInbox::App do
 
     it "leaves it alone when dismissed" do
       press(app, "\t", "\r", "\e")
-      expect(screen(app).join("\n")).not_to include("Pull this session")
+      expect(app).not_to paint("Pull this session")
       expect(client).not_to have_received(:adopt)
     end
   end
@@ -197,12 +197,12 @@ RSpec.describe ClaudeInbox::App do
       # The form defaults to the selected fixture row's cwd, a path from the
       # machine the fixture was captured on, so point it somewhere real.
       press(app, "n", "h", "i", "\e[B", "\e[B", ctrl_u, *Dir.pwd.chars, ctrl_s)
-      expect(screen(app).first).to include("starting session…")
+      expect(app).to paint("starting session…").in_status_line
 
       client.release
       expect(wait_for { screen(app).first.include?("started deadbeef") }).to be(true)
       store.update(store.sessions + [session(id: "deadbeef", name: "fresh one")])
-      expect(screen(app)).to include(/▶.*fresh one/)
+      expect(app).to paint("fresh one").on_selected_row
     end
 
     # A directory `claude` has never run in before is exactly where `claude
@@ -217,7 +217,7 @@ RSpec.describe ClaudeInbox::App do
       expect(lines.join("\n")).to include("fix the thing")
       expect(lines.join("\n")).to include("New session")
       press(app, ctrl_s)
-      expect(screen(app).first).to include("starting session…")
+      expect(app).to paint("starting session…").in_status_line
     end
   end
 
@@ -230,7 +230,7 @@ RSpec.describe ClaudeInbox::App do
       expect(before).not_to be_nil
       press(app, "n", *"half a thought".chars)
       queue << [:notice, "remote: starting session…"]
-      expect(screen(app).first).to include("remote: starting session…")
+      expect(app).to paint("remote: starting session…").in_status_line
 
       store.update(store.sessions + [session(id: "31472308", name: "from the phone")])
       queue << [:remote_started, "31472308", "192.168.1.30"]
@@ -243,7 +243,7 @@ RSpec.describe ClaudeInbox::App do
       press(app, "\e", "y")
       app.step
       expect(app.instance_variable_get(:@selected)&.key).to eq(before)
-      expect(screen(app).join("\n")).to include("from the phone")
+      expect(app).to paint("from the phone")
     end
   end
 
@@ -277,12 +277,12 @@ RSpec.describe ClaudeInbox::App do
     end
 
     it "shows the port in the header, and the URL once the lookup lands" do
-      expect(screen(app).first).to include("◉ :#{listener.port}")
+      expect(app).to paint("◉ :#{listener.port}").in_status_line
       press(app, "N")
-      expect(screen(app).join("\n")).to include("listening on 127.0.0.1:#{listener.port}")
-      expect(screen(app).join("\n")).to include("looking up this Mac's addresses…")
+      expect(app).to paint("listening on 127.0.0.1:#{listener.port}")
+      expect(app).to paint("looking up this Mac's addresses…")
       press(app, "c")
-      expect(screen(app).first).to include("still looking up this Mac's addresses")
+      expect(app).to paint("still looking up this Mac's addresses").in_status_line
       gate << true
       expect(wait_for { screen(app).join("\n").include?("http://127.0.0.1:#{listener.port}/#") }).to be(true)
     end
@@ -290,7 +290,7 @@ RSpec.describe ClaudeInbox::App do
     it "issues a new token on r then y, and says phones must pair again" do
       old = pairing.token
       press(app, "N", "r")
-      expect(screen(app).join("\n")).to include("rotate? y/n")
+      expect(app).to paint("rotate? y/n")
       gate << true << true
       press(app, "y")
       expect(wait_for { screen(app).first.include?("new token: phones pair again with N") }).to be(true)
@@ -301,13 +301,13 @@ RSpec.describe ClaudeInbox::App do
   describe "N" do
     it "opens the pairing dialog, which says how to turn the listener on while it is off" do
       press(app, "N")
-      expect(screen(app).join("\n")).to include("off: start with --listen or --listen-lan")
-      expect(screen(app).join("\n")).to include("esc close")
+      expect(app).to paint("off: start with --listen or --listen-lan")
+      expect(app).to paint("esc close")
       press(app, "c", "r", "y")
-      expect(screen(app).join("\n")).not_to include("rotate?")
-      expect(screen(app).join("\n")).to include("Pair a phone")
+      expect(app).not_to paint("rotate?")
+      expect(app).to paint("Pair a phone")
       press(app, "\e")
-      expect(screen(app).join("\n")).not_to include("Pair a phone")
+      expect(app).not_to paint("Pair a phone")
     end
   end
 
@@ -329,7 +329,7 @@ RSpec.describe ClaudeInbox::App do
     it "says so while the worker runs, then confirms once it is gone" do
       client.hold
       press(app, ctrl_x, "y")
-      expect(screen(app).first).to include("deleting f23c8673…")
+      expect(app).to paint("deleting f23c8673…").in_status_line
 
       client.release
       expect(wait_for { screen(app).first.include?("deleted f23c8673") }).to be(true)
@@ -342,9 +342,9 @@ RSpec.describe ClaudeInbox::App do
       store.set_pr("f23c8673", "https://github.com/o/r/pull/7")
 
       press(app, "a")
-      expect(screen(app).join("\n")).to include("> auth spike")
+      expect(app).to paint("> auth spike")
       press(app, "\e", "P")
-      expect(screen(app).join("\n")).to include("> https://github.com/o/r/pull/7")
+      expect(app).to paint("> https://github.com/o/r/pull/7")
     end
   end
 end
