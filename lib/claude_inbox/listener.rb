@@ -2,6 +2,7 @@
 
 require "fileutils"
 require "json"
+require "openssl"
 require "socket"
 require_relative "agents_client"
 require_relative "http"
@@ -37,22 +38,14 @@ module ClaudeInbox
     RECENT = 5
     ROUTES = {"/" => "GET", "/api/options" => "GET", "/api/sessions" => "POST"}.freeze
     JSON_TYPE = {"Content-Type" => "application/json"}.freeze
+    # The phone's form. Everything it needs is inline, and it talks to
+    # nothing but this listener.
+    PAGE = File.read(File.join(__dir__, "remote.html"), encoding: Encoding::UTF_8).freeze
     PAGE_TYPE = {
       "Content-Type" => "text/html; charset=utf-8",
-      "Content-Security-Policy" => "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'"
+      "Content-Security-Policy" => "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " \
+        "img-src blob: data:; connect-src 'self'; form-action 'none'; frame-ancestors 'none'"
     }.freeze
-    PAGE = <<~HTML
-      <!doctype html>
-      <html lang="en">
-      <meta charset="utf-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1">
-      <title>claude-inbox</title>
-      <style>body { font: 17px/1.5 -apple-system, system-ui, sans-serif; margin: 2em auto; max-width: 32em; padding: 0 1em; }</style>
-      <h1>claude-inbox is listening</h1>
-      <p>The form for starting a session from this page isn't here yet. Until it is,
-      send <code>POST /api/sessions</code> with your pairing token, as the README shows.</p>
-      </html>
-    HTML
 
     # What `N` and the header chip show, as of one moment. `state` is :off,
     # :listening, :in_use (the port is taken), :held (another inbox has the
@@ -411,20 +404,22 @@ module ClaudeInbox
 
     # Checked cheapest first, and nothing is written to disk until every
     # check has passed. A retry with the same Idempotency-Key gets the
-    # first answer instead of a second session.
+    # first answer instead of a second session; the key sent with a
+    # different request is refused, since that answer isn't this one's.
     def post_session(io, request, via)
       params = read_json(io, request)
-      images = take_images(params)
       key = request.headers["idempotency-key"]
       key = nil if key.to_s.empty?
-      earlier = key && claim(key)
+      digest = OpenSSL::Digest.digest("SHA256", JSON.generate(params)) if key
+      images = take_images(params)
+      earlier = key && claim(key, digest)
       return json(200, earlier) if earlier
       started = nil
       begin
         started = launch(params, images, via)
         json(201, started)
       ensure
-        settle(key, started) if key
+        settle(key, digest, started) if key
       end
     rescue AgentsClient::Error => e
       reason = printable(e.message.lines.first.to_s.strip)
@@ -469,22 +464,25 @@ module ClaudeInbox
 
     # The body an earlier request with this key got, or nil once the key
     # is this request's; one still starting is a 409.
-    def claim(key)
+    def claim(key, digest)
       @mutex.synchronize do
-        earlier = @keys[key]
-        raise Http::Error.new(409, "already starting") if earlier == :spawning
-        return earlier if earlier
+        sent, earlier = @keys[key]
+        if sent
+          raise Http::Error.new(422, "this Idempotency-Key was sent with a different request") unless sent == digest
+          raise Http::Error.new(409, "already starting") if earlier == :spawning
+          return earlier
+        end
         @keys.shift while @keys.size >= KEYS_KEPT
-        @keys[key] = :spawning
+        @keys[key] = [digest, :spawning]
         nil
       end
     end
 
     # A failed start frees its key, so a retry goes through rather than
     # getting 409 for ever.
-    def settle(key, started)
+    def settle(key, digest, started)
       @mutex.synchronize do
-        if started then @keys[key] = started
+        if started then @keys[key] = [digest, started]
         else @keys.delete(key)
         end
       end
@@ -500,7 +498,7 @@ module ClaudeInbox
       values[:prompt] = SessionRequest.attach(values[:prompt], paths)
       @queue << [:notice, "remote: starting session…"]
       id = Http.utf8(@spawn_lock.synchronize { @client.spawn(**values, explicit_mode: true) })
-      url = remote_url(id)
+      url = remote_url(id, wait: values[:remote] ? @bridge_wait : 0)
       @queue << [:remote_started, id, via]
       remember(via, "started #{id}")
       {id: id, name: values[:name], cwd: values[:cwd], url: url}
@@ -531,8 +529,10 @@ module ClaudeInbox
 
     # The session registers its bridge a moment after `claude --bg`
     # returns; without it in time the reply has no URL, only the id.
-    def remote_url(id)
-      deadline = Http.monotonic + @bridge_wait
+    # Without --remote-control it seldom registers one (docs/cli-quirks.md),
+    # so that start looks once rather than waits.
+    def remote_url(id, wait:)
+      deadline = Http.monotonic + wait
       loop do
         url = Session.new(id: id, job_state: JobState.read(id, jobs_dir: @jobs_dir)).remote_url
         return url if url || Http.monotonic >= deadline

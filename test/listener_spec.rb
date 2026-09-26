@@ -65,12 +65,13 @@ describe ClaudeInbox::Listener do
   def drained = Array.new(queue.size) { queue.pop }
 
   describe "routing and the token" do
-    it "serves the page at / to anyone, as HTML no other site can frame" do
+    it "serves the phone page at / to anyone, as HTML that reaches only this listener and can't be framed" do
       r = call("GET", "/", token: nil)
       _(r.status).must_equal 200
       _(r.headers["content-type"]).must_equal "text/html; charset=utf-8"
-      _(r.headers["content-security-policy"]).must_include "frame-ancestors 'none'"
-      _(r.body).must_include "claude-inbox is listening"
+      _(r.headers["content-security-policy"]).must_equal "default-src 'none'; script-src 'unsafe-inline'; " \
+        "style-src 'unsafe-inline'; img-src blob: data:; connect-src 'self'; form-action 'none'; frame-ancestors 'none'"
+      _(r.body.b).must_equal File.binread(File.expand_path("../lib/claude_inbox/remote.html", __dir__))
       _(r.headers.values_at("connection", "cache-control", "x-content-type-options", "referrer-policy"))
         .must_equal ["close", "no-store", "nosniff", "no-referrer"]
     end
@@ -134,6 +135,27 @@ describe ClaudeInbox::Listener do
     end
   end
 
+  describe "the phone page" do
+    let(:page) { ClaudeInbox::Listener::PAGE }
+
+    it "refuses what the listener would, before sending it" do
+      _(page).must_include "const MAX_IMAGES = #{ClaudeInbox::Listener::MAX_IMAGES};"
+      _(page).must_include "const MAX_BODY = #{ClaudeInbox::Listener::MAX_BODY};"
+    end
+
+    it "loads nothing from anywhere else, which the CSP would block without a word" do
+      _(page).wont_match(/<link\b|@import/)
+      _(page).wont_match(%r{\b(?:src|href|action)=["']?(?:https?:)?//})
+      _(page).wont_match(%r{url\(["']?(?:https?:)?//})
+    end
+
+    it "sends only the keys a start takes, so none is refused as unknown" do
+      fields = page[/const fields = \{(.*?)\};/m, 1].scan(/(\w+):/).flatten
+      _(page).must_match(/const body = JSON\.stringify\(\{\.\.\.fields, images: /)
+      _((fields + %w[images]).sort).must_equal (ClaudeInbox::SessionRequest::KEYS + %w[images]).sort
+    end
+  end
+
   describe "GET /api/options" do
     it "offers the choices, only the permission modes a phone may use, and the directories" do
       older = mkdir("code", "older")
@@ -179,7 +201,25 @@ describe ClaudeInbox::Listener do
     it "hands back the claude.ai/code page once the session has registered its bridge" do
       FileUtils.mkdir_p(File.join(tmp, "jobs", "deadbeef"))
       File.write(File.join(tmp, "jobs", "deadbeef", "state.json"), JSON.generate(bridgeSessionId: "cse_01AbC"))
-      _(start({prompt: "go", cwd: project}).json["url"]).must_equal "https://claude.ai/code/session_01AbC"
+      _(start({prompt: "go", cwd: project, remote: true}).json["url"]).must_equal "https://claude.ai/code/session_01AbC"
+    end
+
+    it "answers without waiting for a bridge a session without Remote Control seldom registers" do
+      options[:bridge_wait] = 3
+      began = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      r = start({prompt: "go", cwd: project, remote: false})
+      _(r.status).must_equal 201
+      _(r.json["url"]).must_be_nil
+      _(Process.clock_gettime(Process::CLOCK_MONOTONIC) - began).must_be :<, 1
+    end
+
+    it "still hands back a bridge that is already there without Remote Control, looking once" do
+      FileUtils.mkdir_p(File.join(tmp, "jobs", "deadbeef"))
+      File.write(File.join(tmp, "jobs", "deadbeef", "state.json"), JSON.generate(bridgeSessionId: "cse_01AbC"))
+      options[:bridge_wait] = 3
+      began = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      _(start({prompt: "go", cwd: project, remote: false}).json["url"]).must_equal "https://claude.ai/code/session_01AbC"
+      _(Process.clock_gettime(Process::CLOCK_MONOTONIC) - began).must_be :<, 1
     end
 
     it "refuses what the form refuses, naming the field, and starts nothing" do
@@ -286,6 +326,14 @@ describe ClaudeInbox::Listener do
       _(again.json).must_equal first.json
       _(client.spawns.size).must_equal 1
       _(start({prompt: "go", cwd: project}, headers: {"Idempotency-Key" => "k2"}).status).must_equal 201
+    end
+
+    it "refuses a key sent again with a different request, rather than answer it with the first start" do
+      _(start({prompt: "first task", cwd: project}, headers: {"Idempotency-Key" => "k1"}).status).must_equal 201
+      r = start({prompt: "second task", cwd: project}, headers: {"Idempotency-Key" => "k1"})
+      _([r.status, r.json]).must_equal [422, {"error" => "this Idempotency-Key was sent with a different request"}]
+      _(client.spawns.map { |s| s[:prompt] }).must_equal ["first task"]
+      _(start({prompt: "first task", cwd: project}, headers: {"Idempotency-Key" => "k1"}).status).must_equal 200
     end
 
     it "takes an empty Idempotency-Key as none, so every start is a new one" do

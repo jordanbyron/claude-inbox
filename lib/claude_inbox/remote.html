@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Inbox">
+<meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+<title>New session · claude-inbox</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f2f2f7; --card: #ffffff; --ink: #1c1c1e; --muted: #6e6e73; --line: #d1d1d6;
+  --accent: #0a7385; --accent-ink: #ffffff; --error: #c0281c; --badge-bg: #fff1c2; --badge-ink: #6b4a00;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000; --card: #1c1c1e; --ink: #f2f2f7; --muted: #98989f; --line: #3a3a3c;
+    --accent: #5ccbdc; --accent-ink: #00262c; --error: #ff7b6f; --badge-bg: #3d3000; --badge-ink: #ffd666;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 17px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(32px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+main { max-width: 36rem; margin: 0 auto; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 8px; }
+h1 { font-size: 28px; margin: 0; }
+.host { color: var(--muted); font-size: 15px; overflow-wrap: anywhere; }
+.badge { background: var(--badge-bg); color: var(--badge-ink); font-size: 13px; font-weight: 600; padding: 2px 10px; border-radius: 999px; }
+label { display: block; font-size: 15px; font-weight: 600; margin: 18px 0 6px; }
+input, select, textarea, button { font: inherit; font-size: 17px; color: inherit; }
+input[type=text], select, textarea {
+  display: block; width: 100%; min-height: 44px; padding: 10px 12px; margin: 0;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--card);
+}
+textarea { min-height: 9.5em; resize: vertical; }
+select {
+  -webkit-appearance: none; appearance: none; padding-right: 36px;
+  background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%238e8e93' stroke-width='2'/%3E%3C/svg%3E") no-repeat right 14px center;
+}
+input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+button, .button {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--accent);
+  font-weight: 600; text-decoration: none; cursor: pointer;
+}
+button.primary { width: 100%; margin-top: 24px; border: 0; background: var(--accent); color: var(--accent-ink); }
+button:disabled, .button.off { opacity: .45; pointer-events: none; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.images { display: flex; gap: 8px; align-items: center; margin-top: 8px; overflow-x: auto; }
+.images .button { flex: none; margin: 0; font-size: 17px; }
+figure { position: relative; flex: none; width: 72px; height: 72px; margin: 0; border-radius: 8px; overflow: hidden; background: var(--line); }
+figure img { display: block; width: 100%; height: 100%; object-fit: cover; }
+figcaption { position: absolute; left: 4px; bottom: 4px; padding: 0 5px; border-radius: 4px; background: rgba(0, 0, 0, .6); color: #fff; font-size: 12px; }
+figure button { position: absolute; top: 2px; right: 2px; width: 32px; min-height: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: rgba(0, 0, 0, .6); color: #fff; font-size: 20px; line-height: 1; }
+.toggles { margin-top: 20px; border-top: 1px solid var(--line); }
+.toggle { display: flex; justify-content: space-between; align-items: center; min-height: 48px; margin: 0; font-weight: 400; font-size: 17px; border-bottom: 1px solid var(--line); }
+.toggle input { margin: 0; accent-color: var(--accent); }
+.error { margin: 6px 0 0; color: var(--error); font-size: 15px; }
+.error:empty { display: none; }
+.card { margin-top: 16px; padding: 16px; border-radius: 12px; background: var(--card); }
+.card p { margin: 0 0 12px; }
+.muted { color: var(--muted); font-size: 15px; overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+code { font: 15px ui-monospace, SFMono-Regular, Menlo, monospace; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>New session</h1>
+  <span class="host" id="host"></span>
+  <span class="badge" id="fixture" hidden>fixture</span>
+</header>
+
+<section id="note" class="card" aria-live="polite">
+  <p id="note-text">Asking the inbox…</p>
+  <button type="button" id="retry" hidden>Try again</button>
+</section>
+
+<section id="pair" class="card" hidden>
+  <p id="pair-why">Paste the pairing URL. In the inbox, <b>N</b> shows it and <b>c</b> copies it.</p>
+  <input type="text" id="token" inputmode="url" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="http://…:7433/#token" aria-label="Pairing URL or token">
+  <p class="error" id="error-token"></p>
+  <button type="button" class="primary" id="pair-save">Pair</button>
+</section>
+
+<section id="form" hidden>
+  <label for="prompt">Prompt</label>
+  <textarea id="prompt" placeholder="What should this session do?"></textarea>
+  <p class="error" id="error-prompt"></p>
+  <div class="images" id="images">
+    <label class="button" for="file" id="add-image">Add image</label>
+  </div>
+  <input type="file" id="file" class="visually-hidden" accept="image/*" multiple>
+  <p class="error" id="error-images"></p>
+
+  <label for="name">Name</label>
+  <input type="text" id="name" autocapitalize="off" autocorrect="off" placeholder="(none: claude picks one)">
+  <p class="error" id="error-name"></p>
+
+  <label for="cwd">Directory</label>
+  <select id="cwd"></select>
+  <input type="text" id="cwd-other" hidden autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="/path/to/project or ~/code/project" aria-label="Another directory">
+  <p class="error" id="error-cwd"></p>
+
+  <label for="model">Model</label>
+  <select id="model"></select>
+  <p class="error" id="error-model"></p>
+  <label for="effort">Effort</label>
+  <select id="effort"></select>
+  <p class="error" id="error-effort"></p>
+  <label for="permission_mode">Permissions</label>
+  <select id="permission_mode"></select>
+  <p class="error" id="error-permission_mode"></p>
+
+  <div class="toggles">
+    <label class="toggle">Worktree <input type="checkbox" id="worktree" switch></label>
+    <label class="toggle">Remote Control <input type="checkbox" id="remote" switch checked></label>
+  </div>
+
+  <button type="button" class="primary" id="start">Start</button>
+  <p class="error" id="error-start" aria-live="polite"></p>
+</section>
+
+<section id="done" class="card" hidden>
+  <p>Started <code id="done-id"></code></p>
+  <p class="muted" id="done-where"></p>
+  <p class="muted" id="done-later">claude.ai/code lists it once it has registered, in a moment.</p>
+  <div class="actions">
+    <a class="button" id="done-url" target="_blank" rel="noopener">Open in Claude</a>
+    <button type="button" id="new">New</button>
+  </div>
+</section>
+</main>
+
+<script>
+"use strict";
+// The listener's MAX_IMAGES and MAX_BODY. It refuses a body over the limit
+// without reading it, which a phone still uploading can see as no answer.
+const MAX_IMAGES = 8;
+const MAX_BODY = 16777216;
+const LONG_EDGE = 2000;
+const FIELDS = ["prompt", "name", "cwd", "model", "effort", "permission_mode", "images"];
+const NO_ANSWER = "no answer from the inbox. Is it open with --listen-lan, and is the Mac awake?";
+const REJECTED = "token rejected: press N in the inbox and pair again";
+const TOKEN = /^[A-Za-z0-9_-]{32,}$/;
+
+const $ = (id) => document.getElementById(id);
+const saved = {
+  get(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } },
+  set(key, value) {
+    try { value == null ? localStorage.removeItem(key) : localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  }
+};
+
+let token = saved.get("token");
+let options = null;
+let images = [];
+let shrinking = Promise.resolve();
+let starting = false;
+let draft = saved.get("draft") || {};
+
+function show(view) {
+  for (const id of ["note", "pair", "form", "done"]) $(id).hidden = id !== view;
+}
+
+function note(text, retry) {
+  $("note-text").textContent = text;
+  $("retry").hidden = !retry;
+  show("note");
+}
+
+function showPair(why) {
+  $("pair-why").textContent = why || $("pair-why").textContent;
+  show("pair");
+}
+
+async function api(method, path, body, headers) {
+  let res, json = null;
+  try {
+    res = await fetch(path, {method, body, cache: "no-store", headers: {...headers, Authorization: `Bearer ${token}`}});
+    json = await res.json();
+  } catch {
+    if (!res) return {status: 0, error: NO_ANSWER};
+  }
+  if (res.status === 401) return {status: 401, error: REJECTED};
+  // Status 0 whatever the HTTP status: a captive portal answers 200 with a page of its own.
+  if (!json || typeof json !== "object" || Array.isArray(json)) return {status: 0, error: `the inbox isn't answering (HTTP ${res.status})`};
+  return {status: res.status, json, error: json.error || `HTTP ${res.status}`, field: json.field};
+}
+
+async function load() {
+  if (!token) return showPair();
+  note("Asking the inbox…");
+  const r = await api("GET", "/api/options");
+  if (r.status === 401) return showPair(r.error);
+  if (r.status !== 200) return note(r.error, true);
+  options = r.json;
+  $("fixture").hidden = !options.fixture;
+  fill();
+  show("form");
+}
+
+// Filled again on a new pairing URL or after a 401, with a draft open:
+// what is on screen then stays, where it is still offered.
+function fill() {
+  const dirs = options.dirs || [];
+  const refill = $("cwd").options.length > 0;
+  const last = refill ? cwd() : saved.get("cwd");
+  const typed = (refill && $("cwd").value === "") || (Boolean(last) && !dirs.some((d) => d.path === last));
+  $("cwd").replaceChildren(...dirs.map((d) => new Option(d.label, d.path)), new Option("another directory…", ""));
+  $("cwd").value = typed || !dirs.length ? "" : last || dirs[0].path;
+  if (typed) $("cwd-other").value = last;
+  for (const [id, list] of [["model", options.models], ["effort", options.efforts], ["permission_mode", options.permission_modes]]) {
+    const picked = $(id).value;
+    $(id).replaceChildren(...(list || []).map((v) => new Option(v, v)));
+    if ((list || []).includes(picked)) $(id).value = picked;
+  }
+  relabel();
+}
+
+// "default" means what the settings for that directory say, as the n form
+// shows it. The listener caps the mode it resolves to, so in a directory
+// that defaults to acceptEdits, "default" can't start anything from here.
+// The page's own pick away from it is undone where "default" is allowed.
+function relabel() {
+  const dir = (options.dirs || []).find((d) => d.path === $("cwd").value);
+  $("cwd-other").hidden = $("cwd").value !== "";
+  for (const id of ["model", "effort", "permission_mode"]) {
+    const option = [...$(id).options].find((o) => o.value === "default");
+    if (!option) continue;
+    const set = dir && dir.defaults && dir.defaults[id];
+    const refused = id === "permission_mode" && Boolean(set) && !(options.permission_modes || []).includes(set);
+    option.textContent = !set ? "default" : refused ? `default (${set}: not from a phone)` : `default (${set})`;
+    option.disabled = refused;
+    const select = $(id);
+    if (refused && select.value === "default") {
+      const allowed = [...select.options].find((o) => !o.disabled);
+      if (allowed) [select.value, select.dataset.forced] = [allowed.value, "1"];
+    } else if (!refused && select.dataset.forced) {
+      select.value = "default";
+      delete select.dataset.forced;
+    }
+  }
+  // On, since you are away from the desk, unless /config or the project
+  // turns Remote Control off there. A flip of your own stays put.
+  if (!$("remote").dataset.flipped) $("remote").checked = !(dir && dir.defaults && dir.defaults.remote === "no");
+}
+
+function cwd() {
+  return $("cwd").value || $("cwd-other").value.trim();
+}
+
+function saveDraft() {
+  draft.prompt = $("prompt").value;
+  draft.name = $("name").value;
+  saved.set("draft", draft);
+}
+
+function fieldError(field, message) {
+  const el = $(`error-${FIELDS.includes(field) ? field : "start"}`);
+  el.textContent = message;
+  el.scrollIntoView({block: "center", behavior: "smooth"});
+}
+
+function clearErrors() {
+  for (const el of document.querySelectorAll(".error")) el.textContent = "";
+}
+
+// A photo is decoded at full size, so one at a time: a phone has room for a
+// single 48-megapixel bitmap, not eight.
+function addImages(files) {
+  $("error-images").textContent = "";
+  const room = MAX_IMAGES - images.length;
+  if (files.length > room) $("error-images").textContent = `at most ${MAX_IMAGES} images`;
+  for (const file of files.slice(0, room)) {
+    const image = {};
+    images.push(image);
+    insertToken(images.length);
+    shrinking = shrinking
+      .then(() => shrink(file))
+      .then((url) => { image.url = url; }, () => dropImage(image, `${file.name || "a photo"} couldn't be read`))
+      .then(drawImages);
+  }
+  drawImages();
+}
+
+function shrink(file) {
+  return new Promise((resolve, reject) => {
+    const src = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, LONG_EDGE / Math.max(img.naturalWidth, img.naturalHeight, 1));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#fff"; // JPEG has no alpha; a transparent PNG would turn black
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      const url = canvas.toDataURL("image/jpeg", 0.85);
+      URL.revokeObjectURL(src);
+      canvas.width = canvas.height = 0;
+      url.startsWith("data:image/jpeg;base64,") ? resolve(url) : reject(new Error("canvas"));
+    };
+    img.onerror = () => { URL.revokeObjectURL(src); reject(new Error("decode")); };
+    img.src = src;
+  });
+}
+
+function insertToken(n) {
+  const p = $("prompt");
+  const at = p.selectionEnd ?? p.value.length;
+  const before = p.value.slice(0, at), after = p.value.slice(at);
+  const text = (/\S$/.test(before) ? " " : "") + `[Image #${n}]` + (/^\S/.test(after) ? " " : "");
+  p.value = before + text + after;
+  p.selectionStart = p.selectionEnd = at + text.length;
+  saveDraft();
+}
+
+// The inbox maps [Image #n] to the nth image sent, so the ones after it move up.
+function dropImage(image, why) {
+  const k = images.indexOf(image) + 1;
+  if (!k) return;
+  images.splice(k - 1, 1);
+  $("prompt").value = $("prompt").value.replace(/ ?\[Image #(\d+)\]/gi, (match, n) =>
+    Number(n) === k ? "" : Number(n) > k ? match.replace(n, n - 1) : match);
+  saveDraft();
+  if (why) $("error-images").textContent = why;
+  drawImages();
+}
+
+function drawImages() {
+  const figures = images.map((image, i) => {
+    const figure = document.createElement("figure");
+    if (image.url) figure.append(Object.assign(new Image(), {src: image.url, alt: `Image #${i + 1}`}));
+    const caption = document.createElement("figcaption");
+    caption.textContent = image.url ? `#${i + 1}` : "…";
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = "×";
+    remove.setAttribute("aria-label", `Remove image ${i + 1}`);
+    remove.disabled = starting;
+    remove.addEventListener("click", () => dropImage(image));
+    figure.append(caption, remove);
+    return figure;
+  });
+  $("images").replaceChildren($("add-image"), ...figures);
+  $("file").disabled = starting || images.length >= MAX_IMAGES;
+  $("add-image").classList.toggle("off", $("file").disabled);
+}
+
+// Not crypto.randomUUID: over plain http to an address it doesn't exist.
+function newKey() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function start() {
+  const button = $("start");
+  if (button.disabled) return;
+  clearErrors();
+  button.disabled = starting = true;
+  drawImages();
+  button.textContent = images.length ? "Preparing images…" : "Starting…";
+  try {
+    while (images.some((image) => !image.url)) await shrinking;
+    const remote = $("remote").checked;
+    const fields = {
+      prompt: $("prompt").value, name: $("name").value, cwd: cwd(),
+      model: $("model").value, effort: $("effort").value, permission_mode: $("permission_mode").value,
+      worktree: $("worktree").checked, remote: remote
+    };
+    const body = JSON.stringify({...fields, images: images.map((image) => ({data: image.url.slice(image.url.indexOf(",") + 1)}))});
+    const size = new Blob([body]).size;
+    if (size > MAX_BODY) {
+      return fieldError("images", `these come to ${(size / 1048576).toFixed(1)} MB and the inbox takes ${MAX_BODY / 1048576} MB: remove one`);
+    }
+    // Kept with the draft for this request alone, so a retry after a lost
+    // answer gets that answer, and an edited one is a start of its own.
+    // Compared as text: crypto.subtle, like randomUUID, needs https.
+    const sent = JSON.stringify({...fields, images: images.map((image) => `${image.url.length}:${image.url.slice(-24)}`)});
+    if (!draft.key || draft.sent !== sent) Object.assign(draft, {key: newKey(), sent});
+    saveDraft();
+    saved.set("cwd", cwd());
+    button.textContent = "Starting…";
+    const r = await api("POST", "/api/sessions", body, {"Content-Type": "application/json", "Idempotency-Key": draft.key});
+    if (r.status === 201 || r.status === 200) return started(r.json, remote);
+    // An answer means the listener has let the key go, unless it is still starting.
+    if (r.status !== 0 && r.status !== 409) Object.assign(draft, {key: null, sent: null});
+    saveDraft();
+    if (r.status === 401) return showPair(r.error);
+    fieldError(r.field, r.error);
+  } finally {
+    button.disabled = starting = false;
+    button.textContent = "Start";
+    drawImages();
+  }
+}
+
+function started(session, remote) {
+  draft = {};
+  saved.set("draft", null);
+  images = [];
+  drawImages();
+  $("prompt").value = "";
+  $("name").value = "";
+  $("done-id").textContent = session.id;
+  $("done-where").textContent = [session.name, session.cwd].filter(Boolean).join(" · ");
+  const link = $("done-url");
+  link.hidden = !/^https:\/\//.test(session.url || "");
+  if (!link.hidden) link.href = session.url;
+  $("done-later").hidden = !(remote && link.hidden);
+  show("done");
+}
+
+function pair() {
+  const text = $("token").value.trim();
+  const sent = text.includes("#") ? text.slice(text.lastIndexOf("#") + 1) : text;
+  if (!TOKEN.test(sent)) {
+    $("error-token").textContent = "that isn't a pairing URL: it ends in # and the token";
+    return;
+  }
+  $("error-token").textContent = "";
+  $("token").value = "";
+  token = sent;
+  saved.set("token", token);
+  load();
+}
+
+// Also on hashchange: a pairing URL opened over this page changes only the
+// fragment, which doesn't load the page again.
+function takeFragment() {
+  if (location.hash.length < 2) return false;
+  const sent = location.hash.slice(1);
+  // Out of Safari's address bar and history; a home-screen app shows neither.
+  if (!navigator.standalone) history.replaceState(null, "", location.pathname + location.search);
+  // A stray or elided (abcd…wxyz) fragment leaves a good token alone.
+  if (!TOKEN.test(sent)) return false;
+  token = sent;
+  saved.set("token", token);
+  return true;
+}
+
+$("host").textContent = location.host;
+takeFragment();
+window.addEventListener("hashchange", () => { if (takeFragment()) load(); });
+// The images themselves aren't kept, and a token left behind would name the next one added.
+$("prompt").value = (draft.prompt || "").replace(/ ?\[Image #\d+\]/gi, "");
+$("name").value = draft.name || "";
+$("prompt").addEventListener("input", saveDraft);
+$("name").addEventListener("input", saveDraft);
+$("cwd").addEventListener("change", () => { saved.set("cwd", cwd() || null); relabel(); });
+$("cwd-other").addEventListener("input", () => saved.set("cwd", cwd() || null));
+for (const id of ["model", "effort", "permission_mode"]) $(id).addEventListener("change", () => delete $(id).dataset.forced);
+$("remote").addEventListener("change", () => { $("remote").dataset.flipped = "1"; });
+$("file").addEventListener("change", (e) => { addImages([...e.target.files]); e.target.value = ""; });
+$("start").addEventListener("click", start);
+$("retry").addEventListener("click", load);
+$("pair-save").addEventListener("click", pair);
+$("token").addEventListener("keydown", (e) => { if (e.key === "Enter") pair(); });
+$("new").addEventListener("click", () => { show("form"); $("prompt").focus(); });
+load();
+</script>
+</body>
+</html>

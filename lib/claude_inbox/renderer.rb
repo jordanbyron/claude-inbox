@@ -217,9 +217,14 @@ module ClaudeInbox
       text =
         if view.filter_editing then " " + @theme.cyan_bold("/") + line(view.filter, width - 2)
         elsif view.filter then " " + @theme.cyan_bold("/") + view.filter.to_s + @p.dim("  esc clears")
-        else " " + KEYS.map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
+        else " " + footer_keys(view).map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
         end
       Text.pad(text, width)
+    end
+
+    def footer_keys(view)
+      return KEYS unless view.listening&.lan
+      KEYS.flat_map { |key| (key[0] == "n") ? [key, ["N", "pair"]] : [key] }
     end
 
     def line(buffer, width) = buffer.row(width, cursor: caret)

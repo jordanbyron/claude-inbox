@@ -215,6 +215,17 @@ describe ClaudeInbox::Renderer do
     _(chip.call(:held)).must_include "\e[38;5;#{ClaudeInbox::Theme::HUES[:red]}m◉ !"
   end
 
+  it "puts N in the footer only while listening on the LAN" do
+    snapshot = ->(lan) {
+      ClaudeInbox::Listener::Snapshot.new(state: :listening, port: 7433, lan: lan, urls: nil, firewall: nil, allowed_modes: [],
+        recent: [], held_by: nil, fixture: false)
+    }
+    footer = ->(listening) { frame(sections, width: 200, height: 10, listening: listening).lines.last }
+    _(footer.call(snapshot.call(true))).must_include "n new  N pair  t pin"
+    _(footer.call(snapshot.call(false))).wont_include "N pair"
+    _(footer.call(nil)).wont_include "N pair"
+  end
+
   it "keeps the header's settled chip distinct from the chip separator" do
     entries = {"823b882f" => {"settled_at" => now.to_i, "last_state" => "done", "state_since" => now.to_i - 5}}
     sec = Store.sectionize(sessions, Store.merge_entries(entries, sessions, now), now)

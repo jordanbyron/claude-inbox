@@ -235,6 +235,46 @@ and rejected tokens, counting a repeat rather than listing it again. Anyone with
 you, in your projects: treat a leaked URL like a leaked password, and press
 `r`.
 
+**The page.** The pairing URL opens the `n` form, sized for a phone:
+prompt, name, directory, model, effort, permissions, worktree and Remote
+Control, which starts out on, since you are away from the desk, unless
+`/config` or the project's settings turn it off for that directory. The
+directories are the ones your sessions ran in lately, then the projects
+whose trust dialog you accepted, and the one you picked last is picked
+again; "another directory…" takes a typed path instead. "default" in a list
+says what that directory's settings make it: `default (opus)`. Where the
+settings make it a permission mode a phone may not use, it reads
+`default (acceptEdits: not from a phone)` and can't be picked, and `plan`
+stands in for it until you pick a directory that allows it. Add image
+takes a photo or picks from the library, scales anything larger down to
+2000 pixels on the long edge and sends it as a JPEG, which leaves the
+photo's metadata, location included, on the phone; an `[Image #1]` lands at
+the cursor, as a paste does in the form. What you type is kept on the phone
+until a start goes through, but the photos are not, so after a reload add
+them again. If a start gets no answer, Start again sends the same request
+under the same key and gets that start's answer rather than a second
+session; change anything first and it is a new start. A refusal shows under the field it is about. A start that went
+through gives the session's id and, with Remote Control on, an Open in
+Claude link to its claude.ai/code page once the session has registered
+there; the inbox waits three seconds for that, and past them the page says
+claude.ai/code will list it in a moment. The page keeps the token and takes
+it out of the address bar. Once the token is rotated it says "token
+rejected: press N in the inbox and pair again" and asks for the new pairing
+URL.
+
+**On the home screen.**
+
+1. In the inbox, press `N` and then `c`. The pairing URL, token and all, is
+   on the clipboard, and Universal Clipboard takes it to the phone.
+2. On the phone, paste it into Safari and open it.
+3. Tap Share, then Add to Home Screen, then Add.
+4. Open the new icon. It keeps its own storage, apart from Safari's, so the
+   first time it asks for the token: paste the pairing URL again and tap
+   Pair.
+
+The page comes from the inbox itself, so with the inbox closed or the Mac
+asleep the icon has nothing to open.
+
 **Permission modes.** A remote start may use `default`, `auto` and `plan`,
 nothing wider. `default` means whatever your settings say for that
 directory, so it is worked out first: a project whose settings default to
@@ -264,11 +304,37 @@ or WebP images that the prompt can point at as `[Image #1]`. Left out,
 the form's default does. An unknown key
 is refused, so a misspelt setting can't quietly fall back to its default.
 The answer is `201 {"id", "name", "cwd", "url"}`, where `url` is the
-session's claude.ai/code page, or null if it hasn't registered yet. A
+session's claude.ai/code page, or null if it hasn't registered within three
+seconds; without `remote` the inbox doesn't wait, since such a session
+seldom registers at all. A
 refusal is `{"error", "field"}` with the same message the form would show,
 and a CLI refusal such as "Workspace not trusted" comes back as a 500. Send
 an `Idempotency-Key` header and a retry gets the first answer instead of a
-second session.
+second session; the same key with a different request is refused with 422.
+
+**A Shortcut.** To start a session from the share sheet, with the photos or
+text you shared, a Shortcut can send the same request. In outline:
+
+1. Receive Images and Text from the Share Sheet.
+2. Get Images from the Shortcut Input, and Repeat with Each: Resize Image
+   to 2000 on the longest edge, Convert Image to JPEG, Base64 Encode, a
+   Dictionary with `data` set to the encoded text, and Add to Variable
+   `images`.
+3. Ask for Input for the prompt, with the shared text as its default.
+4. Get Contents of URL `http://192.168.1.20:7433/api/sessions`, method POST,
+   with the headers `Authorization: Bearer <token>` and `Idempotency-Key`,
+   and a JSON body: `prompt`, `cwd` as a path such as `~/code/claude-inbox`,
+   `remote` true, and `images` as the variable. The key only has to differ
+   from one start to the next, so make it a Random Number between 1 and
+   1000000000: the Current Date as text goes only to the minute, and a
+   second start with a key the inbox has seen gets the first one's answer
+   and starts nothing. A label from `/api/options` would do for `cwd` today,
+   but it grows a parent directory when another directory of the same name
+   turns up, and the saved Shortcut would then get a 422.
+5. Show the answer, or Open URLs on its `url`.
+
+Put the token in a Text action at the top. If you share the Shortcut, make
+that action an Import Question, so the token isn't in what you share.
 
 A remote start never moves the cursor, attaches, or closes what you have
 open. The header says `started 31472308 from 192.168.1.30`, and the row
