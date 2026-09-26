@@ -9,6 +9,7 @@ require_relative "pairing"
 require_relative "pairing_dialog"
 require_relative "start"
 require_relative "../subprocess"
+require_relative "../text"
 
 module ClaudeInbox
   module Remote
@@ -48,7 +49,7 @@ module ClaudeInbox
         "/manifest.webmanifest" => [{"Content-Type" => "application/manifest+json"}, MANIFEST],
         "/icon.png" => [{"Content-Type" => "image/png"}, ICON]
       }.freeze
-      ROUTES = FILES.transform_values { "GET" }.merge(Start::ROUTES).freeze
+      ROUTES = FILES.transform_values { "GET" }.merge(Start::VERBS).freeze
 
       # What `N` and the header chip show, as of one moment. `state` is :off,
       # :listening, :in_use (the port is taken), :held (another inbox has the
@@ -116,7 +117,7 @@ module ClaudeInbox
         @lock_path = lock_path
         @fixture = fixture
         @retry_every = retry_every
-        @start = Start.new(client: client, store: store, queue: queue, record: method(:remember), allowed_modes: allowed_modes,
+        @start = Start.new(client: client, store: store, queue: queue, allowed_modes: allowed_modes,
           fixture: fixture, **start_options)
         @mutex = Mutex.new
         @state = :off
@@ -197,15 +198,11 @@ module ClaudeInbox
         authorized = false
         request = Http.read_head(io, deadline: Http.monotonic + HEAD_TIMEOUT)
         file = route(request)
-        reply =
-          if file then [200, *file]
-          else
-            authorize(request, via)
-            authorized = true
-            authenticated(slot) if slot
-            @start.call(request, io, via)
-          end
-        Http.write(io, *reply)
+        return Http.write(io, 200, *file) if file
+        authorize(request, via)
+        authorized = true
+        authenticated(slot) if slot
+        Http.write(io, *answer(request, io, via))
       rescue Http::Error => e
         Http.write(io, e.status, Http::JSON_TYPE.merge(e.headers), JSON.generate(e.body))
       rescue => e
@@ -248,7 +245,7 @@ module ClaudeInbox
         release_lock
         @mutex.synchronize do
           @state = state
-          @error = error && Http.printable(error)
+          @error = error && Text.printable(error)
         end
         state
       end
@@ -389,8 +386,19 @@ module ClaudeInbox
 
       # The same outcome from the same place again moves up with a count, so
       # a host sending bad tokens can't push everything else out of the list.
+      # Every start, and every refusal once the token has checked out, is
+      # listed for `N`.
+      def answer(request, io, via)
+        status, headers, body, note = @start.call(request, io, via)
+        remember(via, note) if note
+        [status, headers, body]
+      rescue Http::Error => e
+        remember(via, e.note || "refused: #{e.message}")
+        raise
+      end
+
       def remember(via, result)
-        result = Http.printable(result)
+        result = Text.printable(result)
         @mutex.synchronize do
           same = @recent.find { |o| o.via == via && o.result == result }
           outcome = Outcome.new(at: Time.now, via: via, result: result, count: (same&.count || 0) + 1)
@@ -403,7 +411,7 @@ module ClaudeInbox
         Thread.new do
           yield
         rescue => e
-          @queue << [:notice, Http.printable(e.message)]
+          @queue << [:notice, Text.printable(e.message)]
         end
       end
 

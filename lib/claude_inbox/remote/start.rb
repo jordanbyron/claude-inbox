@@ -8,6 +8,7 @@ require_relative "../job_state"
 require_relative "../session"
 require_relative "../session_request"
 require_relative "../settings"
+require_relative "../text"
 require_relative "../trust"
 require_relative "http"
 
@@ -17,19 +18,19 @@ module ClaudeInbox
     # the way the `n` form starts one, within the permission cap. Listener
     # hands it a request only once the token has checked out.
     class Start
-      ROUTES = {"/api/options" => "GET", "/api/sessions" => "POST"}.freeze
+      # Path => [verb, the method that answers it].
+      ROUTES = {"/api/options" => ["GET", :options], "/api/sessions" => ["POST", :post_session]}.freeze
+      VERBS = ROUTES.transform_values(&:first).freeze
       MAX_BODY = 16 * 1024 * 1024
       MAX_IMAGES = 8
       BODY_TIMEOUT = 120
       KEYS_KEPT = 16
 
-      # `record` takes (via, result) for the list `N` shows.
-      def initialize(client:, store:, queue:, record:, allowed_modes:, fixture: false, images_dir: Images::DEFAULT_DIR,
+      def initialize(client:, store:, queue:, allowed_modes:, fixture: false, images_dir: Images::DEFAULT_DIR,
         jobs_dir: JobState::DEFAULT_DIR, trust: Trust.method(:projects), settings: Settings.method(:defaults), bridge_wait: 3)
         @client = client
         @store = store
         @queue = queue
-        @record = record
         @allowed_modes = allowed_modes
         @fixture = fixture
         @images_dir = images_dir
@@ -42,12 +43,13 @@ module ClaudeInbox
         @keys = {}
       end
 
-      # => [status, headers, body], or raises Http::Error.
-      def call(request, io, via)
-        (request.path == "/api/options") ? json(200, choices) : post_session(io, request, via)
-      end
+      # => [status, headers, body, note], `note` being what `N` lists, if
+      # anything; or raises Http::Error.
+      def call(request, io, via) = send(ROUTES.fetch(request.path)[1], request, io, via)
 
       private
+
+      def options(_request, _io, _via) = json(200, choices)
 
       def json(status, body) = [status, Http::JSON_TYPE, JSON.generate(@fixture ? body.merge(fixture: true) : body)]
 
@@ -73,7 +75,7 @@ module ClaudeInbox
       # check has passed. A retry with the same Idempotency-Key gets the
       # first answer instead of a second session; the key sent with a
       # different request is refused, since that answer isn't this one's.
-      def post_session(io, request, via)
+      def post_session(request, io, via)
         params = read_json(io, request)
         key = request.headers["idempotency-key"]
         key = nil if key.to_s.empty?
@@ -84,18 +86,14 @@ module ClaudeInbox
         started = nil
         begin
           started = launch(params, images, via)
-          json(201, started)
+          [*json(201, started), "started #{started[:id]}"]
         ensure
           settle(key, digest, started) if key
         end
       rescue AgentsClient::Error => e
-        reason = Http.printable(e.message.lines.first.to_s.strip)
+        reason = Text.printable(e.message.lines.first.to_s.strip)
         @queue << [:notice, "remote start failed: #{reason}"]
-        @record.call(via, reason)
-        raise Http::Error.new(500, e.message, source: "claude")
-      rescue Http::Error => e
-        @record.call(via, "refused: #{e.message}")
-        raise
+        raise Http::Error.new(500, e.message, source: "claude", note: reason)
       end
 
       def read_json(io, request)
@@ -168,7 +166,6 @@ module ClaudeInbox
         id = Http.utf8(@spawn_lock.synchronize { @client.spawn(**values) })
         url = remote_url(id, wait: values[:remote] ? @bridge_wait : 0)
         @queue << [:remote_started, id, via]
-        @record.call(via, "started #{id}")
         {id: id, name: values[:name], cwd: values[:cwd], url: url}
       rescue SessionRequest::Invalid => e
         raise Http::Error.new(422, e.message, field: e.field)

@@ -13,9 +13,8 @@ describe ClaudeInbox::Remote::Start do
   let(:trusted) { [] }
   let(:settings) { {} }
   let(:options) { {} }
-  let(:recorded) { [] }
   let(:remote_start) do
-    ClaudeInbox::Remote::Start.new(client: client, store: store, queue: queue, record: ->(via, result) { recorded << [via, result] },
+    ClaudeInbox::Remote::Start.new(client: client, store: store, queue: queue,
       allowed_modes: ClaudeInbox::Remote::Listener::DEFAULT_MODES, images_dir: File.join(tmp, "images"),
       jobs_dir: File.join(tmp, "jobs"), trust: -> { trusted },
       settings: ->(dir) { settings.fetch(dir) { ClaudeInbox::Settings::Defaults.new } }, bridge_wait: 0, **options)
@@ -29,10 +28,10 @@ describe ClaudeInbox::Remote::Start do
   def raw(text)
     sock = FakeSocket.new(text)
     request = ClaudeInbox::Remote::Http.read_head(sock, deadline: ClaudeInbox::Remote::Http.monotonic + 5)
-    status, headers, body = remote_start.call(request, sock, "192.168.1.30")
-    Reply.new(status, headers, body, sock.written)
+    status, headers, body, note = remote_start.call(request, sock, "192.168.1.30")
+    Reply.new(status, headers, body, sock.written, note)
   rescue ClaudeInbox::Remote::Http::Error => e
-    Reply.new(e.status, e.headers, JSON.generate(e.body), sock.written)
+    Reply.new(e.status, e.headers, JSON.generate(e.body), sock.written, e.note)
   end
 
   def call(verb, path, body = nil, type: "application/json", headers: {})
@@ -47,8 +46,6 @@ describe ClaudeInbox::Remote::Start do
   def start(params, **opts) = call("POST", "/api/sessions", params, **opts)
 
   def drained = Array.new(queue.size) { queue.pop }
-
-  def results = recorded.map(&:last)
 
   describe "GET /api/options" do
     it "offers the choices, only the permission modes a phone may use, and the directories" do
@@ -89,7 +86,7 @@ describe ClaudeInbox::Remote::Start do
       _(client.spawns).must_equal [{prompt: "fix it", name: "phone", cwd: project, model: "opus", effort: nil,
                                     permission_mode: "auto", worktree: false, remote: true}]
       _(drained).must_equal [[:notice, "remote: starting session…"], [:remote_started, "deadbeef", "192.168.1.30"]]
-      _(results.last).must_equal "started deadbeef"
+      _(r.note).must_equal "started deadbeef"
     end
 
     it "hands back the claude.ai/code page once the session has registered its bridge" do
@@ -235,11 +232,6 @@ describe ClaudeInbox::Remote::Start do
       _(client.spawns.size).must_equal 2
     end
 
-    it "notes a refused start for N, as it does a failed one" do
-      start({prompt: "go", cwd: project, permission_mode: "bypassPermissions"})
-      _(results.last).must_equal "refused: permission mode bypassPermissions isn't allowed from another device"
-    end
-
     it "says 409 while the first request with that key is still starting" do
       client.hold
       first = Thread.new { start({prompt: "go", cwd: project}, headers: {"Idempotency-Key" => "k1"}) }
@@ -254,7 +246,7 @@ describe ClaudeInbox::Remote::Start do
       r = start({prompt: "go", cwd: project}, headers: {"Idempotency-Key" => "k1"})
       _([r.status, r.json]).must_equal [500, {"error" => "claude --bg failed: Workspace not trusted", "source" => "claude"}]
       _(drained.last).must_equal [:notice, "remote start failed: claude --bg failed: Workspace not trusted"]
-      _(results.last).must_equal "claude --bg failed: Workspace not trusted"
+      _(r.note).must_equal "claude --bg failed: Workspace not trusted"
       client.fail_spawn(nil)
       _(start({prompt: "go", cwd: project}, headers: {"Idempotency-Key" => "k1"}).status).must_equal 201
     end

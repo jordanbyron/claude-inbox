@@ -29,14 +29,16 @@ module ClaudeInbox
       JSON_TYPE = {"Content-Type" => "application/json"}.freeze
 
       # A request refused: the status, the message and any other members for
-      # the JSON body, and the headers that status calls for.
+      # the JSON body, and the headers that status calls for. `note`, when
+      # set, is what the refusal is logged as in place of its message.
       class Error < StandardError
-        attr_reader :status, :headers, :details
+        attr_reader :status, :headers, :details, :note
 
-        def initialize(status, message, headers: {}, **details)
+        def initialize(status, message, headers: {}, note: nil, **details)
           super(message)
           @status = status
           @headers = headers
+          @note = note
           @details = details
         end
 
@@ -79,9 +81,6 @@ module ClaudeInbox
       # binary string and raises on a bad byte, and a message can quote CLI
       # output or request bytes.
       def self.utf8(text) = String.new(text.to_s, encoding: Encoding::UTF_8).scrub("\uFFFD")
-
-      # For what reaches the terminal and quotes a request.
-      def self.printable(text) = utf8(text).gsub(/[[:cntrl:]]/) { |c| format("\\x%02x", c.ord) }
 
       # `deadline` (on the monotonic clock) bounds the whole head, not each
       # read: a per-read timeout lets a byte every few seconds hold the

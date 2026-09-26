@@ -181,6 +181,11 @@ describe ClaudeInbox::Remote::Listener do
       _(drained.last).must_equal [:notice, "remote start failed: claude --bg failed: \\x1b[2Jno such directory"]
     end
 
+    it "notes a refused start for N, as it does a failed one" do
+      start({prompt: "go", cwd: project, permission_mode: "bypassPermissions"})
+      _(listener.snapshot.recent.last.result).must_equal "refused: permission mode bypassPermissions isn't allowed from another device"
+    end
+
     it "answers anything else that goes wrong with a 500 and its message" do
       options[:images_dir] = File.join(tmp, "listen.json").tap { |f| File.write(f, "") }
       r = start({prompt: "go", cwd: project, images: [{data: [PNG].pack("m0")}]})
@@ -310,6 +315,18 @@ describe ClaudeInbox::Remote::Listener do
       _(answer).must_include "Retry-After: 2"
     ensure
       [*idle, third].compact.each(&:close)
+    end
+
+    it "stops counting a connection as unauthenticated once its token checks out" do
+      listener.start
+      held = TCPSocket.new("127.0.0.1", listener.port)
+      held.write("POST /api/sessions HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer #{pairing.token}\r\n" \
+        "Content-Type: application/json\r\nContent-Length: 10\r\nExpect: 100-continue\r\n\r\n")
+      _(held.readpartial(4096)).must_include "100 Continue"
+      idle = TCPSocket.new("127.0.0.1", listener.port)
+      _(Net::HTTP.get_response(URI("http://127.0.0.1:#{listener.port}/")).code).must_equal "200"
+    ensure
+      [held, idle].compact.each(&:close)
     end
 
     it "gives each connection's slot back once it is answered" do

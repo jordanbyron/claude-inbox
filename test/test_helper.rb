@@ -114,8 +114,9 @@ class FakeSocket
   def write(data) = @written << data.b
 end
 
-# What came back from Listener#handle or Start#call, parsed.
-Reply = Struct.new(:status, :headers, :body, :written) do
+# What came back from Listener#handle or Start#call, parsed. `note` is
+# Start's, for N.
+Reply = Struct.new(:status, :headers, :body, :written, :note) do
   def json = JSON.parse(body)
 end
 
