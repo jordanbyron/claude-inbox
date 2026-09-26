@@ -2,67 +2,64 @@
 
 require "stringio"
 
-RSpec.describe ClaudeInbox::Terminal, :terminal do
+RSpec.describe ClaudeInbox::Terminal do
   let(:out) { StringIO.new }
-  let(:terminal) { described_class.new(out, StringIO.new) }
+  let(:input) { StringIO.new }
+  let(:terminal) { described_class.new(out, input) }
 
-  it "takes the wheel for the duration of the alt screen and hands it back" do
-    terminal.enter
-    entered = taken
-    expect(entered).to include(described_class::ALT_ON)
-    expect(entered).to include(described_class::WHEEL_KEYS_ON)
+  context "once it enters the alt screen" do
+    before { terminal.enter }
 
-    terminal.restore
-    left = taken
-    expect(left).to include(described_class::WHEEL_KEYS_OFF)
-    # The mode belongs to the alt screen, so it has to go first.
-    expect(left.index(described_class::WHEEL_KEYS_OFF)).to be < left.index(described_class::ALT_OFF)
+    it "takes the wheel" do
+      expect(out.string).to include(described_class::ALT_ON)
+      expect(out.string).to include(described_class::WHEEL_KEYS_ON)
+    end
+
+    it("takes over the mouse") { expect(out.string).to include(described_class::MOUSE_ON) }
+
+    it("asks for bracketed paste") { expect(out.string).to include(described_class::PASTE_ON) }
+
+    it "hands the screen to a child and takes it back afterwards" do
+      in_child = nil
+      terminal.release { in_child = out.string.rindex(described_class::ALT_OFF) > out.string.rindex(described_class::ALT_ON) }
+      expect(in_child).to be(true)
+      expect(out.string.rindex(described_class::ALT_ON)).to be > out.string.rindex(described_class::ALT_OFF)
+    end
+
+    # Each mode belongs to the alt screen, so it has to go first.
+    context "and restores" do
+      before do
+        out.string = +""
+        terminal.restore
+      end
+
+      it "hands the wheel back before leaving the alt screen" do
+        expect(out.string.index(described_class::WHEEL_KEYS_OFF)).to be < out.string.index(described_class::ALT_OFF)
+      end
+
+      it "hands the mouse back before leaving the alt screen" do
+        expect(out.string.index(described_class::MOUSE_OFF)).to be < out.string.index(described_class::ALT_OFF)
+      end
+
+      it "hands bracketed paste back before leaving the alt screen" do
+        expect(out.string.index(described_class::PASTE_OFF)).to be < out.string.index(described_class::ALT_OFF)
+      end
+
+      it "restores once, however many times it is asked" do
+        terminal.restore
+        expect(out.string.scan(described_class::ALT_OFF).size).to eq(1)
+      end
+    end
   end
 
-  it "takes over the mouse for the duration of the alt screen and hands it back" do
-    terminal.enter
-    entered = taken
-    expect(entered).to include(described_class::MOUSE_ON)
+  context "on a tty with a mode of its own" do
+    let(:input) { ModedInput.new }
 
-    terminal.restore
-    left = taken
-    expect(left).to include(described_class::MOUSE_OFF)
-    expect(left.index(described_class::MOUSE_OFF)).to be < left.index(described_class::ALT_OFF)
-  end
-
-  it "asks for bracketed paste for the duration of the alt screen and hands it back" do
-    terminal.enter
-    expect(taken).to include(described_class::PASTE_ON)
-
-    terminal.restore
-    left = taken
-    expect(left).to include(described_class::PASTE_OFF)
-    expect(left.index(described_class::PASTE_OFF)).to be < left.index(described_class::ALT_OFF)
-  end
-
-  it "restores once, however many times it is asked" do
-    terminal.enter
-    taken
-    terminal.restore
-    terminal.restore
-    expect(taken.scan(described_class::ALT_OFF).size).to eq(1)
-  end
-
-  it "hands the screen to a child and takes it back afterwards" do
-    terminal.enter
-    taken
-    order = []
-    terminal.release { order << taken.include?(described_class::ALT_OFF) }
-    expect(order).to eq([true])
-    expect(taken).to include(described_class::ALT_ON)
-  end
-
-  it "hands the tty back in the mode it found it, not a stock cooked one" do
-    input = ModedInput.new
-    terminal = described_class.new(out, input)
-    terminal.enter
-    terminal.restore
-    expect(input.modes).to eq([:shell, :raw, :shell])
+    it "hands the tty back in the mode it found it, not a stock cooked one" do
+      terminal.enter
+      terminal.restore
+      expect(input.modes).to eq([:shell, :raw, :shell])
+    end
   end
 
   it "never lets the frame get smaller than the renderer can lay out" do

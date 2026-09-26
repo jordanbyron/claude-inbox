@@ -4,12 +4,13 @@ require "tmpdir"
 require "fileutils"
 require "json"
 
-RSpec.describe ClaudeInbox::NewSessionForm, :new_session do
+RSpec.describe ClaudeInbox::NewSessionForm do
   # An empty home, so the developer's own ~/.claude settings stay out of the defaults.
   let(:home) { Dir.mktmpdir }
   after { FileUtils.rm_rf(home) }
 
-  let(:form) { described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home) }
+  let(:cwd) { Dir.pwd }
+  let(:form) { described_class.new(cwd: cwd, pastel: Pastel.new(enabled: false), home: home) }
 
   it "starts on the prompt and types into it, spaces included" do
     expect(form.focused.key).to eq(:prompt)
@@ -34,70 +35,69 @@ RSpec.describe ClaudeInbox::NewSessionForm, :new_session do
     expect(form.footer).to include("a prompt is required")
   end
 
-  it "refuses a missing directory" do
-    type("do it")
-    2.times { form.press(:tab, "\t") }
-    form.press(:ctrl_u, "\x15")
-    type("/nope/nowhere")
-    expect(form.press(:ctrl_s, "\x13")).to eq(:changed)
-    expect(form.footer).to include("no such directory")
-    form.press(:tab, "\t")
-    expect(form.focused.key).to eq(:model)
-  end
+  context "with a prompt typed" do
+    before { "do it".each_char { |c| form.press(c, c) } }
 
-  it "submits with expanded values" do
-    type("do it")
-    6.times { form.press(:tab, "\t") }
-    form.press(:space, " ")
-    expect(form.press(:ctrl_s, "\x13")).to eq(:start)
-    v = form.values
-    expect(v[:worktree]).to be(true)
-    expect(v[:remote]).to be(false)
-    expect(v[:name]).to be_nil
-    expect(v[:cwd]).to eq(Dir.pwd)
-  end
+    it "refuses a missing directory" do
+      2.times { form.press(:tab, "\t") }
+      form.press(:ctrl_u, "\x15")
+      "/nope/nowhere".each_char { |c| form.press(c, c) }
+      expect(form.press(:ctrl_s, "\x13")).to eq(:changed)
+      expect(form.footer).to include("no such directory")
+      form.press(:tab, "\t")
+      expect(form.focused.key).to eq(:model)
+    end
 
-  it "moves to the next field on enter instead of starting" do
-    type("do it")
-    3.times { form.press(:tab, "\t") }
-    form.press("l", "l")
-    expect(form.press(:return, "\r")).to eq(:changed)
-    expect(form.focused.key).to eq(:effort)
-    expect(form.values[:model]).to eq("fable")
-  end
+    it "submits with expanded values" do
+      6.times { form.press(:tab, "\t") }
+      form.press(:space, " ")
+      expect(form.press(:ctrl_s, "\x13")).to eq(:start)
+      v = form.values
+      expect(v[:worktree]).to be(true)
+      expect(v[:remote]).to be(false)
+      expect(v[:name]).to be_nil
+      expect(v[:cwd]).to eq(Dir.pwd)
+    end
 
-  it "starts and attaches on ^O, starts and stays put on ^S" do
-    type("do it")
-    expect(form.press(:ctrl_o, "\x0f")).to eq(:start_and_attach)
-    other = described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
-    type_into(other, "do it")
-    expect(other.press(:ctrl_s, "\x13")).to eq(:start)
-  end
+    it "moves to the next field on enter instead of starting" do
+      3.times { form.press(:tab, "\t") }
+      form.press("l", "l")
+      expect(form.press(:return, "\r")).to eq(:changed)
+      expect(form.focused.key).to eq(:effort)
+      expect(form.values[:model]).to eq("fable")
+    end
 
-  it "goes busy on ^S and ignores keys until the App reports back" do
-    type("do it")
-    expect(form.press(:ctrl_s, "\x13")).to eq(:start)
-    expect(form.footer).to include("starting session…")
-    expect(form.press("x", "x")).to eq(:changed)
-    expect(form.values[:prompt]).to eq("do it")
-  end
+    it "starts and attaches on ^O" do
+      expect(form.press(:ctrl_o, "\x0f")).to eq(:start_and_attach)
+    end
 
-  it "hands the prompt back with the failure once the App reports it failed" do
-    type("do it")
-    form.press(:ctrl_s, "\x13")
-    form.submission_failed("claude --bg failed: not a trusted directory")
-    expect(form.footer).to include("not a trusted directory")
-    expect(form.values[:prompt]).to eq("do it")
-    expect(form.press(:ctrl_s, "\x13")).to eq(:start)
+    it "starts and stays put on ^S" do
+      expect(form.press(:ctrl_s, "\x13")).to eq(:start)
+    end
+
+    it "goes busy on ^S and ignores keys until the App reports back" do
+      expect(form.press(:ctrl_s, "\x13")).to eq(:start)
+      expect(form.footer).to include("starting session…")
+      expect(form.press("x", "x")).to eq(:changed)
+      expect(form.values[:prompt]).to eq("do it")
+    end
+
+    it "hands the prompt back with the failure once the App reports it failed" do
+      form.press(:ctrl_s, "\x13")
+      form.submission_failed("claude --bg failed: not a trusted directory")
+      expect(form.footer).to include("not a trusted directory")
+      expect(form.values[:prompt]).to eq("do it")
+      expect(form.press(:ctrl_s, "\x13")).to eq(:start)
+    end
   end
 
   describe "images" do
     let(:clip) { ClaudeInbox::Images::Clipboard.new(nil, nil) }
-    let(:form) { described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), clipboard: -> { clip }, home: home) }
+    let(:form) { described_class.new(cwd: cwd, pastel: Pastel.new(enabled: false), clipboard: -> { clip }, home: home) }
 
     it "attaches the clipboard's image on an empty paste, as a token in the prompt" do
       clip.image = "/tmp/shot.png"
-      type("match ")
+      "match ".each_char { |c| form.press(c, c) }
       expect(form.paste("")).to eq(:changed)
       expect(form.values[:prompt]).to eq("match @/tmp/shot.png")
       rows = form.screen(80, 24)
@@ -128,13 +128,11 @@ RSpec.describe ClaudeInbox::NewSessionForm, :new_session do
     end
 
     it "attaches a dropped image file and keeps any other drop as text" do
-      Dir.mktmpdir do |dir|
-        File.write("#{dir}/a b.png", "x")
-        type("see ")
-        form.paste("#{dir}/a\\ b.png ")
-        form.paste(" not #{dir}/nope.txt")
-        expect(form.values[:prompt]).to eq("see @#{dir}/a\\ b.png not #{dir}/nope.txt")
-      end
+      File.write("#{home}/a b.png", "x")
+      "see ".each_char { |c| form.press(c, c) }
+      form.paste("#{home}/a\\ b.png ")
+      form.paste(" not #{home}/nope.txt")
+      expect(form.values[:prompt]).to eq("see @#{home}/a\\ b.png not #{home}/nope.txt")
     end
 
     it "pastes multi-line text into the prompt, and flattens it into a one-line field" do
@@ -147,9 +145,9 @@ RSpec.describe ClaudeInbox::NewSessionForm, :new_session do
   end
 
   it "takes a multi-line prompt: enter breaks the line, ^S starts" do
-    type("first")
+    "first".each_char { |c| form.press(c, c) }
     form.press(:return, "\r")
-    type("second")
+    "second".each_char { |c| form.press(c, c) }
     expect(form.press(:ctrl_s, "\x13")).to eq(:start)
     expect(form.values[:prompt]).to eq("first\nsecond")
     rows = form.screen(80, 24)
@@ -159,10 +157,10 @@ RSpec.describe ClaudeInbox::NewSessionForm, :new_session do
   end
 
   it "shows the last rows of a long prompt, counting the rest in the border" do
-    10.times { |i|
-      type("line#{i}")
+    10.times do |i|
+      "line#{i}".each_char { |c| form.press(c, c) }
       form.press(:return, "\r")
-    }
+    end
     rows = form.screen(80, 21)
     top = rows.index { |r| r.include?("┌") }
     expect(rows[top]).to include("↑ 4 more")
@@ -171,76 +169,86 @@ RSpec.describe ClaudeInbox::NewSessionForm, :new_session do
     expect(rows[top + 8]).to include("└")
   end
 
-  it "shows what the defaults resolve to" do
-    Dir.mktmpdir do |home|
+  context "with a model and effort in user settings" do
+    before do
       FileUtils.mkdir_p("#{home}/.claude")
       File.write("#{home}/.claude/settings.json", {model: "opus", effortLevel: "high"}.to_json)
-      f = described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
-      rows = f.screen(100, 24)
+    end
+
+    it "shows what the defaults resolve to" do
+      rows = form.screen(100, 24)
       expect(rows.find { |r| r.include?("Model") }).to include("opus (settings)")
       expect(rows.find { |r| r.include?("Effort") }).to include("high (settings)")
       expect(rows.find { |r| r.include?("Permissions") }).to include("auto (cli default)")
-      expect(f.values[:model]).to be_nil
+      expect(form.values[:model]).to be_nil
     end
   end
 
-  it "reads project settings from the target directory" do
-    Dir.mktmpdir do |home|
-      Dir.mktmpdir do |proj|
-        FileUtils.mkdir_p("#{home}/.claude")
-        FileUtils.mkdir_p("#{proj}/.claude")
-        File.write("#{home}/.claude/settings.json", {model: "opus"}.to_json)
-        File.write("#{proj}/.claude/settings.local.json", {permissions: {defaultMode: "plan"}}.to_json)
-        f = described_class.new(cwd: proj, pastel: Pastel.new(enabled: false), home: home)
-        rows = f.screen(100, 24)
-        expect(rows.find { |r| r.include?("Model") }).to include("opus (settings)")
-        expect(rows.find { |r| r.include?("Permissions") }).to include("plan (settings)")
-      end
+  context "aimed at a project with settings of its own" do
+    let(:cwd) { Dir.mktmpdir }
+
+    before do
+      FileUtils.mkdir_p("#{home}/.claude")
+      FileUtils.mkdir_p("#{cwd}/.claude")
+      File.write("#{home}/.claude/settings.json", {model: "opus"}.to_json)
+      File.write("#{cwd}/.claude/settings.local.json", {permissions: {defaultMode: "plan"}}.to_json)
+    end
+
+    after { FileUtils.rm_rf(cwd) }
+
+    it "reads project settings from the target directory" do
+      rows = form.screen(100, 24)
+      expect(rows.find { |r| r.include?("Model") }).to include("opus (settings)")
+      expect(rows.find { |r| r.include?("Permissions") }).to include("plan (settings)")
     end
   end
 
-  it "starts with Remote Control when settings turn it on for all sessions" do
-    Dir.mktmpdir do |home|
+  context "when settings turn Remote Control on for all sessions" do
+    before do
       FileUtils.mkdir_p("#{home}/.claude")
       File.write("#{home}/.claude/settings.json", {remoteControlAtStartup: true}.to_json)
-      f = described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
-      expect(f.screen(100, 24).find { |r| r.include?("Remote Control") }).to include("yes (settings)")
-      expect(f.values[:remote]).to be(true)
-      7.times { f.press(:tab, "\t") }
-      f.press("l", "l")
-      expect(f.values[:remote]).to be(false)
+    end
+
+    it "starts with Remote Control, and lets it be switched off" do
+      expect(form.screen(100, 24).find { |r| r.include?("Remote Control") }).to include("yes (settings)")
+      expect(form.values[:remote]).to be(true)
+      7.times { form.press(:tab, "\t") }
+      form.press("l", "l")
+      expect(form.values[:remote]).to be(false)
     end
   end
 
   it "leaves Remote Control off when nothing turns it on" do
-    Dir.mktmpdir do |home|
-      f = described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
-      expect(f.values[:remote]).to be(false)
-      7.times { f.press(:tab, "\t") }
-      f.press("h", "h")
-      expect(f.values[:remote]).to be(true)
-    end
+    expect(form.values[:remote]).to be(false)
+    7.times { form.press(:tab, "\t") }
+    form.press("h", "h")
+    expect(form.values[:remote]).to be(true)
   end
 
-  it "tab-completes the directory" do
-    Dir.mktmpdir do |root|
-      FileUtils.mkdir_p("#{root}/apple")
-      FileUtils.mkdir_p("#{root}/apricot")
-      FileUtils.mkdir_p("#{root}/banana")
+  context "with directories to complete" do
+    let(:root) { Dir.mktmpdir }
+
+    before do
+      %w[apple apricot banana].each { |d| FileUtils.mkdir_p("#{root}/#{d}") }
       2.times { form.press(:tab, "\t") }
       form.press(:ctrl_u, "\x15")
-      type("#{root}/b")
+    end
+
+    after { FileUtils.rm_rf(root) }
+
+    it "tab-completes the directory" do
+      "#{root}/b".each_char { |c| form.press(c, c) }
       form.press(:tab, "\t")
       expect(form.focused.value.to_s).to eq("#{root}/banana/")
       form.press(:ctrl_u, "\x15")
-      type("#{root}/a")
+      "#{root}/a".each_char { |c| form.press(c, c) }
       form.press(:tab, "\t")
       expect(form.focused.value.to_s).to eq("#{root}/ap")
       expect(form.footer).to include("apple  apricot")
       form.press(:tab, "\t")
       expect(form.focused.key).to eq(:cwd)
       expect(form.footer).to include("apple  apricot")
-      type("pl")
+      "pl".each_char { |c| form.press(c, c) }
       form.press(:tab, "\t")
       expect(form.focused.value.to_s).to eq("#{root}/apple/")
       form.press(:tab, "\t")
@@ -249,24 +257,27 @@ RSpec.describe ClaudeInbox::NewSessionForm, :new_session do
   end
 
   it "edits the prompt under the cursor, and still cycles choices with arrows" do
-    type("abd")
+    "abd".each_char { |c| form.press(c, c) }
     form.press(:left, "\e[D")
-    type("c")
+    form.press("c", "c")
     expect(form.values[:prompt]).to eq("abcd")
     form.press(:backspace, "\x7f")
     form.press(:home, "\e[H")
-    type("A")
+    form.press("A", "A")
     expect(form.values[:prompt]).to eq("Aabd")
     3.times { form.press(:tab, "\t") }
     form.press(:right, "\e[C")
     expect(form.values[:model]).to eq("fable")
   end
 
-  it "draws the cursor on the cell it sits on" do
-    f = described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: true), home: home)
-    "ab".each_char { |c| f.press(c, c) }
-    f.press(:left, "\e[D")
-    expect(f.screen(80, 24).join("\n")).to include("a\e[7mb\e[0m")
+  context "in color" do
+    let(:form) { described_class.new(cwd: cwd, pastel: Pastel.new(enabled: true), home: home) }
+
+    it "draws the cursor on the cell it sits on" do
+      "ab".each_char { |c| form.press(c, c) }
+      form.press(:left, "\e[D")
+      expect(form.screen(80, 24).join("\n")).to include("a\e[7mb\e[0m")
+    end
   end
 
   it "cancels on escape when the prompt is empty" do
@@ -285,103 +296,112 @@ RSpec.describe ClaudeInbox::NewSessionForm, :new_session do
   end
 
   describe "slash commands" do
-    it "opens a menu on a leading slash and narrows it as you type" do
-      with_commands do |f|
-        type_into(f, "/")
-        expect(f.menu.map(&:name)).to eq(%w[babysit deploy unslop unsplit])
-        expect(f.footer).to include("pick")
-        type_into(f, "uns")
-        expect(f.menu.map(&:name)).to eq(%w[unslop unsplit])
-        rows = f.screen(80, 24)
+    context "with three user skills and a project command" do
+      let(:cwd) { Dir.mktmpdir }
+
+      before do
+        %w[unslop unsplit babysit].each do |n|
+          FileUtils.mkdir_p("#{home}/.claude/skills/#{n}")
+          File.write("#{home}/.claude/skills/#{n}/SKILL.md", "---\ndescription: #{n} does things\n---\n")
+        end
+        FileUtils.mkdir_p("#{cwd}/.claude/commands")
+        File.write("#{cwd}/.claude/commands/deploy.md", "---\ndescription: Ship it\n---\n")
+      end
+
+      after { FileUtils.rm_rf(cwd) }
+
+      it "opens a menu on a leading slash and narrows it as you type" do
+        form.press("/", "/")
+        expect(form.menu.map(&:name)).to eq(%w[babysit deploy unslop unsplit])
+        expect(form.footer).to include("pick")
+        "uns".each_char { |c| form.press(c, c) }
+        expect(form.menu.map(&:name)).to eq(%w[unslop unsplit])
+        rows = form.screen(80, 24)
         expect(rows.find { |r| r.include?("/unsplit") }).to include("unsplit does things")
         expect(rows.find { |r| r.include?("/unslop") }).not_to be_nil
         expect(rows.find { |r| r.include?("Worktree") }).not_to be_nil
-        type_into(f, "zz")
-        expect(f.menu).to be_nil
+        "zz".each_char { |c| form.press(c, c) }
+        expect(form.menu).to be_nil
+      end
+
+      it "picks with tab or enter, leaving the cursor after the command and a space" do
+        "/unsl".each_char { |c| form.press(c, c) }
+        expect(form.press(:tab, "\t")).to eq(:changed)
+        expect(form.values[:prompt]).to eq("/unslop")
+        expect(form.focused.value.to_s).to eq("/unslop ")
+        expect(form.menu).to be_nil
+        "the readme".each_char { |c| form.press(c, c) }
+        expect(form.press(:return, "\r")).to eq(:changed)
+        "/dep".each_char { |c| form.press(c, c) }
+        expect(form.menu.map(&:name)).to eq(%w[deploy])
+        form.press(:return, "\r")
+        expect(form.values[:prompt]).to eq("/unslop the readme\n/deploy")
+      end
+
+      it "moves the pick with the arrows and keeps enter for picking" do
+        form.press("/", "/")
+        form.press(:down, "\e[B")
+        expect(form.picked.name).to eq("deploy")
+        form.press(:up, "\e[A")
+        form.press(:up, "\e[A")
+        expect(form.picked.name).to eq("unsplit")
+        form.press(:return, "\r")
+        expect(form.values[:prompt]).to eq("/unsplit")
+        expect(form.focused.key).to eq(:prompt)
+      end
+
+      it "closes the menu on escape without leaving the form, until the query changes" do
+        "/un".each_char { |c| form.press(c, c) }
+        expect(form.press(:escape, "\e")).to eq(:changed)
+        expect(form.menu).to be_nil
+        expect(form.press(:tab, "\t")).to eq(:changed)
+        expect(form.focused.key).to eq(:name)
+        form.press(:back_tab, "\e[Z")
+        expect(form.menu).to be_nil
+        form.press("s", "s")
+        expect(form.menu.map(&:name)).to eq(%w[unslop unsplit])
+        expect(form.press(:escape, "\e")).to eq(:changed)
+        expect(form.press(:escape, "\e")).to eq(:changed)
+        expect(form.footer).to include("discard")
+      end
+
+      it "offers commands for a slash word anywhere in the prompt, but not mid-word" do
+        "first do".each_char { |c| form.press(c, c) }
+        form.press(:return, "\r")
+        "then /uns".each_char { |c| form.press(c, c) }
+        expect(form.menu.map(&:name)).to eq(%w[unslop unsplit])
+        form.press(:tab, "\t")
+        expect(form.values[:prompt]).to eq("first do\nthen /unslop")
+        "a/b".each_char { |c| form.press(c, c) }
+        expect(form.menu).to be_nil
+        form.press(:ctrl_u, "\x15")
+        "/unslop x".each_char { |c| form.press(c, c) }
+        expect(form.menu).to be_nil
+        form.press(:left, "\e[D")
+        form.press(:left, "\e[D")
+        expect(form.menu.map(&:name)).to eq(%w[unslop])
+        form.press(:tab, "\t")
+        expect(form.focused.value.to_s).to eq("/unslop  x")
       end
     end
 
-    it "picks with tab or enter, leaving the cursor after the command and a space" do
-      with_commands do |f|
-        type_into(f, "/unsl")
-        expect(f.press(:tab, "\t")).to eq(:changed)
-        expect(f.values[:prompt]).to eq("/unslop")
-        expect(f.focused.value.to_s).to eq("/unslop ")
-        expect(f.menu).to be_nil
-        type_into(f, "the readme")
-        expect(f.press(:return, "\r")).to eq(:changed)
-        type_into(f, "/dep")
-        expect(f.menu.map(&:name)).to eq(%w[deploy])
-        f.press(:return, "\r")
-        expect(f.values[:prompt]).to eq("/unslop the readme\n/deploy")
-      end
-    end
+    context "with more commands than the menu shows" do
+      let(:cwd) { home }
 
-    it "moves the pick with the arrows and keeps enter for picking" do
-      with_commands do |f|
-        type_into(f, "/")
-        f.press(:down, "\e[B")
-        expect(f.picked.name).to eq("deploy")
-        f.press(:up, "\e[A")
-        f.press(:up, "\e[A")
-        expect(f.picked.name).to eq("unsplit")
-        f.press(:return, "\r")
-        expect(f.values[:prompt]).to eq("/unsplit")
-        expect(f.focused.key).to eq(:prompt)
-      end
-    end
-
-    it "closes the menu on escape without leaving the form, until the query changes" do
-      with_commands do |f|
-        type_into(f, "/un")
-        expect(f.press(:escape, "\e")).to eq(:changed)
-        expect(f.menu).to be_nil
-        expect(f.press(:tab, "\t")).to eq(:changed)
-        expect(f.focused.key).to eq(:name)
-        f.press(:back_tab, "\e[Z")
-        expect(f.menu).to be_nil
-        type_into(f, "s")
-        expect(f.menu.map(&:name)).to eq(%w[unslop unsplit])
-        expect(f.press(:escape, "\e")).to eq(:changed)
-        expect(f.press(:escape, "\e")).to eq(:changed)
-        expect(f.footer).to include("discard")
-      end
-    end
-
-    it "offers commands for a slash word anywhere in the prompt, but not mid-word" do
-      with_commands do |f|
-        type_into(f, "first do")
-        f.press(:return, "\r")
-        type_into(f, "then /uns")
-        expect(f.menu.map(&:name)).to eq(%w[unslop unsplit])
-        f.press(:tab, "\t")
-        expect(f.values[:prompt]).to eq("first do\nthen /unslop")
-        type_into(f, "a/b")
-        expect(f.menu).to be_nil
-        f.press(:ctrl_u, "\x15")
-        type_into(f, "/unslop x")
-        expect(f.menu).to be_nil
-        f.press(:left, "\e[D")
-        f.press(:left, "\e[D")
-        expect(f.menu.map(&:name)).to eq(%w[unslop])
-        f.press(:tab, "\t")
-        expect(f.focused.value.to_s).to eq("/unslop  x")
-      end
-    end
-
-    it "keeps the pick in view and counts the rest on the last row" do
-      Dir.mktmpdir do |home|
+      before do
         ("a".."j").each do |n|
           FileUtils.mkdir_p("#{home}/.claude/skills/cmd-#{n}")
           File.write("#{home}/.claude/skills/cmd-#{n}/SKILL.md", "---\ndescription: #{n}\n---\n")
         end
-        f = described_class.new(cwd: home, pastel: Pastel.new(enabled: false), home: home)
-        type_into(f, "/")
-        rows = f.screen(80, 24)
+        form.press("/", "/")
+      end
+
+      it "keeps the pick in view and counts the rest on the last row" do
+        rows = form.screen(80, 24)
         expect(rows.count { |r| r.include?("/cmd-") }).to eq(6)
         expect(rows.find { |r| r.include?("/cmd-f") }).to include("+4 more")
-        7.times { f.press(:down, "\e[B") }
-        rows = f.screen(80, 24)
+        7.times { form.press(:down, "\e[B") }
+        rows = form.screen(80, 24)
         expect(rows.find { |r| r.include?("/cmd-b") }).to be_nil
         expect(rows.find { |r| r.include?("/cmd-c") }).not_to be_nil
         expect(rows.find { |r| r.include?("/cmd-h") }).to include("+2 more")

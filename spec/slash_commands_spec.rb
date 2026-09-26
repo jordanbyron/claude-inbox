@@ -4,16 +4,37 @@ require "tmpdir"
 require "fileutils"
 require "json"
 
-RSpec.describe ClaudeInbox::SlashCommands, :slash_commands do
-  it "lists project and user skills and commands, project first on a clash" do
-    Dir.mktmpdir do |home|
-      Dir.mktmpdir do |proj|
-        skill("#{home}/.claude/skills", "unslop", "Cut AI tells.")
-        skill("#{home}/.claude/skills", "shared", "from home")
-        skill("#{proj}/.claude/skills", "shared", "from project")
-        command("#{proj}/.claude/commands", "deploy", "---\ndescription: Ship it\n---\nDeploy $ARGUMENTS")
-        command("#{home}/.claude/commands", "frontend/component", "Make a component")
-        list = described_class.list(cwd: proj, home: home)
+RSpec.describe ClaudeInbox::SlashCommands do
+  describe ".list" do
+    subject(:list) { described_class.list(cwd: proj, home: home) }
+
+    let(:home) { Dir.mktmpdir }
+    let(:proj) { home }
+    let(:files) { {} }
+
+    before do
+      files.each do |path, body|
+        FileUtils.mkdir_p(File.dirname(path))
+        File.write(path, body)
+      end
+    end
+
+    after { FileUtils.rm_rf([home, proj]) }
+
+    context "with skills and commands in the project and the user's home" do
+      let(:proj) { Dir.mktmpdir }
+
+      let(:files) do
+        {
+          "#{home}/.claude/skills/unslop/SKILL.md" => "---\nname: unslop\ndescription: Cut AI tells.\n---\n\nbody\n",
+          "#{home}/.claude/skills/shared/SKILL.md" => "---\nname: shared\ndescription: from home\n---\n\nbody\n",
+          "#{home}/.claude/commands/frontend/component.md" => "Make a component",
+          "#{proj}/.claude/skills/shared/SKILL.md" => "---\nname: shared\ndescription: from project\n---\n\nbody\n",
+          "#{proj}/.claude/commands/deploy.md" => "---\ndescription: Ship it\n---\nDeploy $ARGUMENTS"
+        }
+      end
+
+      it "lists both, project first on a clash" do
         expect(list.map(&:name)).to eq(%w[component deploy shared unslop])
         expect(list.map(&:source)).to eq(%w[user project project user])
         expect(list.find { |c| c.name == "shared" }.description).to eq("from project")
@@ -22,51 +43,65 @@ RSpec.describe ClaudeInbox::SlashCommands, :slash_commands do
         expect(list.first.to_s).to eq("/component")
       end
     end
-  end
 
-  it "reads folded, quoted and multi-line descriptions up to their first line" do
-    Dir.mktmpdir do |home|
-      root = "#{home}/.claude/skills"
-      skill(root, "folded", ">-\n  Send a push notification\n  when something happens.")
-      skill(root, "quoted", "'It''s quoted: with a colon'")
-      skill(root, "dq", '"Double quoted"')
-      skill(root, "hidden", "Not for the menu", "user-invocable: false\n")
-      by = described_class.list(cwd: home, home: home).to_h { |c| [c.name, c.description] }
-      expect(by["folded"]).to eq("Send a push notification")
-      expect(by["quoted"]).to eq("It's quoted: with a colon")
-      expect(by["dq"]).to eq("Double quoted")
-      expect(by).not_to include("hidden")
+    context "with folded, quoted and multi-line descriptions" do
+      subject(:by_name) { list.to_h { |c| [c.name, c.description] } }
+
+      let(:files) do
+        {
+          "#{home}/.claude/skills/folded/SKILL.md" =>
+            "---\nname: folded\ndescription: >-\n  Send a push notification\n  when something happens.\n---\n\nbody\n",
+          "#{home}/.claude/skills/quoted/SKILL.md" => "---\nname: quoted\ndescription: 'It''s quoted: with a colon'\n---\n\nbody\n",
+          "#{home}/.claude/skills/dq/SKILL.md" => "---\nname: dq\ndescription: \"Double quoted\"\n---\n\nbody\n",
+          "#{home}/.claude/skills/hidden/SKILL.md" =>
+            "---\nname: hidden\ndescription: Not for the menu\nuser-invocable: false\n---\n\nbody\n"
+        }
+      end
+
+      it "reads each up to its first line" do
+        expect(by_name["folded"]).to eq("Send a push notification")
+        expect(by_name["quoted"]).to eq("It's quoted: with a colon")
+        expect(by_name["dq"]).to eq("Double quoted")
+        expect(by_name).not_to include("hidden")
+      end
+    end
+
+    context "with plugin and synced skills" do
+      let(:plugin) { ".claude/plugins/cache/official/skill-creator/abc" }
+      let(:files) do
+        {
+          "#{home}/#{plugin}/skills/skill-creator/SKILL.md" =>
+            "---\nname: skill-creator\ndescription: Make skills\n---\n\nbody\n",
+          "#{home}/#{plugin}/commands/eval.md" => "---\ndescription: Run evals\n---",
+          "#{home}/.claude/plugins/installed_plugins.json" => {
+            version: 2,
+            plugins: {"skill-creator@official" => [{scope: "user", installPath: "#{home}/#{plugin}"}]}
+          }.to_json,
+          "#{home}/.claude/skills/synced/bucket-1/docs/SKILL.md" => "---\nname: docs\ndescription: Living docs\n---\n\nbody\n"
+        }
+      end
+
+      it "namespaces them the way the CLI does" do
+        expect(list.map(&:name)).to eq(%w[anthropic-skills:docs skill-creator:eval skill-creator:skill-creator])
+        expect(list.map(&:source)).to eq(%w[synced plugin plugin])
+      end
+    end
+
+    context "with nothing installed at all" do
+      it "copes" do
+        expect(list).to eq([])
+      end
     end
   end
 
-  it "namespaces plugin and synced skills the way the CLI does" do
-    Dir.mktmpdir do |home|
-      plugin = "#{home}/.claude/plugins/cache/official/skill-creator/abc"
-      skill("#{plugin}/skills", "skill-creator", "Make skills")
-      command("#{plugin}/commands", "eval", "---\ndescription: Run evals\n---")
-      FileUtils.mkdir_p("#{home}/.claude/plugins")
-      File.write("#{home}/.claude/plugins/installed_plugins.json", {
-        version: 2,
-        plugins: {"skill-creator@official" => [{scope: "user", installPath: plugin}]}
-      }.to_json)
-      skill("#{home}/.claude/skills/synced/bucket-1", "docs", "Living docs")
-      list = described_class.list(cwd: home, home: home)
-      expect(list.map(&:name)).to eq(%w[anthropic-skills:docs skill-creator:eval skill-creator:skill-creator])
-      expect(list.map(&:source)).to eq(%w[synced plugin plugin])
-    end
-  end
+  describe ".match" do
+    let(:cmds) { %w[review code-review unslop Babysit].map { |n| described_class::Command.new(n, "", "user") } }
 
-  it "copes with nothing installed at all" do
-    Dir.mktmpdir do |home|
-      expect(described_class.list(cwd: home, home: home)).to eq([])
+    it "matches by prefix first, then anywhere in the name, ignoring case" do
+      expect(described_class.match(cmds, "re").map(&:name)).to eq(%w[review code-review])
+      expect(described_class.match(cmds, "b").map(&:name)).to eq(%w[Babysit])
+      expect(described_class.match(cmds, "").map(&:name)).to eq(%w[review code-review unslop Babysit])
+      expect(described_class.match(cmds, "zz")).to eq([])
     end
-  end
-
-  it "matches by prefix first, then anywhere in the name, ignoring case" do
-    cmds = %w[review code-review unslop Babysit].map { |n| described_class::Command.new(n, "", "user") }
-    expect(described_class.match(cmds, "re").map(&:name)).to eq(%w[review code-review])
-    expect(described_class.match(cmds, "b").map(&:name)).to eq(%w[Babysit])
-    expect(described_class.match(cmds, "").map(&:name)).to eq(%w[review code-review unslop Babysit])
-    expect(described_class.match(cmds, "zz")).to eq([])
   end
 end

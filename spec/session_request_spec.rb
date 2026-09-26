@@ -148,19 +148,44 @@ RSpec.describe ClaudeInbox::SessionRequest do
   end
 
   describe "resolve" do
-    let(:defaults) { ->(remote) { ClaudeInbox::Settings::Defaults.new(model: "opus", permission_mode: "plan", remote: remote) } }
+    subject(:resolved) { described_class.resolve(values, defaults) }
 
-    it "follows /config for Remote Control left unset, and passes it either way" do
-      values = described_class.from_params(base)
-      expect(described_class.resolve(values, defaults.call("yes"))[:remote]).to be(true)
-      expect(described_class.resolve(values, defaults.call("no"))[:remote]).to be(false)
-      expect(described_class.resolve(values, defaults.call(nil))[:remote]).to be(false)
-      expect(described_class.resolve(values.merge(remote: false), defaults.call("yes"))[:remote]).to be(false)
+    let(:values) { described_class.from_params(base) }
+    let(:defaults) { ClaudeInbox::Settings::Defaults.new(model: "opus", permission_mode: "plan", remote: remote) }
+    let(:remote) { nil }
+
+    context "when /config turns Remote Control on" do
+      let(:remote) { "yes" }
+
+      it "follows it for Remote Control left unset" do
+        expect(resolved[:remote]).to be(true)
+      end
+
+      context "and the request turns it off" do
+        let(:values) { described_class.from_params(base).merge(remote: false) }
+
+        it "passes it off" do
+          expect(resolved[:remote]).to be(false)
+        end
+      end
     end
 
-    it "leaves the other settings to the CLI" do
-      resolved = described_class.resolve(described_class.from_params(base), defaults.call(nil))
-      expect(resolved.values_at(:model, :effort, :permission_mode)).to eq([nil, nil, nil])
+    context "when /config turns Remote Control off" do
+      let(:remote) { "no" }
+
+      it "follows it for Remote Control left unset" do
+        expect(resolved[:remote]).to be(false)
+      end
+    end
+
+    context "when /config leaves Remote Control unset" do
+      it "passes it off" do
+        expect(resolved[:remote]).to be(false)
+      end
+
+      it "leaves the other settings to the CLI" do
+        expect(resolved.values_at(:model, :effort, :permission_mode)).to eq([nil, nil, nil])
+      end
     end
   end
 

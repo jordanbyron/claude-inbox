@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe ClaudeInbox::Logs, :logs do
+RSpec.describe ClaudeInbox::Logs do
   let(:replay) { (1..10).map { |i| "line #{i}" }.join("\r\n") }
   let(:client) { ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), logs: replay) }
   let(:asked) { [] }
@@ -52,13 +52,15 @@ RSpec.describe ClaudeInbox::Logs, :logs do
     logs.want("abc12345")
     clock.advance(described_class::DEBOUNCE)
     logs.tick
-    expect(settled_asked).to eq(%w[abc12345])
+    sleep 0.05 # time for the worker to ask, were it going to
+    expect(asked).to eq(%w[abc12345])
   end
 
   it "ignores a request with nothing to fetch" do
     logs.want(nil)
     clock.advance(described_class::DEBOUNCE)
     logs.tick
-    expect(settled_asked).to be_empty
+    sleep 0.05 # time for the worker to ask, were it going to
+    expect(asked).to be_empty
   end
 end

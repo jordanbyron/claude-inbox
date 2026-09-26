@@ -1,44 +1,77 @@
 # frozen_string_literal: true
 
+require "fileutils"
+require "json"
 require "tmpdir"
 
-RSpec.describe ClaudeInbox::JobState, :job_state do
-  it "reads the detail line, the pulse, the open work and the PR links" do
-    Dir.mktmpdir do |dir|
-      write_job(dir, "aaa11111",
-        "state" => "working",
-        "detail" => "watching CI re-run",
-        "needs" => "confirm: merge once green?",
-        "output" => {"result" => "CI re-run passed"},
-        "tempo" => "idle",
-        "bridgeSessionId" => "cse_01AB",
-        "respawnFlags" => ["--remote-control", "--model", "opus"],
-        "inFlight" => {"tasks" => 1},
-        "fan" => [{"kind" => "shell", "label" => "gh pr checks --watch"}],
-        "children" => [
-          {"kind" => "pr", "href" => "https://github.com/o/r/pull/7"},
-          {"kind" => "issue", "href" => "https://github.com/o/r/issues/8"}
-        ])
-      js = described_class.read("aaa11111", jobs_dir: dir)
-      expect(js.detail).to eq("watching CI re-run")
-      expect(js.needs).to eq("confirm: merge once green?")
-      expect(js.result).to eq("CI re-run passed")
-      expect(js.pr_urls).to eq(["https://github.com/o/r/pull/7"])
-      expect(js.bridge_id).to eq("cse_01AB")
-      expect(js).to be_remote_control
-      expect(described_class.new({})).not_to be_remote_control
-      expect(js).to be_waiting_on_work
-      expect(js.in_flight_label).to eq("1 shell")
-    end
-  end
+RSpec.describe ClaudeInbox::JobState do
+  describe "a job file on disk" do
+    let(:dir) { Dir.mktmpdir }
+    let(:state_file) { File.join(dir, "aaa11111", "state.json") }
+    let(:contents) { JSON.generate(job) }
 
-  it "is nil for a session with no readable file" do
-    Dir.mktmpdir do |dir|
-      FileUtils.mkdir_p(File.join(dir, "bad00000"))
-      File.write(File.join(dir, "bad00000", "state.json"), "{not json")
-      expect(described_class.read("bad00000", jobs_dir: dir)).to be_nil
-      expect(described_class.read("gone0000", jobs_dir: dir)).to be_nil
-      expect(described_class.read(nil, jobs_dir: dir)).to be_nil
+    before do
+      FileUtils.mkdir_p(File.dirname(state_file))
+      File.write(state_file, contents)
+    end
+
+    after { FileUtils.rm_rf(dir) }
+
+    context "carrying everything the daemon writes" do
+      let(:job) do
+        {
+          "state" => "working",
+          "detail" => "watching CI re-run",
+          "needs" => "confirm: merge once green?",
+          "output" => {"result" => "CI re-run passed"},
+          "tempo" => "idle",
+          "bridgeSessionId" => "cse_01AB",
+          "respawnFlags" => ["--remote-control", "--model", "opus"],
+          "inFlight" => {"tasks" => 1},
+          "fan" => [{"kind" => "shell", "label" => "gh pr checks --watch"}],
+          "children" => [
+            {"kind" => "pr", "href" => "https://github.com/o/r/pull/7"},
+            {"kind" => "issue", "href" => "https://github.com/o/r/issues/8"}
+          ]
+        }
+      end
+
+      it "reads the detail line, the pulse, the open work and the PR links" do
+        js = described_class.read("aaa11111", jobs_dir: dir)
+        expect(js.detail).to eq("watching CI re-run")
+        expect(js.needs).to eq("confirm: merge once green?")
+        expect(js.result).to eq("CI re-run passed")
+        expect(js.pr_urls).to eq(["https://github.com/o/r/pull/7"])
+        expect(js.bridge_id).to eq("cse_01AB")
+        expect(js).to be_remote_control
+        expect(described_class.new({})).not_to be_remote_control
+        expect(js).to be_waiting_on_work
+        expect(js.in_flight_label).to eq("1 shell")
+      end
+    end
+
+    context "that is not JSON" do
+      let(:contents) { "{not json" }
+
+      it "is nil for a session with no readable file" do
+        expect(described_class.read("aaa11111", jobs_dir: dir)).to be_nil
+        expect(described_class.read("gone0000", jobs_dir: dir)).to be_nil
+        expect(described_class.read(nil, jobs_dir: dir)).to be_nil
+      end
+    end
+
+    context "for an agent waiting on a shell" do
+      let(:job) { {"tempo" => "idle", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}]} }
+
+      it "enriches background sessions only" do
+        bg, term = described_class.enrich([
+          session(id: "aaa11111"),
+          session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "u1")
+        ], jobs_dir: dir)
+        expect(bg.job_state.in_flight_label).to eq("1 shell")
+        expect(bg).to be_waiting_on_work
+        expect(term.job_state).to be_nil
+      end
     end
   end
 
@@ -96,18 +129,5 @@ RSpec.describe ClaudeInbox::JobState, :job_state do
     js = described_class.new({"intent" => "Look into the TIAA gateway 403s"})
     expect(js.intent).to eq("Look into the TIAA gateway 403s")
     expect(described_class.new({}).intent).to be_nil
-  end
-
-  it "enriches background sessions only" do
-    Dir.mktmpdir do |dir|
-      write_job(dir, "aaa11111", "tempo" => "idle", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}])
-      bg, term = described_class.enrich([
-        session(id: "aaa11111"),
-        session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "u1")
-      ], jobs_dir: dir)
-      expect(bg.job_state.in_flight_label).to eq("1 shell")
-      expect(bg).to be_waiting_on_work
-      expect(term.job_state).to be_nil
-    end
   end
 end

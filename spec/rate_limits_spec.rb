@@ -1,40 +1,61 @@
 # frozen_string_literal: true
 
-RSpec.describe ClaudeInbox::RateLimits, :rate_limits do
+require "fileutils"
+require "tmpdir"
+
+RSpec.describe ClaudeInbox::RateLimits do
+  subject(:rate_limits) { described_class.new(path: path) }
+
   let(:now) { Time.now }
+  let(:dir) { Dir.mktmpdir }
+  let(:path) { File.join(dir, "rate_limits.json") }
 
-  it "shows both windows, rounded" do
-    with_file('{"five_hour":{"used_percentage":23.5,"resets_at":1},"seven_day":{"used_percentage":41.2,"resets_at":2}}') do |rl|
-      expect(rl.windows(now)).to eq([window("session", 24, Time.at(1)), window("week", 41, Time.at(2))])
+  before { File.write(path, json) if json }
+
+  after { FileUtils.rm_rf(dir) }
+
+  context "with both windows" do
+    let(:json) { '{"five_hour":{"used_percentage":23.5,"resets_at":1},"seven_day":{"used_percentage":41.2,"resets_at":2}}' }
+
+    it "shows both windows, rounded" do
+      expect(rate_limits.windows(now)).to eq([
+        described_class::Window.new("session", 24, Time.at(1)),
+        described_class::Window.new("week", 41, Time.at(2))
+      ])
     end
   end
 
-  it "shows whichever window is present" do
-    with_file('{"seven_day":{"used_percentage":80}}') { |rl| expect(rl.windows(now)).to eq([window("week", 80)]) }
-  end
+  context "with only the week" do
+    let(:json) { '{"seven_day":{"used_percentage":80}}' }
 
-  it "is nil with no file, an empty object, or junk" do
-    with_file(nil) { |rl| expect(rl.windows(now)).to be_nil }
-    with_file("{}") { |rl| expect(rl.windows(now)).to be_nil }
-    with_file("not json") { |rl| expect(rl.windows(now)).to be_nil }
-    with_file("[1]") { |rl| expect(rl.windows(now)).to be_nil }
-  end
-
-  it "is nil once the file goes stale" do
-    with_file('{"five_hour":{"used_percentage":10}}') do |rl|
-      expect(rl.windows(now)).not_to be_nil
-      expect(rl.windows(now + described_class::STALE_AFTER + 1)).to be_nil
+    it "shows whichever window is present" do
+      expect(rate_limits.windows(now)).to eq([described_class::Window.new("week", 80, nil)])
     end
   end
 
-  it "re-reads only when the file changes" do
-    with_file('{"five_hour":{"used_percentage":10}}') do |rl, path|
-      expect(rl.windows(now)).to eq([window("session", 10)])
+  [nil, "{}", "not json", "[1]"].each do |contents|
+    context "with #{contents ? "a file holding #{contents}" : "no file"}" do
+      let(:json) { contents }
+
+      it("is nil") { expect(rate_limits.windows(now)).to be_nil }
+    end
+  end
+
+  context "with the session window" do
+    let(:json) { '{"five_hour":{"used_percentage":10}}' }
+
+    it "is nil once the file goes stale" do
+      expect(rate_limits.windows(now)).not_to be_nil
+      expect(rate_limits.windows(now + described_class::STALE_AFTER + 1)).to be_nil
+    end
+
+    it "re-reads only when the file changes" do
+      expect(rate_limits.windows(now)).to eq([described_class::Window.new("session", 10, nil)])
       File.write(path, '{"five_hour":{"used_percentage":50}}')
       File.utime(now + 1, now + 1, path)
-      expect(rl.windows(now + 2)).to eq([window("session", 50)])
+      expect(rate_limits.windows(now + 2)).to eq([described_class::Window.new("session", 50, nil)])
       File.delete(path)
-      expect(rl.windows(now + 3)).to be_nil
+      expect(rate_limits.windows(now + 3)).to be_nil
     end
   end
 end

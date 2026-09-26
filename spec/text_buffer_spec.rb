@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-RSpec.describe ClaudeInbox::TextBuffer, :text_buffer do
+RSpec.describe ClaudeInbox::TextBuffer do
   let(:mark) { ->(cell) { "[#{cell}]" } }
 
   it "types where the cursor is" do
     b = described_class.new("ad")
     b.press(:left, "\e[D")
-    type(b, "bc")
+    "bc".each_char { |c| b.press(c, c) }
     expect(b.to_s).to eq("abcd")
     expect(b.cursor).to eq(3)
   end
@@ -34,7 +34,7 @@ RSpec.describe ClaudeInbox::TextBuffer, :text_buffer do
     expect(b.to_s).to eq("ne")
     b.press(:ctrl_k, "\v")
     expect(b.to_s).to eq("")
-    type(b, "keep this")
+    "keep this".each_char { |c| b.press(c, c) }
     b.press(:ctrl_u, "\x15")
     expect(b.to_s).to eq("")
   end
@@ -94,7 +94,7 @@ RSpec.describe ClaudeInbox::TextBuffer, :text_buffer do
     it "shows the image as a numbered token and hands its path back" do
       b = described_class.new("see ")
       b.attach("/tmp/a.png")
-      type(b, " and ")
+      " and ".each_char { |c| b.press(c, c) }
       b.attach("/tmp/b.png")
       expect(b.to_s).to eq("see [Image #1] and [Image #2]")
       expect(b.chips.map(&:path)).to eq(["/tmp/a.png", "/tmp/b.png"])
@@ -104,7 +104,7 @@ RSpec.describe ClaudeInbox::TextBuffer, :text_buffer do
     it "moves over and deletes the token as one cell" do
       b = described_class.new("a")
       b.attach("/tmp/a.png")
-      type(b, "b")
+      "b".each_char { |c| b.press(c, c) }
       2.times { b.press(:left, "\e[D") }
       expect(b.cursor).to eq(1)
       b.press(:delete, "\e[3~")

@@ -3,9 +3,9 @@
 require "net/http"
 require "tmpdir"
 
-RSpec.describe ClaudeInbox::Remote::Listener, :remote_listener do
+RSpec.describe ClaudeInbox::Remote::Listener do
   let(:tmp) { File.realpath(Dir.mktmpdir) }
-  let(:project) { mkdir("code", "app") }
+  let(:project) { File.join(tmp, "code", "app").tap { |dir| FileUtils.mkdir_p(dir) } }
   let(:client) { RecordingClient.new }
   let(:store) { ClaudeInbox::Store.new(path: nil).tap { |s| s.update([session(id: "abc12345", cwd: project)]) } }
   let(:queue) { Queue.new }
@@ -16,7 +16,14 @@ RSpec.describe ClaudeInbox::Remote::Listener, :remote_listener do
     ClaudeInbox::Remote::Pairing.new(path: File.join(tmp, "listen.json"), local_name: -> { "mac-mini" },
       hostname: -> { "mac-mini" }, addresses: -> { [Addrinfo.ip("192.168.1.20")] }, firewall: -> { :off })
   end
-  let(:listener) { listener_with }
+  let(:listener_args) do
+    {client: client, store: store, queue: queue, pairing: pairing, port: 7433,
+     images_dir: File.join(tmp, "images"), jobs_dir: File.join(tmp, "jobs"), lock_path: File.join(tmp, "listen.lock"),
+     trust: -> { trusted }, settings: ->(dir) { settings.fetch(dir) { ClaudeInbox::Settings::Defaults.new } },
+     bridge_wait: 0, **options}
+  end
+  let(:listener) { described_class.new(**listener_args) }
+  let(:phone) { Phone.new(listener, token: pairing.token, host: "127.0.0.1:7433") }
 
   after do
     listener.stop
@@ -25,7 +32,7 @@ RSpec.describe ClaudeInbox::Remote::Listener, :remote_listener do
 
   describe "routing and the token" do
     it "serves the phone page at / to anyone, as HTML that reaches only this listener and can't be framed" do
-      r = call("GET", "/", token: nil)
+      r = phone.get("/", token: nil)
       expect(r.status).to eq(200)
       expect(r.headers["content-type"]).to eq("text/html; charset=utf-8")
       expect(r.headers["content-security-policy"]).to eq("default-src 'none'; script-src 'unsafe-inline'; " \
@@ -37,18 +44,18 @@ RSpec.describe ClaudeInbox::Remote::Listener, :remote_listener do
     end
 
     it "serves what Add to Home Screen reads to anyone, so the page opens as an app with its own icon" do
-      manifest = call("GET", "/manifest.webmanifest", token: nil)
+      manifest = phone.get("/manifest.webmanifest", token: nil)
       expect([manifest.status, manifest.headers["content-type"]]).to eq([200, "application/manifest+json"])
       expect(manifest.json.values_at("start_url", "display")).to eq(["/", "standalone"])
       expect(manifest.json["icons"].map { |icon| icon["src"] }).to eq(["/icon.png"])
-      icon = call("GET", "/icon.png", token: nil)
+      icon = phone.get("/icon.png", token: nil)
       expect([icon.status, icon.headers["content-type"]]).to eq([200, "image/png"])
       expect(icon.body.b).to eq(File.binread(File.expand_path("../../lib/claude_inbox/remote/icon.png", __dir__)))
     end
 
     it "asks for the token, says how to get one, and notes who was turned away" do
       [nil, "wrong", pairing.token + "x"].each do |token|
-        r = call("GET", "/api/options", token: token)
+        r = phone.get("/api/options", token: token)
         expect(r.status).to eq(401)
         expect(r.headers["www-authenticate"]).to eq("Bearer")
         expect(r.json["error"]).to include("press N")
@@ -57,13 +64,13 @@ RSpec.describe ClaudeInbox::Remote::Listener, :remote_listener do
     end
 
     it "counts rejected tokens from one place in one entry, so they can't push the starts out of N" do
-      start({prompt: "go", cwd: project})
-      20.times { call("GET", "/api/options", token: "wrong") }
+      phone.start({prompt: "go", cwd: project})
+      20.times { phone.get("/api/options", token: "wrong") }
       expect(listener.snapshot.recent.map { |o| [o.result, o.count] }).to eq([["started deadbeef", 1], ["token rejected", 20]])
     end
 
     it "turns a request without the token away before reading its body or inviting it" do
-      r = raw("POST /api/sessions HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer wrong\r\n" \
+      r = phone.send_raw("POST /api/sessions HTTP/1.1\r\nHost: 127.0.0.1\r\nAuthorization: Bearer wrong\r\n" \
         "Content-Type: application/json\r\nContent-Length: 999999999\r\nExpect: 100-continue\r\n\r\n")
       expect(r.status).to eq(401)
       expect(r.written).not_to include("100 Continue")
@@ -71,37 +78,38 @@ RSpec.describe ClaudeInbox::Remote::Listener, :remote_listener do
     end
 
     it "answers only to the names it was reached by, so a rebound DNS name gets nowhere" do
-      expect(call("GET", "/api/options", host: "evil.example:7433").status).to eq(421)
-      expect(call("GET", "/api/options", host: "192.168.1.20:7433").status).to eq(421)
-      expect(call("GET", "/", token: nil, host: nil).status).to eq(421)
-      expect(call("GET", "/api/options", host: "LOCALHOST:7433").status).to eq(200)
-      expect(call("GET", "/api/options", host: "127.0.0.1").status).to eq(200)
-      expect(call("GET", "/api/options", host: "[::1]:7433").status).to eq(200)
+      expect(phone.get("/api/options", host: "evil.example:7433").status).to eq(421)
+      expect(phone.get("/api/options", host: "192.168.1.20:7433").status).to eq(421)
+      expect(phone.get("/", token: nil, host: nil).status).to eq(421)
+      expect(phone.get("/api/options", host: "LOCALHOST:7433").status).to eq(200)
+      expect(phone.get("/api/options", host: "127.0.0.1").status).to eq(200)
+      expect(phone.get("/api/options", host: "[::1]:7433").status).to eq(200)
     end
 
     it "takes any port with the name, as an ssh tunnel on another local port sends it" do
-      expect(call("GET", "/api/options", host: "localhost:8000").status).to eq(200)
-      expect(call("GET", "/api/options", host: "evil.example:8000").status).to eq(421)
+      expect(phone.get("/api/options", host: "localhost:8000").status).to eq(200)
+      expect(phone.get("/api/options", host: "evil.example:8000").status).to eq(421)
     end
 
-    it "answers to this Mac's names and addresses in LAN mode" do
-      lan = listener_with(lan: true)
-      [["mac-mini.local:7433", 200], ["192.168.1.20:7433", 200], ["evil.example", 421]].each do |host, status|
-        sock = FakeSocket.new("GET / HTTP/1.1\r\nHost: #{host}\r\n\r\n")
-        lan.handle(sock, via: "192.168.1.30")
-        expect(sock.written).to match(/\AHTTP\/1\.1 #{status} /)
+    context "in LAN mode" do
+      let(:options) { {lan: true} }
+
+      it "answers to this Mac's names and addresses in LAN mode" do
+        [["mac-mini.local:7433", 200], ["192.168.1.20:7433", 200], ["evil.example", 421]].each do |host, status|
+          expect(phone.get("/", token: nil, host: host).status).to eq(status)
+        end
       end
     end
 
     it "takes GET and POST only, each on its own path, and knows no other path" do
-      put = call("PUT", "/api/sessions", "{}")
+      put = phone.request("PUT", "/api/sessions", "{}")
       expect([put.status, put.headers["allow"]]).to eq([405, "GET, POST"])
-      expect(call("OPTIONS", "/api/sessions", token: nil).status).to eq(405)
-      get = call("GET", "/api/sessions")
+      expect(phone.request("OPTIONS", "/api/sessions", token: nil).status).to eq(405)
+      get = phone.get("/api/sessions")
       expect([get.status, get.headers["allow"]]).to eq([405, "POST"])
-      expect(call("POST", "/api/options", "{}").headers["allow"]).to eq("GET")
-      expect(call("GET", "/api/nope").status).to eq(404)
-      expect(raw("garbage\r\n\r\n").status).to eq(400)
+      expect(phone.request("POST", "/api/options", "{}").headers["allow"]).to eq("GET")
+      expect(phone.get("/api/nope").status).to eq(404)
+      expect(phone.send_raw("garbage\r\n\r\n").status).to eq(400)
     end
   end
 
@@ -129,39 +137,44 @@ RSpec.describe ClaudeInbox::Remote::Listener, :remote_listener do
 
   describe "handing a request to Start" do
     it "starts a session once the token checks out, and lists it for N" do
-      r = start({prompt: "fix it", cwd: project})
+      r = phone.start({prompt: "fix it", cwd: project})
       expect(r.status).to eq(201)
       expect(client.spawns.size).to eq(1)
       expect(listener.snapshot.recent.last.result).to eq("started deadbeef")
     end
 
     it "lets nothing a request sent reach the terminal as an escape sequence" do
-      expect(start({prompt: "x", cwd: "/tmp/\e]0;PWNED\a\e[2J"}).status).to eq(422)
-      expect(start({"\e[31mkey" => 1}).status).to eq(422)
+      expect(phone.start({prompt: "x", cwd: "/tmp/\e]0;PWNED\a\e[2J"}).status).to eq(422)
+      expect(phone.start({"\e[31mkey" => 1}).status).to eq(422)
       client.fail_spawn("claude --bg failed: \e[2Jno such directory")
-      start({prompt: "go", cwd: project})
+      phone.start({prompt: "go", cwd: project})
       results = listener.snapshot.recent.map(&:result)
       expect(results.size).to eq(3)
       expect(results.join).not_to include("\e")
       expect(results.last).to eq("claude --bg failed: \\x1b[2Jno such directory")
-      expect(drained.last).to eq([:notice, "remote start failed: claude --bg failed: \\x1b[2Jno such directory"])
+      expect(Array.new(queue.size) { queue.pop }.last).to eq([:notice, "remote start failed: claude --bg failed: \\x1b[2Jno such directory"])
     end
 
     it "notes a refused start for N, as it does a failed one" do
-      start({prompt: "go", cwd: project, permission_mode: "bypassPermissions"})
+      phone.start({prompt: "go", cwd: project, permission_mode: "bypassPermissions"})
       expect(listener.snapshot.recent.last.result).to eq("refused: permission mode bypassPermissions isn't allowed from another device")
     end
 
-    it "answers anything else that goes wrong with a 500 and its message" do
-      options[:images_dir] = File.join(tmp, "listen.json").tap { |f| File.write(f, "") }
-      r = start({prompt: "go", cwd: project, images: [{data: [PNG].pack("m0")}]})
-      expect(r.status).to eq(500)
-      expect(r.json["error"]).to include("File exists")
+    context "with a file where the images go" do
+      let(:options) { {images_dir: File.join(tmp, "listen.json")} }
+
+      before { File.write(options[:images_dir], "") }
+
+      it "answers anything else that goes wrong with a 500 and its message" do
+        r = phone.start({prompt: "go", cwd: project, images: [{data: [PNG].pack("m0")}]})
+        expect(r.status).to eq(500)
+        expect(r.json["error"]).to include("File exists")
+      end
     end
 
     it "keeps what went wrong to itself until the token checks out" do
       FileUtils.mkdir_p(File.join(tmp, "listen.json"))
-      r = call("GET", "/api/options", token: "a-guess")
+      r = Phone.new(listener, host: "127.0.0.1:7433").get("/api/options", token: "a-guess")
       expect([r.status, r.json]).to eq([500, {"error" => "internal error"}])
     end
   end
@@ -180,11 +193,11 @@ RSpec.describe ClaudeInbox::Remote::Listener, :remote_listener do
         posted = http.post("/api/sessions", JSON.generate(prompt: "go", cwd: "app"), auth.merge("Content-Type" => "application/json"))
         expect([posted.code, JSON.parse(posted.body)["id"]]).to eq(["201", "deadbeef"])
       end
-      expect(drained.last).to eq([:remote_started, "deadbeef", "127.0.0.1"])
+      expect(Array.new(queue.size) { queue.pop }.last).to eq([:remote_started, "deadbeef", "127.0.0.1"])
       listener.stop
       expect(listener.snapshot.state).to eq(:off)
       expect { TCPSocket.new("127.0.0.1", port) }.to raise_error(Errno::ECONNREFUSED)
-      again = listener_with(port: port)
+      again = described_class.new(**listener_args, port: port)
       again.start
       expect(again.snapshot.state).to eq(:listening)
     ensure
@@ -193,7 +206,7 @@ RSpec.describe ClaudeInbox::Remote::Listener, :remote_listener do
 
     it "leaves a second inbox saying who is listening, and lets it take over once that one quits" do
       listener.start
-      second = listener_with(retry_every: 0.05)
+      second = described_class.new(**listener_args, retry_every: 0.05)
       second.start
       expect([second.snapshot.state, second.snapshot.held_by]).to eq([:held, Process.pid])
       listener.stop
@@ -207,7 +220,7 @@ RSpec.describe ClaudeInbox::Remote::Listener, :remote_listener do
       taken = Socket.new(:INET, :STREAM)
       taken.bind(Addrinfo.tcp("127.0.0.1", 0))
       taken.listen(1)
-      busy = listener_with(port: taken.local_address.ip_port)
+      busy = described_class.new(**listener_args, port: taken.local_address.ip_port)
       busy.start
       expect(busy.snapshot.state).to eq(:in_use)
       listener.start
@@ -221,7 +234,7 @@ RSpec.describe ClaudeInbox::Remote::Listener, :remote_listener do
       taken = Socket.new(:INET, :STREAM)
       taken.bind(Addrinfo.tcp("127.0.0.1", 0))
       taken.listen(1)
-      busy = listener_with(port: taken.local_address.ip_port, retry_every: 0.05)
+      busy = described_class.new(**listener_args, port: taken.local_address.ip_port, retry_every: 0.05)
       busy.start
       busy.refresh
       expect(busy.snapshot.urls).to be_nil
@@ -233,9 +246,10 @@ RSpec.describe ClaudeInbox::Remote::Listener, :remote_listener do
     end
 
     it "says what went wrong, and stops trying, when it can't even take the lock" do
-      locked = mkdir("locked")
+      locked = File.join(tmp, "locked")
+      FileUtils.mkdir_p(locked)
       File.chmod(0o500, locked)
-      broken = listener_with(lock_path: File.join(locked, "sub", "listen.lock"), retry_every: 0.05)
+      broken = described_class.new(**listener_args, lock_path: File.join(locked, "sub", "listen.lock"), retry_every: 0.05)
       broken.start
       s = broken.snapshot
       expect(s.state).to eq(:failed)
@@ -252,7 +266,7 @@ RSpec.describe ClaudeInbox::Remote::Listener, :remote_listener do
       taken = Socket.new(:INET, :STREAM)
       taken.bind(Addrinfo.tcp("127.0.0.1", 0))
       taken.listen(1)
-      busy = listener_with(port: taken.local_address.ip_port, retry_every: 0.05)
+      busy = described_class.new(**listener_args, port: taken.local_address.ip_port, retry_every: 0.05)
       busy.start
       expect(busy.snapshot.state).to eq(:in_use)
       taken.close
@@ -350,39 +364,39 @@ RSpec.describe ClaudeInbox::Remote::Listener, :remote_listener do
 
   describe ".options" do
     it "is nil unless a flag or the environment asks for the listener" do
-      expect(options_for("--fixture", "x.json")).to be_nil
-      expect(options_for("--listen-allow-modes=plan")).to be_nil
-      expect(options_for(CLAUDE_INBOX_LISTEN: " ")).to be_nil
+      expect(described_class.options(%w[--fixture x.json], {})).to be_nil
+      expect(described_class.options(%w[--listen-allow-modes=plan], {})).to be_nil
+      expect(described_class.options([], {"CLAUDE_INBOX_LISTEN" => " "})).to be_nil
     end
 
     it "listens on loopback at 7433 for phone-safe modes unless told otherwise" do
-      expect(options_for("--listen")).to eq({port: 7433, lan: false, allowed_modes: %w[default auto plan]})
-      expect(options_for("--listen=8080")[:port]).to eq(8080)
-      expect(options_for("--listen-lan")).to eq({port: 7433, lan: true, allowed_modes: %w[default auto plan]})
-      expect(options_for("--listen-lan=9000")[:port]).to eq(9000)
-      expect(options_for("--listen=0")[:port]).to eq(0)
+      expect(described_class.options(%w[--listen], {})).to eq({port: 7433, lan: false, allowed_modes: %w[default auto plan]})
+      expect(described_class.options(%w[--listen=8080], {})[:port]).to eq(8080)
+      expect(described_class.options(%w[--listen-lan], {})).to eq({port: 7433, lan: true, allowed_modes: %w[default auto plan]})
+      expect(described_class.options(%w[--listen-lan=9000], {})[:port]).to eq(9000)
+      expect(described_class.options(%w[--listen=0], {})[:port]).to eq(0)
     end
 
     it "widens to the LAN only when --listen-lan says so, whatever order the flags came in" do
-      expect(options_for("--listen-lan", "--listen=8080")).to eq({port: 7433, lan: true, allowed_modes: %w[default auto plan]})
-      expect(options_for("--listen=8080", "--listen-lan=9000")[:lan]).to be(true)
+      expect(described_class.options(%w[--listen-lan --listen=8080], {})).to eq({port: 7433, lan: true, allowed_modes: %w[default auto plan]})
+      expect(described_class.options(%w[--listen=8080 --listen-lan=9000], {})[:lan]).to be(true)
     end
 
     it "reads the environment when no flag is given, and a flag over it" do
-      expect(options_for(CLAUDE_INBOX_LISTEN: "7500")).to eq({port: 7500, lan: false, allowed_modes: %w[default auto plan]})
-      expect(options_for(CLAUDE_INBOX_LISTEN: "lan")).to eq({port: 7433, lan: true, allowed_modes: %w[default auto plan]})
-      expect(options_for(CLAUDE_INBOX_LISTEN: "lan:7500")).to eq({port: 7500, lan: true, allowed_modes: %w[default auto plan]})
-      expect(options_for("--listen", CLAUDE_INBOX_LISTEN: "lan")[:lan]).to be(false)
-      expect(options_for(CLAUDE_INBOX_LISTEN: "lan", CLAUDE_INBOX_LISTEN_ALLOW_MODES: "plan")[:allowed_modes]).to eq(%w[plan])
-      expect(options_for("--listen", "--listen-allow-modes=default, acceptEdits")[:allowed_modes]).to eq(%w[default acceptEdits])
+      expect(described_class.options([], {"CLAUDE_INBOX_LISTEN" => "7500"})).to eq({port: 7500, lan: false, allowed_modes: %w[default auto plan]})
+      expect(described_class.options([], {"CLAUDE_INBOX_LISTEN" => "lan"})).to eq({port: 7433, lan: true, allowed_modes: %w[default auto plan]})
+      expect(described_class.options([], {"CLAUDE_INBOX_LISTEN" => "lan:7500"})).to eq({port: 7500, lan: true, allowed_modes: %w[default auto plan]})
+      expect(described_class.options(%w[--listen], {"CLAUDE_INBOX_LISTEN" => "lan"})[:lan]).to be(false)
+      expect(described_class.options([], {"CLAUDE_INBOX_LISTEN" => "lan", "CLAUDE_INBOX_LISTEN_ALLOW_MODES" => "plan"})[:allowed_modes]).to eq(%w[plan])
+      expect(described_class.options(["--listen", "--listen-allow-modes=default, acceptEdits"], {})[:allowed_modes]).to eq(%w[default acceptEdits])
     end
 
     it "refuses a port or a mode it can't use" do
-      expect { options_for("--listen=http") }.to raise_error(ArgumentError)
-      expect { options_for("--listen=70000") }.to raise_error(ArgumentError)
-      expect { options_for("--listen=") }.to raise_error(ArgumentError)
-      expect { options_for(CLAUDE_INBOX_LISTEN: "yes") }.to raise_error(ArgumentError)
-      expect { options_for("--listen", "--listen-allow-modes=plan,yolo") }.to raise_error(ArgumentError) { |error|
+      expect { described_class.options(%w[--listen=http], {}) }.to raise_error(ArgumentError)
+      expect { described_class.options(%w[--listen=70000], {}) }.to raise_error(ArgumentError)
+      expect { described_class.options(%w[--listen=], {}) }.to raise_error(ArgumentError)
+      expect { described_class.options([], {"CLAUDE_INBOX_LISTEN" => "yes"}) }.to raise_error(ArgumentError)
+      expect { described_class.options(%w[--listen --listen-allow-modes=plan,yolo], {}) }.to raise_error(ArgumentError) { |error|
         expect(error.message).to include("yolo")
       }
     end
