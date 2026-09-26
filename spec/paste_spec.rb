@@ -1,9 +1,7 @@
 # frozen_string_literal: true
 
-require_relative "../lib/claude_inbox/paste"
-
 RSpec.describe ClaudeInbox::Paste do
-  let(:paste) { ClaudeInbox::Paste.new }
+  subject(:paste) { described_class.new }
 
   it "passes plain keys through untouched" do
     expect(paste.feed("j")).to eq([[:key, "j"]])

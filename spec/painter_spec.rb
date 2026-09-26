@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
-require_relative "../lib/claude_inbox/painter"
+require "stringio"
 
 RSpec.describe ClaudeInbox::Painter do
+  subject(:painter) { described_class.new(out) }
+
+  let(:out) { StringIO.new }
+
   it "paints only changed lines" do
-    out = StringIO.new
-    painter = ClaudeInbox::Painter.new(out)
     painter.paint(%w[a b c])
     out.truncate(0)
     out.rewind
@@ -16,8 +18,7 @@ RSpec.describe ClaudeInbox::Painter do
   end
 
   it "never erases to end of line after a row" do
-    out = StringIO.new
-    ClaudeInbox::Painter.new(out).paint(%w[a b])
+    painter.paint(%w[a b])
     expect(out.string).not_to include "\e[K"
     expect(out.string).not_to include "\e[0K"
   end

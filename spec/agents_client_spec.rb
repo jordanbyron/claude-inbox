@@ -31,7 +31,7 @@ RSpec.describe ClaudeInbox::AgentsClient do
   end
 
   it "names the default permission mode when given it, as a remote start does" do
-    a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "go", permission_mode: "default")
+    a = described_class.spawn_args("claude", prompt: "go", permission_mode: "default")
     expect(a).to eq(["claude", "--bg", "--permission-mode", "default", "--", "go"])
   end
 
@@ -57,32 +57,30 @@ RSpec.describe ClaudeInbox::AgentsClient do
   end
 
   describe "reading origins out of the process tree" do
-    def origins(rows, parents) = ClaudeInbox::AgentsClient.origins(rows, parents)
-
     it "knows a terminal by its shell parent" do
       rows = [[100, 200, "claude"]]
-      expect(origins(rows, {200 => "-zsh"})).to eq({100 => :terminal})
+      expect(described_class.origins(rows, {200 => "-zsh"})).to eq({100 => :terminal})
     end
 
     it "knows a Remote Control worker by its flag or its parent" do
-      expect(origins([[100, 200, "claude --sdk-url wss://x"]], {200 => "-zsh"})).to eq({100 => :remote})
-      expect(origins([[100, 200, "claude"]], {200 => "claude rc --worker"})).to eq({100 => :remote})
+      expect(described_class.origins([[100, 200, "claude --sdk-url wss://x"]], {200 => "-zsh"})).to eq({100 => :remote})
+      expect(described_class.origins([[100, 200, "claude"]], {200 => "claude rc --worker"})).to eq({100 => :remote})
     end
 
     it "resumes an adopted conversation under the daemon with Remote Control on" do
-      expect(ClaudeInbox::AgentsClient.adopt_args("claude", "u1")).to eq(["claude", "--bg", "--resume", "u1", "--remote-control"])
-      expect(ClaudeInbox::AgentsClient.transcript_path("/Users/x/.claude/w/p", "u1", home: "/Users/x"))
+      expect(described_class.adopt_args("claude", "u1")).to eq(["claude", "--bg", "--resume", "u1", "--remote-control"])
+      expect(described_class.transcript_path("/Users/x/.claude/w/p", "u1", home: "/Users/x"))
         .to eq("/Users/x/.claude/projects/-Users-x--claude-w-p/u1.jsonl")
     end
 
     it "reads a worker's bridge id off its command line" do
       rows = [[100, 200, "claude --print --sdk-url https://api/cse_01AB --session-id cse_01AB"], [101, 200, "claude"]]
-      expect(ClaudeInbox::AgentsClient.bridge_ids(rows)).to eq({100 => "cse_01AB"})
+      expect(described_class.bridge_ids(rows)).to eq({100 => "cse_01AB"})
     end
 
     it "knows a sub-agent by its claude parent" do
       rows = [[100, 200, "claude"]]
-      expect(origins(rows, {200 => "/Users/x/.local/bin/claude bg-spare --bg-spare /tmp/x.sock"})).to eq({100 => :subagent})
+      expect(described_class.origins(rows, {200 => "/Users/x/.local/bin/claude bg-spare --bg-spare /tmp/x.sock"})).to eq({100 => :subagent})
     end
 
     # A headless run started from a session's Bash call has that shell for a
@@ -91,45 +89,46 @@ RSpec.describe ClaudeInbox::AgentsClient do
     it "knows a headless run by its own flags, whatever spawned it" do
       rows = [[38482, 38480, "claude -p Reply with exactly: OK"]]
       parents = {38480 => "timeout 90 claude -p Reply with exactly: OK"}
-      expect(origins(rows, parents)).to eq({38482 => :headless})
+      expect(described_class.origins(rows, parents)).to eq({38482 => :headless})
 
       shell_parent = {38480 => "/bin/zsh -c source /Users/x/.claude/shell-snapshots/snapshot-zsh-1.sh"}
-      expect(origins([[38482, 38480, "claude --input-format stream-json"]], shell_parent)).to eq({38482 => :headless})
+      expect(described_class.origins([[38482, 38480, "claude --input-format stream-json"]], shell_parent)).to eq({38482 => :headless})
     end
 
     it "reads the flag out of the arguments, not the program name" do
-      expect(ClaudeInbox::AgentsClient.headless?("claude")).to be(false)
-      expect(ClaudeInbox::AgentsClient.headless?("/Users/x/.local/bin/claude -p x")).to be(true)
-      expect(ClaudeInbox::AgentsClient.headless?("claude-p")).to be(false)
+      expect(described_class.headless?("claude")).to be(false)
+      expect(described_class.headless?("/Users/x/.local/bin/claude -p x")).to be(true)
+      expect(described_class.headless?("claude-p")).to be(false)
     end
   end
 
   describe "starting a background session" do
     # Stands in for `claude`: prints an id and records the directory it ran
     # in, or fails when the arguments mention boom.
+    let(:dir) { Dir.mktmpdir }
+    let(:bin) { File.join(dir, "claude") }
+
     before do
-      @dir = Dir.mktmpdir
-      @bin = File.join(@dir, "claude")
-      File.write(@bin, <<~SH)
+      File.write(bin, <<~SH)
         #!/bin/sh
         case "$*" in *boom*) echo "no daemon" >&2; echo "see log"; exit 1;; esac
-        pwd > #{@dir}/ran_in
+        pwd > #{dir}/ran_in
         echo "started 1a2b3c4d"
       SH
-      File.chmod(0o755, @bin)
+      File.chmod(0o755, bin)
     end
 
-    after { FileUtils.rm_rf(@dir) }
+    after { FileUtils.rm_rf(dir) }
 
-    let(:client) { ClaudeInbox::AgentsClient.new(bin: @bin) }
+    let(:client) { described_class.new(bin: bin) }
 
     it "spawns in the given directory and returns the short id" do
-      expect(client.spawn(prompt: "hi", cwd: @dir)).to eq("1a2b3c4d")
-      expect(File.read(File.join(@dir, "ran_in")).strip).to eq(File.realpath(@dir))
+      expect(client.spawn(prompt: "hi", cwd: dir)).to eq("1a2b3c4d")
+      expect(File.read(File.join(dir, "ran_in")).strip).to eq(File.realpath(dir))
     end
 
     it "says what failed, with everything the CLI printed" do
-      expect { client.spawn(prompt: "boom", cwd: @dir) }.to raise_error(ClaudeInbox::AgentsClient::Error) { |e|
+      expect { client.spawn(prompt: "boom", cwd: dir) }.to raise_error(described_class::Error) { |e|
         expect(e.message).to eq("claude --bg failed: no daemon\nsee log")
       }
     end
@@ -137,14 +136,14 @@ RSpec.describe ClaudeInbox::AgentsClient do
     it "adopts once the worker is gone and returns the short id" do
       worker = Process.spawn("sleep", "30")
       Process.detach(worker)
-      expect(client.adopt(session_id: "u1", cwd: @dir, pid: worker)).to eq("1a2b3c4d")
+      expect(client.adopt(session_id: "u1", cwd: dir, pid: worker)).to eq("1a2b3c4d")
       expect { Process.kill(0, worker) }.to raise_error(Errno::ESRCH)
     end
 
     it "names the resume when adopting fails" do
       worker = Process.spawn("sleep", "30")
       Process.detach(worker)
-      expect { client.adopt(session_id: "boom", cwd: @dir, pid: worker) }.to raise_error(ClaudeInbox::AgentsClient::Error) { |e|
+      expect { client.adopt(session_id: "boom", cwd: dir, pid: worker) }.to raise_error(described_class::Error) { |e|
         expect(e.message).to eq("claude --bg --resume failed: no daemon\nsee log")
       }
     end
@@ -158,5 +157,26 @@ RSpec.describe ClaudeInbox::AgentsClient do
 
   it "flags blocked as needing you" do
     expect(sessions.find { |x| x.id == "f23c8673" }).to be_needs_you
+  end
+
+  it "builds claude --bg arguments, leaving unset ones off" do
+    a = described_class.spawn_args("claude", prompt: "fix it", model: nil, effort: nil, permission_mode: nil, worktree: false, name: nil)
+    expect(a).to eq(["claude", "--bg", "--", "fix it"])
+    a = described_class.spawn_args("claude", prompt: "fix it", model: "opus", effort: "high", permission_mode: "acceptEdits", worktree: true, name: "flaky")
+    expect(a).to eq(["claude", "--bg", "--model", "opus", "--effort", "high", "--permission-mode", "acceptEdits", "--name", "flaky", "--worktree", "--", "fix it"])
+  end
+
+  it "puts --remote-control last, where its optional name cannot eat the prompt" do
+    a = described_class.spawn_args("claude", prompt: "fix it", name: "flaky", remote: true)
+    expect(a).to eq(["claude", "--bg", "--name", "flaky", "--remote-control", "--", "fix it"])
+  end
+
+  it "keeps a prompt that starts with a dash a prompt" do
+    a = described_class.spawn_args("claude", prompt: "-x is not a flag", remote: true)
+    expect(a).to eq(["claude", "--bg", "--remote-control", "--", "-x is not a flag"])
+  end
+
+  it "mentions a file the way the CLI's own prompt does, spaces escaped" do
+    expect(described_class.mention("/tmp/Screen Shot.png")).to eq("@/tmp/Screen\\ Shot.png")
   end
 end

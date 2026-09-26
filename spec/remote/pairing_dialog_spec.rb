@@ -1,17 +1,13 @@
 # frozen_string_literal: true
 
-require_relative "../../lib/claude_inbox/remote/listener"
-
-RSpec.describe ClaudeInbox::Remote::PairingDialog do
+RSpec.describe ClaudeInbox::Remote::PairingDialog, :pairing_dialog do
   let(:token) { "AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcde" }
   let(:listening) do
     ClaudeInbox::Remote::Listener::Snapshot.new(state: :listening, port: 7433, lan: false, urls: ["http://127.0.0.1:7433/##{token}"],
       firewall: nil, allowed_modes: %w[default plan], recent: [], held_by: nil, fixture: false)
   end
   let(:snapshot) { [listening] }
-  let(:dialog) { ClaudeInbox::Remote::PairingDialog.new(-> { snapshot[0] }) }
-
-  def box(width = 120) = dialog.frame(width).join("\n")
+  let(:dialog) { described_class.new(-> { snapshot[0] }) }
 
   it "says where it listens, and shows the pairing URL with the token cut short" do
     expect(box).to include "listening on 127.0.0.1:7433"

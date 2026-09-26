@@ -1,20 +1,7 @@
 # frozen_string_literal: true
 
-require "tmpdir"
-require_relative "../lib/claude_inbox/rate_limits"
-
-RSpec.describe ClaudeInbox::RateLimits do
+RSpec.describe ClaudeInbox::RateLimits, :rate_limits do
   let(:now) { Time.now }
-
-  def window(label, percent, resets_at = nil) = ClaudeInbox::RateLimits::Window.new(label, percent, resets_at)
-
-  def with_file(json)
-    Dir.mktmpdir do |dir|
-      path = File.join(dir, "rate_limits.json")
-      File.write(path, json) if json
-      yield ClaudeInbox::RateLimits.new(path: path), path
-    end
-  end
 
   it "shows both windows, rounded" do
     with_file('{"five_hour":{"used_percentage":23.5,"resets_at":1},"seven_day":{"used_percentage":41.2,"resets_at":2}}') do |rl|
@@ -36,7 +23,7 @@ RSpec.describe ClaudeInbox::RateLimits do
   it "is nil once the file goes stale" do
     with_file('{"five_hour":{"used_percentage":10}}') do |rl|
       expect(rl.windows(now)).not_to be_nil
-      expect(rl.windows(now + ClaudeInbox::RateLimits::STALE_AFTER + 1)).to be_nil
+      expect(rl.windows(now + described_class::STALE_AFTER + 1)).to be_nil
     end
   end
 

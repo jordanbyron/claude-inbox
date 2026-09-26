@@ -1,21 +1,13 @@
 # frozen_string_literal: true
 
-Store = ClaudeInbox::Store unless defined?(Store)
-
-RSpec.describe ClaudeInbox::Store::Sections do
+RSpec.describe ClaudeInbox::Store::Sections, :store, :store_sections do
   let(:now) { Time.at(1_789_600_000) }
-
-  def sections(sessions, entries = {}, at = now) = Store.sectionize(sessions, entries, at)
 
   let(:terminal) { session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "uuid", cwd: "/tmp/term") }
   let(:sec) do
     entries = {"b" => {"pinned" => true}, "z" => {"settled_at" => now.to_i}}
     sections([terminal, session(id: "a", state: "blocked"), session(id: "b"), session(id: "c", name: "Other", cwd: "/srv/other"), session(id: "z", state: "done")], entries)
   end
-
-  def row(key) = Store::Selection.row(key)
-
-  def fold(name) = Store::Selection.fold(name)
 
   it "finds a row by its selection, or nothing" do
     expect(sec.row(row("a")).id).to eq("a")

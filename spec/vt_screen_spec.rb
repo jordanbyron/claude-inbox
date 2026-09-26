@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe ClaudeInbox::VtScreen do
-  def screen(str, **kw) = ClaudeInbox::VtScreen.new(**kw).feed(str)
-
+RSpec.describe ClaudeInbox::VtScreen, :vt_screen do
   it("handles plain text and CRLF") { expect(screen("hello\r\nworld").lines).to eq(%w[hello world]) }
   it("turns cursor-forward into spaces") { expect(screen("a\e[2Cb").lines).to eq(["a  b"]) }
   it("ignores SGR and OSC") { expect(screen("\e[31mred\e[0m\e]0;title\a text").lines).to eq(["red text"]) }

@@ -1,11 +1,9 @@
 # frozen_string_literal: true
 
-require_relative "../../lib/claude_inbox/remote/listener"
-require_relative "../../lib/claude_inbox/remote/pairing"
 require "net/http"
 require "tmpdir"
 
-RSpec.describe ClaudeInbox::Remote::Listener do
+RSpec.describe ClaudeInbox::Remote::Listener, :remote_listener do
   let(:tmp) { File.realpath(Dir.mktmpdir) }
   let(:project) { mkdir("code", "app") }
   let(:client) { RecordingClient.new }
@@ -24,37 +22,6 @@ RSpec.describe ClaudeInbox::Remote::Listener do
     listener.stop
     FileUtils.remove_entry(tmp)
   end
-
-  def listener_with(**overrides)
-    ClaudeInbox::Remote::Listener.new(client: client, store: store, queue: queue, pairing: pairing, port: 7433,
-      images_dir: File.join(tmp, "images"), jobs_dir: File.join(tmp, "jobs"), lock_path: File.join(tmp, "listen.lock"),
-      trust: -> { trusted }, settings: ->(dir) { settings.fetch(dir) { ClaudeInbox::Settings::Defaults.new } },
-      bridge_wait: 0, **options, **overrides)
-  end
-
-  def mkdir(*parts) = File.join(tmp, *parts).tap { |dir| FileUtils.mkdir_p(dir) }
-
-  def raw(text)
-    sock = FakeSocket.new(text)
-    listener.handle(sock, via: "192.168.1.30")
-    head, body = sock.written.sub("HTTP/1.1 100 Continue\r\n\r\n", "").split("\r\n\r\n", 2)
-    status, *lines = head.split("\r\n")
-    Reply.new(status.split[1].to_i, lines.to_h { |line| line.split(": ", 2).then { |k, v| [k.downcase, v] } }, body, sock.written)
-  end
-
-  def call(verb, path, body = nil, token: pairing.token, host: "127.0.0.1:7433", type: "application/json", headers: {})
-    body = JSON.generate(body) if body && !body.is_a?(String)
-    lines = ["#{verb} #{path} HTTP/1.1", "Host: #{host}"]
-    lines << "Authorization: Bearer #{token}" if token
-    lines << "Content-Type: #{type}" if body && type
-    lines << "Content-Length: #{body.bytesize}" if body
-    headers.each { |name, value| lines << "#{name}: #{value}" }
-    raw(lines.join("\r\n") + "\r\n\r\n" + body.to_s)
-  end
-
-  def start(params, **opts) = call("POST", "/api/sessions", params, **opts)
-
-  def drained = Array.new(queue.size) { queue.pop }
 
   describe "routing and the token" do
     it "serves the phone page at / to anyone, as HTML that reaches only this listener and can't be framed" do
@@ -139,7 +106,7 @@ RSpec.describe ClaudeInbox::Remote::Listener do
   end
 
   describe "the phone page" do
-    let(:page) { ClaudeInbox::Remote::Listener::PAGE }
+    let(:page) { described_class::PAGE }
 
     it "refuses what the listener would, before sending it" do
       expect(page).to include("const MAX_IMAGES = #{ClaudeInbox::Remote::Start::MAX_IMAGES};")
@@ -319,7 +286,7 @@ RSpec.describe ClaudeInbox::Remote::Listener do
     # Every test connection comes from 127.0.0.1, so `peer` names the host.
     it "lets another host in while one holds its two unauthenticated slots" do
       hosts = Queue.new
-      listener.define_singleton_method(:peer) { |_| hosts.pop }
+      allow(listener).to receive(:peer) { hosts.pop }
       listener.start
       idle = Array.new(2) do
         hosts << "192.168.1.30"
@@ -373,7 +340,7 @@ RSpec.describe ClaudeInbox::Remote::Listener do
   end
 
   it "stays off, and says so, when disabled" do
-    off = ClaudeInbox::Remote::Listener.disabled
+    off = described_class.disabled
     off.start
     off.refresh
     off.stop
@@ -382,8 +349,6 @@ RSpec.describe ClaudeInbox::Remote::Listener do
   end
 
   describe ".options" do
-    def options_for(*argv, **env) = ClaudeInbox::Remote::Listener.options(argv, env.transform_keys(&:to_s))
-
     it "is nil unless a flag or the environment asks for the listener" do
       expect(options_for("--fixture", "x.json")).to be_nil
       expect(options_for("--listen-allow-modes=plan")).to be_nil

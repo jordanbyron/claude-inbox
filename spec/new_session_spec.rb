@@ -1,41 +1,15 @@
 # frozen_string_literal: true
 
-require "claude_inbox/new_session_form"
 require "tmpdir"
 require "fileutils"
 require "json"
 
-RSpec.describe ClaudeInbox::AgentsClient do
-  it "builds claude --bg arguments, leaving unset ones off" do
-    a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "fix it", model: nil, effort: nil, permission_mode: nil, worktree: false, name: nil)
-    expect(a).to eq(["claude", "--bg", "--", "fix it"])
-    a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "fix it", model: "opus", effort: "high", permission_mode: "acceptEdits", worktree: true, name: "flaky")
-    expect(a).to eq(["claude", "--bg", "--model", "opus", "--effort", "high", "--permission-mode", "acceptEdits", "--name", "flaky", "--worktree", "--", "fix it"])
-  end
-
-  it "puts --remote-control last, where its optional name cannot eat the prompt" do
-    a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "fix it", name: "flaky", remote: true)
-    expect(a).to eq(["claude", "--bg", "--name", "flaky", "--remote-control", "--", "fix it"])
-  end
-
-  it "keeps a prompt that starts with a dash a prompt" do
-    a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "-x is not a flag", remote: true)
-    expect(a).to eq(["claude", "--bg", "--remote-control", "--", "-x is not a flag"])
-  end
-
-  it "mentions a file the way the CLI's own prompt does, spaces escaped" do
-    expect(ClaudeInbox::AgentsClient.mention("/tmp/Screen Shot.png")).to eq("@/tmp/Screen\\ Shot.png")
-  end
-end
-
-RSpec.describe ClaudeInbox::NewSessionForm do
+RSpec.describe ClaudeInbox::NewSessionForm, :new_session do
   # An empty home, so the developer's own ~/.claude settings stay out of the defaults.
   let(:home) { Dir.mktmpdir }
   after { FileUtils.rm_rf(home) }
 
-  let(:form) { ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home) }
-
-  def type(str) = str.each_char { |c| form.press(c, c) }
+  let(:form) { described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home) }
 
   it "starts on the prompt and types into it, spaces included" do
     expect(form.focused.key).to eq(:prompt)
@@ -95,12 +69,10 @@ RSpec.describe ClaudeInbox::NewSessionForm do
   it "starts and attaches on ^O, starts and stays put on ^S" do
     type("do it")
     expect(form.press(:ctrl_o, "\x0f")).to eq(:start_and_attach)
-    other = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
+    other = described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
     type_into(other, "do it")
     expect(other.press(:ctrl_s, "\x13")).to eq(:start)
   end
-
-  def type_into(f, str) = str.each_char { |c| f.press((c == " ") ? :space : c, c) }
 
   it "goes busy on ^S and ignores keys until the App reports back" do
     type("do it")
@@ -121,7 +93,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
 
   describe "images" do
     let(:clip) { ClaudeInbox::Images::Clipboard.new(nil, nil) }
-    let(:form) { ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), clipboard: -> { clip }, home: home) }
+    let(:form) { described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), clipboard: -> { clip }, home: home) }
 
     it "attaches the clipboard's image on an empty paste, as a token in the prompt" do
       clip.image = "/tmp/shot.png"
@@ -203,7 +175,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
     Dir.mktmpdir do |home|
       FileUtils.mkdir_p("#{home}/.claude")
       File.write("#{home}/.claude/settings.json", {model: "opus", effortLevel: "high"}.to_json)
-      f = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
+      f = described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
       rows = f.screen(100, 24)
       expect(rows.find { |r| r.include?("Model") }).to include("opus (settings)")
       expect(rows.find { |r| r.include?("Effort") }).to include("high (settings)")
@@ -219,7 +191,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
         FileUtils.mkdir_p("#{proj}/.claude")
         File.write("#{home}/.claude/settings.json", {model: "opus"}.to_json)
         File.write("#{proj}/.claude/settings.local.json", {permissions: {defaultMode: "plan"}}.to_json)
-        f = ClaudeInbox::NewSessionForm.new(cwd: proj, pastel: Pastel.new(enabled: false), home: home)
+        f = described_class.new(cwd: proj, pastel: Pastel.new(enabled: false), home: home)
         rows = f.screen(100, 24)
         expect(rows.find { |r| r.include?("Model") }).to include("opus (settings)")
         expect(rows.find { |r| r.include?("Permissions") }).to include("plan (settings)")
@@ -231,7 +203,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
     Dir.mktmpdir do |home|
       FileUtils.mkdir_p("#{home}/.claude")
       File.write("#{home}/.claude/settings.json", {remoteControlAtStartup: true}.to_json)
-      f = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
+      f = described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
       expect(f.screen(100, 24).find { |r| r.include?("Remote Control") }).to include("yes (settings)")
       expect(f.values[:remote]).to be(true)
       7.times { f.press(:tab, "\t") }
@@ -242,7 +214,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
 
   it "leaves Remote Control off when nothing turns it on" do
     Dir.mktmpdir do |home|
-      f = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
+      f = described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
       expect(f.values[:remote]).to be(false)
       7.times { f.press(:tab, "\t") }
       f.press("h", "h")
@@ -291,7 +263,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
   end
 
   it "draws the cursor on the cell it sits on" do
-    f = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: true), home: home)
+    f = described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: true), home: home)
     "ab".each_char { |c| f.press(c, c) }
     f.press(:left, "\e[D")
     expect(f.screen(80, 24).join("\n")).to include("a\e[7mb\e[0m")
@@ -313,49 +285,32 @@ RSpec.describe ClaudeInbox::NewSessionForm do
   end
 
   describe "slash commands" do
-    def with_commands
-      Dir.mktmpdir do |home|
-        Dir.mktmpdir do |proj|
-          %w[unslop unsplit babysit].each do |n|
-            FileUtils.mkdir_p("#{home}/.claude/skills/#{n}")
-            File.write("#{home}/.claude/skills/#{n}/SKILL.md", "---\ndescription: #{n} does things\n---\n")
-          end
-          FileUtils.mkdir_p("#{proj}/.claude/commands")
-          File.write("#{proj}/.claude/commands/deploy.md", "---\ndescription: Ship it\n---\n")
-          f = ClaudeInbox::NewSessionForm.new(cwd: proj, pastel: Pastel.new(enabled: false), home: home)
-          yield f
-        end
-      end
-    end
-
-    def type(f, str) = str.each_char { |c| f.press((c == " ") ? :space : c, c) }
-
     it "opens a menu on a leading slash and narrows it as you type" do
       with_commands do |f|
-        type(f, "/")
+        type_into(f, "/")
         expect(f.menu.map(&:name)).to eq(%w[babysit deploy unslop unsplit])
         expect(f.footer).to include("pick")
-        type(f, "uns")
+        type_into(f, "uns")
         expect(f.menu.map(&:name)).to eq(%w[unslop unsplit])
         rows = f.screen(80, 24)
         expect(rows.find { |r| r.include?("/unsplit") }).to include("unsplit does things")
         expect(rows.find { |r| r.include?("/unslop") }).not_to be_nil
         expect(rows.find { |r| r.include?("Worktree") }).not_to be_nil
-        type(f, "zz")
+        type_into(f, "zz")
         expect(f.menu).to be_nil
       end
     end
 
     it "picks with tab or enter, leaving the cursor after the command and a space" do
       with_commands do |f|
-        type(f, "/unsl")
+        type_into(f, "/unsl")
         expect(f.press(:tab, "\t")).to eq(:changed)
         expect(f.values[:prompt]).to eq("/unslop")
         expect(f.focused.value.to_s).to eq("/unslop ")
         expect(f.menu).to be_nil
-        type(f, "the readme")
+        type_into(f, "the readme")
         expect(f.press(:return, "\r")).to eq(:changed)
-        type(f, "/dep")
+        type_into(f, "/dep")
         expect(f.menu.map(&:name)).to eq(%w[deploy])
         f.press(:return, "\r")
         expect(f.values[:prompt]).to eq("/unslop the readme\n/deploy")
@@ -364,7 +319,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
 
     it "moves the pick with the arrows and keeps enter for picking" do
       with_commands do |f|
-        type(f, "/")
+        type_into(f, "/")
         f.press(:down, "\e[B")
         expect(f.picked.name).to eq("deploy")
         f.press(:up, "\e[A")
@@ -378,14 +333,14 @@ RSpec.describe ClaudeInbox::NewSessionForm do
 
     it "closes the menu on escape without leaving the form, until the query changes" do
       with_commands do |f|
-        type(f, "/un")
+        type_into(f, "/un")
         expect(f.press(:escape, "\e")).to eq(:changed)
         expect(f.menu).to be_nil
         expect(f.press(:tab, "\t")).to eq(:changed)
         expect(f.focused.key).to eq(:name)
         f.press(:back_tab, "\e[Z")
         expect(f.menu).to be_nil
-        type(f, "s")
+        type_into(f, "s")
         expect(f.menu.map(&:name)).to eq(%w[unslop unsplit])
         expect(f.press(:escape, "\e")).to eq(:changed)
         expect(f.press(:escape, "\e")).to eq(:changed)
@@ -395,16 +350,16 @@ RSpec.describe ClaudeInbox::NewSessionForm do
 
     it "offers commands for a slash word anywhere in the prompt, but not mid-word" do
       with_commands do |f|
-        type(f, "first do")
+        type_into(f, "first do")
         f.press(:return, "\r")
-        type(f, "then /uns")
+        type_into(f, "then /uns")
         expect(f.menu.map(&:name)).to eq(%w[unslop unsplit])
         f.press(:tab, "\t")
         expect(f.values[:prompt]).to eq("first do\nthen /unslop")
-        type(f, "a/b")
+        type_into(f, "a/b")
         expect(f.menu).to be_nil
         f.press(:ctrl_u, "\x15")
-        type(f, "/unslop x")
+        type_into(f, "/unslop x")
         expect(f.menu).to be_nil
         f.press(:left, "\e[D")
         f.press(:left, "\e[D")
@@ -420,8 +375,8 @@ RSpec.describe ClaudeInbox::NewSessionForm do
           FileUtils.mkdir_p("#{home}/.claude/skills/cmd-#{n}")
           File.write("#{home}/.claude/skills/cmd-#{n}/SKILL.md", "---\ndescription: #{n}\n---\n")
         end
-        f = ClaudeInbox::NewSessionForm.new(cwd: home, pastel: Pastel.new(enabled: false), home: home)
-        type(f, "/")
+        f = described_class.new(cwd: home, pastel: Pastel.new(enabled: false), home: home)
+        type_into(f, "/")
         rows = f.screen(80, 24)
         expect(rows.count { |r| r.include?("/cmd-") }).to eq(6)
         expect(rows.find { |r| r.include?("/cmd-f") }).to include("+4 more")
