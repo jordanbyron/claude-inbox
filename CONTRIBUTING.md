@@ -33,19 +33,18 @@ Other switches while developing:
 CLAUDE_INBOX_STDERR=/tmp/err.log bin/claude-inbox   # crash traces off the alt screen
 DEBUG=1 bin/claude-inbox                            # slow-frame notes in /tmp/inbox-debug.log
 CLAUDE_INBOX_NO_REAP=1 bin/claude-inbox             # never delete an idle session
-bin/claude-inbox --fixture test/fixtures/agents.json --listen=0   # the listener on a free port; N shows it,
-                                                    # and the token is in $TMPDIR/claude-inbox-fixture/listen.json
 bin/screens                                         # drive the fixture in a pty, print every screen
 ```
 
 `bin/screens` is how a refactor is checked against the real screen: run it on
 `main` and on the branch and diff the two.
 
-The phone's page is `lib/claude_inbox/remote.html`, which the listener reads
-once when the inbox starts, so restart after an edit. To try it, run the
-fixture with `--listen=0`, press `N` and then `c`, and open the copied URL in
-a browser; a phone-sized window and the dark scheme are a toggle away in its
-developer tools. Starts go to the fixture, which starts nothing.
+The phone's page is `lib/claude_inbox/remote.html`. The listener reads it
+once at startup, so restart after an edit. To try it, run
+`bin/claude-inbox --fixture test/fixtures/agents.json --listen=0`, press `N`
+then `c`, and open the copied URL in a browser. The fixture keeps its token
+in `$TMPDIR/claude-inbox-fixture/listen.json`, and its starts start nothing.
+[docs/remote-start.md](docs/remote-start.md) documents the page and the API.
 
 ## Local CI and signoff
 
