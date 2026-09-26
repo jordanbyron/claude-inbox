@@ -13,6 +13,12 @@ module ClaudeInbox
 
     def strip_ansi(s) = s.gsub(ANSI, "")
 
+    # Control characters as \xNN, so quoted text can't reach the terminal
+    # as an escape. Bytes that aren't UTF-8 become U+FFFD.
+    def printable(s)
+      String.new(s.to_s, encoding: Encoding::UTF_8).scrub("\uFFFD").gsub(/[[:cntrl:]]/) { |c| format("\\x%02x", c.ord) }
+    end
+
     def width(s) = Unicode::DisplayWidth.of(strip_ansi(s))
 
     # Truncate plain (uncolored) text to `w` columns, appending an ellipsis

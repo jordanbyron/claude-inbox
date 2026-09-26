@@ -26,15 +26,19 @@ module ClaudeInbox
         "Referrer-Policy" => "no-referrer"
       }.freeze
 
-      # A request refused: the status, the message and any other members for
-      # the JSON body, and the headers that status calls for.
-      class Error < StandardError
-        attr_reader :status, :headers, :details
+      JSON_TYPE = {"Content-Type" => "application/json"}.freeze
 
-        def initialize(status, message, headers: {}, **details)
+      # A request refused: the status, the message and any other members for
+      # the JSON body, and the headers that status calls for. `note`, when
+      # set, is what the refusal is logged as in place of its message.
+      class Error < StandardError
+        attr_reader :status, :headers, :details, :note
+
+        def initialize(status, message, headers: {}, note: nil, **details)
           super(message)
           @status = status
           @headers = headers
+          @note = note
           @details = details
         end
 

@@ -99,7 +99,7 @@ class RecordingClient < ClaudeInbox::FixtureClient
   end
 end
 
-# A connection for the Http and Listener specs: it reads the request it
+# A connection for the Remote specs: it reads the request it
 # was given and keeps whatever is written back.
 class FakeSocket
   attr_reader :written
@@ -113,5 +113,13 @@ class FakeSocket
 
   def write(data) = @written << data.b
 end
+
+# What came back from Listener#handle or Start#call, parsed. `note` is
+# Start's, for N.
+Reply = Struct.new(:status, :headers, :body, :written, :note) do
+  def json = JSON.parse(body)
+end
+
+PNG = "\x89PNG\r\n\x1A\n#{"\0" * 16}".b
 
 Minitest::Spec.include Fixtures
