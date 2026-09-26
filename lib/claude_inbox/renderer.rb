@@ -21,6 +21,7 @@ module ClaudeInbox
     Frame = Struct.new(:lines, :items, :top, :list_width)
 
     CHROME_ROWS = 2 # header + footer
+    MIN_LIST_WIDTH = 44 # with the peek open, the list keeps at least this many columns
 
     def self.body_height(height) = height - CHROME_ROWS
 
@@ -70,11 +71,10 @@ module ClaudeInbox
       ["za", "fold"], ["/", "filter"], ["q", "quit"]
     ].freeze
 
-    def initialize(color: true, min_left: 44, home: Dir.home)
+    def initialize(color: true, home: Dir.home)
       @p = Pastel.new(enabled: color)
       @theme = Theme.new(enabled: color)
       @palette = Palette.new(enabled: color)
-      @min_left = min_left
       @home = home
     end
 
@@ -115,7 +115,7 @@ module ClaudeInbox
 
     def width_for_list(width, peek)
       return width unless peek
-      [(width * 0.4).floor, @min_left].max.clamp(0, width)
+      [(width * 0.4).floor, MIN_LIST_WIDTH].max.clamp(0, width)
     end
 
     def clamp_top(top, size, view_h, items, selected)
