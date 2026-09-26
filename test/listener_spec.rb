@@ -70,10 +70,21 @@ describe ClaudeInbox::Listener do
       _(r.status).must_equal 200
       _(r.headers["content-type"]).must_equal "text/html; charset=utf-8"
       _(r.headers["content-security-policy"]).must_equal "default-src 'none'; script-src 'unsafe-inline'; " \
-        "style-src 'unsafe-inline'; img-src blob: data:; connect-src 'self'; form-action 'none'; frame-ancestors 'none'"
+        "style-src 'unsafe-inline'; img-src blob: data:; connect-src 'self'; manifest-src 'self'; form-action 'none'; " \
+        "frame-ancestors 'none'"
       _(r.body.b).must_equal File.binread(File.expand_path("../lib/claude_inbox/remote.html", __dir__))
       _(r.headers.values_at("connection", "cache-control", "x-content-type-options", "referrer-policy"))
         .must_equal ["close", "no-store", "nosniff", "no-referrer"]
+    end
+
+    it "serves what Add to Home Screen reads to anyone, so the page opens as an app with its own icon" do
+      manifest = call("GET", "/manifest.webmanifest", token: nil)
+      _([manifest.status, manifest.headers["content-type"]]).must_equal [200, "application/manifest+json"]
+      _(manifest.json.values_at("start_url", "display")).must_equal ["/", "standalone"]
+      _(manifest.json["icons"].map { |icon| icon["src"] }).must_equal ["/icon.png"]
+      icon = call("GET", "/icon.png", token: nil)
+      _([icon.status, icon.headers["content-type"]]).must_equal [200, "image/png"]
+      _(icon.body.b).must_equal File.binread(File.expand_path("../lib/claude_inbox/icon.png", __dir__))
     end
 
     it "asks for the token, says how to get one, and notes who was turned away" do
@@ -144,7 +155,8 @@ describe ClaudeInbox::Listener do
     end
 
     it "loads nothing from anywhere else, which the CSP would block without a word" do
-      _(page).wont_match(/<link\b|@import/)
+      _(page).wont_include "@import"
+      _(page.scan(/<link\b[^>]*>/).map { |link| link[/href="([^"]*)"/, 1] }).must_equal ["/manifest.webmanifest", "/icon.png"]
       _(page).wont_match(%r{\b(?:src|href|action)=["']?(?:https?:)?//})
       _(page).wont_match(%r{url\(["']?(?:https?:)?//})
     end
