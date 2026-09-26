@@ -66,8 +66,6 @@ bundle exec rake test
 bundle exec standardrb --fix
 bundle exec bundle-audit check --update
 gh signoff status        # is HEAD signed off?
-gh signoff --commit <sha>   # sign off a specific commit
-gh signoff -f            # sign off despite unpushed or uncommitted changes
 ```
 
 `gh signoff install` makes `signoff` a required check on `main`. Run it once
