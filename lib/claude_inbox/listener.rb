@@ -47,7 +47,7 @@ module ClaudeInbox
     }.freeze
     # What Add to Home Screen reads to open the page as an app of its own.
     # The icon is drawn by icon.svg: rsvg-convert -w 512 icon.svg -o icon.png
-    MANIFEST = JSON.generate(name: "claude-inbox", short_name: "Inbox", start_url: "/", scope: "/", display: "standalone",
+    MANIFEST = JSON.generate(name: "Claude Inbox", start_url: "/", scope: "/", display: "standalone",
       icons: [{src: "/icon.png", sizes: "512x512", type: "image/png"}]).freeze
     ICON = File.binread(File.join(__dir__, "icon.png")).freeze
     # Served to anyone, like the page itself: none of it is a secret.
