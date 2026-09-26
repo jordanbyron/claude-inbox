@@ -26,6 +26,8 @@ module ClaudeInbox
         "Referrer-Policy" => "no-referrer"
       }.freeze
 
+      JSON_TYPE = {"Content-Type" => "application/json"}.freeze
+
       # A request refused: the status, the message and any other members for
       # the JSON body, and the headers that status calls for.
       class Error < StandardError
@@ -77,6 +79,9 @@ module ClaudeInbox
       # binary string and raises on a bad byte, and a message can quote CLI
       # output or request bytes.
       def self.utf8(text) = String.new(text.to_s, encoding: Encoding::UTF_8).scrub("\uFFFD")
+
+      # For what reaches the terminal and quotes a request.
+      def self.printable(text) = utf8(text).gsub(/[[:cntrl:]]/) { |c| format("\\x%02x", c.ord) }
 
       # `deadline` (on the monotonic clock) bounds the whole head, not each
       # read: a per-read timeout lets a byte every few seconds hold the
