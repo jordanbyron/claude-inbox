@@ -516,10 +516,8 @@ module ClaudeInbox
       raise Http::Error.new(403, "permission mode #{mode} isn't allowed from another device", field: "permission_mode")
     end
 
-    # With no settings file naming a mode, the CLI's own default applies:
-    # auto for an account that opted in, else manual, never wider. Nil
-    # leaves the flag off for it; where auto is refused, "default" (which
-    # 2.1.283 calls manual) is named instead.
+    # Unset in settings, the CLI's own default is auto or manual, never
+    # wider: leave the flag off unless auto is refused.
     def builtin_mode = @allowed_modes.include?("auto") ? nil : "default"
 
     # Left out, Remote Control is what /config says for that directory, as
