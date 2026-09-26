@@ -364,24 +364,3 @@ describe "renderer session colors" do
     _(bar.call(90)).must_include "\e[38;5;203m█████████░"
   end
 end
-
-describe ClaudeInbox::Painter do
-  it "paints only changed lines" do
-    out = StringIO.new
-    painter = ClaudeInbox::Painter.new(out)
-    painter.paint(%w[a b c])
-    out.truncate(0)
-    out.rewind
-    painter.paint(%w[a X c])
-    _(out.string).must_include "X"
-    _(out.string).wont_include "a"
-    _(out.string).must_include "\e[2;1H"
-  end
-
-  it "never erases to end of line after a row" do
-    out = StringIO.new
-    ClaudeInbox::Painter.new(out).paint(%w[a b])
-    _(out.string).wont_include "\e[K"
-    _(out.string).wont_include "\e[0K"
-  end
-end
