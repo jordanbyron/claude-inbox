@@ -134,6 +134,20 @@ describe ClaudeInbox::App do
     end
   end
 
+  it "opens, closes and toggles the section under the cursor on zo, zc and za" do
+    store.settle("b03695b1")
+    press("\t", "\t")
+    _(screen.join("\n")).wont_include "app store release strategy"
+    press("z", "o")
+    _(screen.join("\n")).must_include "app store release strategy"
+    press("\t", "\t")
+    _(selected_line).must_include "app store release strategy"
+    press("z", "c")
+    _(screen.join("\n")).wont_include "app store release strategy"
+    press("\t", "\t", "z", "a")
+    _(screen.join("\n")).must_include "app store release strategy"
+  end
+
   describe "ctrl-x deletes a session" do
     it "asks first and deletes once confirmed" do
       press(CTRL_X)
