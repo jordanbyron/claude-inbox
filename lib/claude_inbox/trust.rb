@@ -19,21 +19,5 @@ module ClaudeInbox
     rescue SystemCallError, IOError, JSON::ParserError
       []
     end
-
-    # Whether `dir` is one of `projects` or sits under one, by realpath, so
-    # a symlinked checkout matches. Looser than the CLI, which stops looking
-    # at a git repository's root; close enough for ordering.
-    def self.covers?(dir, projects)
-      return false unless (real = realpath(dir))
-      projects.filter_map { |project| realpath(project) }
-        .any? { |root| real == root || real.start_with?(File.join(root, "")) }
-    end
-
-    def self.realpath(path)
-      File.realpath(path)
-    rescue SystemCallError
-      nil
-    end
-    private_class_method :realpath
   end
 end
