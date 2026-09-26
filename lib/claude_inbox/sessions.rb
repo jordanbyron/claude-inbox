@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative "job_state"
-require_relative "pull_requests"
 
 module ClaudeInbox
   # Puts the list together. JobState goes before PullRequests because the PR
