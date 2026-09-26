@@ -235,14 +235,14 @@ and rejected tokens, counting a repeat rather than listing it again. Anyone with
 you, in your projects: treat a leaked URL like a leaked password, and press
 `r`.
 
-**Permission modes.** A remote start may use `default` and `plan`, nothing
-wider. `default` means whatever your settings say for that directory, so it
-is worked out first: a project whose settings default to `bypassPermissions`
-is refused with 403 rather than started. `--listen-allow-modes` gives the
-list in full, for example `--listen-allow-modes=default,plan,acceptEdits`.
-The mode that passed is handed to `claude` by name, `--permission-mode
-default` included. Settings files the inbox doesn't read, such as managed
-settings, aren't taken into account when it is worked out.
+**Permission modes.** A remote start may use `default`, `auto` and `plan`,
+nothing wider. `default` means whatever your settings say for that
+directory, so it is worked out first: a project whose settings default to
+`bypassPermissions` is refused with 403 rather than started.
+`--listen-allow-modes` gives the list in full, for example
+`--listen-allow-modes=default,plan,acceptEdits`. Settings files the inbox
+doesn't read, such as managed settings, aren't taken into account when it is
+worked out.
 
 **The API.** `GET /api/options` lists the models, efforts, permission modes
 and directories a start can use, each directory with a short `label` and the

@@ -21,7 +21,7 @@ module ClaudeInbox
   # failure becomes a response.
   class Listener
     DEFAULT_PORT = 7433
-    DEFAULT_MODES = %w[default plan].freeze
+    DEFAULT_MODES = %w[default auto plan].freeze
     LOCK_PATH = File.join(Dir.home, ".config", "claude-inbox", "listen.lock")
     MAX_CONNECTIONS = 4
     MAX_UNAUTHENTICATED = 2
@@ -513,10 +513,14 @@ module ClaudeInbox
     # mode that passed rather than have the CLI work it out again.
     def capped_mode(values)
       mode = values[:permission_mode]
-      mode = @settings.call(values[:cwd]).permission_mode || "default" if mode == "default"
-      return mode if @allowed_modes.include?(mode)
+      mode = @settings.call(values[:cwd]).permission_mode || builtin_mode if mode == "default"
+      return mode if mode.nil? || @allowed_modes.include?(mode)
       raise Http::Error.new(403, "permission mode #{mode} isn't allowed from another device", field: "permission_mode")
     end
+
+    # Unset in settings, the CLI's own default is auto or manual, never
+    # wider: leave the flag off unless auto is refused.
+    def builtin_mode = @allowed_modes.include?("auto") ? nil : "default"
 
     # Left out, Remote Control is what /config says for that directory, as
     # the n form's default is, and is then passed as the flag the form passes.
