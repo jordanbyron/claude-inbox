@@ -36,7 +36,8 @@ module Release
     private
 
     def kind(message)
-      subject = message.lines.first.to_s
+      # bin/release splits git log on NUL, so every record but the first opens with a newline.
+      subject = message.lstrip.lines.first.to_s
       return :major if subject[SUBJECT, :breaking] || message.match?(BREAKING_FOOTER)
 
       case subject[/\A(\w+)/]

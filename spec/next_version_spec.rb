@@ -32,6 +32,10 @@ RSpec.describe Release::NextVersion do
     expect(described_class.new("1.2.3", ["docs: explain BREAKING CHANGE: footers (#7)"]).version).to be_nil
   end
 
+  it "reads the subject past a record's leading newline" do
+    expect(described_class.new("1.2.3", ["refactor: rename (#2)\n", "\nfeat: add a key (#3)\n"]).version).to eq("1.3.0")
+  end
+
   it "names the bump" do
     expect(described_class.new("1.2.3", ["fix: x"]).bump).to eq(:patch)
     expect(described_class.new("1.2.3", ["docs: x"]).bump).to be_nil
