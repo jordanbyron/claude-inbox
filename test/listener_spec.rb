@@ -205,7 +205,7 @@ describe ClaudeInbox::Listener do
       _(r.status).must_equal 201
       _(r.json).must_equal({"id" => "deadbeef", "name" => "phone", "cwd" => project, "url" => nil})
       _(client.spawns).must_equal [{prompt: "fix it", name: "phone", cwd: project, model: "opus", effort: "default",
-                                    permission_mode: nil, worktree: false, remote: true, explicit_mode: true}]
+                                    permission_mode: "auto", worktree: false, remote: true, explicit_mode: true}]
       _(drained).must_equal [[:notice, "remote: starting session…"], [:remote_started, "deadbeef", "192.168.1.30"]]
       _(listener.snapshot.recent.last.result).must_equal "started deadbeef"
     end
@@ -276,10 +276,10 @@ describe ClaudeInbox::Listener do
       _(argv.each_cons(2).to_a).must_include ["--permission-mode", "plan"]
     end
 
-    it "leaves the CLI's own default, auto included, to a directory whose settings name no mode" do
+    it "names auto where settings name no mode, so a settings file it doesn't read can't widen it" do
       _(start({prompt: "go", cwd: project}).status).must_equal 201
       argv = ClaudeInbox::AgentsClient.spawn_args("claude", **client.spawns.last.except(:cwd))
-      _(argv).wont_include "--permission-mode"
+      _(argv.each_cons(2).to_a).must_include ["--permission-mode", "auto"]
     end
 
     it "names default there instead when auto isn't allowed, rather than let the CLI pick auto" do
