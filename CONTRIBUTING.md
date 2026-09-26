@@ -20,7 +20,7 @@ through the checkout's Bundler, so it runs your working copy.
 
 ```sh
 bin/claude-inbox                                        # live
-bin/claude-inbox --fixture test/fixtures/agents.json    # no daemon needed
+bin/claude-inbox --fixture spec/fixtures/agents.json    # no daemon needed
 CLAUDE_INBOX_STDERR=/tmp/err.log bin/claude-inbox       # crash traces off the alt screen
 DEBUG=1 bin/claude-inbox                                # slow-frame notes in /tmp/inbox-debug.log
 CLAUDE_INBOX_NO_REAP=1 bin/claude-inbox                 # never delete an idle session
@@ -38,7 +38,7 @@ records what the daemon and CLI actually do, which `claude --help` doesn't.
 
 The phone's page is `lib/claude_inbox/remote/page.html`. The listener reads it
 once at startup, so restart after an edit. To try it, run
-`bin/claude-inbox --fixture test/fixtures/agents.json --listen=0`, press `N`
+`bin/claude-inbox --fixture spec/fixtures/agents.json --listen=0`, press `N`
 then `c`, and open the copied URL in a browser. The fixture keeps its token
 in `$TMPDIR/claude-inbox-fixture/listen.json`, and its starts start nothing.
 [docs/remote-start.md](docs/remote-start.md) documents the page and the API.
@@ -51,7 +51,7 @@ four seconds.
 
 1. Push your branch and open the PR.
 2. Run `bin/ci`. It runs `bundle install`, `standardrb`, `bundle-audit` and
-   `rake test`.
+   `rspec`.
 3. If every step passes and HEAD is on the remote, it runs `gh signoff`,
    which sets a green `signoff` status on the PR.
 4. Merge.
@@ -64,7 +64,7 @@ you tested.
 While iterating:
 
 ```sh
-bundle exec rake test
+bundle exec rspec
 bundle exec standardrb --fix
 bundle exec bundle-audit check --update
 gh signoff status        # is HEAD signed off?

@@ -92,7 +92,7 @@ CI.run do
 
   step "Security: Gem audit", "bundle", "exec", "bundle-audit", "check", "--update", "--quiet"
 
-  step "Tests: minitest", "bundle", "exec", "rake", "test"
+  step "Tests: rspec", "bundle", "exec", "rspec"
 
   head_is_pushed = system("git merge-base --is-ancestor HEAD @{push}", out: File::NULL, err: File::NULL)
 

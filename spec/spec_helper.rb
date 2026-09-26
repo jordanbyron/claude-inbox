@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 require "bundler/setup"
-require "minitest/autorun"
-require "minitest/spec"
 require "stringio"
 require_relative "../lib/claude_inbox"
 require_relative "../lib/claude_inbox/renderer"
@@ -122,4 +120,11 @@ end
 
 PNG = "\x89PNG\r\n\x1A\n#{"\0" * 16}".b
 
-Minitest::Spec.include Fixtures
+RSpec.configure do |config|
+  config.include Fixtures
+  config.disable_monkey_patching!
+  config.expect_with(:rspec) { |c| c.syntax = :expect }
+  config.define_derived_metadata { |metadata| metadata[:aggregate_failures] = true }
+  config.order = :random
+  Kernel.srand config.seed
+end
