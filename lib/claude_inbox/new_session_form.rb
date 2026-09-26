@@ -18,8 +18,7 @@ module ClaudeInbox
     # string on :choice ones — `kind` says which.
     Field = Struct.new(:key, :label, :kind, :value, :choices)
 
-    # "default" stays the internal value so spawn_args leaves the flag off;
-    # the screen shows what that resolves to instead.
+    # The screen shows what "default" resolves to; `values` makes it nil.
     DEFAULT = "default"
 
     MENU_ROWS = 6
