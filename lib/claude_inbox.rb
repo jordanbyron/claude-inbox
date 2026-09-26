@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module ClaudeInbox
-  VERSION = "0.2.0"
+  VERSION = "0.3.0"
 end
 
 require_relative "claude_inbox/palette"
