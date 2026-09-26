@@ -5,6 +5,7 @@
 # bumps VERSION from the conventional commits since the last tag, pushes the
 # gem and opens a GitHub release. See CONTRIBUTING.md.
 
+require "bundler"
 require "fileutils"
 require "open3"
 require_relative "../release/next_version"
@@ -58,19 +59,24 @@ if DRY_RUN
   exit
 end
 
-# The first release ships VERSION as it stands, so there is nothing to commit.
-bumped = version != current
-if bumped
-  File.write(VERSION_FILE, File.read(VERSION_FILE).sub(VERSION_LINE, %(VERSION = "#{version}")))
-  step "git", "commit", "--quiet", "--all", "--message", "chore: release #{tag}"
+# The lock records the gem's own version, so it is relocked into the release
+# commit; otherwise the next bundle install rewrites it and dirties the tree.
+# Unbundled, because a bundle exec parent would pin the relock to its Gemfile.
+File.write(VERSION_FILE, File.read(VERSION_FILE).sub(VERSION_LINE, %(VERSION = "#{version}"))) if version != current
+unless Bundler.with_unbundled_env { system("bundle", "lock", "--local", out: File::NULL) }
+  system "git", "checkout", "--quiet", "--", "."
+  abort "bundle lock failed; VERSION and Gemfile.lock are left as they were"
 end
+# The first release ships VERSION as it stands, so there may be nothing to commit.
+committed = !capture("git", "status", "--porcelain").empty?
+step "git", "commit", "--quiet", "--all", "--message", "chore: release #{tag}" if committed
 step "git", "tag", "--annotate", tag, "--message", tag
 
 gem_file = "claude-inbox-#{version}.gem"
 unless system("gem", "build", "claude-inbox.gemspec") && system("gem", "push", gem_file)
   # Undo before aborting, so main never carries a version rubygems does not.
   system "git", "tag", "--delete", tag
-  system "git", "reset", "--quiet", "--hard", "HEAD~1" if bumped
+  system "git", "reset", "--quiet", "--hard", "HEAD~1" if committed
   FileUtils.rm_f gem_file
   abort "#{tag} was not published; the release commit and tag are undone"
 end
