@@ -268,7 +268,7 @@ URL.
    on the clipboard, and Universal Clipboard takes it to the phone.
 2. On the phone, paste it into Safari and open it.
 3. Tap Share, then Add to Home Screen, then Add.
-4. Open the new icon. It keeps its own storage, apart from Safari's, so the
+4. Open the new Inbox icon. It keeps its own storage, apart from Safari's, so the
    first time it asks for the token: paste the pairing URL again and tap
    Pair.
 
