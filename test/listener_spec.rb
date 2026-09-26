@@ -204,8 +204,8 @@ describe ClaudeInbox::Listener do
       r = start({prompt: "fix it", cwd: "app", name: "phone", model: "opus", remote: true})
       _(r.status).must_equal 201
       _(r.json).must_equal({"id" => "deadbeef", "name" => "phone", "cwd" => project, "url" => nil})
-      _(client.spawns).must_equal [{prompt: "fix it", name: "phone", cwd: project, model: "opus", effort: "default",
-                                    permission_mode: "auto", worktree: false, remote: true, explicit_mode: true}]
+      _(client.spawns).must_equal [{prompt: "fix it", name: "phone", cwd: project, model: "opus", effort: nil,
+                                    permission_mode: "auto", worktree: false, remote: true}]
       _(drained).must_equal [[:notice, "remote: starting session…"], [:remote_started, "deadbeef", "192.168.1.30"]]
       _(listener.snapshot.recent.last.result).must_equal "started deadbeef"
     end

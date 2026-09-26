@@ -390,7 +390,7 @@ module ClaudeInbox
         models: AgentsClient::MODELS,
         efforts: AgentsClient::EFFORTS,
         permission_modes: AgentsClient::PERMISSION_MODES & @allowed_modes,
-        dirs: paths.map { |path| {path: path, label: label(path, paths), defaults: @settings.call(path).to_h} }
+        dirs: paths.map { |path| {path: path, label: SessionRequest.label(path, paths), defaults: @settings.call(path).to_h} }
       }
     end
 
@@ -400,17 +400,6 @@ module ClaudeInbox
     def dir_paths
       recent = @store.sessions.sort_by { |s| -s.started_at.to_i }.filter_map { |s| s.cwd && SessionRequest.strip_worktree(s.cwd) }
       (recent + @trust.call).uniq.select { |dir| File.directory?(dir) }
-    end
-
-    # The fewest trailing components that name `path` alone among `paths`,
-    # which is how SessionRequest finds a directory by label.
-    def label(path, paths)
-      parts = path.split("/").reject(&:empty?)
-      (1..parts.size).each do |n|
-        label = parts.last(n).join("/")
-        return label if paths.one? { |other| other.end_with?("/#{label}") }
-      end
-      path
     end
 
     # Checked cheapest first, and nothing is written to disk until every
@@ -503,12 +492,13 @@ module ClaudeInbox
       values = SessionRequest.from_params(params, dirs: dir_paths)
       field, message = SessionRequest.problem(values)
       raise Http::Error.new(422, message, field: field) if field
-      values[:permission_mode] = capped_mode(values)
-      values[:remote] = remote_control(params, values)
+      defaults = @settings.call(values[:cwd])
+      values = SessionRequest.resolve(values, defaults)
+      values[:permission_mode] = capped_mode(values[:permission_mode] || defaults.permission_mode || builtin_mode)
       paths = images.each_with_index.map { |bytes, i| Images.save(bytes, dir: @images_dir, index: i + 1) }
       values[:prompt] = SessionRequest.attach(values[:prompt], paths)
       @queue << [:notice, "remote: starting session…"]
-      id = Http.utf8(@spawn_lock.synchronize { @client.spawn(**values, explicit_mode: true) })
+      id = Http.utf8(@spawn_lock.synchronize { @client.spawn(**values) })
       url = remote_url(id, wait: values[:remote] ? @bridge_wait : 0)
       @queue << [:remote_started, id, via]
       remember(via, "started #{id}")
@@ -517,13 +507,11 @@ module ClaudeInbox
       raise Http::Error.new(422, e.message, field: e.field)
     end
 
-    # "default" is what the settings files say, so a project defaulting to
-    # bypassPermissions can't pass as "default". The spawn always names the
+    # Unset, the mode is what the settings files say, so a project defaulting
+    # to bypassPermissions can't pass as "default". The spawn always names the
     # mode that passed: the flag beats every settings file short of managed
     # policy, so one the inbox doesn't read can't widen it.
-    def capped_mode(values)
-      mode = values[:permission_mode]
-      mode = @settings.call(values[:cwd]).permission_mode || builtin_mode if mode == "default"
+    def capped_mode(mode)
       return mode if @allowed_modes.include?(mode)
       raise Http::Error.new(403, "permission mode #{mode} isn't allowed from another device", field: "permission_mode")
     end
@@ -532,13 +520,6 @@ module ClaudeInbox
     # wider. Passed as "default" the CLI takes manual, so auto is named
     # outright wherever it is allowed.
     def builtin_mode = @allowed_modes.include?("auto") ? "auto" : "default"
-
-    # Left out, Remote Control is what /config says for that directory, as
-    # the n form's default is, and is then passed as the flag the form passes.
-    def remote_control(params, values)
-      return values[:remote] if params.key?("remote")
-      @settings.call(values[:cwd]).remote == "yes"
-    end
 
     # The session registers its bridge a moment after `claude --bg`
     # returns; without it in time the reply has no URL, only the id.

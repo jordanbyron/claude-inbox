@@ -31,10 +31,9 @@ describe ClaudeInbox::AgentsClient do
     _(s.display_name).must_equal "claude-inbox-38"
   end
 
-  it "names even the default permission mode when asked to, as a remote start does" do
-    a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "go", permission_mode: "default", explicit_mode: true)
+  it "names the default permission mode when given it, as a remote start does" do
+    a = ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "go", permission_mode: "default")
     _(a).must_equal ["claude", "--bg", "--permission-mode", "default", "--", "go"]
-    _(ClaudeInbox::AgentsClient.spawn_args("claude", prompt: "go", explicit_mode: true)).must_equal ["claude", "--bg", "--", "go"]
   end
 
   it "classifies fixture interactive rows as remote when told their pids" do
