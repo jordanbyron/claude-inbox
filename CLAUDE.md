@@ -16,8 +16,8 @@ shared checkout: other sessions commit there concurrently.
 
 ## Conventions
 
-- Tests are minitest/spec (`describe` / `it` / `_(x).must_equal`) in
-  `test/**/*_spec.rb`, one spec file per class.
+- Tests are RSpec (`RSpec.describe` / `it` / `expect(x).to eq`) in
+  `spec/**/*_spec.rb`, one spec file per class.
 - The UI is keyboard-only with vim bindings; a new action needs a key in
   `Keymap::BINDINGS` and a row in the README key table.
 - Commit subjects are `type: what changed` (`fix:`, `feat:`, `refactor:`,

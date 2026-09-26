@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
-require "minitest/test_task"
+require "rspec/core/rake_task"
 
-Minitest::TestTask.create do |t|
-  t.test_globs = ["test/**/*_spec.rb"]
-end
-task default: :test
+RSpec::Core::RakeTask.new(:spec)
+task default: :spec
