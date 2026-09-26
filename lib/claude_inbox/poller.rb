@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "reaper"
 require_relative "sessions"
 
 module ClaudeInbox
