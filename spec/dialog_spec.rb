@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "../lib/claude_inbox/dialog"
-
 RSpec.describe ClaudeInbox::Dialog do
   describe "snooze" do
-    let(:dialog) { ClaudeInbox::Dialog::Snooze.new("abc12345") }
+    let(:dialog) { described_class::Snooze.new("abc12345") }
 
     it "answers with the choice behind the key" do
       expect(dialog.press("3", "3")).to eq(:snooze)
@@ -20,24 +18,24 @@ RSpec.describe ClaudeInbox::Dialog do
     it "lists every choice in the box" do
       box = dialog.frame(60).join("\n")
       expect(box).to include "Snooze"
-      ClaudeInbox::Dialog::Snooze::MENU.each { |k, label, _| expect(box).to include "#{k}  #{label}" }
+      described_class::Snooze::MENU.each { |k, label, _| expect(box).to include "#{k}  #{label}" }
     end
   end
 
   describe "confirm" do
     it "asks before pulling a remote session into the daemon" do
-      adopt = ClaudeInbox::Dialog::Confirm.new(:adopt, "u1")
+      adopt = described_class::Confirm.new(:adopt, "u1")
       expect(adopt.frame(60).join("\n")).to include "Pull this session into the daemon?"
       expect(adopt.press("y", "y")).to eq(:confirm)
     end
 
     it "takes y and nothing else, and says which it is asking about" do
-      stop = ClaudeInbox::Dialog::Confirm.new(:stop, "abc12345")
+      stop = described_class::Confirm.new(:stop, "abc12345")
       expect(stop.frame(60).join("\n")).to include "Stop session abc12345?"
       expect(stop.press("Y", "Y")).to be_nil
       expect(stop.press("y", "y")).to eq(:confirm)
 
-      delete = ClaudeInbox::Dialog::Confirm.new(:delete, "abc12345")
+      delete = described_class::Confirm.new(:delete, "abc12345")
       expect(delete.frame(60).join("\n")).to include "Delete session abc12345?"
       expect(delete.press("n", "n")).to eq(:cancel)
       expect(delete.press(:escape, "\e")).to eq(:cancel)
@@ -45,7 +43,7 @@ RSpec.describe ClaudeInbox::Dialog do
   end
 
   describe "prompt" do
-    let(:dialog) { ClaudeInbox::Dialog::Prompt.new(:alias, "abc12345", "auth") }
+    let(:dialog) { described_class::Prompt.new(:alias, "abc12345", "auth") }
     let(:caret) { ->(cell) { "[#{cell}]" } }
 
     it "edits the line and saves it on enter" do
@@ -83,13 +81,13 @@ RSpec.describe ClaudeInbox::Dialog do
 
     it "shows the line with a cursor, and its own question per kind" do
       expect(dialog.frame(60, caret).join("\n")).to include "> auth[ ]"
-      pr = ClaudeInbox::Dialog::Prompt.new(:pr, "abc12345", "")
+      pr = described_class::Prompt.new(:pr, "abc12345", "")
       expect(pr.frame(60).join("\n")).to include "Pull request URL (empty clears):"
     end
 
     it "leaves the string it was given alone" do
       given = "auth"
-      ClaudeInbox::Dialog::Prompt.new(:alias, "abc12345", given).press("x", "x")
+      described_class::Prompt.new(:alias, "abc12345", given).press("x", "x")
       expect(given).to eq("auth")
     end
   end

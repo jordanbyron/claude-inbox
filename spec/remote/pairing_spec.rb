@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require_relative "../../lib/claude_inbox/remote/pairing"
 require "tmpdir"
 
 RSpec.describe ClaudeInbox::Remote::Pairing do
@@ -11,7 +10,7 @@ RSpec.describe ClaudeInbox::Remote::Pairing do
   let(:lookups) { [] }
   let(:now) { [0.0] }
   let(:pairing) do
-    ClaudeInbox::Remote::Pairing.new(path: path, local_name: -> { names.first.tap { |n| lookups << n } }, hostname: -> { "mac.mini.lan" },
+    described_class.new(path: path, local_name: -> { names.first.tap { |n| lookups << n } }, hostname: -> { "mac.mini.lan" },
       addresses: -> { addresses }, firewall: -> { :on }, clock: -> { now[0] })
   end
 
@@ -23,7 +22,7 @@ RSpec.describe ClaudeInbox::Remote::Pairing do
       expect(token.size).to be >= 43
       expect(pairing.token).to eq(token)
       expect(File.stat(path).mode & 0o777).to eq(0o600)
-      expect(ClaudeInbox::Remote::Pairing.new(path: path).token).to eq(token)
+      expect(described_class.new(path: path).token).to eq(token)
     end
 
     # A temp file left by a crash already exists, so opening it with a mode
@@ -51,7 +50,7 @@ RSpec.describe ClaudeInbox::Remote::Pairing do
       pairing.rotate!
       expect(pairing.token).not_to eq(old)
       expect(pairing.matches?(old)).to be(false)
-      expect(ClaudeInbox::Remote::Pairing.new(path: path).token).to eq(pairing.token)
+      expect(described_class.new(path: path).token).to eq(pairing.token)
     end
 
     it "is issued afresh when the file holds something that isn't one" do
@@ -59,7 +58,7 @@ RSpec.describe ClaudeInbox::Remote::Pairing do
       File.write(path, JSON.generate(token: "short"))
       expect(pairing.token).not_to eq("short")
       File.write(path, "[1, 2]")
-      expect(ClaudeInbox::Remote::Pairing.new(path: path).token.size).to be >= 43
+      expect(described_class.new(path: path).token.size).to be >= 43
     end
   end
 
@@ -110,7 +109,7 @@ RSpec.describe ClaudeInbox::Remote::Pairing do
       interface.new("lo0", Addrinfo.ip("127.0.0.1")), interface.new("bridge100", Addrinfo.ip("192.168.64.1")),
       interface.new("utun3", nil), interface.new("en1", Addrinfo.ip("192.168.1.20"))
     ]
-    expect(ClaudeInbox::Remote::Pairing.addresses(interfaces).map(&:ip_address)).to eq(%w[192.168.1.20 127.0.0.1 192.168.64.1])
-    expect(ClaudeInbox::Remote::Pairing.addresses).not_to be_empty
+    expect(described_class.addresses(interfaces).map(&:ip_address)).to eq(%w[192.168.1.20 127.0.0.1 192.168.64.1])
+    expect(described_class.addresses).not_to be_empty
   end
 end

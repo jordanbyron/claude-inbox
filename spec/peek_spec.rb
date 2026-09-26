@@ -1,35 +1,16 @@
 # frozen_string_literal: true
 
-require_relative "../lib/claude_inbox/logs"
-require_relative "../lib/claude_inbox/peek"
+RSpec.describe ClaudeInbox::Peek, :peek do
+  subject(:peek) { described_class.new(logs) }
 
-RSpec.describe ClaudeInbox::Peek do
   let(:replay) { (1..10).map { |i| "line #{i}" }.join("\r\n") }
   let(:client) { ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), logs: replay) }
   let(:now) { Time.at(1_789_400_000) }
-  let(:clock) { -> { now + @elapsed } }
+  let(:clock) { StillClock.new(now) }
   let(:logs) { ClaudeInbox::Logs.new(client, clock: clock) }
-  let(:peek) { ClaudeInbox::Peek.new(logs) }
 
-  before do
-    @elapsed = 0
-    logs.start
-  end
+  before { logs.start }
   after { logs.stop }
-
-  def row(**attrs) = ClaudeInbox::Store::Row.new(session: session(**attrs), entry: nil)
-
-  def on(key) = ClaudeInbox::Store::Selection.row(key)
-
-  def pr(state) = ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: state)
-
-  def fetch(r)
-    peek.select(on(r.key), r.session)
-    peek.toggle
-    @elapsed += ClaudeInbox::Logs::DEBOUNCE
-    logs.tick
-    expect(wait_for { logs.cached(r.session.id) }).not_to be_nil
-  end
 
   it "shows nothing while closed" do
     peek.select(on("abc12345"), session)
@@ -56,7 +37,7 @@ RSpec.describe ClaudeInbox::Peek do
     peek.select(on(r.key), r.session)
     peek.toggle
     v = peek.view(r, 10)
-    expect(v.lines).to eq([ClaudeInbox::Peek::TERMINAL_NOTE, "", "pid 42 · /tmp/proj", "session u1"])
+    expect(v.lines).to eq([described_class::TERMINAL_NOTE, "", "pid 42 · /tmp/proj", "session u1"])
     expect(v.title).to eq("thing")
     expect(logs.cached("abc12345")).to be_nil
   end
@@ -65,7 +46,7 @@ RSpec.describe ClaudeInbox::Peek do
     r = row(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u2", pid: 7, origin: :remote, bridge_id: "cse_01AB")
     peek.select(on(r.key), r.session)
     peek.toggle
-    expect(peek.view(r, 10).lines.first).to eq(ClaudeInbox::Peek::REMOTE_NOTE)
+    expect(peek.view(r, 10).lines.first).to eq(described_class::REMOTE_NOTE)
     expect(peek.view(r, 10).lines.last).to eq("https://claude.ai/code/session_01AB")
   end
 
@@ -75,7 +56,7 @@ RSpec.describe ClaudeInbox::Peek do
     peek.toggle
     expect(peek.view(r, 10).lines).to eq(["(loading…)"])
 
-    @elapsed += ClaudeInbox::Logs::DEBOUNCE
+    clock.advance(ClaudeInbox::Logs::DEBOUNCE)
     logs.tick
     expect(wait_for { logs.cached("abc12345") }).not_to be_nil
     expect(peek.view(r, 10).lines).to eq((1..10).map { |i| "line #{i}" })
@@ -121,7 +102,8 @@ RSpec.describe ClaudeInbox::Peek do
   end
 
   it "sums up the session and its pull requests under the title" do
-    r = row(status: "idle", waiting_for: "permission prompt", prs: [pr("OPEN"), pr(nil)])
+    prs = ["OPEN", nil].map { |state| ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: state) }
+    r = row(status: "idle", waiting_for: "permission prompt", prs: prs)
     peek.select(on(r.key), r.session)
     peek.toggle
     started = now.strftime("started %b %-d %H:%M")

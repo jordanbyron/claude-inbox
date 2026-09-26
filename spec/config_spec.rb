@@ -1,17 +1,6 @@
 # frozen_string_literal: true
 
-require "claude_inbox/config"
-require "tmpdir"
-
-RSpec.describe ClaudeInbox::Config do
-  def argv_with(contents, typed = [])
-    Dir.mktmpdir do |dir|
-      path = File.join(dir, "config")
-      File.write(path, contents) if contents
-      ClaudeInbox::Config.argv(typed, path: path)
-    end
-  end
-
+RSpec.describe ClaudeInbox::Config, :config do
   it "is the typed arguments alone without a config file" do
     expect(argv_with(nil, ["--no-color"])).to eq(["--no-color"])
   end

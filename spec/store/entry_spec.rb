@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-Store = ClaudeInbox::Store unless defined?(Store)
-Entry = ClaudeInbox::Store::Entry
-
 RSpec.describe ClaudeInbox::Store::Entry do
   let(:now) { Time.at(1_789_600_000) }
 
@@ -11,7 +8,7 @@ RSpec.describe ClaudeInbox::Store::Entry do
       h = {"alias" => "x", "pr" => "u", "wake_at" => 1, "snoozed_at" => 2, "last_state" => "done", "state_since" => 3,
            "last_seen" => 4, "pinned" => true, "pinned_at" => 5, "settled_at" => 6, "acknowledged_at" => 7,
            "revived_at" => 8, "reap_failed_at" => 9, "reap_error" => "no"}
-      e = Entry.new(h)
+      e = described_class.new(h)
       expect(e.alias_name).to eq("x")
       expect(e.pr).to eq("u")
       expect(e.wake_at).to eq(1)
@@ -30,7 +27,7 @@ RSpec.describe ClaudeInbox::Store::Entry do
     end
 
     it "answers nil or false for an empty entry" do
-      e = Entry.new({})
+      e = described_class.new({})
       expect(e.alias_name).to be_nil
       expect(e.wake_at).to be_nil
       expect(e.pinned?).to be(false)
@@ -38,43 +35,43 @@ RSpec.describe ClaudeInbox::Store::Entry do
     end
 
     it "is parked only on an until-woken snooze" do
-      expect(Entry.new("wake_at" => Store::UNTIL_WOKEN)).to be_parked
-      expect(Entry.new("wake_at" => now.to_i)).not_to be_parked
+      expect(described_class.new("wake_at" => ClaudeInbox::Store::UNTIL_WOKEN)).to be_parked
+      expect(described_class.new("wake_at" => now.to_i)).not_to be_parked
     end
 
     it "is stale once unseen for PRUNE_AFTER, and never before it has been seen" do
-      expect(Entry.new("last_seen" => now.to_i - Store::PRUNE_AFTER - 1).stale?(now)).to be(true)
-      expect(Entry.new("last_seen" => now.to_i - Store::PRUNE_AFTER).stale?(now)).to be(false)
-      expect(Entry.new({}).stale?(now)).to be_nil
+      expect(described_class.new("last_seen" => now.to_i - ClaudeInbox::Store::PRUNE_AFTER - 1).stale?(now)).to be(true)
+      expect(described_class.new("last_seen" => now.to_i - ClaudeInbox::Store::PRUNE_AFTER).stale?(now)).to be(false)
+      expect(described_class.new({}).stale?(now)).to be_nil
     end
   end
 
   describe ".blank" do
     it "carries only a state_since of now" do
-      expect(Entry.blank(now).to_h).to eq({"state_since" => now.to_i})
+      expect(described_class.blank(now).to_h).to eq({"state_since" => now.to_i})
     end
   end
 
   describe ".first_seen" do
     it "seeds state_since from started_at for a finished session whose process was reaped" do
       s = session(id: "a", state: "done", pid: nil, started_at: now - 86_400)
-      expect(Entry.first_seen(s, now).to_h).to eq({"last_state" => "done", "state_since" => (now - 86_400).to_i})
+      expect(described_class.first_seen(s, now).to_h).to eq({"last_state" => "done", "state_since" => (now - 86_400).to_i})
     end
 
     it "seeds state_since from now for a finished session that is still alive, or a working one" do
-      expect(Entry.first_seen(session(id: "a", state: "done", pid: 123, status: "idle"), now).state_since).to eq(now.to_i)
-      expect(Entry.first_seen(session(id: "a", state: "working", pid: nil), now).state_since).to eq(now.to_i)
+      expect(described_class.first_seen(session(id: "a", state: "done", pid: 123, status: "idle"), now).state_since).to eq(now.to_i)
+      expect(described_class.first_seen(session(id: "a", state: "working", pid: nil), now).state_since).to eq(now.to_i)
     end
   end
 
   describe "#observe" do
     it "seeds a first sighting and records last_seen" do
-      e = Entry.observe(nil, session(id: "a"), now)
+      e = described_class.observe(nil, session(id: "a"), now)
       expect(e.to_h).to eq({"last_state" => "working", "state_since" => now.to_i, "last_seen" => now.to_i})
     end
 
     it "bumps state_since only when the state changes" do
-      e = Entry.observe(nil, session(id: "a"), now)
+      e = described_class.observe(nil, session(id: "a"), now)
       e.observe(session(id: "a"), now + 100)
       expect(e.state_since).to eq(now.to_i)
       expect(e.last_seen).to eq((now + 100).to_i)
@@ -84,51 +81,51 @@ RSpec.describe ClaudeInbox::Store::Entry do
     end
 
     it "clears an elapsed snooze" do
-      e = Entry.new("wake_at" => now.to_i - 1, "snoozed_at" => now.to_i - 901, "last_state" => "working").observe(session(id: "a"), now)
+      e = described_class.new("wake_at" => now.to_i - 1, "snoozed_at" => now.to_i - 901, "last_state" => "working").observe(session(id: "a"), now)
       expect(e.to_h).not_to include "wake_at"
       expect(e.to_h).not_to include "snoozed_at"
     end
 
     it "keeps a snooze that has not elapsed, and a parked one for ever" do
-      e = Entry.new("wake_at" => now.to_i + 900, "snoozed_at" => now.to_i, "last_state" => "working").observe(session(id: "a"), now + 60)
+      e = described_class.new("wake_at" => now.to_i + 900, "snoozed_at" => now.to_i, "last_state" => "working").observe(session(id: "a"), now + 60)
       expect(e.wake_at).to eq(now.to_i + 900)
-      parked = Entry.new("wake_at" => Store::UNTIL_WOKEN, "snoozed_at" => now.to_i, "last_state" => "working").observe(session(id: "a"), now + 86_400 * 30)
-      expect(parked.wake_at).to eq(Store::UNTIL_WOKEN)
+      parked = described_class.new("wake_at" => ClaudeInbox::Store::UNTIL_WOKEN, "snoozed_at" => now.to_i, "last_state" => "working").observe(session(id: "a"), now + 86_400 * 30)
+      expect(parked.wake_at).to eq(ClaudeInbox::Store::UNTIL_WOKEN)
     end
 
     it "wakes a snooze when the session becomes blocked afterwards" do
       h = {"wake_at" => now.to_i + 900, "snoozed_at" => now.to_i - 300, "last_state" => "working", "state_since" => now.to_i - 400}
-      e = Entry.new(h).observe(session(id: "a", state: "blocked"), now)
+      e = described_class.new(h).observe(session(id: "a", state: "blocked"), now)
       expect(e.to_h).not_to include "wake_at"
       expect(e.to_h).not_to include "snoozed_at"
     end
 
     it "keeps a hand-settle while the session finishes, and lifts it on any other change" do
       h = {"settled_at" => now.to_i, "last_state" => "working", "state_since" => now.to_i - 60}
-      expect(Entry.new(h.dup).observe(session(id: "a", state: "done"), now + 30).settled_at).to eq(now.to_i)
-      expect(Entry.new(h.dup).observe(session(id: "a", state: "blocked"), now + 30).to_h).not_to include "settled_at"
+      expect(described_class.new(h.dup).observe(session(id: "a", state: "done"), now + 30).settled_at).to eq(now.to_i)
+      expect(described_class.new(h.dup).observe(session(id: "a", state: "blocked"), now + 30).to_h).not_to include "settled_at"
     end
 
     it "lifts an acknowledge and a revive once the state changes" do
       h = {"acknowledged_at" => now.to_i, "revived_at" => now.to_i, "last_state" => "blocked", "state_since" => now.to_i - 60}
-      same = Entry.new(h.dup).observe(session(id: "a", state: "blocked"), now + 30)
+      same = described_class.new(h.dup).observe(session(id: "a", state: "blocked"), now + 30)
       expect(same.acknowledged_at).to eq(now.to_i)
       expect(same.revived_at).to eq(now.to_i)
-      changed = Entry.new(h.dup).observe(session(id: "a", state: "working"), now + 30)
+      changed = described_class.new(h.dup).observe(session(id: "a", state: "working"), now + 30)
       expect(changed.to_h).not_to include "acknowledged_at"
       expect(changed.to_h).not_to include "revived_at"
     end
 
     it "returns itself, over the same hash" do
       h = {"last_state" => "working"}
-      e = Entry.new(h)
+      e = described_class.new(h)
       expect(e.observe(session(id: "a"), now)).to equal(e)
       expect(e.to_h).to equal(h)
     end
   end
 
   describe "mutators" do
-    let(:entry) { Entry.new({}) }
+    subject(:entry) { described_class.new({}) }
 
     it "snooze sets the wake time and when it was asked for" do
       entry.snooze(:h1, now)
@@ -184,11 +181,11 @@ RSpec.describe ClaudeInbox::Store::Entry do
   describe ".snooze_until" do
     let(:evening) { Time.new(2026, 9, 16, 20, 30, 0) }
 
-    it("15m") { expect(Entry.snooze_until(:m15, evening)).to eq(evening.to_i + 900) }
-    it("1h") { expect(Entry.snooze_until(:h1, evening)).to eq(evening.to_i + 3600) }
-    it("tomorrow 9am") { expect(Entry.snooze_until(:tomorrow_9am, evening)).to eq(Time.new(2026, 9, 17, 9).to_i) }
-    it("today 9am when it is still early") { expect(Entry.snooze_until(:tomorrow_9am, Time.new(2026, 9, 16, 3))).to eq(Time.new(2026, 9, 16, 9).to_i) }
-    it("until woken") { expect(Entry.snooze_until(:until_woken, evening)).to eq(Store::UNTIL_WOKEN) }
-    it("rejects anything else") { expect { Entry.snooze_until(:never, evening) }.to raise_error(ArgumentError) }
+    it("15m") { expect(described_class.snooze_until(:m15, evening)).to eq(evening.to_i + 900) }
+    it("1h") { expect(described_class.snooze_until(:h1, evening)).to eq(evening.to_i + 3600) }
+    it("tomorrow 9am") { expect(described_class.snooze_until(:tomorrow_9am, evening)).to eq(Time.new(2026, 9, 17, 9).to_i) }
+    it("today 9am when it is still early") { expect(described_class.snooze_until(:tomorrow_9am, Time.new(2026, 9, 16, 3))).to eq(Time.new(2026, 9, 16, 9).to_i) }
+    it("until woken") { expect(described_class.snooze_until(:until_woken, evening)).to eq(ClaudeInbox::Store::UNTIL_WOKEN) }
+    it("rejects anything else") { expect { described_class.snooze_until(:never, evening) }.to raise_error(ArgumentError) }
   end
 end

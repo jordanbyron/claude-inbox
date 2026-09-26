@@ -1,35 +1,13 @@
 # frozen_string_literal: true
 
-require_relative "../lib/claude_inbox/poller"
-
-RSpec.describe ClaudeInbox::Poller do
-  let(:client) do
-    Class.new(ClaudeInbox::FixtureClient) {
-      def removed = (@removed ||= [])
-
-      def rm(id)
-        removed << id
-        true
-      end
-    }.new(fixture_path("agents.json"))
-  end
+RSpec.describe ClaudeInbox::Poller, :poller do
+  let(:client) { RecordingClient.new }
 
   # Pinned: the reaper's 14-day cutoff against the fixture's startedAt
   # decides how many rows are due, and the wall clock keeps moving it.
   let(:clock) { -> { Time.at(1_789_604_500) } }
   let(:store) { ClaudeInbox::Store.new(path: nil, clock: clock) }
   let(:queue) { Queue.new }
-
-  def poller(reaper: ClaudeInbox::Reaper.disabled, interval: ClaudeInbox::Poller::INTERVAL)
-    ClaudeInbox::Poller.new(
-      client: client, store: store, reaper: reaper, queue: queue, interval: interval, clock: clock,
-      pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil)
-    )
-  end
-
-  def messages = Array.new(queue.size) { queue.pop(true) }
-
-  def published_ids(msgs) = msgs.filter_map { |kind, list| list.map(&:id) if kind == :sessions }
 
   it "hands the list over as sessions on the queue" do
     poller.once
@@ -39,30 +17,23 @@ RSpec.describe ClaudeInbox::Poller do
   end
 
   it "reports a failed poll as an error instead of raising" do
-    client.define_singleton_method(:list) { raise "daemon gone" }
+    allow(client).to receive(:list).and_raise("daemon gone")
     poller.once
     expect(messages).to eq([[:error, "daemon gone"]])
   end
 
   describe "the reaper" do
+    let(:reaper) { instance_double(ClaudeInbox::Reaper, due: %w[f23c8673], sweep: %w[f23c8673]) }
+
+    before { allow(reaper).to receive(:report) { |keys| "reaped #{keys.join(" ")}" } }
+
     it "is off unless something arms it, so a poll on its own deletes nothing" do
       poller.once
       expect(client.removed).to be_empty
       expect(published_ids(messages).first).to include("f23c8673")
     end
 
-    def drain = messages.each { |kind, list| store.update(list) if kind == :sessions }
-
-    def shown = store.sessions.map(&:id)
-
     it "keeps what it reaped out of the frame, from the first hand-over on" do
-      reaper = Class.new {
-        def due(_sessions, _now) = %w[f23c8673]
-
-        def sweep(_sessions, _now) = %w[f23c8673]
-
-        def report(keys) = "reaped #{keys.join(" ")}"
-      }.new
       poller(reaper: reaper).once
       msgs = messages
       expect(msgs.assoc(:notice)[1]).to eq("reaped f23c8673")
@@ -74,26 +45,14 @@ RSpec.describe ClaudeInbox::Poller do
     end
 
     it "brings a row back when its reap was refused" do
-      reaper = Class.new {
-        def due(_sessions, _now) = %w[f23c8673]
-
-        def sweep(_sessions, _now) = []
-
-        def report(keys) = "reaped #{keys.join(" ")}"
-      }.new
+      allow(reaper).to receive(:sweep).and_return([])
       poller(reaper: reaper).once
       drain
       expect(shown).to include("f23c8673")
     end
 
     it "releases what it hid when the sweep itself fails" do
-      reaper = Class.new {
-        def due(_sessions, _now) = %w[f23c8673]
-
-        def sweep(_sessions, _now) = raise(Errno::EACCES, "reaped.log")
-
-        def report(keys) = "reaped #{keys.join(" ")}"
-      }.new
+      allow(reaper).to receive(:sweep).and_raise(Errno::EACCES, "reaped.log")
       poller(reaper: reaper).once
       msgs = messages
       expect(msgs.assoc(:error)[1]).to include("reaped.log")
@@ -102,18 +61,10 @@ RSpec.describe ClaudeInbox::Poller do
     end
 
     it "keeps a row the user deleted hidden even when the reaper let it go the same poll" do
-      reaper = Class.new {
-        def initialize(store) = @store = store
-
-        def due(_sessions, _now) = %w[f23c8673]
-
-        def sweep(_sessions, _now)
-          @store.forget("f23c8673")
-          []
-        end
-
-        def report(keys) = "reaped #{keys.join(" ")}"
-      }.new(store)
+      allow(reaper).to receive(:sweep) do
+        store.forget("f23c8673")
+        []
+      end
       poller(reaper: reaper).once
       drain
       expect(shown).not_to include("f23c8673")
@@ -122,11 +73,11 @@ RSpec.describe ClaudeInbox::Poller do
     # Every hand-over after the sweep carries the reaped key; a list without
     # it is what tells the store the daemon dropped it.
     it "keeps a reaped row hidden on later polls while the daemon still lists it" do
-      client.define_singleton_method(:rm) do |id|
-        @refused ||= id
-        raise ClaudeInbox::AgentsClient::Error, "rm failed: unpushed commits" if id == @refused
-        removed << id
-        true
+      refused = nil
+      allow(client).to receive(:rm).and_wrap_original do |rm, id|
+        refused ||= id
+        raise ClaudeInbox::AgentsClient::Error, "rm failed: unpushed commits" if id == refused
+        rm.call(id)
       end
       reaper = ClaudeInbox::Reaper.new(client, store, log_path: File::NULL, enabled: true)
 
@@ -134,7 +85,6 @@ RSpec.describe ClaudeInbox::Poller do
       drain
       poller(reaper: reaper).once
       drain
-      refused = client.instance_variable_get(:@refused)
       reaped = client.removed.dup
       expect(reaped.size).to eq(1)
       expect(shown).to include(refused)
@@ -153,11 +103,9 @@ RSpec.describe ClaudeInbox::Poller do
   # has returned and `forget` run, but `claude agents` still lists the id on
   # the poll that follows.
   describe "a delete while a poll is in flight" do
-    def drain_into_store(msgs) = msgs.each { |kind, list| store.update(list) if kind == :sessions }
-
     it "does not bring the row back until the daemon has dropped it" do
       poller.once
-      drain_into_store(messages)
+      drain(messages)
       expect(store.sections.all.map(&:id)).to include("f23c8673")
 
       client.rm("f23c8673")
@@ -165,7 +113,7 @@ RSpec.describe ClaudeInbox::Poller do
       poller.once
       msgs = messages
       expect(published_ids(msgs).first).to include("f23c8673")
-      drain_into_store(msgs)
+      drain(msgs)
       expect(store.sections.all.map(&:id)).not_to include("f23c8673")
       expect(store.sessions.map(&:id)).not_to include("f23c8673")
     end
@@ -175,86 +123,70 @@ RSpec.describe ClaudeInbox::Poller do
   # assume it has, and only ever assert that something did *not* happen after
   # giving it far longer than it needs.
   describe "the worker" do
-    let(:client) do
-      Class.new(ClaudeInbox::FixtureClient) {
-        def polls = (@polls ||= Queue.new)
+    subject(:worker) { poller(interval: interval) }
 
-        def list
-          polls << true
-          super
-        end
-      }.new(fixture_path("agents.json"))
-    end
+    let(:client) { PollerCountingClient.new(fixture_path("agents.json")) }
+    let(:interval) { 60 }
 
-    def polls = client.polls.size
-
-    def wait_for_polls(n)
-      deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 2
-      sleep 0.01 until polls >= n || Process.clock_gettime(Process::CLOCK_MONOTONIC) > deadline
-      polls
-    end
-
-    after { @poller&.stop }
+    after { worker.stop }
 
     it "polls once when started" do
-      @poller = poller(interval: 60)
-      @poller.start
+      worker.start
       expect(wait_for_polls(1)).to eq(1)
     end
 
     it "collapses a burst of wake-ups into one poll" do
-      @poller = poller(interval: 60)
-      @poller.soon
-      @poller.soon
-      @poller.start
+      worker.soon
+      worker.soon
+      worker.start
       expect(wait_for_polls(1)).to eq(1)
       sleep 0.2
       expect(polls).to eq(1)
     end
 
-    it "polls again on the interval" do
-      @poller = poller(interval: 0.05)
-      @poller.start
-      expect(wait_for_polls(2)).to be >= 2
+    context "with a short interval" do
+      let(:interval) { 0.05 }
+
+      it "polls again on the interval" do
+        worker.start
+        expect(wait_for_polls(2)).to be >= 2
+      end
     end
 
     it "skips the poll while paused and catches up on resume" do
-      @poller = poller(interval: 60)
-      @poller.pause
-      @poller.start
-      @poller.soon
+      worker.pause
+      worker.start
+      worker.soon
       sleep 0.2
       expect(polls).to eq(0)
 
-      @poller.resume
+      worker.resume
       expect(wait_for_polls(1)).to eq(1)
     end
 
     it "can be stopped before it was started" do
-      poller.stop
+      worker.stop
     end
 
     it "starts one worker however many times start is called" do
-      @poller = poller(interval: 60)
-      @poller.start
-      @poller.start
+      worker.start
+      worker.start
       expect(wait_for_polls(1)).to eq(1)
       sleep 0.2
       expect(polls).to eq(1)
     end
 
     it "reports a poll that blew the stack and keeps polling" do
-      client.define_singleton_method(:list) do
-        polls << true
+      allow(client).to receive(:list) do
+        client.polls << true
         raise SystemStackError, "stack level too deep"
       end
-      @poller = poller(interval: 60)
-      @poller.start
+      worker.start
       expect(wait_for_polls(1)).to eq(1)
       expect(queue.pop).to eq([:error, "stack level too deep"])
-      client.singleton_class.remove_method(:list)
+      allow(client).to receive(:list).and_call_original
 
-      @poller.soon
+      worker.soon
       expect(wait_for_polls(2)).to eq(2)
       expect(queue.pop.first).to eq(:sessions)
     end

@@ -2,7 +2,7 @@
 
 RSpec.describe ClaudeInbox::Session do
   it "needs only the members it is given" do
-    s = ClaudeInbox::Session.new(id: "abc12345")
+    s = described_class.new(id: "abc12345")
     expect(s.id).to eq("abc12345")
     expect(s.kind).to be_nil
     expect(s.prs).to eq([])
@@ -24,7 +24,7 @@ RSpec.describe ClaudeInbox::Session do
   end
 
   it "answers [] for prs even when handed nil, as the Struct it replaced did" do
-    expect(ClaudeInbox::Session.new(id: "abc12345", prs: nil).pr).to be_nil
+    expect(described_class.new(id: "abc12345", prs: nil).pr).to be_nil
   end
 
   # The poller publishes a list and then keeps working on it, so a step that

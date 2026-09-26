@@ -1,14 +1,13 @@
 # frozen_string_literal: true
 
-require_relative "../lib/claude_inbox/app"
 require "stringio"
 require "tmpdir"
 
-CTRL_X = "\x18"
-CTRL_S = "\x13"
-CTRL_U = "\x15"
+RSpec.describe ClaudeInbox::App, :app_screen do
+  let(:ctrl_x) { "\x18" }
+  let(:ctrl_s) { "\x13" }
+  let(:ctrl_u) { "\x15" }
 
-RSpec.describe ClaudeInbox::App do
   let(:terminal) { ScreenTerminal.new }
 
   let(:client) { RecordingClient.new }
@@ -17,7 +16,7 @@ RSpec.describe ClaudeInbox::App do
   let(:queue) { Queue.new }
 
   let(:app) do
-    ClaudeInbox::App.new(
+    described_class.new(
       client: client, store: store, pull_requests: pull_requests,
       rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
       terminal: terminal, input: StringIO.new, color: false, queue: queue
@@ -31,29 +30,6 @@ RSpec.describe ClaudeInbox::App do
 
   after { client.release }
 
-  def press(*keys) = keys.each { |k| app.step(k) }
-
-  def screen
-    app.step
-    terminal.lines
-  end
-
-  def status_line = screen.first
-
-  def footer = screen.last
-
-  def selected_line = screen.find { |l| l.include?("▶") }
-
-  # The selected row's key: the row itself carries a live age and spinner.
-  def cursor
-    app.step
-    app.instance_variable_get(:@selected)&.key
-  end
-
-  def row_of(label) = screen.index { |l| l.include?(label) } + 1
-
-  def click(col, row) = press("\e[<0;#{col};#{row}M")
-
   it "hands a paste to the new-session form whole, and types it into the filter" do
     press("/", "\e[200~thi\e[201~")
     expect(footer).to include("/thi")
@@ -63,7 +39,7 @@ RSpec.describe ClaudeInbox::App do
   end
 
   it "drops a paste that lands where nothing is typed, so its letters never act as keys" do
-    press(CTRL_X, "\e[200~yes, every directory\e[201~")
+    press(ctrl_x, "\e[200~yes, every directory\e[201~")
     expect(screen.join("\n")).to include("Delete session f23c8673?")
     expect(client.removed).to be_empty
     press("\e", "N", "\e[200~query\e[201~")
@@ -149,7 +125,7 @@ RSpec.describe ClaudeInbox::App do
 
   describe "ctrl-x deletes a session" do
     it "asks first and deletes once confirmed" do
-      press(CTRL_X)
+      press(ctrl_x)
       expect(screen.join("\n")).to include("Delete session f23c8673?")
       expect(client.removed).to be_empty
 
@@ -161,14 +137,14 @@ RSpec.describe ClaudeInbox::App do
 
     it "keeps the session when the confirm is dismissed" do
       ["\e", "n", "q"].each do |dismiss|
-        press(CTRL_X, dismiss)
+        press(ctrl_x, dismiss)
         expect(screen.join("\n")).not_to include("Delete session")
         expect(client.removed).to be_empty
       end
     end
 
     it "refuses on a terminal row instead of arming a confirm it can't honour" do
-      press("\t", CTRL_X)
+      press("\t", ctrl_x)
       expect(screen.join("\n")).not_to include("Delete session")
       expect(status_line).to include("terminal")
     end
@@ -188,40 +164,27 @@ RSpec.describe ClaudeInbox::App do
   end
 
   describe "adopting a remote session" do
-    let(:client) do
-      Class.new(ClaudeInbox::FixtureClient) {
-        def adopted = (@adopted ||= [])
+    let(:client) { RecordingClient.new(origins: {57405 => :remote}) }
 
-        def attached = (@attached ||= [])
-
-        def adopt(**opts)
-          adopted << opts
-          "adop7ed0"
-        end
-
-        def attach(id) = attached << id
-
-        def release = nil
-      }.new(fixture_path("agents.json"), origins: {57405 => :remote})
-    end
+    before { allow(client).to receive(:adopt).and_call_original }
 
     it "asks on Enter, then pulls the conversation in and attaches to it" do
       press("\t", "\r")
       expect(screen.join("\n")).to include("Pull this session into the daemon?")
-      expect(client.adopted).to be_empty
+      expect(client).not_to have_received(:adopt)
 
       press("y")
       expect(wait_for {
         app.step
         client.attached == %w[adop7ed0]
       }).to be(true)
-      expect(client.adopted).to eq([{session_id: "4a93393d-1c06-57da-9fb8-12f5b1535d95", cwd: "/Users/byron/code/claude-inbox", pid: 57405}])
+      expect(client).to have_received(:adopt).once.with(session_id: "4a93393d-1c06-57da-9fb8-12f5b1535d95", cwd: "/Users/byron/code/claude-inbox", pid: 57405)
     end
 
     it "leaves it alone when dismissed" do
       press("\t", "\r", "\e")
       expect(screen.join("\n")).not_to include("Pull this session")
-      expect(client.adopted).to be_empty
+      expect(client).not_to have_received(:adopt)
     end
   end
 
@@ -230,7 +193,7 @@ RSpec.describe ClaudeInbox::App do
       client.hold
       # The form defaults to the selected fixture row's cwd, a path from the
       # machine the fixture was captured on, so point it somewhere real.
-      press("n", "h", "i", "\e[B", "\e[B", CTRL_U, *Dir.pwd.chars, CTRL_S)
+      press("n", "h", "i", "\e[B", "\e[B", ctrl_u, *Dir.pwd.chars, ctrl_s)
       expect(status_line).to include("starting session…")
 
       client.release
@@ -245,12 +208,12 @@ RSpec.describe ClaudeInbox::App do
     # than dropping it once the spawn is known to have failed.
     it "reopens the form with the prompt and the error, instead of losing it, when the spawn fails" do
       client.fail_spawn("claude --bg failed: not a trusted directory")
-      press("n", *"fix the thing".chars, "\e[B", "\e[B", CTRL_U, *Dir.pwd.chars, CTRL_S)
+      press("n", *"fix the thing".chars, "\e[B", "\e[B", ctrl_u, *Dir.pwd.chars, ctrl_s)
       expect(wait_for { screen.join("\n").include?("not a trusted directory") }).to be(true)
       lines = screen
       expect(lines.join("\n")).to include("fix the thing")
       expect(lines.join("\n")).to include("New session")
-      press(CTRL_S)
+      press(ctrl_s)
       expect(status_line).to include("starting session…")
     end
   end
@@ -283,15 +246,14 @@ RSpec.describe ClaudeInbox::App do
     let(:gate) { Queue.new }
     let(:pairing) do
       ClaudeInbox::Remote::Pairing.new(path: File.join(tmp, "listen.json"), local_name: -> { "m" }, addresses: -> { [] }).tap do |p|
-        lookups = gate
-        p.define_singleton_method(:urls) do |**kw|
-          lookups.pop
-          super(**kw)
+        allow(p).to receive(:urls).and_wrap_original do |urls, **kw|
+          gate.pop
+          urls.call(**kw)
         end
       end
     end
     let(:app) do
-      ClaudeInbox::App.new(
+      described_class.new(
         client: client, store: store, pull_requests: pull_requests,
         rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
         terminal: terminal, input: StringIO.new, color: false, queue: queue,
@@ -360,7 +322,7 @@ RSpec.describe ClaudeInbox::App do
   describe "deleting a session" do
     it "says so while the worker runs, then confirms once it is gone" do
       client.hold
-      press(CTRL_X, "y")
+      press(ctrl_x, "y")
       expect(status_line).to include("deleting f23c8673…")
 
       client.release

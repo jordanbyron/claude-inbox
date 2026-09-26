@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "../../lib/claude_inbox/remote/listener"
 require "tmpdir"
 
-RSpec.describe ClaudeInbox::Remote::Start do
+RSpec.describe ClaudeInbox::Remote::Start, :remote_start do
   let(:tmp) { File.realpath(Dir.mktmpdir) }
   let(:project) { mkdir("code", "app") }
   let(:client) { RecordingClient.new }
@@ -13,38 +12,13 @@ RSpec.describe ClaudeInbox::Remote::Start do
   let(:settings) { {} }
   let(:options) { {} }
   let(:remote_start) do
-    ClaudeInbox::Remote::Start.new(client: client, store: store, queue: queue,
+    described_class.new(client: client, store: store, queue: queue,
       allowed_modes: ClaudeInbox::Remote::Listener::DEFAULT_MODES, images_dir: File.join(tmp, "images"),
       jobs_dir: File.join(tmp, "jobs"), trust: -> { trusted },
       settings: ->(dir) { settings.fetch(dir) { ClaudeInbox::Settings::Defaults.new } }, bridge_wait: 0, **options)
   end
 
   after { FileUtils.remove_entry(tmp) }
-
-  def mkdir(*parts) = File.join(tmp, *parts).tap { |dir| FileUtils.mkdir_p(dir) }
-
-  # Start's answer, or the Http::Error it raised, as Listener would write it.
-  def raw(text)
-    sock = FakeSocket.new(text)
-    request = ClaudeInbox::Remote::Http.read_head(sock, deadline: ClaudeInbox::Remote::Http.monotonic + 5)
-    status, headers, body, note = remote_start.call(request, sock, "192.168.1.30")
-    Reply.new(status, headers, body, sock.written, note)
-  rescue ClaudeInbox::Remote::Http::Error => e
-    Reply.new(e.status, e.headers, JSON.generate(e.body), sock.written, e.note)
-  end
-
-  def call(verb, path, body = nil, type: "application/json", headers: {})
-    body = JSON.generate(body) if body && !body.is_a?(String)
-    lines = ["#{verb} #{path} HTTP/1.1"]
-    lines << "Content-Type: #{type}" if body && type
-    lines << "Content-Length: #{body.bytesize}" if body
-    headers.each { |name, value| lines << "#{name}: #{value}" }
-    raw(lines.join("\r\n") + "\r\n\r\n" + body.to_s)
-  end
-
-  def start(params, **opts) = call("POST", "/api/sessions", params, **opts)
-
-  def drained = Array.new(queue.size) { queue.pop }
 
   describe "GET /api/options" do
     it "offers the choices, only the permission modes a phone may use, and the directories" do

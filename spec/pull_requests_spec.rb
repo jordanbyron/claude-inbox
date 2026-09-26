@@ -2,12 +2,9 @@
 
 require "tmpdir"
 
-PullRequests = ClaudeInbox::PullRequests
-PullRequest = ClaudeInbox::PullRequest
-
-RSpec.describe PullRequests do
+RSpec.describe ClaudeInbox::PullRequests do
   let(:now) { Time.at(1_789_600_000) }
-  let(:prs) { PullRequests.new(cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: nil, clock: -> { now }) }
+  let(:prs) { described_class.new(cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: nil, clock: -> { now }) }
 
   it "seeds state from Claude Code's own cache" do
     pr = prs.status("https://github.com/jordanbyron/parks_genie/pull/885")
@@ -31,25 +28,25 @@ RSpec.describe PullRequests do
   end
 
   it "parses gh output, calling an open draft DRAFT" do
-    pr = PullRequests.parse("u", '{"number":9,"state":"OPEN","isDraft":true,"title":"t","url":"u"}')
+    pr = described_class.parse("u", '{"number":9,"state":"OPEN","isDraft":true,"title":"t","url":"u"}')
     expect(pr.state).to eq("DRAFT")
-    expect(PullRequests.parse("u", '{"state":"OPEN","isDraft":false}').state).to eq("OPEN")
-    expect(PullRequests.parse("u", '{"state":"MERGED","isDraft":false}')).to be_merged
-    expect(PullRequests.parse("u", "garbage")).to be_nil
+    expect(described_class.parse("u", '{"state":"OPEN","isDraft":false}').state).to eq("OPEN")
+    expect(described_class.parse("u", '{"state":"MERGED","isDraft":false}')).to be_merged
+    expect(described_class.parse("u", "garbage")).to be_nil
   end
 
   it "only accepts github pull request urls by hand" do
-    expect(PullRequests.valid_url?("https://github.com/o/r/pull/12")).to be(true)
-    expect(PullRequests.valid_url?("https://github.com/o/r/issues/12")).to be(false)
-    expect(PullRequests.valid_url?("885")).to be(false)
+    expect(described_class.valid_url?("https://github.com/o/r/pull/12")).to be(true)
+    expect(described_class.valid_url?("https://github.com/o/r/issues/12")).to be(false)
+    expect(described_class.valid_url?("885")).to be(false)
   end
 
   it "asks gh only for unresolved PRs and only once per refresh window" do
     calls = []
-    client = PullRequests.new(cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: "gh", clock: -> { now })
-    client.define_singleton_method(:fetch) do |url|
+    client = described_class.new(cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: "gh", clock: -> { now })
+    allow(client).to receive(:fetch) do |url|
       calls << url
-      PullRequest.new(number: 885, url: url, state: "MERGED")
+      ClaudeInbox::PullRequest.new(number: 885, url: url, state: "MERGED")
     end
     client.status("https://github.com/jordanbyron/parks_genie/pull/856") # merged in cache: never asked
     client.status("https://github.com/jordanbyron/parks_genie/pull/885")
@@ -62,10 +59,10 @@ RSpec.describe PullRequests do
   # that asks: the first frame waits on it.
   it "enriches without asking gh, and refresh is the slow half" do
     calls = []
-    client = PullRequests.new(cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: "gh", clock: -> { now })
-    client.define_singleton_method(:fetch) do |url|
+    client = described_class.new(cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: "gh", clock: -> { now })
+    allow(client).to receive(:fetch) do |url|
       calls << url
-      PullRequest.new(number: url[/\d+\z/].to_i, url: url, state: "OPEN")
+      ClaudeInbox::PullRequest.new(number: url[/\d+\z/].to_i, url: url, state: "OPEN")
     end
     sessions = ClaudeInbox::JobState.enrich([
       session(id: "b03695b1"), # 856 and 866, both resolved in the cache
@@ -87,8 +84,8 @@ RSpec.describe PullRequests do
   # The poller hands the list to the main thread before it asks gh, so the
   # answers must land on new sessions, not on the ones already published.
   it "leaves the sessions it refreshed as they were" do
-    client = PullRequests.new(cache_path: nil, resolved_path: nil, gh: "gh", clock: -> { now })
-    client.define_singleton_method(:fetch) { |u| PullRequest.new(number: 1, url: u, state: "OPEN") }
+    client = described_class.new(cache_path: nil, resolved_path: nil, gh: "gh", clock: -> { now })
+    allow(client).to receive(:fetch) { |u| ClaudeInbox::PullRequest.new(number: 1, url: u, state: "OPEN") }
     before = client.enrich([session(id: "x")], {"x" => "https://github.com/o/r/pull/1"}).first
     expect(before.prs.map(&:state)).to eq([nil])
 
@@ -102,18 +99,18 @@ RSpec.describe PullRequests do
     Dir.mktmpdir do |dir|
       path = File.join(dir, "prs.json")
       url = "https://github.com/o/r/pull/7"
-      first = PullRequests.new(cache_path: nil, resolved_path: path, gh: "gh", clock: -> { now })
+      first = described_class.new(cache_path: nil, resolved_path: path, gh: "gh", clock: -> { now })
       asked = 0
-      first.define_singleton_method(:fetch) do |u|
+      allow(first).to receive(:fetch) do |u|
         asked += 1
-        PullRequest.new(number: 7, url: u, state: "MERGED", title: "seven")
+        ClaudeInbox::PullRequest.new(number: 7, url: u, state: "MERGED", title: "seven")
       end
       expect(first.status(url)).to be_merged
       expect(asked).to eq(1)
       expect(JSON.parse(File.read(path))[url]["state"]).to eq("MERGED")
 
-      second = PullRequests.new(cache_path: nil, resolved_path: path, gh: "gh", clock: -> { now })
-      second.define_singleton_method(:fetch) { |_| raise "asked gh about a PR already known to be merged" }
+      second = described_class.new(cache_path: nil, resolved_path: path, gh: "gh", clock: -> { now })
+      allow(second).to receive(:fetch).and_raise("asked gh about a PR already known to be merged")
       pr = second.status(url)
       expect(pr).to be_merged
       expect(pr.title).to eq("seven")
@@ -123,8 +120,8 @@ RSpec.describe PullRequests do
   it "does not write anything a fetch left open" do
     Dir.mktmpdir do |dir|
       path = File.join(dir, "prs.json")
-      client = PullRequests.new(cache_path: nil, resolved_path: path, gh: "gh", clock: -> { now })
-      client.define_singleton_method(:fetch) { |u| PullRequest.new(number: 1, url: u, state: "OPEN") }
+      client = described_class.new(cache_path: nil, resolved_path: path, gh: "gh", clock: -> { now })
+      allow(client).to receive(:fetch) { |u| ClaudeInbox::PullRequest.new(number: 1, url: u, state: "OPEN") }
       client.status("https://github.com/o/r/pull/1")
       expect(File.exist?(path)).to be(false)
     end

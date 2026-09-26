@@ -2,16 +2,8 @@
 
 require "tmpdir"
 
-Store = ClaudeInbox::Store unless defined?(Store)
-
-RSpec.describe Store do
+RSpec.describe ClaudeInbox::Store, :store do
   let(:now) { Time.at(1_789_600_000) }
-
-  def sections(sessions, entries = {}, at = now) = Store.sectionize(sessions, entries, at)
-
-  def ids(rows) = rows.map(&:id)
-
-  def pr(state) = ClaudeInbox::PullRequest.new(number: 1, url: "https://github.com/o/r/pull/1", state: state)
 
   describe "sectioning" do
     it "puts blocked and failed in Needs you" do
@@ -38,9 +30,9 @@ RSpec.describe Store do
 
     it "tracks remote sessions in merge_entries by session uuid" do
       r = session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "u9", origin: :remote)
-      e = Store.merge_entries({}, [r], now)
+      e = described_class.merge_entries({}, [r], now)
       expect(e["u9"]["last_state"]).to eq("working")
-      e = Store.merge_entries(e, [r.with(status: "idle")], now + 60)
+      e = described_class.merge_entries(e, [r.with(status: "idle")], now + 60)
       expect(e["u9"]["last_state"]).to eq("done")
       expect(e["u9"]["state_since"]).to eq((now + 60).to_i)
     end
@@ -149,7 +141,7 @@ RSpec.describe Store do
     it "toggle_pin sets and clears pinned via the store" do
       clock = -> { now }
       Dir.mktmpdir do |dir|
-        store = Store.new(path: File.join(dir, "state.json"), clock: clock)
+        store = described_class.new(path: File.join(dir, "state.json"), clock: clock)
         store.update([session(id: "a")])
         store.toggle_pin("a")
         expect(store.sections.pinned.map(&:id)).to eq(%w[a])
@@ -179,13 +171,13 @@ RSpec.describe Store do
 
     it "seeds state_since from started_at for a first-seen finished session whose process was reaped" do
       s = session(id: "a", state: "done", pid: nil, started_at: now - 86_400)
-      entries = Store.merge_entries({}, [s], now)
+      entries = described_class.merge_entries({}, [s], now)
       expect(entries["a"]["state_since"]).to eq((now - 86_400).to_i)
     end
 
     it "seeds state_since from now for a first-seen finished session that is still alive" do
       s = session(id: "a", state: "done", pid: 123, status: "idle")
-      entries = Store.merge_entries({}, [s], now)
+      entries = described_class.merge_entries({}, [s], now)
       expect(entries["a"]["state_since"]).to eq(now.to_i)
     end
   end
@@ -200,7 +192,7 @@ RSpec.describe Store do
 
     it "wakes when the session becomes blocked after the snooze" do
       entries = {"a" => {"wake_at" => now.to_i + 900, "snoozed_at" => now.to_i - 300, "last_state" => "working", "state_since" => now.to_i - 400}}
-      entries = Store.merge_entries(entries, [session(id: "a", state: "blocked")], now)
+      entries = described_class.merge_entries(entries, [session(id: "a", state: "blocked")], now)
       sec = sections([session(id: "a", state: "blocked")], entries)
       expect(ids(sec.needs_you)).to eq(%w[a])
       expect(sec.snoozed).to be_empty
@@ -208,15 +200,15 @@ RSpec.describe Store do
     end
 
     it "wakes a parked session when it fails" do
-      entries = {"a" => {"wake_at" => Store::UNTIL_WOKEN, "snoozed_at" => now.to_i - 300, "last_state" => "working", "state_since" => now.to_i - 400}}
-      entries = Store.merge_entries(entries, [session(id: "a", state: "failed")], now)
+      entries = {"a" => {"wake_at" => described_class::UNTIL_WOKEN, "snoozed_at" => now.to_i - 300, "last_state" => "working", "state_since" => now.to_i - 400}}
+      entries = described_class.merge_entries(entries, [session(id: "a", state: "failed")], now)
       expect(ids(sections([session(id: "a", state: "failed")], entries).needs_you)).to eq(%w[a])
     end
 
     it "keeps an already-blocked session snoozed" do
-      entries = Store.merge_entries({"a" => {"last_state" => "blocked", "state_since" => now.to_i - 600}}, [session(id: "a", state: "blocked")], now)
+      entries = described_class.merge_entries({"a" => {"last_state" => "blocked", "state_since" => now.to_i - 600}}, [session(id: "a", state: "blocked")], now)
       snoozed = entries.merge("a" => entries["a"].merge("wake_at" => now.to_i + 900, "snoozed_at" => now.to_i))
-      later = Store.merge_entries(snoozed, [session(id: "a", state: "blocked")], now + 60)
+      later = described_class.merge_entries(snoozed, [session(id: "a", state: "blocked")], now + 60)
       sec = sections([session(id: "a", state: "blocked")], later, now + 60)
       expect(ids(sec.snoozed)).to eq(%w[a])
       expect(sec.needs_you).to be_empty
@@ -228,14 +220,14 @@ RSpec.describe Store do
     end
 
     it "never wakes until_woken on its own" do
-      entries = {"a" => {"wake_at" => Store::UNTIL_WOKEN, "last_state" => "working"}}
+      entries = {"a" => {"wake_at" => described_class::UNTIL_WOKEN, "last_state" => "working"}}
       sec = sections([session(id: "a")], entries, now + 86_400 * 30)
       expect(ids(sec.snoozed)).to eq(%w[a])
       expect(sec.snoozed.first).to be_parked
     end
 
     it "sorts Snoozed by wake_at with parked last" do
-      entries = {"a" => {"wake_at" => Store::UNTIL_WOKEN}, "b" => {"wake_at" => now.to_i + 3600}, "c" => {"wake_at" => now.to_i + 60}}
+      entries = {"a" => {"wake_at" => described_class::UNTIL_WOKEN}, "b" => {"wake_at" => now.to_i + 3600}, "c" => {"wake_at" => now.to_i + 60}}
       expect(ids(sections(%w[a b c].map { |i| session(id: i) }, entries).snoozed)).to eq(%w[c b a])
     end
 
@@ -260,28 +252,28 @@ RSpec.describe Store do
 
     it "stays settled when the session finishes" do
       entries = {"a" => {"settled_at" => now.to_i, "last_state" => "working", "state_since" => now.to_i - 60}}
-      later = Store.merge_entries(entries, [session(id: "a", state: "done")], now + 30)
+      later = described_class.merge_entries(entries, [session(id: "a", state: "done")], now + 30)
       expect(later["a"]["settled_at"]).to eq(now.to_i)
       expect(ids(sections([session(id: "a", state: "done")], later, now + 30).settled)).to eq(%w[a])
     end
 
     it "comes back when the session starts working again" do
       entries = {"a" => {"settled_at" => now.to_i, "last_state" => "blocked", "state_since" => now.to_i - 60}}
-      later = Store.merge_entries(entries, [session(id: "a", state: "working")], now + 30)
+      later = described_class.merge_entries(entries, [session(id: "a", state: "working")], now + 30)
       expect(later["a"]).not_to include("settled_at")
       expect(ids(sections([session(id: "a", state: "working")], later, now + 30).active)).to eq(%w[a])
     end
 
     it "comes back when the session becomes blocked afterwards" do
       entries = {"a" => {"settled_at" => now.to_i, "last_state" => "working", "state_since" => now.to_i - 60}}
-      later = Store.merge_entries(entries, [session(id: "a", state: "blocked")], now + 30)
+      later = described_class.merge_entries(entries, [session(id: "a", state: "blocked")], now + 30)
       expect(later["a"]).not_to include("settled_at")
       expect(ids(sections([session(id: "a", state: "blocked")], later, now + 30).needs_you)).to eq(%w[a])
     end
 
     it "is lifted by wake and replaces a snooze" do
       Dir.mktmpdir do |dir|
-        store = Store.new(path: File.join(dir, "state.json"), clock: -> { now })
+        store = described_class.new(path: File.join(dir, "state.json"), clock: -> { now })
         store.snooze("a", :h1)
         store.settle("a")
         expect(store.entry("a")).not_to include("wake_at")
@@ -293,7 +285,7 @@ RSpec.describe Store do
 
     it "takes hold again after a wake, even with no state change in between" do
       Dir.mktmpdir do |dir|
-        store = Store.new(path: File.join(dir, "state.json"), clock: -> { now })
+        store = described_class.new(path: File.join(dir, "state.json"), clock: -> { now })
         store.update([session(id: "a", state: "blocked")])
         store.wake("a")
         store.settle("a")
@@ -325,13 +317,13 @@ RSpec.describe Store do
 
     it "clears once the state actually changes again" do
       entries = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 60, "revived_at" => now.to_i}}
-      later = Store.merge_entries(entries, [session(id: "a", state: "working")], now + 30)
+      later = described_class.merge_entries(entries, [session(id: "a", state: "working")], now + 30)
       expect(later["a"]).not_to include("revived_at")
     end
 
     it "wake un-settles a resolved-PR session via the store" do
       Dir.mktmpdir do |dir|
-        store = Store.new(path: File.join(dir, "state.json"), clock: -> { now })
+        store = described_class.new(path: File.join(dir, "state.json"), clock: -> { now })
         store.update([session(id: "a", state: "done", prs: [pr("MERGED")])])
         expect(store.sections.settled.map(&:id)).to eq(%w[a])
         store.wake("a")
@@ -351,15 +343,15 @@ RSpec.describe Store do
 
     it "comes back to Needs You once the state changes again after acknowledging" do
       entries = {"a" => {"acknowledged_at" => now.to_i, "last_state" => "blocked", "state_since" => now.to_i - 60}}
-      later = Store.merge_entries(entries, [session(id: "a", state: "working")], now + 30)
-      later = Store.merge_entries(later, [session(id: "a", state: "blocked")], now + 60)
+      later = described_class.merge_entries(entries, [session(id: "a", state: "working")], now + 30)
+      later = described_class.merge_entries(later, [session(id: "a", state: "blocked")], now + 60)
       expect(later["a"]).not_to include("acknowledged_at")
       expect(ids(sections([session(id: "a", state: "blocked")], later, now + 60).needs_you)).to eq(%w[a])
     end
 
     it "acknowledge sets acknowledged_at via the store" do
       Dir.mktmpdir do |dir|
-        store = Store.new(path: File.join(dir, "state.json"), clock: -> { now })
+        store = described_class.new(path: File.join(dir, "state.json"), clock: -> { now })
         store.update([session(id: "a", state: "blocked")])
         store.acknowledge("a")
         expect(store.entry("a")["acknowledged_at"]).to eq(now.to_i)
@@ -370,42 +362,42 @@ RSpec.describe Store do
 
   describe ".merge_entries" do
     it "bumps state_since only when state changes" do
-      e = Store.merge_entries({}, [session(id: "a")], now)
+      e = described_class.merge_entries({}, [session(id: "a")], now)
       expect(e["a"]["state_since"]).to eq(now.to_i)
-      e = Store.merge_entries(e, [session(id: "a")], now + 100)
+      e = described_class.merge_entries(e, [session(id: "a")], now + 100)
       expect(e["a"]["state_since"]).to eq(now.to_i)
-      e = Store.merge_entries(e, [session(id: "a", state: "done")], now + 200)
+      e = described_class.merge_entries(e, [session(id: "a", state: "done")], now + 200)
       expect(e["a"]["state_since"]).to eq((now + 200).to_i)
       expect(e["a"]["last_state"]).to eq("done")
     end
 
     it "clears an elapsed snooze" do
       entries = {"a" => {"wake_at" => now.to_i - 1, "snoozed_at" => now.to_i - 901, "last_state" => "working"}}
-      e = Store.merge_entries(entries, [session(id: "a")], now)
+      e = described_class.merge_entries(entries, [session(id: "a")], now)
       expect(e["a"]).not_to include("wake_at")
       expect(e["a"]).not_to include("snoozed_at")
     end
 
     it "keeps aliases and prunes stale entries" do
       entries = {
-        "old" => {"alias" => "x", "last_seen" => now.to_i - Store::PRUNE_AFTER - 1},
+        "old" => {"alias" => "x", "last_seen" => now.to_i - described_class::PRUNE_AFTER - 1},
         "kept" => {"alias" => "y", "last_seen" => now.to_i - 100}
       }
-      e = Store.merge_entries(entries, [], now)
+      e = described_class.merge_entries(entries, [], now)
       expect(e).not_to include("old")
       expect(e["kept"]["alias"]).to eq("y")
     end
 
     it "skips rows with no key at all" do
-      expect(Store.merge_entries({}, [session(id: nil, session_id: nil, kind: "interactive")], now)).to be_empty
+      expect(described_class.merge_entries({}, [session(id: nil, session_id: nil, kind: "interactive")], now)).to be_empty
     end
   end
 
   describe ".folded?" do
     it "folds a foldable section until it is expanded" do
-      expect(Store.folded?(:settled, {})).to be(true)
-      expect(Store.folded?(:settled, {settled: true})).to be(false)
-      expect(Store.folded?(:active, {})).to be(false)
+      expect(described_class.folded?(:settled, {})).to be(true)
+      expect(described_class.folded?(:settled, {settled: true})).to be(false)
+      expect(described_class.folded?(:active, {})).to be(false)
     end
   end
 
@@ -413,7 +405,7 @@ RSpec.describe Store do
     it "sections the captured sessions" do
       sessions = fixture_sessions
       at = Time.at(1_789_604_500)
-      sec = Store.sectionize(sessions, Store.merge_entries({}, sessions, at), at)
+      sec = described_class.sectionize(sessions, described_class.merge_entries({}, sessions, at), at)
       expect(ids(sec.needs_you)).to eq(%w[f23c8673])
       expect(ids(sec.active)).to eq([nil, "823b882f", "dcbc1d98", "b0b18338", "fbf5253a", "b03695b1"])
       expect(sec.settled).to be_empty
@@ -421,7 +413,7 @@ RSpec.describe Store do
   end
 
   describe "alias and pull request overrides" do
-    let(:store) { Store.new(path: nil, clock: -> { now }).tap { |st| st.update([session(id: "a")]) } }
+    let(:store) { described_class.new(path: nil, clock: -> { now }).tap { |st| st.update([session(id: "a")]) } }
 
     it "reads back what set_alias and set_pr wrote, and nil once cleared" do
       expect(store.alias_for("a")).to be_nil
@@ -446,7 +438,7 @@ RSpec.describe Store do
 
   describe "row" do
     it "pairs a session with its entry, and carries the last refused reap" do
-      store = Store.new(path: nil, clock: -> { now })
+      store = described_class.new(path: nil, clock: -> { now })
       s = session(id: "a")
       store.update([s])
 
@@ -459,7 +451,7 @@ RSpec.describe Store do
     end
 
     it "has no entry for a session with nothing to key on" do
-      store = Store.new(path: nil, clock: -> { now })
+      store = described_class.new(path: nil, clock: -> { now })
       row = store.row(session(id: nil, session_id: nil, kind: "interactive"))
       expect(row.entry).to be_nil
       expect(row.reap_failed_at).to be_nil
@@ -468,7 +460,7 @@ RSpec.describe Store do
 
   describe "forget" do
     it "drops the entry and the row without waiting for the prune window" do
-      store = Store.new(path: nil, clock: -> { now })
+      store = described_class.new(path: nil, clock: -> { now })
       store.update([session(id: "a"), session(id: "b")])
       store.toggle_pin("a")
 
@@ -478,14 +470,14 @@ RSpec.describe Store do
     end
 
     it "leaves an unknown id alone" do
-      store = Store.new(path: nil, clock: -> { now })
+      store = described_class.new(path: nil, clock: -> { now })
       store.update([session(id: "a")])
       store.forget("nope")
       expect(store.sections.all.map(&:id)).to eq(%w[a])
     end
 
     it "keeps the session hidden while the daemon still lists it" do
-      store = Store.new(path: nil, clock: -> { now })
+      store = described_class.new(path: nil, clock: -> { now })
       store.update([session(id: "a"), session(id: "b")])
       store.forget("a")
 
@@ -496,7 +488,7 @@ RSpec.describe Store do
     end
 
     it "shows the key again once a poll without it has gone by" do
-      store = Store.new(path: nil, clock: -> { now })
+      store = described_class.new(path: nil, clock: -> { now })
       store.update([session(id: "a")])
       store.forget("a")
       store.update([session(id: "a")])
@@ -514,7 +506,7 @@ RSpec.describe Store do
       Dir.mktmpdir do |dir|
         path = File.join(dir, "nested", "state.json")
         clock = -> { Time.at(1_789_600_000) }
-        store = Store.new(path: path, clock: clock)
+        store = described_class.new(path: path, clock: clock)
         store.update([session(id: "a")])
         store.snooze("a", :h1)
         store.set_alias("a", "flaky test fix")
@@ -525,7 +517,7 @@ RSpec.describe Store do
         expect(data["sessions"]["a"]["alias"]).to eq("flaky test fix")
         expect(Dir.glob(File.join(dir, "nested", ".state.*.tmp"))).to be_empty
 
-        reloaded = Store.new(path: path, clock: clock)
+        reloaded = described_class.new(path: path, clock: clock)
         reloaded.update([session(id: "a")])
         expect(reloaded.sections.snoozed.map(&:id)).to eq(%w[a])
         reloaded.wake("a")

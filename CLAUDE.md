@@ -17,7 +17,9 @@ shared checkout: other sessions commit there concurrently.
 ## Conventions
 
 - Tests are RSpec (`RSpec.describe` / `it` / `expect(x).to eq`) in
-  `spec/**/*_spec.rb`, one spec file per class.
+  `spec/**/*_spec.rb`, one spec file per class. A spec file holds no `def`
+  and no top-level constant: helpers and fakes live in `spec/support`,
+  included by a metadata tag on the group.
 - The UI is keyboard-only with vim bindings; a new action needs a key in
   `Keymap::BINDINGS` and a row in the README key table.
 - Commit subjects are `type: what changed` (`fix:`, `feat:`, `refactor:`,

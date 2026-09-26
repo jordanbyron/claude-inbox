@@ -2,7 +2,7 @@
 
 RSpec.describe ClaudeInbox::Keymap do
   let(:t) { [Time.at(0)] }
-  let(:km) { ClaudeInbox::Keymap.new(clock: -> { t[0] }) }
+  subject(:km) { described_class.new(clock: -> { t[0] }) }
 
   it "maps vim motion keys and arrows alike" do
     expect(km.press("j", "j")).to eq(:down)
@@ -28,7 +28,7 @@ RSpec.describe ClaudeInbox::Keymap do
 
   it "expires a pending chord after the timeout" do
     km.press("g", "g")
-    t[0] += ClaudeInbox::Keymap::CHORD_TIMEOUT + 0.1
+    t[0] += described_class::CHORD_TIMEOUT + 0.1
     expect(km.press("g", "g")).to be_nil
     expect(km.pending).to eq("g")
   end
