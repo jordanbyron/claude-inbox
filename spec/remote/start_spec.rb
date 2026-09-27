@@ -5,7 +5,7 @@ require "tmpdir"
 RSpec.describe ClaudeInbox::Remote::Start do
   let(:tmp) { File.realpath(Dir.mktmpdir) }
   let(:project) { File.join(tmp, "code", "app").tap { |dir| FileUtils.mkdir_p(dir) } }
-  let(:client) { RecordingClient.new }
+  let(:client) { RecordingClient.new.tap { |c| allow(c).to receive(:jobs_dir).and_return(File.join(tmp, "jobs")) } }
   let(:store) { ClaudeInbox::Store.new(path: nil).tap { |s| s.update([session(id: "abc12345", cwd: project)]) } }
   let(:queue) { Queue.new }
   let(:trusted) { [] }
@@ -14,7 +14,7 @@ RSpec.describe ClaudeInbox::Remote::Start do
   let(:remote_start) do
     described_class.new(client: client, store: store, queue: queue,
       allowed_modes: ClaudeInbox::Remote::Listener::DEFAULT_MODES, images_dir: File.join(tmp, "images"),
-      jobs_dir: File.join(tmp, "jobs"), trust: -> { trusted },
+      trust: -> { trusted },
       settings: ->(dir) { settings.fetch(dir) { ClaudeInbox::Settings::Defaults.new } }, bridge_wait: 0, **options)
   end
 

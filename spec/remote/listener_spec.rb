@@ -19,7 +19,7 @@ RSpec.describe ClaudeInbox::Remote::Listener do
   let(:phone) { Phone.new(listener, token: pairing.token) }
   let(:listener_args) do
     {client: client, store: store, queue: queue, pairing: pairing, port: 7433,
-     images_dir: File.join(tmp, "images"), jobs_dir: File.join(tmp, "jobs"), lock_path: File.join(tmp, "listen.lock"),
+     images_dir: File.join(tmp, "images"), lock_path: File.join(tmp, "listen.lock"),
      trust: -> { trusted }, settings: ->(dir) { settings.fetch(dir) { ClaudeInbox::Settings::Defaults.new } },
      bridge_wait: 0, **options}
   end
