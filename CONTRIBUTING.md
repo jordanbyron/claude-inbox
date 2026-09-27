@@ -91,7 +91,9 @@ Setup script (cached for about a week, so it runs rarely):
 # What bin/ci needs that the VM doesn't ship. See CONTRIBUTING.md, "Cloud sessions".
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq && apt-get install -y -qq gh
+# The image lists PPAs the setup network refuses; their 403s must not end the update.
+apt-get update -qq || true
+apt-get install -y -qq gh
 # The proxy serves the GitHub API only for attached repos, so
 # `gh extension install basecamp/gh-signoff` gets a 403. git can still clone it.
 git clone -q --depth 1 https://github.com/basecamp/gh-signoff /opt/gh-signoff
