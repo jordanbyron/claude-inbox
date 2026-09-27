@@ -103,11 +103,6 @@ module ClaudeInbox
       :changed
     end
 
-    def command_query
-      return nil unless focused.key == :prompt
-      focused.value.head[/(?:\A|\s)\/(\S*)\z/, 1]
-    end
-
     def menu
       q = command_query
       return nil if q.nil? || @dismissed == q
@@ -133,15 +128,6 @@ module ClaudeInbox
       return @defaults if @defaults_for == cwd
       @defaults_for = cwd
       @defaults = Settings.defaults(cwd, home: @home)
-    end
-
-    # Project commands live under the Directory field's path, so they
-    # follow it as the defaults do.
-    def commands
-      cwd = directory
-      return @commands if @commands_for == cwd
-      @commands_for = cwd
-      @commands = SlashCommands.list(cwd: cwd, home: @home)
     end
 
     # Full-screen body: a tall prompt editor, then one row per setting with
@@ -191,6 +177,20 @@ module ClaudeInbox
     end
 
     private
+
+    def command_query
+      return nil unless focused.key == :prompt
+      focused.value.head[/(?:\A|\s)\/(\S*)\z/, 1]
+    end
+
+    # Project commands live under the Directory field's path, so they
+    # follow it as the defaults do.
+    def commands
+      cwd = directory
+      return @commands if @commands_for == cwd
+      @commands_for = cwd
+      @commands = SlashCommands.list(cwd: cwd, home: @home)
+    end
 
     # Esc with a prompt typed asks first, so a stray keypress can't lose it.
     def escape_pressed
