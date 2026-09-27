@@ -3,6 +3,7 @@
 require "json"
 require_relative "debug"
 require_relative "job_state"
+require_relative "session"
 require_relative "subprocess"
 
 module ClaudeInbox
