@@ -10,8 +10,6 @@ RSpec.describe ClaudeInbox::Remote::Http do
       request = described_class.read_head(StringIO.new("POST /api/sessions?x=1 HTTP/1.1\r\nHost: 127.0.0.1:7433\r\nContent-Type:  application/json \r\n\r\n".b), deadline: deadline)
       expect(request.verb).to eq("POST")
       expect(request.path).to eq("/api/sessions")
-      expect(request.query).to eq("x=1")
-      expect(request.version).to eq("1.1")
       expect(request.headers).to eq({"host" => "127.0.0.1:7433", "content-type" => "application/json"})
     end
 

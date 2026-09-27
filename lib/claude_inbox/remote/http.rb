@@ -50,12 +50,11 @@ module ClaudeInbox
       # pass for the first. The bytes read past the head stay here for the
       # body.
       class Request
-        attr_reader :verb, :path, :query, :version, :headers
+        attr_reader :verb, :path, :headers
 
-        def initialize(verb, target, version, headers, rest)
+        def initialize(verb, target, headers, rest)
           @verb = verb
-          @path, @query = target.split("?", 2)
-          @version = version
+          @path = target.split("?", 2).first
           @headers = headers
           @rest = rest
         end
@@ -88,13 +87,13 @@ module ClaudeInbox
       def self.read_head(io, deadline:)
         rest = +"".b
         line = read_line(io, rest, deadline)
-        request = line.match(%r{\A(\S+) (/\S*) HTTP/(1\.[01])\z})
+        request = line.match(%r{\A(\S+) (/\S*) HTTP/1\.[01]\z})
         raise Error.new(400, "not an HTTP/1.x request line") unless request && request[1].match?(TOKEN)
         headers = {}
         count = 0
         loop do
           line = read_line(io, rest, deadline)
-          return Request.new(request[1], request[2], request[3], headers, rest) if line.empty?
+          return Request.new(request[1], request[2], headers, rest) if line.empty?
           raise Error.new(400, "more than #{MAX_HEADERS} headers") if (count += 1) > MAX_HEADERS
           name, value = line.split(":", 2)
           raise Error.new(400, "malformed header") unless value && name.match?(TOKEN)
