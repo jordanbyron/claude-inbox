@@ -47,5 +47,6 @@ module ClaudeInbox
       end
       nil
     end
+    private_class_method :remote_control, :pick
   end
 end
