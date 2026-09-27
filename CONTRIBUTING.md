@@ -97,7 +97,10 @@ apt-get install -y -qq gh
 # The proxy serves the GitHub API only for attached repos, so
 # `gh extension install basecamp/gh-signoff` gets a 403. git can still clone it.
 git clone -q --depth 1 https://github.com/basecamp/gh-signoff /opt/gh-signoff
-gh extension install /opt/gh-signoff
+# `gh extension install` wants a token even for a local directory, and the
+# setup phase has none. The install is only this symlink; the session runs as root.
+mkdir -p /root/.local/share/gh/extensions
+ln -sfn /opt/gh-signoff /root/.local/share/gh/extensions/gh-signoff
 (cd /home/user/claude-inbox && bundle install --quiet) || true
 ```
 
