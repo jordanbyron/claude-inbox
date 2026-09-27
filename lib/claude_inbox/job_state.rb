@@ -38,12 +38,12 @@ module ClaudeInbox
     # Each background session with its job file read onto `job_state`, or nil
     # when there is none: interactive sessions have no job file, and neither
     # does one the daemon has already forgotten. Sessions.load calls this.
-    def self.enrich(sessions, jobs_dir: DEFAULT_DIR)
+    def self.enrich(sessions, jobs_dir:)
       sessions.map { |s| s.background? ? s.with(job_state: read(s.id, jobs_dir: jobs_dir)) : s }
     end
 
     # => JobState, or nil when there is no readable file for this id.
-    def self.read(id, jobs_dir: DEFAULT_DIR)
+    def self.read(id, jobs_dir:)
       return nil unless id
       new(JSON.parse(File.read(File.join(jobs_dir, id, "state.json"))))
     rescue JSON::ParserError, SystemCallError
