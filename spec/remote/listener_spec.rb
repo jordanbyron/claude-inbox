@@ -244,23 +244,23 @@ RSpec.describe ClaudeInbox::Remote::Listener do
     end
 
     it "says what went wrong, and stops trying, when it can't even take the lock" do
-      locked = File.join(tmp, "locked").tap { |dir| FileUtils.mkdir_p(dir) }
-      File.chmod(0o500, locked)
+      # A file where the lock's directory belongs, not a read-only directory,
+      # which root writes through.
+      blocker = File.join(tmp, "blocker").tap { |f| File.write(f, "") }
       broken = described_class.new(
         **listener_args,
-        lock_path: File.join(locked, "sub", "listen.lock"),
+        lock_path: File.join(blocker, "sub", "listen.lock"),
         retry_every: 0.05
       )
       broken.start
       s = broken.snapshot
       expect(s.state).to eq(:failed)
-      expect(s.error).to include("Permission denied")
-      File.chmod(0o700, locked)
+      expect(s.error).to include("File exists")
+      File.delete(blocker)
       sleep 0.2
       expect(broken.snapshot.state).to eq(:failed)
     ensure
       broken&.stop
-      File.chmod(0o700, locked) if locked
     end
 
     it "binds once the port is free again" do
