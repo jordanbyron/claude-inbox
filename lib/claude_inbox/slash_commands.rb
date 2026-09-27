@@ -112,5 +112,6 @@ module ClaudeInbox
       s = s[1..-2] if quoted
       s.gsub("''", "'")
     end
+    private_class_method :from_dir, :skills, :commands, :qualify, :plugins, :synced, :frontmatter, :unquote
   end
 end
