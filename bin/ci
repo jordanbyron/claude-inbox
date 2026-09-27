@@ -8,6 +8,10 @@
 
 Dir.chdir(File.expand_path("..", __dir__))
 
+# `bundle exec` finds a gem's executable on PATH. A ruby reached through a
+# bare symlink, as on the cloud VM, has no gem bindir there.
+ENV["PATH"] = [Gem.bindir, ENV["PATH"]].join(File::PATH_SEPARATOR)
+
 class CI
   COLORS = {
     banner: "\e[1;32m",

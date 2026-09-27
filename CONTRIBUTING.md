@@ -70,6 +70,41 @@ bundle exec bundle-audit check --update
 gh signoff status        # is HEAD signed off?
 ```
 
+## Cloud sessions
+
+The `claude-inbox: singleshot refactors` routine runs `bin/ci` in a Claude
+Code cloud environment. The VM ships Ruby 3.3 but no `gh`, no UTF-8 locale
+and no gem executables on PATH. The environment (claude.ai/code, cloud icon,
+settings) supplies the first two; `bin/ci` puts the gem bindir on PATH itself.
+
+Environment variables:
+
+```
+LANG=C.UTF-8
+LC_ALL=C.UTF-8
+```
+
+Setup script (cached for about a week, so it runs rarely):
+
+```bash
+#!/bin/bash
+# What bin/ci needs that the VM doesn't ship. See CONTRIBUTING.md, "Cloud sessions".
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq && apt-get install -y -qq gh
+# The proxy serves the GitHub API only for attached repos, so
+# `gh extension install basecamp/gh-signoff` gets a 403. git can still clone it.
+git clone -q --depth 1 https://github.com/basecamp/gh-signoff /opt/gh-signoff
+gh extension install /opt/gh-signoff
+(cd /home/user/claude-inbox && bundle install --quiet) || true
+```
+
+Every GitHub request from the VM goes through Anthropic's proxy, which
+refuses to write commit statuses: `gh signoff` fails there with "Write access
+to this GitHub API path is not permitted through this proxy". A cloud run
+leaves its PR as a draft with a "Not signed off" line; run `bin/ci` on the
+branch locally to set the status.
+
 ## Cutting a release
 
 You need push rights to the `claude-inbox` gem on rubygems.org (`gem signin`,
