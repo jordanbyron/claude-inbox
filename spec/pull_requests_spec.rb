@@ -4,7 +4,8 @@ require "tmpdir"
 
 RSpec.describe ClaudeInbox::PullRequests do
   let(:now) { Time.at(1_789_600_000) }
-  let(:prs) { described_class.new(cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: nil, clock: -> { now }) }
+  let(:cached) { {cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, clock: -> { now }} }
+  let(:prs) { described_class.new(**cached, gh: nil) }
 
   it "seeds state from Claude Code's own cache" do
     pr = prs.status("https://github.com/jordanbyron/parks_genie/pull/885")
@@ -21,7 +22,10 @@ RSpec.describe ClaudeInbox::PullRequests do
   end
 
   it "enriches sessions, letting an override replace the scanned list" do
-    sessions = ClaudeInbox::JobState.enrich([session(id: "b03695b1"), session(id: "b0b18338")], jobs_dir: fixture_path("jobs"))
+    sessions = ClaudeInbox::JobState.enrich(
+      [session(id: "b03695b1"), session(id: "b0b18338")],
+      jobs_dir: fixture_path("jobs")
+    )
     a, b = prs.enrich(sessions, {"b0b18338" => "https://github.com/o/r/pull/1"})
     expect(a.prs.map(&:number)).to eq([856, 866])
     expect(b.prs.map(&:number)).to eq([1])
@@ -43,7 +47,7 @@ RSpec.describe ClaudeInbox::PullRequests do
 
   it "asks gh only for unresolved PRs and only once per refresh window" do
     calls = []
-    client = described_class.new(cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: "gh", clock: -> { now })
+    client = described_class.new(**cached, gh: "gh")
     allow(client).to receive(:fetch) do |url|
       calls << url
       ClaudeInbox::PullRequest.new(number: 885, url: url, state: "MERGED")
@@ -59,7 +63,7 @@ RSpec.describe ClaudeInbox::PullRequests do
   # that asks: the first frame waits on it.
   it "enriches without asking gh, and refresh is the slow half" do
     calls = []
-    client = described_class.new(cache_path: fixture_path("gh-pr-status-cache.json"), resolved_path: nil, gh: "gh", clock: -> { now })
+    client = described_class.new(**cached, gh: "gh")
     allow(client).to receive(:fetch) do |url|
       calls << url
       ClaudeInbox::PullRequest.new(number: url[/\d+\z/].to_i, url: url, state: "OPEN")

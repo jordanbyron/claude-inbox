@@ -10,6 +10,7 @@ RSpec.describe ClaudeInbox::Peek do
   let(:logs) { ClaudeInbox::Logs.new(client, clock: clock) }
   let(:row) { ClaudeInbox::Store::Row.new(session, nil) }
   let(:selection) { ClaudeInbox::Store::Selection }
+  let(:terminal) { {id: nil, kind: "interactive", state: nil} }
 
   before { logs.start }
   after { logs.stop }
@@ -35,7 +36,7 @@ RSpec.describe ClaudeInbox::Peek do
   end
 
   it "explains a terminal session instead of fetching its logs" do
-    r = ClaudeInbox::Store::Row.new(session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u1", pid: 42), nil)
+    r = ClaudeInbox::Store::Row.new(session(**terminal, status: "idle", session_id: "u1", pid: 42), nil)
     peek.select(selection.row(r.key), r.session)
     peek.toggle
     v = peek.view(r, 10)
@@ -45,7 +46,10 @@ RSpec.describe ClaudeInbox::Peek do
   end
 
   it "explains a remote session the same way, with its claude.ai/code link" do
-    r = ClaudeInbox::Store::Row.new(session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u2", pid: 7, origin: :remote, bridge_id: "cse_01AB"), nil)
+    r = ClaudeInbox::Store::Row.new(
+      session(**terminal, status: "idle", session_id: "u2", pid: 7, origin: :remote, bridge_id: "cse_01AB"),
+      nil
+    )
     peek.select(selection.row(r.key), r.session)
     peek.toggle
     expect(peek.view(r, 10).lines.first).to eq(described_class::REMOTE_NOTE)
@@ -112,7 +116,9 @@ RSpec.describe ClaudeInbox::Peek do
   end
 
   it "sums up the session and its pull requests under the title" do
-    prs = ["OPEN", nil].map { |state| ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: state) }
+    prs = ["OPEN", nil].map do |state|
+      ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: state)
+    end
     r = ClaudeInbox::Store::Row.new(session(status: "idle", waiting_for: "permission prompt", prs: prs), nil)
     peek.select(selection.row(r.key), r.session)
     peek.toggle

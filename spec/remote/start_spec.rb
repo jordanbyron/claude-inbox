@@ -5,7 +5,7 @@ require "tmpdir"
 RSpec.describe ClaudeInbox::Remote::Start do
   let(:tmp) { File.realpath(Dir.mktmpdir) }
   let(:project) { File.join(tmp, "code", "app").tap { |dir| FileUtils.mkdir_p(dir) } }
-  let(:client) { RecordingClient.new }
+  let(:client) { RecordingClient.new.tap { |c| allow(c).to receive(:jobs_dir).and_return(File.join(tmp, "jobs")) } }
   let(:store) { ClaudeInbox::Store.new(path: nil).tap { |s| s.update([session(id: "abc12345", cwd: project)]) } }
   let(:queue) { Queue.new }
   let(:trusted) { [] }
@@ -14,7 +14,7 @@ RSpec.describe ClaudeInbox::Remote::Start do
   let(:remote_start) do
     described_class.new(client: client, store: store, queue: queue,
       allowed_modes: ClaudeInbox::Remote::Listener::DEFAULT_MODES, images_dir: File.join(tmp, "images"),
-      jobs_dir: File.join(tmp, "jobs"), trust: -> { trusted },
+      trust: -> { trusted },
       settings: ->(dir) { settings.fetch(dir) { ClaudeInbox::Settings::Defaults.new } }, bridge_wait: 0, **options)
   end
 
@@ -31,7 +31,11 @@ RSpec.describe ClaudeInbox::Remote::Start do
         session(id: "b", cwd: tree, started_at: Time.at(3_000)),
         session(id: "c", cwd: project, started_at: Time.at(2_000))
       ])
-      trusted.replace([File.join(tmp, "code", "trusted").tap { |dir| FileUtils.mkdir_p(dir) }, project, File.join(tmp, "gone")])
+      trusted.replace([
+        File.join(tmp, "code", "trusted").tap { |dir| FileUtils.mkdir_p(dir) },
+        project,
+        File.join(tmp, "gone")
+      ])
       settings[project] = ClaudeInbox::Settings::Defaults.new("opus", nil, "plan")
       body = phone.get("/api/options").json
       expect(body["models"]).to eq(ClaudeInbox::AgentsClient::MODELS)
@@ -43,7 +47,10 @@ RSpec.describe ClaudeInbox::Remote::Start do
     end
 
     it "labels a directory by as many trailing names as it takes to tell it apart" do
-      trusted.replace([File.join(tmp, "a", "x", "app").tap { |dir| FileUtils.mkdir_p(dir) }, File.join(tmp, "b", "x", "app").tap { |dir| FileUtils.mkdir_p(dir) }])
+      trusted.replace([
+        File.join(tmp, "a", "x", "app").tap { |dir| FileUtils.mkdir_p(dir) },
+        File.join(tmp, "b", "x", "app").tap { |dir| FileUtils.mkdir_p(dir) }
+      ])
       expect(phone.get("/api/options").json["dirs"].map { |d| d["label"] }).to eq(%w[code/app a/x/app b/x/app])
     end
 

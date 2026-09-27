@@ -27,14 +27,13 @@ module ClaudeInbox
       KEYS_KEPT = 16
 
       def initialize(client:, store:, queue:, allowed_modes:, fixture: false, images_dir: Images::DEFAULT_DIR,
-        jobs_dir: JobState::DEFAULT_DIR, trust: Trust.method(:projects), settings: Settings.method(:defaults), bridge_wait: 3)
+        trust: Trust.method(:projects), settings: Settings.method(:defaults), bridge_wait: 3)
         @client = client
         @store = store
         @queue = queue
         @allowed_modes = allowed_modes
         @fixture = fixture
         @images_dir = images_dir
-        @jobs_dir = jobs_dir
         @trust = trust
         @settings = settings
         @bridge_wait = bridge_wait
@@ -192,7 +191,7 @@ module ClaudeInbox
       def remote_url(id, wait:)
         deadline = Http.monotonic + wait
         loop do
-          url = Session.new(id: id, job_state: JobState.read(id, jobs_dir: @jobs_dir)).remote_url
+          url = Session.new(id: id, job_state: JobState.read(id, jobs_dir: @client.jobs_dir)).remote_url
           return url if url || Http.monotonic >= deadline
           sleep 0.2
         end

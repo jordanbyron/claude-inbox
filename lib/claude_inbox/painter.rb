@@ -7,9 +7,8 @@ module ClaudeInbox
   # line after a row: in the terminal's last column the cursor stays put
   # (pending wrap), so EL would eat the glyph just drawn.
   class Painter
-    def initialize(out, cursor: TTY::Cursor)
+    def initialize(out)
       @out = out
-      @cursor = cursor
       @prev = []
     end
 
@@ -17,10 +16,10 @@ module ClaudeInbox
       buf = +""
       lines.each_with_index do |line, i|
         next if @prev[i] == line
-        buf << @cursor.move_to(0, i) << line
+        buf << TTY::Cursor.move_to(0, i) << line
       end
       if @prev.size > lines.size
-        (lines.size...@prev.size).each { |i| buf << @cursor.move_to(0, i) << @cursor.clear_line }
+        (lines.size...@prev.size).each { |i| buf << TTY::Cursor.move_to(0, i) << TTY::Cursor.clear_line }
       end
       @out.print buf unless buf.empty?
       @out.flush

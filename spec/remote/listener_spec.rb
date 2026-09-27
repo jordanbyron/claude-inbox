@@ -19,7 +19,7 @@ RSpec.describe ClaudeInbox::Remote::Listener do
   let(:phone) { Phone.new(listener, token: pairing.token) }
   let(:listener_args) do
     {client: client, store: store, queue: queue, pairing: pairing, port: 7433,
-     images_dir: File.join(tmp, "images"), jobs_dir: File.join(tmp, "jobs"), lock_path: File.join(tmp, "listen.lock"),
+     images_dir: File.join(tmp, "images"), lock_path: File.join(tmp, "listen.lock"),
      trust: -> { trusted }, settings: ->(dir) { settings.fetch(dir) { ClaudeInbox::Settings::Defaults.new } },
      bridge_wait: 0, **options}
   end
@@ -184,7 +184,11 @@ RSpec.describe ClaudeInbox::Remote::Listener do
       Net::HTTP.start("127.0.0.1", port) do |http|
         auth = {"Authorization" => "Bearer #{pairing.token}"}
         expect(http.get("/api/options", auth).code).to eq("200")
-        posted = http.post("/api/sessions", JSON.generate(prompt: "go", cwd: "app"), auth.merge("Content-Type" => "application/json"))
+        posted = http.post(
+          "/api/sessions",
+          JSON.generate(prompt: "go", cwd: "app"),
+          auth.merge("Content-Type" => "application/json")
+        )
         expect([posted.code, JSON.parse(posted.body)["id"]]).to eq(["201", "deadbeef"])
       end
       expect(drain(queue).last).to eq([:remote_started, "deadbeef", "127.0.0.1"])
@@ -240,19 +244,23 @@ RSpec.describe ClaudeInbox::Remote::Listener do
     end
 
     it "says what went wrong, and stops trying, when it can't even take the lock" do
-      locked = File.join(tmp, "locked").tap { |dir| FileUtils.mkdir_p(dir) }
-      File.chmod(0o500, locked)
-      broken = described_class.new(**listener_args, lock_path: File.join(locked, "sub", "listen.lock"), retry_every: 0.05)
+      # A file where the lock's directory belongs, not a read-only directory,
+      # which root writes through.
+      blocker = File.join(tmp, "blocker").tap { |f| File.write(f, "") }
+      broken = described_class.new(
+        **listener_args,
+        lock_path: File.join(blocker, "sub", "listen.lock"),
+        retry_every: 0.05
+      )
       broken.start
       s = broken.snapshot
       expect(s.state).to eq(:failed)
-      expect(s.error).to include("Permission denied")
-      File.chmod(0o700, locked)
+      expect(s.error).to include("File exists")
+      File.delete(blocker)
       sleep 0.2
       expect(broken.snapshot.state).to eq(:failed)
     ensure
       broken&.stop
-      File.chmod(0o700, locked) if locked
     end
 
     it "binds once the port is free again" do
@@ -302,7 +310,9 @@ RSpec.describe ClaudeInbox::Remote::Listener do
       get = "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n"
       statuses = %w[192.168.1.30 192.168.1.31].map do |host|
         hosts << host
-        TCPSocket.open("127.0.0.1", listener.port) { |sock| sock.write(get) && sock.readpartial(4096)[/\AHTTP\/1\.1 (\d+)/, 1] }
+        TCPSocket.open("127.0.0.1", listener.port) do |sock|
+          sock.write(get) && sock.readpartial(4096)[/\AHTTP\/1\.1 (\d+)/, 1]
+        end
       end
       expect(statuses).to eq(%w[503 200])
     ensure

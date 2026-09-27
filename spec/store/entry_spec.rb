@@ -81,20 +81,37 @@ RSpec.describe ClaudeInbox::Store::Entry do
     end
 
     it "clears an elapsed snooze" do
-      e = described_class.new("wake_at" => now.to_i - 1, "snoozed_at" => now.to_i - 901, "last_state" => "working").observe(session(id: "a"), now)
+      e = described_class.new(
+        "wake_at" => now.to_i - 1,
+        "snoozed_at" => now.to_i - 901,
+        "last_state" => "working"
+      ).observe(session(id: "a"), now)
       expect(e.to_h).not_to include "wake_at"
       expect(e.to_h).not_to include "snoozed_at"
     end
 
     it "keeps a snooze that has not elapsed, and a parked one for ever" do
-      e = described_class.new("wake_at" => now.to_i + 900, "snoozed_at" => now.to_i, "last_state" => "working").observe(session(id: "a"), now + 60)
+      e = described_class.new(
+        "wake_at" => now.to_i + 900,
+        "snoozed_at" => now.to_i,
+        "last_state" => "working"
+      ).observe(session(id: "a"), now + 60)
       expect(e.wake_at).to eq(now.to_i + 900)
-      parked = described_class.new("wake_at" => ClaudeInbox::Store::UNTIL_WOKEN, "snoozed_at" => now.to_i, "last_state" => "working").observe(session(id: "a"), now + 86_400 * 30)
+      parked = described_class.new(
+        "wake_at" => ClaudeInbox::Store::UNTIL_WOKEN,
+        "snoozed_at" => now.to_i,
+        "last_state" => "working"
+      ).observe(session(id: "a"), now + 86_400 * 30)
       expect(parked.wake_at).to eq(ClaudeInbox::Store::UNTIL_WOKEN)
     end
 
     it "wakes a snooze when the session becomes blocked afterwards" do
-      h = {"wake_at" => now.to_i + 900, "snoozed_at" => now.to_i - 300, "last_state" => "working", "state_since" => now.to_i - 400}
+      h = {
+        "wake_at" => now.to_i + 900,
+        "snoozed_at" => now.to_i - 300,
+        "last_state" => "working",
+        "state_since" => now.to_i - 400
+      }
       e = described_class.new(h).observe(session(id: "a", state: "blocked"), now)
       expect(e.to_h).not_to include "wake_at"
       expect(e.to_h).not_to include "snoozed_at"
@@ -107,7 +124,12 @@ RSpec.describe ClaudeInbox::Store::Entry do
     end
 
     it "lifts an acknowledge and a revive once the state changes" do
-      h = {"acknowledged_at" => now.to_i, "revived_at" => now.to_i, "last_state" => "blocked", "state_since" => now.to_i - 60}
+      h = {
+        "acknowledged_at" => now.to_i,
+        "revived_at" => now.to_i,
+        "last_state" => "blocked",
+        "state_since" => now.to_i - 60
+      }
       same = described_class.new(h.dup).observe(session(id: "a", state: "blocked"), now + 30)
       expect(same.acknowledged_at).to eq(now.to_i)
       expect(same.revived_at).to eq(now.to_i)

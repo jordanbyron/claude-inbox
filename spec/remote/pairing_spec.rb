@@ -5,13 +5,19 @@ require "tmpdir"
 RSpec.describe ClaudeInbox::Remote::Pairing do
   let(:dir) { Dir.mktmpdir }
   let(:path) { File.join(dir, "config", "listen.json") }
-  let(:addresses) { [Addrinfo.ip("127.0.0.1"), Addrinfo.ip("192.168.1.20"), Addrinfo.ip("100.100.4.2"), Addrinfo.ip("fe80::1")] }
+  let(:addresses) { %w[127.0.0.1 192.168.1.20 100.100.4.2 fe80::1].map { |ip| Addrinfo.ip(ip) } }
   let(:names) { ["Mac-Mini"] }
   let(:lookups) { [] }
   let(:now) { [0.0] }
   let(:pairing) do
-    described_class.new(path: path, local_name: -> { names.first.tap { |n| lookups << n } }, hostname: -> { "mac.mini.lan" },
-      addresses: -> { addresses }, firewall: -> { :on }, clock: -> { now[0] })
+    described_class.new(
+      path: path,
+      local_name: -> { names.first.tap { |n| lookups << n } },
+      hostname: -> { "mac.mini.lan" },
+      addresses: -> { addresses },
+      firewall: -> { :on },
+      clock: -> { now[0] }
+    )
   end
 
   after { FileUtils.remove_entry(dir) }

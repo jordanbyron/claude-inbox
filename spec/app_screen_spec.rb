@@ -251,7 +251,11 @@ RSpec.describe ClaudeInbox::App do
     let(:tmp) { Dir.mktmpdir }
     let(:gate) { Queue.new }
     let(:pairing) do
-      ClaudeInbox::Remote::Pairing.new(path: File.join(tmp, "listen.json"), local_name: -> { "m" }, addresses: -> { [] }).tap do |p|
+      ClaudeInbox::Remote::Pairing.new(
+        path: File.join(tmp, "listen.json"),
+        local_name: -> { "m" },
+        addresses: -> { [] }
+      ).tap do |p|
         allow(p).to receive(:urls).and_wrap_original do |urls, **kw|
           gate.pop
           urls.call(**kw)
@@ -263,7 +267,12 @@ RSpec.describe ClaudeInbox::App do
         client: client, store: store, pull_requests: pull_requests,
         rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
         terminal: terminal, input: StringIO.new, color: false, queue: queue,
-        listen: {port: 0, pairing: pairing, lock_path: File.join(tmp, "listen.lock"), images_dir: File.join(tmp, "images")}
+        listen: {
+          port: 0,
+          pairing: pairing,
+          lock_path: File.join(tmp, "listen.lock"),
+          images_dir: File.join(tmp, "images")
+        }
       )
     end
     let(:listener) { app.instance_variable_get(:@listener) }
@@ -314,10 +323,22 @@ RSpec.describe ClaudeInbox::App do
   describe "opening a new session" do
     it "strips a trailing worktree path so the new session lands in the repo it was cut from" do
       store.update(store.sessions + [
-        session(id: "aaaa1111", name: "cut from a worktree", cwd: "/Users/byron/code/claude-inbox/.claude/worktrees/foo"),
-        session(id: "bbbb2222", name: "deep in a worktree", cwd: "/Users/byron/code/claude-inbox/.claude/worktrees/foo/lib")
+        session(
+          id: "aaaa1111",
+          name: "cut from a worktree",
+          cwd: "/Users/byron/code/claude-inbox/.claude/worktrees/foo"
+        ),
+        session(
+          id: "bbbb2222",
+          name: "deep in a worktree",
+          cwd: "/Users/byron/code/claude-inbox/.claude/worktrees/foo/lib"
+        )
       ])
-      {"cut from" => "/Users/byron/code/claude-inbox", "deep in" => "/Users/byron/code/claude-inbox", "not booting" => "/Users/byron/code/comma3"}.each do |name, dir|
+      {
+        "cut from" => "/Users/byron/code/claude-inbox",
+        "deep in" => "/Users/byron/code/claude-inbox",
+        "not booting" => "/Users/byron/code/comma3"
+      }.each do |name, dir|
         press(app, "/", *name.chars, "\r", "n")
         expect(screen(app).find { |l| l.include?("Directory") }.split("Directory").last.strip).to eq(dir)
         press(app, "\e", "\e")
