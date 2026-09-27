@@ -40,7 +40,7 @@ module ClaudeInbox
       @queue = queue
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests,
         reaper: reaper, queue: @queue)
-      @listener = listen ? Remote::Listener.new(client: client, store: store, queue: @queue, jobs_dir: client.jobs_dir, **listen) : Remote::Listener.disabled
+      @listener = listen ? Remote::Listener.new(client: client, store: store, queue: @queue, **listen) : Remote::Listener.disabled
       @logs = Logs.new(client)
       @peek = Peek.new(@logs)
       @selected = nil
