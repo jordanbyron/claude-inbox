@@ -32,7 +32,7 @@ module ClaudeInbox
       # the JSON body, and the headers that status calls for. `note`, when
       # set, is what the refusal is logged as in place of its message.
       class Error < StandardError
-        attr_reader :status, :headers, :details, :note
+        attr_reader :status, :headers, :note
 
         def initialize(status, message, headers: {}, note: nil, **details)
           super(message)
@@ -43,6 +43,10 @@ module ClaudeInbox
         end
 
         def body = {error: Http.utf8(message), **details.transform_values { |v| v.is_a?(Integer) ? v : Http.utf8(v) }}
+
+        private
+
+        attr_reader :details
       end
 
       # A request head. `headers` are keyed in lower case, and a repeated
