@@ -258,8 +258,8 @@ RSpec.describe ClaudeInbox::Renderer do
 
   it "ends the header with a usage bar per window, after any notice, and with nothing when there is none" do
     header = ->(**o) { renderer.frame(sections, view.with(width: 120, height: 10, **o)).lines.first }
-    five = ClaudeInbox::RateLimits::Window.new("session", 24)
-    seven = ClaudeInbox::RateLimits::Window.new("week", 100)
+    five = ClaudeInbox::RateLimits::Window.new("session", 24, nil)
+    seven = ClaudeInbox::RateLimits::Window.new("week", 100, nil)
     expect(header.call(usage: [five, seven])).to match(/session ██░░░░░░░░ 24%  week ██████████ 100% $/)
     expect(header.call(status: "⚠ daemon down", usage: [five])).to match(/⚠ daemon down  ·  session ██░░░░░░░░ 24% $/)
     expect(header.call).not_to include("session")
@@ -355,7 +355,7 @@ RSpec.describe "renderer session colors" do
 
   it "turns a usage bar yellow from 70% and red from 90%" do
     bar = ->(pct) {
-      usage = [ClaudeInbox::RateLimits::Window.new("session", pct)]
+      usage = [ClaudeInbox::RateLimits::Window.new("session", pct, nil)]
       renderer.frame(ClaudeInbox::Store.sectionize([], {}, now), view.with(width: 100, height: 5, usage: usage))
         .lines.first
     }

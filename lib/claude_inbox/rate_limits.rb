@@ -18,9 +18,7 @@ module ClaudeInbox
     LABELS = {"five_hour" => "session", "seven_day" => "week"}.freeze
 
     # `resets_at` is when the window rolls over, or nil if the file omits it.
-    Window = Data.define(:label, :percent, :resets_at) do
-      def initialize(label:, percent:, resets_at: nil) = super
-    end
+    Window = Data.define(:label, :percent, :resets_at)
 
     def initialize(path: DEFAULT_PATH)
       @path = path
