@@ -66,6 +66,10 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   the directories it offers for a new session, never to decide whether one
   may start, so if the format changes that list gets shorter and nothing
   else breaks.
+- The link scan writes `pr-link` records into the transcript, and a bare
+  `#340` gets resolved against the repo of the session's cwd. A session in
+  icc_app reviewing `ontra-common-ruby#340` ends up with `children` holding
+  `icc_app/pull/340`, a different PR that was merged years ago.
 - `~/.claude/gh-pr-status-cache.json` is keyed by PR url and calls an open
   draft `DRAFT`; `gh pr view` reports `OPEN` plus `isDraft`. The cache only
   covers PRs Claude Code's own sessions opened, so a link scan finds plenty

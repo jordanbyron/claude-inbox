@@ -135,7 +135,8 @@ new prompt while still blocked doesn't count.
 it has is merged or closed. A hand-settled session stays put when it
 finishes, and comes back on any other state change. `failed` never settles.
 A session with no pull request never settles on its own, and one with an
-open or draft PR stays Active.
+open or draft PR stays Active. A PR merged or closed before the session
+started doesn't count, since the session can only have mentioned it.
 
 **Reap.** On the next poll, the inbox deletes a background session that has
 been quiet for 14 days with `claude rm`, transcript and worktree included.

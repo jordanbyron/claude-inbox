@@ -5,7 +5,7 @@ require "tmpdir"
 RSpec.describe ClaudeInbox::Store do
   let(:now) { Time.at(1_789_600_000) }
   let(:interactive) { {id: nil, kind: "interactive", state: nil} }
-  let(:merged) { {prs: [ClaudeInbox::PullRequest.new(state: "MERGED")]} }
+  let(:merged) { {prs: [ClaudeInbox::PullRequest.new(state: "MERGED", resolved_at: now.to_i - 60)]} }
 
   describe "sectioning" do
     it "puts blocked and failed in Needs you" do
@@ -73,7 +73,7 @@ RSpec.describe ClaudeInbox::Store do
     it "settles a finished session the moment its PR is merged or closed" do
       entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 5}}
       %w[MERGED CLOSED].each do |st|
-        s = session(id: "a", state: "done", prs: [ClaudeInbox::PullRequest.new(state: st)])
+        s = session(id: "a", state: "done", prs: [ClaudeInbox::PullRequest.new(state: st, resolved_at: now.to_i - 60)])
         sec = described_class.sectionize([s], entries, now)
         expect(sec.settled.map(&:id)).to eq(%w[a])
       end
@@ -96,7 +96,7 @@ RSpec.describe ClaudeInbox::Store do
     it "settles a blocked session the moment its PR is merged or closed" do
       entries = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 5}}
       %w[MERGED CLOSED].each do |st|
-        s = session(id: "a", state: "blocked", prs: [ClaudeInbox::PullRequest.new(state: st)])
+        s = session(id: "a", state: "blocked", prs: [ClaudeInbox::PullRequest.new(state: st, resolved_at: now.to_i - 60)])
         sec = described_class.sectionize([s], entries, now)
         expect(sec.settled.map(&:id)).to eq(%w[a])
         expect(sec.needs_you).to be_empty
@@ -116,6 +116,29 @@ RSpec.describe ClaudeInbox::Store do
       sec = described_class.sectionize([session(id: "a", state: "blocked", **merged)], entries, now)
       expect(sec.settled.map(&:id)).to eq(%w[a])
       expect(sec.active).to be_empty
+    end
+
+    # The CLI resolves a bare `#340` against the session's own repo, so a
+    # review of ontra-common-ruby#340 run from icc_app links icc_app#340,
+    # merged years ago.
+    it "keeps a blocked session in Needs you when its only PR was resolved before it started" do
+      entries = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 5}}
+      old = ClaudeInbox::PullRequest.new(state: "MERGED", resolved_at: Time.at(1_789_400_000).to_i - 86_400)
+      sec = described_class.sectionize([session(id: "a", state: "blocked", prs: [old])], entries, now)
+      expect(sec.needs_you.map(&:id)).to eq(%w[a])
+    end
+
+    it "settles on the session's own PR alone when it also mentions an old one" do
+      entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 5}}
+      old = ClaudeInbox::PullRequest.new(state: "MERGED", resolved_at: Time.at(1_789_400_000).to_i - 86_400)
+      s = session(id: "a", state: "done", prs: [old, *merged[:prs]])
+      expect(described_class.sectionize([s], entries, now).settled.map(&:id)).to eq(%w[a])
+    end
+
+    it "holds a session in view until gh says when its PR was resolved" do
+      entries = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 5}}
+      s = session(id: "a", state: "blocked", prs: [ClaudeInbox::PullRequest.new(state: "MERGED")])
+      expect(described_class.sectionize([s], entries, now).needs_you.map(&:id)).to eq(%w[a])
     end
 
     it "keeps a failed session loud even once its PR merged" do

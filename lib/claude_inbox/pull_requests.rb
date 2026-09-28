@@ -1,14 +1,16 @@
 # frozen_string_literal: true
 
 require "json"
+require "time"
 require_relative "records"
 require_relative "subprocess"
 
 module ClaudeInbox
   # A pull request tied to a session. `state` uses GitHub's vocabulary plus
   # DRAFT, the same as Claude Code's own cache: OPEN, DRAFT, MERGED, CLOSED,
-  # or nil when nothing has told us yet.
-  PullRequest = Struct.new(:number, :url, :state, :title) do
+  # or nil when nothing has told us yet. `resolved_at` is when it was merged
+  # or closed, in epoch seconds, once gh has said.
+  PullRequest = Struct.new(:number, :url, :state, :title, :resolved_at) do
     def short = number ? "##{number}" : url.to_s.sub(%r{\Ahttps?://(www\.)?}, "")
 
     def merged? = state == "MERGED"
@@ -19,6 +21,16 @@ module ClaudeInbox
     def resolved? = merged? || closed?
 
     def known? = !state.nil?
+
+    # Nothing more to learn: resolved, and gh has said when.
+    def final? = resolved? && !resolved_at.nil?
+
+    # Resolved before `time`, so a session started then can only have mentioned it.
+    def resolved_before?(time) = final? && resolved_at < time.to_i
+
+    # Resolved at or after `time`, which is the only kind of resolution that
+    # can answer a session started then.
+    def resolved_since?(time) = final? && resolved_at >= time.to_i
   end
 
   # Finds the PRs a session is tied to and keeps their state fresh.
@@ -34,11 +46,10 @@ module ClaudeInbox
   # State comes first from our own record of resolved PRs, then from
   # ~/.claude/gh-pr-status-cache.json (whatever Claude Code last saw), then
   # from `gh pr view` for PRs that are still open, at most once per
-  # REFRESH_AFTER. A merged or closed PR never changes again, so it is never
-  # asked about twice — and once gh has said so, it is written to
-  # RESOLVED_PATH so the next launch does not ask either. Claude Code's cache
-  # only covers PRs its own sessions opened, and a link scan picks up plenty
-  # of others.
+  # REFRESH_AFTER. A merged or closed PR never changes again, so once gh has
+  # said so, and when, it is written to RESOLVED_PATH and never asked about
+  # again. Claude Code's cache never says when, and says nothing at all about
+  # most of a link scan's PRs: it only covers PRs its own sessions opened.
   #
   # `enrich` never touches gh; it is what stands between `claude agents` and
   # the first frame. `refresh` is the slow half, one network round trip per
@@ -89,11 +100,11 @@ module ClaudeInbox
     def status(url)
       @mutex.synchronize do
         pr = @known[url] ||= seed(url)
-        return pr if pr.resolved? || !due?(url)
+        return pr if pr.final? || !due?(url)
         @checked_at[url] = @clock.call.to_i
         fresh = fetch(url)
         return pr unless fresh
-        remember(fresh) if fresh.resolved?
+        remember(fresh) if fresh.final?
         @known[url] = fresh
       end
     end
@@ -102,8 +113,9 @@ module ClaudeInbox
     def self.parse(url, json)
       h = JSON.parse(json)
       state = (h["state"] == "OPEN" && h["isDraft"]) ? "DRAFT" : h["state"]
-      PullRequest.new(number: h["number"], url: h["url"] || url, state: state, title: h["title"])
-    rescue JSON::ParserError
+      resolved_at = h["closedAt"] && Time.iso8601(h["closedAt"]).to_i
+      PullRequest.new(number: h["number"], url: h["url"] || url, state: state, title: h["title"], resolved_at: resolved_at)
+    rescue JSON::ParserError, ArgumentError
       nil
     end
 
@@ -126,7 +138,8 @@ module ClaudeInbox
     def seed(url)
       number = url[%r{/pull/(\d+)}, 1]&.to_i
       cached = resolved[url] || claude_cache[url]
-      PullRequest.new(number: cached&.dig("number") || number, url: url, state: cached&.dig("state"), title: cached&.dig("title"))
+      PullRequest.new(number: cached&.dig("number") || number, url: url, state: cached&.dig("state"),
+        title: cached&.dig("title"), resolved_at: cached&.dig("resolved_at"))
     end
 
     # Same shape as Claude Code's cache, so `seed` reads both alike.
@@ -140,13 +153,13 @@ module ClaudeInbox
 
     # Under @mutex.
     def remember(pr)
-      resolved[pr.url] = {"number" => pr.number, "state" => pr.state, "title" => pr.title}
+      resolved[pr.url] = {"number" => pr.number, "state" => pr.state, "title" => pr.title, "resolved_at" => pr.resolved_at}
       return unless @resolved_path
       Records.save(@resolved_path, resolved)
     end
 
     def fetch(url)
-      r = Subprocess.capture(@gh, "pr", "view", url, "--json", "number,state,isDraft,title,url")
+      r = Subprocess.capture(@gh, "pr", "view", url, "--json", "number,state,isDraft,title,url,closedAt")
       r.success? ? self.class.parse(url, r.out) : nil
     rescue SystemCallError
       nil
