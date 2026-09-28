@@ -31,6 +31,12 @@ RSpec.describe ClaudeInbox::PullRequests do
     expect(b.prs.map(&:number)).to eq([1])
   end
 
+  it "reads when gh says a PR was merged or closed" do
+    json = '{"number":9,"state":"MERGED","isDraft":false,"closedAt":"2026-09-28T14:00:00Z"}'
+    expect(described_class.parse("u", json).resolved_at).to eq(Time.utc(2026, 9, 28, 14).to_i)
+    expect(described_class.parse("u", '{"state":"OPEN","isDraft":false,"closedAt":null}').resolved_at).to be_nil
+  end
+
   it "parses gh output, calling an open draft DRAFT" do
     pr = described_class.parse("u", '{"number":9,"state":"OPEN","isDraft":true,"title":"t","url":"u"}')
     expect(pr.state).to eq("DRAFT")
@@ -45,18 +51,32 @@ RSpec.describe ClaudeInbox::PullRequests do
     expect(described_class.valid_url?("885")).to be(false)
   end
 
-  it "asks gh only for unresolved PRs and only once per refresh window" do
+  it "asks gh until it has said when a PR was resolved, at most once per refresh window" do
     calls = []
     client = described_class.new(**cached, gh: "gh")
     allow(client).to receive(:fetch) do |url|
       calls << url
-      ClaudeInbox::PullRequest.new(number: 885, url: url, state: "MERGED")
+      ClaudeInbox::PullRequest.new(number: 885, url: url, state: "MERGED", resolved_at: now.to_i - 60)
     end
-    client.status("https://github.com/jordanbyron/parks_genie/pull/856") # merged in cache: never asked
     client.status("https://github.com/jordanbyron/parks_genie/pull/885")
     client.status("https://github.com/jordanbyron/parks_genie/pull/885")
     expect(calls.size).to eq(1)
     expect(client.status("https://github.com/jordanbyron/parks_genie/pull/885")).to be_merged
+  end
+
+  it "asks gh once about a PR Claude Code's cache calls merged, since the cache never says when" do
+    later = now
+    client = described_class.new(**cached, clock: -> { later }, gh: "gh")
+    url = "https://github.com/jordanbyron/parks_genie/pull/856"
+    asked = 0
+    allow(client).to receive(:fetch) do |u|
+      asked += 1
+      ClaudeInbox::PullRequest.new(number: 856, url: u, state: "MERGED", resolved_at: now.to_i - 60)
+    end
+    expect(client.status(url).resolved_at).to eq(now.to_i - 60)
+    later = now + described_class::REFRESH_AFTER
+    client.status(url)
+    expect(asked).to eq(1)
   end
 
   # gh is a network round trip per PR, so enrich must never be the thing
@@ -66,7 +86,9 @@ RSpec.describe ClaudeInbox::PullRequests do
     client = described_class.new(**cached, gh: "gh")
     allow(client).to receive(:fetch) do |url|
       calls << url
-      ClaudeInbox::PullRequest.new(number: url[/\d+\z/].to_i, url: url, state: "OPEN")
+      n = url[/\d+\z/].to_i
+      state = {856 => "MERGED", 866 => "CLOSED"}.fetch(n, "OPEN")
+      ClaudeInbox::PullRequest.new(number: n, url: url, state: state, resolved_at: (now.to_i - 60 unless state == "OPEN"))
     end
     sessions = ClaudeInbox::JobState.enrich([
       session(id: "b03695b1"), # 856 and 866, both resolved in the cache
@@ -79,7 +101,7 @@ RSpec.describe ClaudeInbox::PullRequests do
 
     (_, fresh_b), moved = client.refresh([a, b])
     expect(moved).to be(true)
-    expect(calls.map { |u| u[/\d+\z/] }).to eq(%w[1]) # resolved PRs are never asked about
+    expect(calls.map { |u| u[/\d+\z/] }).to eq(%w[856 866 1]) # the cache says 856 and 866 resolved, not when
     expect(fresh_b.prs.map(&:state)).to eq(%w[OPEN])
     _, moved = client.refresh([a, fresh_b])
     expect(moved).to be(false) # inside the refresh window: nothing moved
@@ -107,7 +129,7 @@ RSpec.describe ClaudeInbox::PullRequests do
       asked = 0
       allow(first).to receive(:fetch) do |u|
         asked += 1
-        ClaudeInbox::PullRequest.new(number: 7, url: u, state: "MERGED", title: "seven")
+        ClaudeInbox::PullRequest.new(number: 7, url: u, state: "MERGED", title: "seven", resolved_at: now.to_i - 60)
       end
       expect(first.status(url)).to be_merged
       expect(asked).to eq(1)
@@ -118,6 +140,7 @@ RSpec.describe ClaudeInbox::PullRequests do
       pr = second.status(url)
       expect(pr).to be_merged
       expect(pr.title).to eq("seven")
+      expect(pr.resolved_at).to eq(now.to_i - 60)
     end
   end
 

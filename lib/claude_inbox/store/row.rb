@@ -66,12 +66,16 @@ module ClaudeInbox
       # Resolved PRs settle a `blocked` row too: asking "anything need
       # changing?" leaves it blocked, and merging answers it. `failed` stays
       # in view even if its PR landed; a PR nobody knows the state of yet
-      # (no gh, offline) is ignored.
+      # (no gh, offline) is ignored. So is one resolved before the session
+      # started: reviewing an old PR, or the CLI resolving a bare PR number
+      # against the wrong repo, would otherwise hide a session waiting on you.
+      # Until gh says when a PR was resolved, it holds the row in view.
       def settled?
         return true if hand_settled?
         return false if UNSETTLEABLE.include?(session.effective_state)
-        known = session.prs.select(&:known?)
-        known.any? && known.all?(&:resolved?)
+        started = session.started_at.to_i
+        ours = session.prs.select(&:known?).reject { |pr| pr.resolved_before?(started) }
+        ours.any? && ours.all? { |pr| pr.resolved_since?(started) }
       end
 
       # Idle time is the only clock, not the Settled section: the PR rule holds
