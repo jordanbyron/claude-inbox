@@ -204,8 +204,6 @@ module ClaudeInbox
         pid, ppid, *cmd = l.split
         [pid.to_i, ppid.to_i, cmd.join(" ")]
       }
-    rescue Errno::ENOENT
-      []
     end
 
     # pid => command, for the given parent pids.
