@@ -99,12 +99,25 @@ RSpec.describe ClaudeInbox::PullRequests do
     expect(a.prs.map(&:state)).to eq(%w[MERGED CLOSED])
     expect(b.prs.map(&:state)).to eq([nil])
 
-    (_, fresh_b), moved = client.refresh([a, b])
+    (fresh_a, fresh_b), moved = client.refresh([a, b])
     expect(moved).to be(true)
     expect(calls.map { |u| u[/\d+\z/] }).to eq(%w[856 866 1]) # the cache says 856 and 866 resolved, not when
     expect(fresh_b.prs.map(&:state)).to eq(%w[OPEN])
-    _, moved = client.refresh([a, fresh_b])
+    _, moved = client.refresh([fresh_a, fresh_b])
     expect(moved).to be(false) # inside the refresh window: nothing moved
+  end
+
+  it "counts learning when a cached-merged PR was merged as a change" do
+    client = described_class.new(**cached, gh: "gh")
+    allow(client).to receive(:fetch) do |u|
+      ClaudeInbox::PullRequest.new(number: 856, url: u, state: "MERGED", resolved_at: now.to_i - 60)
+    end
+    before = client.enrich([session(id: "x")], {"x" => "https://github.com/jordanbyron/parks_genie/pull/856"}).first
+    expect(before.prs.map(&:state)).to eq(%w[MERGED])
+
+    (after,), moved = client.refresh([before])
+    expect(moved).to be(true)
+    expect(after.prs.first.resolved_at).to eq(now.to_i - 60)
   end
 
   # The poller hands the list to the main thread before it asks gh, so the
