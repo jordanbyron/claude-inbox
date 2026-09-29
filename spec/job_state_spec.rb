@@ -22,9 +22,9 @@ RSpec.describe ClaudeInbox::JobState do
         ]
       ))
       js = described_class.read("aaa11111", jobs_dir: dir)
-      expect(js.detail).to eq("watching CI re-run")
-      expect(js.needs).to eq("confirm: merge once green?")
-      expect(js.result).to eq("CI re-run passed")
+      expect(js.summary("working")).to eq("watching CI re-run")
+      expect(js.summary("blocked")).to eq("confirm: merge once green?")
+      expect(js.summary("done")).to eq("CI re-run passed")
       expect(js.pr_urls).to eq(["https://github.com/o/r/pull/7"])
       expect(js.bridge_id).to eq("cse_01AB")
       expect(js).to be_remote_control
@@ -73,10 +73,10 @@ RSpec.describe ClaudeInbox::JobState do
     expect(stalled.in_flight_label).to be_nil
   end
 
-  it "has no needs or result when the file carries neither" do
+  it "falls back to the detail line when the file has no needs or result" do
     js = described_class.new("detail" => "thinking")
-    expect(js.needs).to be_nil
-    expect(js.result).to be_nil
+    expect(js.summary("blocked")).to eq("thinking")
+    expect(js.summary("done")).to eq("thinking")
   end
 
   it "summarizes by state: needs while blocked, result once done, else the detail line" do
