@@ -38,8 +38,6 @@ module ClaudeInbox
       "z" => {"o" => :fold_open, "c" => :fold_close, "a" => :fold_toggle}
     }.freeze
 
-    attr_reader :pending
-
     def initialize(clock: -> { Time.now })
       @clock = clock
       @pending = nil
