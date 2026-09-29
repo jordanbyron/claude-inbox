@@ -109,7 +109,8 @@ The prompt is multi-line, and `Enter` breaks a line. Paste an image with
 lands at the cursor for the prompt to point at: "make the button look like
 [Image #1]". Pasted images are kept in `~/.config/claude-inbox/images/` for
 14 days. A dropped file is referenced where it is. Pasting images works on
-macOS only.
+macOS only. Pasted text over 800 characters or 10 lines folds into a
+`[Pasted text #1 +40 lines]` token the same way, and goes out in full.
 
 Remote Control set to yes adds `--remote-control`, so the session also shows
 up at claude.ai/code and in the Claude mobile app. It defaults to yes when

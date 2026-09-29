@@ -100,6 +100,25 @@ RSpec.describe ClaudeInbox::TextBuffer do
     expect(rows).to eq(["abcd", "[ ]"])
   end
 
+  context "with a paste" do
+    it "keeps a short one inline, as typing" do
+      b = described_class.new("a ")
+      b.paste("one\ntwo")
+      expect(b.to_s).to eq("a one\ntwo")
+    end
+
+    it "folds a long one into a token that goes out in full" do
+      lines = (1..12).map { |i| "line #{i}" }.join("\n")
+      b = described_class.new("fix ")
+      b.paste(lines)
+      b.paste("x" * 900)
+      expect(b.to_s).to eq("fix [Pasted text #1 +11 lines][Pasted text #2 900 chars]")
+      expect(b.expand { raise }).to eq("fix #{lines}#{"x" * 900}")
+      b.press(:backspace, "\x7f")
+      expect(b.to_s).to eq("fix [Pasted text #1 +11 lines]")
+    end
+  end
+
   context "with an image attached" do
     let(:chip) { ->(cell) { "<#{cell}>" } }
 
@@ -109,7 +128,7 @@ RSpec.describe ClaudeInbox::TextBuffer do
       type(b, " and ")
       b.attach("/tmp/b.png")
       expect(b.to_s).to eq("see [Image #1] and [Image #2]")
-      expect(b.chips.map(&:path)).to eq(["/tmp/a.png", "/tmp/b.png"])
+      expect(b.images.map(&:path)).to eq(["/tmp/a.png", "/tmp/b.png"])
       expect(b.expand { |c| "@#{c.path}" }).to eq("see @/tmp/a.png and @/tmp/b.png")
     end
 

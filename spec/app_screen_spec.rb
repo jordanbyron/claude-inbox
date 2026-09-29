@@ -43,7 +43,7 @@ RSpec.describe ClaudeInbox::App do
     allow(terminal).to receive(:paint).and_call_original
     press(app, "\e[200~", *("word " * 200).chars, "\e[201~")
     expect(terminal).to have_received(:paint).once
-    expect(screen(app).join).to include("word word")
+    expect(screen(app).join).to include("[Pasted text #1 1000 chars]")
   end
 
   it "drops a paste that lands where nothing is typed, so its letters never act as keys" do
