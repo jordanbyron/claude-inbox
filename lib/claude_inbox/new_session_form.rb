@@ -119,12 +119,13 @@ module ClaudeInbox
       v[:name] = nil if v[:name].strip.empty?
       v[:cwd] = directory
       v[:remote] = SessionRequest::FLAGS[v[:remote]]
-      SessionRequest.resolve(v, defaults(v[:cwd]))
+      SessionRequest.resolve(v, defaults)
     end
 
     # Settings resolve against the directory the session will run in, so
     # they follow the Directory field.
-    def defaults(cwd = directory)
+    def defaults
+      cwd = directory
       return @defaults if @defaults_for == cwd
       @defaults_for = cwd
       @defaults = Settings.defaults(cwd, home: @home)
