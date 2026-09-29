@@ -38,6 +38,14 @@ RSpec.describe ClaudeInbox::App do
     expect(prompt.join("\n").strip).to eq("one\ntwo")
   end
 
+  it "paints no frames while a paste is still arriving" do
+    press(app, "n")
+    allow(terminal).to receive(:paint).and_call_original
+    press(app, "\e[200~", *("word " * 200).chars, "\e[201~")
+    expect(terminal).to have_received(:paint).once
+    expect(screen(app).join).to include("[Pasted text #1 1000 chars]")
+  end
+
   it "drops a paste that lands where nothing is typed, so its letters never act as keys" do
     press(app, ctrl_x, "\e[200~yes, every directory\e[201~")
     expect(app).to paint("Delete session f23c8673?")

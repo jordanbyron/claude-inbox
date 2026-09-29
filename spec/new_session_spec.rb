@@ -146,6 +146,16 @@ RSpec.describe ClaudeInbox::NewSessionForm do
       form.paste("my\nname")
       expect(form.values[:name]).to eq("my name")
     end
+
+    it "folds a long paste in the prompt into a token and starts with all of it" do
+      log = (1..40).map { |i| "error #{i}" }.join("\n")
+      type(form, "why ")
+      form.paste(log)
+      rows = form.screen(80, 30)
+      expect(rows.find { |r| r.include?("why ") }).to include("[Pasted text #1 +39 lines]")
+      expect(rows.join).not_to include("error 40")
+      expect(form.values[:prompt]).to eq("why #{log}")
+    end
   end
 
   it "takes a multi-line prompt: enter breaks the line, ^S starts" do

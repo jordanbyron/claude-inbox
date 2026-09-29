@@ -2,8 +2,8 @@
 
 # Passes when the App's next frame shows `text` (a string it includes, or a
 # pattern it matches): the whole screen, or with a chain, one line of it.
-# App#step paints before it handles a key, so the matcher steps once more
-# to see what the last key did.
+# The matcher steps once more first, so whatever a background worker
+# queued since the last key lands in that frame.
 RSpec::Matchers.define :paint do |text|
   chain(:in_status_line) { @where = :status_line }
   chain(:in_footer) { @where = :footer }

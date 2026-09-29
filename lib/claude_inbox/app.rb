@@ -36,6 +36,7 @@ module ClaudeInbox
       @terminal = terminal
       @color = color
       @renderer = Renderer.new(color: color)
+      @input = input
       @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
       @queue = queue
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests,
@@ -80,8 +81,10 @@ module ClaudeInbox
         @resize = false
         @terminal.resized
       end
-      render
       handle_input(input) if input
+      # A paste arrives a character per read and shows nothing until it
+      # closes, so a frame per character would only stall a long one.
+      render unless @paste.pasting?
     end
 
     private
@@ -128,7 +131,19 @@ module ClaudeInbox
     # ----- main loop --------------------------------------------------------
 
     def main_loop
-      step(@reader.read_keypress(echo: false, raw: false, nonblock: true)) until @quit
+      step(@paste.pasting? ? read_pasted : @reader.read_keypress(echo: false, raw: false, nonblock: true)) until @quit
+    end
+
+    # As much of an open paste as has arrived, read straight off the tty:
+    # the reader switches echo off and back on around every character, and
+    # on a long paste that is most of the wait.
+    def read_pasted
+      return nil unless @input.wait_readable(0.1)
+      out = +""
+      while out.size < 65_536 && @input.wait_readable(0) && (c = @input.getc)
+        out << c
+      end
+      out
     end
 
     def handle_input(raw)

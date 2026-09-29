@@ -219,7 +219,7 @@ module ClaudeInbox
 
     def insert(text)
       return unless editable?
-      focused.value.insert((focused.kind == :multiline) ? text : text.tr("\n", " "))
+      (focused.kind == :multiline) ? focused.value.paste(text) : focused.value.insert(text.tr("\n", " "))
     end
 
     def menu_press(name)

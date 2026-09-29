@@ -9,20 +9,34 @@ module ClaudeInbox
   #
   # Positions count cells, not bytes or characters. A cell is a grapheme
   # cluster — prompts and session names carry emoji, and character indexes
-  # cut them in half — or a Chip, an attached image that shows as one
-  # `[Image #1]` token and moves and deletes as one unit, the way Claude
-  # Code's own prompt treats a pasted image.
+  # cut them in half — or a chip: an attached Image or a long Pasted text,
+  # each shown as one token (`[Image #1]`, `[Pasted text #1 +40 lines]`)
+  # that moves and deletes as one unit, the way Claude Code's own prompt
+  # treats them.
   #
   #   b = TextBuffer.new("ab")
   #   b.press(:left, "\e[D")
   #   b.press("X", "X")
   #   b.to_s                    # => "aXb"
   class TextBuffer
-    Chip = Struct.new(:n, :path) do
+    Image = Struct.new(:n, :path) do
       def to_s = "[Image ##{n}]"
     end
 
+    Pasted = Struct.new(:n, :text) do
+      def to_s
+        lines = text.count("\n")
+        "[Pasted text ##{n} #{(lines > 0) ? "+#{lines} lines" : "#{text.size} chars"}]"
+      end
+    end
+
+    # Past either, a paste folds into a Pasted chip: laid out in full it
+    # buries the prompt around it, and wrapping it costs every frame.
+    FOLD_CHARS = 800
+    FOLD_LINES = 10
+
     def initialize(text = "")
+      @widths = Hash.new { |h, s| h[s] = Text.width(s) }
       @g = text.grapheme_clusters
       @cursor = @g.size
     end
@@ -35,9 +49,19 @@ module ClaudeInbox
     # this is here for callers that need to reason about position (tests).
     attr_reader :cursor
 
-    def chips = @g.grep(Chip)
+    def images = @g.grep(Image)
 
-    def expand = @g.map { |c| c.is_a?(Chip) ? yield(c) : c }.join
+    # The text as it will be sent: a Pasted chip unfolds to its text, and
+    # the block says what each Image becomes.
+    def expand
+      @g.map { |c|
+        case c
+        when Image then yield(c)
+        when Pasted then c.text
+        else c
+        end
+      }.join
+    end
 
     # Swaps the whole text out and parks the cursor at the end — what
     # completion wants after it extends a path.
@@ -62,13 +86,13 @@ module ClaudeInbox
       @cursor += g.size
     end
 
-    # Numbered after the chips already in the text, so a second image is
+    # Chips are numbered per kind and never reused, so a second image is
     # `[Image #2]` even after the first was deleted, as Claude Code does.
-    def attach(path)
-      chip = Chip.new(@next_chip = (@next_chip || 0) + 1, path)
-      @g.insert(@cursor, chip)
-      @cursor += 1
-      chip
+    def attach(path) = place(Image.new(@images = (@images || 0) + 1, path))
+
+    def paste(text)
+      return insert(text) if text.size <= FOLD_CHARS && text.count("\n") < FOLD_LINES
+      place(Pasted.new(@pastes = (@pastes || 0) + 1, text))
     end
 
     # Handles one keypress — readline's editing keys, plus printable text —
@@ -98,12 +122,18 @@ module ClaudeInbox
     # gets plain truncated text instead.
     def row(width, cursor: nil)
       return Text.truncate(to_s, width) unless cursor
-      first = 0
-      first += 1 while width_of(@g[first...@cursor]) > width - 1
+      first = @cursor
+      used = 0
+      while first > 0 && used + cell_width(@g[first - 1]) <= width - 1
+        first -= 1
+        used += cell_width(@g[first])
+      end
       cells = []
+      used = 0
       @g[first..].each do |c|
-        break if width_of(cells) + width_of([c]) > width
+        break if used + cell_width(c) > width
         cells << c
+        used += cell_width(c)
       end
       paint(cells, @cursor - first, cursor)
     end
@@ -129,12 +159,14 @@ module ClaudeInbox
 
     private
 
-    def width_of(cells) = cells.sum { |c| Text.width(c.to_s) }
+    def width_of(cells) = cells.sum { |c| cell_width(c) }
+
+    def cell_width(cell) = @widths[cell.to_s]
 
     def paint(cells, offset, cursor, chip = nil)
       out = cells.each_with_index.map do |c, i|
         s = c.to_s
-        s = chip.call(s) if chip && c.is_a?(Chip)
+        s = chip.call(s) if chip && !c.is_a?(String)
         (i == offset) ? cursor.call(s) : s
       end
       out << cursor.call(" ") if offset && offset >= cells.size
@@ -160,27 +192,46 @@ module ClaudeInbox
 
     # Text.wrap on cells, keeping the trailing spaces the cursor may sit on:
     # a chip is one cell however wide its label, so the wrap has to measure
-    # cells rather than a joined string.
+    # cells rather than a joined string. Widths are kept running rather than
+    # re-measured per word: this runs every frame, over the whole prompt.
     def segments(cells, width)
-      return [cells] if width_of(cells) <= width
-      words = cells.slice_when { |c, _| c == " " }.to_a
       lines = []
       line = []
-      words.each do |word|
-        if !line.empty? && width_of(line) + width_of(word.reverse.drop_while { |c| c == " " }) > width
+      used = 0
+      cells.slice_when { |c, _| c == " " }.each do |word|
+        word_w = width_of(word)
+        bare_w = (word.last == " ") ? word_w - 1 : word_w
+        if !line.empty? && used + bare_w > width
           lines << line
           line = []
+          used = 0
         end
-        while width_of(word) > width
-          cut = word.size - 1
-          cut -= 1 while cut > 0 && width_of(word[0...cut]) > width
-          lines << word[0...cut]
-          word = word[cut..]
+        at = 0
+        while word_w > width
+          cut, cut_w = fit(word, at, width)
+          lines << word[at...at + cut]
+          at += cut
+          word_w -= cut_w
         end
-        line += word
+        line.concat(word[at..])
+        used += word_w
       end
       lines << line unless line.empty?
       lines
+    end
+
+    # How many cells of `word` from `at` fit in `width`, and their width.
+    # Always at least one, so a glyph wider than the box still moves on.
+    def fit(word, at, width)
+      count = 0
+      used = 0
+      (at...word.size).each do |i|
+        w = cell_width(word[i])
+        break if count > 0 && used + w > width
+        count += 1
+        used += w
+      end
+      [count, used]
     end
 
     # The newline itself belongs to the line it ends, so a cursor sitting on
@@ -199,6 +250,12 @@ module ClaudeInbox
     end
 
     def cursor_row(rows) = rows.rindex { |_, start| start <= @cursor } || 0
+
+    def place(chip)
+      @g.insert(@cursor, chip)
+      @cursor += 1
+      chip
+    end
 
     def delete(at, length)
       return if at < 0 || length <= 0

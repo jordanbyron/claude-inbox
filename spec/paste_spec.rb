@@ -18,6 +18,14 @@ RSpec.describe ClaudeInbox::Paste do
     expect(paste.feed(" world\e[201~")).to eq([[:paste, "hello world"]])
   end
 
+  it "says whether a paste is still open" do
+    expect(paste).not_to be_pasting
+    paste.feed("\e[200~hel")
+    expect(paste).to be_pasting
+    paste.feed("lo\e[201~")
+    expect(paste).not_to be_pasting
+  end
+
   it "reports an empty paste, which is how an image arrives" do
     expect(paste.feed("\e[200~\e[201~")).to eq([[:paste, ""]])
   end
