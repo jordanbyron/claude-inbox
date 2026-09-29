@@ -23,6 +23,7 @@ module ClaudeInbox
     end
 
     def initialize(text = "")
+      @widths = Hash.new { |h, s| h[s] = Text.width(s) }
       @g = text.grapheme_clusters
       @cursor = @g.size
     end
@@ -98,12 +99,18 @@ module ClaudeInbox
     # gets plain truncated text instead.
     def row(width, cursor: nil)
       return Text.truncate(to_s, width) unless cursor
-      first = 0
-      first += 1 while width_of(@g[first...@cursor]) > width - 1
+      first = @cursor
+      used = 0
+      while first > 0 && used + cell_width(@g[first - 1]) <= width - 1
+        first -= 1
+        used += cell_width(@g[first])
+      end
       cells = []
+      used = 0
       @g[first..].each do |c|
-        break if width_of(cells) + width_of([c]) > width
+        break if used + cell_width(c) > width
         cells << c
+        used += cell_width(c)
       end
       paint(cells, @cursor - first, cursor)
     end
@@ -129,7 +136,9 @@ module ClaudeInbox
 
     private
 
-    def width_of(cells) = cells.sum { |c| Text.width(c.to_s) }
+    def width_of(cells) = cells.sum { |c| cell_width(c) }
+
+    def cell_width(cell) = @widths[cell.to_s]
 
     def paint(cells, offset, cursor, chip = nil)
       out = cells.each_with_index.map do |c, i|
@@ -160,27 +169,46 @@ module ClaudeInbox
 
     # Text.wrap on cells, keeping the trailing spaces the cursor may sit on:
     # a chip is one cell however wide its label, so the wrap has to measure
-    # cells rather than a joined string.
+    # cells rather than a joined string. Widths are kept running rather than
+    # re-measured per word: this runs every frame, over the whole prompt.
     def segments(cells, width)
-      return [cells] if width_of(cells) <= width
-      words = cells.slice_when { |c, _| c == " " }.to_a
       lines = []
       line = []
-      words.each do |word|
-        if !line.empty? && width_of(line) + width_of(word.reverse.drop_while { |c| c == " " }) > width
+      used = 0
+      cells.slice_when { |c, _| c == " " }.each do |word|
+        word_w = width_of(word)
+        bare_w = (word.last == " ") ? word_w - 1 : word_w
+        if !line.empty? && used + bare_w > width
           lines << line
           line = []
+          used = 0
         end
-        while width_of(word) > width
-          cut = word.size - 1
-          cut -= 1 while cut > 0 && width_of(word[0...cut]) > width
-          lines << word[0...cut]
-          word = word[cut..]
+        at = 0
+        while word_w > width
+          cut, cut_w = fit(word, at, width)
+          lines << word[at...at + cut]
+          at += cut
+          word_w -= cut_w
         end
-        line += word
+        line.concat(word[at..])
+        used += word_w
       end
       lines << line unless line.empty?
       lines
+    end
+
+    # How many cells of `word` from `at` fit in `width`, and their width.
+    # Always at least one, so a glyph wider than the box still moves on.
+    def fit(word, at, width)
+      count = 0
+      used = 0
+      (at...word.size).each do |i|
+        w = cell_width(word[i])
+        break if count > 0 && used + w > width
+        count += 1
+        used += w
+      end
+      [count, used]
     end
 
     # The newline itself belongs to the line it ends, so a cursor sitting on

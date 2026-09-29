@@ -82,6 +82,18 @@ RSpec.describe ClaudeInbox::TextBuffer do
     expect(rows).to eq(["line[1]", "line2"])
   end
 
+  it "cuts a long unbroken paste into full rows" do
+    b = described_class.new("x" * 20_000)
+    rows, hidden = b.view(100, 3)
+    expect(rows).to eq(["x" * 100, "x" * 100, ""])
+    expect(hidden).to eq(198)
+  end
+
+  it "gives a glyph wider than the box a row to itself" do
+    rows, = described_class.new("😀😀").view(1, 3)
+    expect(rows).to eq(["😀", "😀", ""])
+  end
+
   it "gives the cursor a row of its own at the right margin" do
     b = described_class.new("abcd")
     rows, = b.view(4, 3, cursor: mark)

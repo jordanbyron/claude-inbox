@@ -20,6 +20,8 @@ module ClaudeInbox
       @open = nil
     end
 
+    def pasting? = !@open.nil?
+
     def feed(raw)
       out = []
       rest = raw.to_s
