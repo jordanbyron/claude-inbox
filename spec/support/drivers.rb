@@ -32,8 +32,8 @@ module Drivers
 
   def press(app, *keys) = keys.each { |k| app.step(k) }
 
-  # App#step paints before it handles its key, so one more step shows what
-  # the last key did.
+  # One more step first, so whatever a background worker queued since the
+  # last key is on the screen.
   def screen(app)
     app.step
     app.instance_variable_get(:@terminal).lines

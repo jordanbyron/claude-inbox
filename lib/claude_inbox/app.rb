@@ -81,10 +81,10 @@ module ClaudeInbox
         @resize = false
         @terminal.resized
       end
+      handle_input(input) if input
       # A paste arrives a character per read and shows nothing until it
       # closes, so a frame per character would only stall a long one.
       render unless @paste.pasting?
-      handle_input(input) if input
     end
 
     private
