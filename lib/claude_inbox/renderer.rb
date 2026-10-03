@@ -81,14 +81,14 @@ module ClaudeInbox
 
     def frame(sections, view)
       return full_screen(sections, view) if view.screen
-      width, height, now, selected = view.width, view.height, view.now, view.selected
+      width, height, selected = view.width, view.height, view.selected
       list_w = width_for_list(width, view.peek)
       view_h = Renderer.body_height(height)
       body, items =
         if view.loading
           [loading_state(list_w, view_h, view.loading, view.tick), []]
         else
-          body_lines(sections, list_w, view, now)
+          body_lines(sections, list_w, view)
         end
 
       top = clamp_top(view.top, body.size, view_h, items, selected)
@@ -243,7 +243,7 @@ module ClaudeInbox
 
     # ----- body ---------------------------------------------------------------
 
-    def body_lines(sections, width, view, now)
+    def body_lines(sections, width, view)
       lines = []
       items = []
       if sections.all.empty?
@@ -260,7 +260,7 @@ module ClaudeInbox
           next
         end
         rows.each do |row|
-          row_lines(row, name, selected, width, now, view.tick).each_with_index do |l, i|
+          row_lines(row, name, selected, width, view.now, view.tick).each_with_index do |l, i|
             lines << l
             items << ((i.zero? && row.selectable?) ? Item.new(:row, row, name) : nil)
           end
