@@ -76,7 +76,7 @@ module ClaudeInbox
     # one (interactive, or forgotten) has none; Sessions.load sees to the
     # order. `overrides` maps session key => url for links set by hand; an
     # override replaces the scanned list.
-    def enrich(sessions, overrides = {})
+    def enrich(sessions, overrides)
       sessions.map do |s|
         urls = overrides[s.key] ? [overrides[s.key]] : (s.job_state&.pr_urls || [])
         s.with(prs: urls.map { |u| known(u) })
