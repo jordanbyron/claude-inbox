@@ -107,7 +107,7 @@ module ClaudeInbox
         end
       end
 
-      def self.write(io, status, headers = {}, body = "")
+      def self.write(io, status, headers, body)
         body = body.b
         head = ["HTTP/1.1 #{status} #{REASONS.fetch(status)}"]
         HEADERS.merge(headers, "Content-Length" => body.bytesize.to_s).each { |name, value| head << "#{name}: #{value}" }
