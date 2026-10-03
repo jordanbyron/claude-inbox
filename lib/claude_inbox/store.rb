@@ -20,6 +20,7 @@ module ClaudeInbox
     # should see it, but after REAP_AFTER of not seeing it, you never will.
     UNREAPABLE = %w[working].freeze
     SECTIONS = %i[pinned needs_you active snoozed settled].freeze
+    NotWritable = Class.new(StandardError)
     # Sections long enough to be worth hiding behind a fold toggle.
     FOLDABLE_SECTIONS = %i[snoozed settled].freeze
 
@@ -103,7 +104,7 @@ module ClaudeInbox
 
     def mark_reap_failed(id, message) = edit(id) { |e| e.mark_reap_failed(@clock.call, message) }
 
-    def toggle_pin(id) = edit(id) { |e| e.toggle_pin(@clock.call) }
+    def toggle_pin(id) = edit(id, "pin") { |e| e.toggle_pin(@clock.call) }
 
     def set_alias(id, name) = edit(id) { |e| e.alias = name }
 
@@ -154,9 +155,10 @@ module ClaudeInbox
 
     # A store that cannot save still makes the change here, for the screen,
     # and asks the writer for it by `action` through the relay, so the next
-    # poll finds it done rather than undone. An edit with no action is the
-    # caller's to refuse when the store is not writable.
+    # poll finds it done rather than undone. An edit with no request form
+    # would only be undone, so it is refused outright.
     def edit(id, action = nil, **detail)
+      raise NotWritable, "another claude-inbox owns state.json" if !@writable && action.nil?
       @mutex.synchronize do
         yield Entry.new(@entries[id] ||= Entry.blank(@clock.call).to_h)
         save
