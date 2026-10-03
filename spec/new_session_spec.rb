@@ -9,7 +9,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
   let(:home) { Dir.mktmpdir }
   after { FileUtils.rm_rf(home) }
 
-  let(:form) { described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home) }
+  let(:form) { described_class.new(cwd: Dir.pwd, color: false, home: home) }
 
   it "starts on the prompt and types into it, spaces included" do
     expect(form.focused.key).to eq(:prompt)
@@ -69,7 +69,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
   it "starts and attaches on ^O, starts and stays put on ^S" do
     type(form, "do it")
     expect(form.press(:ctrl_o, "\x0f")).to eq(:start_and_attach)
-    other = described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
+    other = described_class.new(cwd: Dir.pwd, color: false, home: home)
     type(other, "do it")
     expect(other.press(:ctrl_s, "\x13")).to eq(:start)
   end
@@ -94,7 +94,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
   describe "images" do
     let(:clip) { ClaudeInbox::Images::Clipboard.new(nil, nil) }
     let(:form) do
-      described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), clipboard: -> { clip }, home: home)
+      described_class.new(cwd: Dir.pwd, color: false, clipboard: -> { clip }, home: home)
     end
 
     it "attaches the clipboard's image on an empty paste, as a token in the prompt" do
@@ -187,7 +187,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
     Dir.mktmpdir do |home|
       FileUtils.mkdir_p("#{home}/.claude")
       File.write("#{home}/.claude/settings.json", {model: "opus", effortLevel: "high"}.to_json)
-      f = described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
+      f = described_class.new(cwd: Dir.pwd, color: false, home: home)
       rows = f.screen(100, 24)
       expect(rows.find { |r| r.include?("Model") }).to include("opus (settings)")
       expect(rows.find { |r| r.include?("Effort") }).to include("high (settings)")
@@ -203,7 +203,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
         FileUtils.mkdir_p("#{proj}/.claude")
         File.write("#{home}/.claude/settings.json", {model: "opus"}.to_json)
         File.write("#{proj}/.claude/settings.local.json", {permissions: {defaultMode: "plan"}}.to_json)
-        f = described_class.new(cwd: proj, pastel: Pastel.new(enabled: false), home: home)
+        f = described_class.new(cwd: proj, color: false, home: home)
         rows = f.screen(100, 24)
         expect(rows.find { |r| r.include?("Model") }).to include("opus (settings)")
         expect(rows.find { |r| r.include?("Permissions") }).to include("plan (settings)")
@@ -215,7 +215,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
     Dir.mktmpdir do |home|
       FileUtils.mkdir_p("#{home}/.claude")
       File.write("#{home}/.claude/settings.json", {remoteControlAtStartup: true}.to_json)
-      f = described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
+      f = described_class.new(cwd: Dir.pwd, color: false, home: home)
       expect(f.screen(100, 24).find { |r| r.include?("Remote Control") }).to include("yes (settings)")
       expect(f.values[:remote]).to be(true)
       7.times { f.press(:tab, "\t") }
@@ -226,7 +226,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
 
   it "leaves Remote Control off when nothing turns it on" do
     Dir.mktmpdir do |home|
-      f = described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
+      f = described_class.new(cwd: Dir.pwd, color: false, home: home)
       expect(f.values[:remote]).to be(false)
       7.times { f.press(:tab, "\t") }
       f.press("h", "h")
@@ -275,7 +275,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
   end
 
   it "draws the cursor on the cell it sits on" do
-    f = described_class.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: true), home: home)
+    f = described_class.new(cwd: Dir.pwd, color: true, home: home)
     "ab".each_char { |c| f.press(c, c) }
     f.press(:left, "\e[D")
     expect(f.screen(80, 24).join("\n")).to include("a\e[7mb\e[0m")
@@ -301,7 +301,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
     let(:proj) { Dir.mktmpdir }
     after { FileUtils.rm_rf(proj) }
 
-    let(:form) { described_class.new(cwd: proj, pastel: Pastel.new(enabled: false), home: home) }
+    let(:form) { described_class.new(cwd: proj, color: false, home: home) }
 
     before do
       %w[unslop unsplit babysit].each do |n|
@@ -392,7 +392,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
           FileUtils.mkdir_p("#{home}/.claude/skills/cmd-#{n}")
           File.write("#{home}/.claude/skills/cmd-#{n}/SKILL.md", "---\ndescription: #{n}\n---\n")
         end
-        f = described_class.new(cwd: home, pastel: Pastel.new(enabled: false), home: home)
+        f = described_class.new(cwd: home, color: false, home: home)
         type(f, "/")
         rows = f.screen(80, 24)
         expect(rows.count { |r| r.include?("/cmd-") }).to eq(6)

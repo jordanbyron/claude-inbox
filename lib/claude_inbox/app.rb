@@ -475,7 +475,7 @@ module ClaudeInbox
 
     def open_new_session
       cwd = selected_session&.cwd || Dir.pwd
-      @modal = NewSessionForm.new(cwd: SessionRequest.strip_worktree(cwd), pastel: Pastel.new(enabled: @color))
+      @modal = NewSessionForm.new(cwd: SessionRequest.strip_worktree(cwd), color: @color)
     end
 
     # `attach:` hands the terminal over as soon as the session starts. Without
