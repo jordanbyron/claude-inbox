@@ -20,14 +20,12 @@ module ClaudeInbox
     RETRY_AFTER = 24 * 3600
     DEFAULT_LOG = File.join(Dir.home, ".config", "claude-inbox", "reaped.log")
 
-    def initialize(client, store, log_path: DEFAULT_LOG, enabled: self.class.enabled?)
+    def initialize(client, store, log_path: DEFAULT_LOG, enabled: true)
       @client = client
       @store = store
       @log_path = log_path
       @enabled = enabled
     end
-
-    def self.enabled? = ENV["CLAUDE_INBOX_NO_REAP"].to_s.empty?
 
     # For --fixture runs and tests: selects nothing, deletes nothing, and
     # needs neither a client nor a store to do it.

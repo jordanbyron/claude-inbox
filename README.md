@@ -3,6 +3,9 @@
 An inbox for Claude Code's background sessions. It lists what `claude agents`
 lists and adds snooze, settle, pinning and each session's pull request.
 
+I liked the workflow in Theo's [T3 Code](https://github.com/pingdotgg/t3code)
+and wanted a better way to manage my Claude agents, so I built this.
+
 ![claude-inbox with one working session, one snoozed and the settled section folded](docs/screenshot.png)
 
 ## Install
@@ -108,11 +111,10 @@ again.
 A session settles when you press `x` or when all its pull requests are merged
 or closed. A session without a pull request only settles by hand.
 
-The inbox deletes background sessions that have been idle for 14 days, with
-`claude rm`. Working, pinned and snoozed sessions are kept, and `claude rm`
-refuses a worktree with unpushed commits. Each deletion is logged to
-`~/.config/claude-inbox/reaped.log`. Set `CLAUDE_INBOX_NO_REAP=1` to turn it
-off.
+With `--reap`, the inbox deletes background sessions that have been idle for
+14 days, with `claude rm`. Working, pinned and snoozed sessions are kept, and
+`claude rm` refuses a worktree with unpushed commits. Each deletion is logged
+to `~/.config/claude-inbox/reaped.log`.
 
 ## Remote Control
 

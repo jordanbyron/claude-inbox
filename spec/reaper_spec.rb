@@ -108,14 +108,4 @@ RSpec.describe ClaudeInbox::Reaper do
     sessions = [session(id: "old1", **quiet)]
     expect(described_class.disabled.sweep(sessions, now)).to be_empty
   end
-
-  it "reads CLAUDE_INBOX_NO_REAP as the off switch" do
-    original = ENV["CLAUDE_INBOX_NO_REAP"]
-    ENV["CLAUDE_INBOX_NO_REAP"] = "1"
-    expect(described_class.enabled?).to be(false)
-    ENV["CLAUDE_INBOX_NO_REAP"] = ""
-    expect(described_class.enabled?).to be(true)
-  ensure
-    ENV["CLAUDE_INBOX_NO_REAP"] = original
-  end
 end

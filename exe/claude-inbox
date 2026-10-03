@@ -60,12 +60,13 @@ if fixture
   opts[:listen] = listen&.merge(fixture: true, pairing: ClaudeInbox::Remote::Pairing.new(path: File.join(dir, "listen.json")),
     lock_path: File.join(dir, "listen.lock"), images_dir: File.join(dir, "images"))
 else
-  # The only place the reaper is armed. Everything else — tests, --fixture,
-  # anything embedding App — gets one that deletes nothing. The listener,
-  # likewise, comes only from this file, and only when asked for.
+  # The only place the reaper is armed, and only with --reap: deleting
+  # sessions is opt-in. Everything else — tests, --fixture, anything
+  # embedding App — gets one that deletes nothing. The listener, likewise,
+  # comes only from this file, and only when asked for.
   opts[:client] = ClaudeInbox::AgentsClient.new
   opts[:store] = ClaudeInbox::Store.new
-  opts[:reaper] = ClaudeInbox::Reaper.new(opts[:client], opts[:store])
+  opts[:reaper] = argv.include?("--reap") ? ClaudeInbox::Reaper.new(opts[:client], opts[:store]) : ClaudeInbox::Reaper.disabled
   opts[:snapshot] = ClaudeInbox::Snapshot.new
   opts[:switch] = ClaudeInbox::Switch.new
   opts[:actions] = ClaudeInbox::Actions.new
