@@ -13,12 +13,11 @@ module ClaudeInbox
   # reaps, since deleting sessions stays with the inbox you can see, and it
   # exits at once while an inbox holds the writer lock.
   class Headless
-    def initialize(client:, store:, pull_requests: PullRequests.new, snapshot: Snapshot.new, actions: Actions.new,
-      lock: WriterLock.new, queue: Queue.new)
+    def initialize(client:, store:, lock: WriterLock.new)
       @lock = lock
-      @queue = queue
-      @poller = Poller.new(client: client, store: store, pull_requests: pull_requests, reaper: Reaper.disabled,
-        queue: queue, snapshot: snapshot, actions: actions)
+      @queue = Queue.new
+      @poller = Poller.new(client: client, store: store, pull_requests: PullRequests.new, reaper: Reaper.disabled,
+        queue: @queue, snapshot: Snapshot.new, actions: Actions.new)
     end
 
     # False when the lock is held, by an inbox or another headless process.
