@@ -109,7 +109,7 @@ module ClaudeInbox
       def self.disabled = new(client: nil, store: nil, queue: nil, pairing: nil, port: nil)
 
       # `start_options` are Start's own.
-      def initialize(client:, store:, queue:, port:, pairing: Pairing.new, lan: false, allowed_modes: DEFAULT_MODES,
+      def initialize(queue:, port:, pairing: Pairing.new, lan: false, allowed_modes: DEFAULT_MODES,
         lock_path: LOCK_PATH, fixture: false, retry_every: RETRY_EVERY, **start_options)
         @queue = queue
         @pairing = pairing
@@ -119,8 +119,7 @@ module ClaudeInbox
         @lock_path = lock_path
         @fixture = fixture
         @retry_every = retry_every
-        @start = Start.new(client: client, store: store, queue: queue, allowed_modes: allowed_modes,
-          fixture: fixture, **start_options)
+        @start = Start.new(queue: queue, allowed_modes: allowed_modes, fixture: fixture, **start_options)
         @mutex = Mutex.new
         @state = :off
         @recent = []
