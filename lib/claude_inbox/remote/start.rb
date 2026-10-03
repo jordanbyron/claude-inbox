@@ -26,7 +26,7 @@ module ClaudeInbox
       BODY_TIMEOUT = 120
       KEYS_KEPT = 16
 
-      def initialize(client:, store:, queue:, allowed_modes:, fixture: false, images_dir: Images::DEFAULT_DIR,
+      def initialize(client:, store:, queue:, allowed_modes:, fixture:, images_dir: Images::DEFAULT_DIR,
         trust: Trust.method(:projects), settings: Settings.method(:defaults), bridge_wait: 3)
         @client = client
         @store = store
