@@ -41,7 +41,7 @@ export type SnapshotRow = {
 type Snapshot = { written_at?: number; sections?: Partial<Record<Section, SnapshotRow[]>> }
 // This session, as the gem's files name it, and the headless inbox this module may start.
 type Host = { session: string; command: string; headlessStartedAt: number; isHeadlessRunning: boolean }
-type Fold = 'snoozed' | 'settled'
+type Fold = keyof Folds
 type Item = { kind: 'row'; row: InboxRow } | { kind: 'fold'; section: Fold; count: number }
 type Snooze = 'm15' | 'h1' | 'tomorrow_9am' | 'until_woken'
 type Action = { action: 'settle' | 'wake' | 'pin'; id: string } | { action: 'snooze'; id: string; choice: Snooze }
@@ -58,7 +58,7 @@ const SNOOZE: Record<string, { choice: Snooze; label: string }> = {
   '4': { choice: 'until_woken', label: 'until woken' },
 }
 // What each chord's second key does, drawn under the footer while it waits.
-const MENU: Record<'g' | 'z' | 's', [string, string][]> = {
+const MENU: Record<NonNullable<Pending>, [string, string][]> = {
   g: [
     ['g', 'first'],
     ['e', 'last'],
