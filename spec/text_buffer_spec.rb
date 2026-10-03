@@ -8,17 +8,16 @@ RSpec.describe ClaudeInbox::TextBuffer do
     b.press(:left, "\e[D")
     type(b, "bc")
     expect(b.to_s).to eq("abcd")
-    expect(b.cursor).to eq(3)
+    type(b, "X")
+    expect(b.to_s).to eq("abcXd")
   end
 
   it "stops at both ends instead of wrapping around" do
     b = described_class.new("ab")
     5.times { b.press(:left, "\e[D") }
-    expect(b.cursor).to eq(0)
     b.press(:backspace, "\x7f")
     expect(b.to_s).to eq("ab")
     5.times { b.press(:right, "\e[C") }
-    expect(b.cursor).to eq(2)
     b.press(:delete, "\e[3~")
     expect(b.to_s).to eq("ab")
   end
@@ -128,7 +127,6 @@ RSpec.describe ClaudeInbox::TextBuffer do
       type(b, " and ")
       b.attach("/tmp/b.png")
       expect(b.to_s).to eq("see [Image #1] and [Image #2]")
-      expect(b.images.map(&:path)).to eq(["/tmp/a.png", "/tmp/b.png"])
       expect(b.expand { |c| "@#{c.path}" }).to eq("see @/tmp/a.png and @/tmp/b.png")
     end
 
@@ -137,7 +135,6 @@ RSpec.describe ClaudeInbox::TextBuffer do
       b.attach("/tmp/a.png")
       type(b, "b")
       2.times { b.press(:left, "\e[D") }
-      expect(b.cursor).to eq(1)
       b.press(:delete, "\e[3~")
       expect(b.to_s).to eq("ab")
       b.attach("/tmp/c.png")

@@ -45,12 +45,6 @@ module ClaudeInbox
 
     def empty? = @g.empty?
 
-    # Grapheme offset of the cursor. Rendering goes through #row / #view;
-    # this is here for callers that need to reason about position (tests).
-    attr_reader :cursor
-
-    def images = @g.grep(Image)
-
     # The text as it will be sent: a Pasted chip unfolds to its text, and
     # the block says what each Image becomes.
     def expand
