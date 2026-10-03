@@ -238,6 +238,22 @@ has no numbers yet, and writing anyway would blank the file.
 The bars stay hidden until the file exists, and hide again once it's more
 than fifteen minutes old.
 
+## Claude Code pane
+
+The same inbox as a pane inside Claude Code, docked beside the transcript in
+a fullscreen terminal. It shows what the running inbox shows, and starts
+`claude-inbox --headless` when none is running. To load it in every session,
+add the folder `claude-inbox --mod-dir` prints to `~/.claude/settings.json`:
+
+```json
+"env": { "CLAUDE_CODE_PLUGIN_DIRS": "/path/from/claude-inbox/--mod-dir" }
+```
+
+`/inbox` opens it, `ctrl+x tab` focuses it and `esc` leaves. The keys are the
+ones above, with `ge` for `G`, `n` `p` for `Tab` `Shift+Tab`, and no `a`,
+`P`, `X`, `Ctrl-x`, `/` or `R`. `Enter` switches to the session when you
+attached through `claude-inbox`.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).

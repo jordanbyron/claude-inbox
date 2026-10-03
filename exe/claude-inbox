@@ -8,6 +8,12 @@ if ARGV.include?("--version")
   exit
 end
 
+# Where the Claude Code mod ships, for CLAUDE_CODE_PLUGIN_DIRS.
+if ARGV.include?("--mod-dir")
+  puts File.expand_path("../mod", __dir__)
+  exit
+end
+
 require "claude_inbox/app"
 require "claude_inbox/config"
 require "tmpdir"

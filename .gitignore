@@ -1,4 +1,5 @@
 /.bundle/
 /vendor/
 /.claude/worktrees/
+/mod/.claude-plugin/types/
 *.gem

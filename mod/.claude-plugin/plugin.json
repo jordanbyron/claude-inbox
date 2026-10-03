@@ -1,0 +1,14 @@
+{
+  "name": "inbox-pane",
+  "version": "0.2.0",
+  "description": "claude-inbox's sections in a pane beside the transcript, with its keys.",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "command": {
+      "type": "string",
+      "title": "claude-inbox command",
+      "description": "The claude-inbox executable to run headless when no inbox is writing the snapshot.",
+      "default": "claude-inbox"
+    }
+  }
+}
