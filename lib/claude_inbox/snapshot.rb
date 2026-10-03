@@ -23,7 +23,7 @@ module ClaudeInbox
     # Called from the poller's threads and the screen's alike.
     def write(sections, now)
       return unless @path
-      body = sections.to_h.to_h { |name, rows| [name.to_s, rows.map { |row| row_hash(row) }] }
+      body = sections.to_h { |name, rows| [name.to_s, rows.map { |row| row_hash(row) }] }
       @mutex.synchronize do
         return if body == @body && now.to_i - @written_at < HEARTBEAT
         @body = body
