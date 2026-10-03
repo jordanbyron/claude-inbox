@@ -3,8 +3,9 @@
 An inbox for Claude Code's background sessions. It lists what `claude agents`
 lists and adds snooze, settle, pinning and each session's pull request.
 
-I liked the workflow in Theo's [T3 Code](https://github.com/pingdotgg/t3code)
-and wanted a better way to manage my Claude agents, so I built this.
+Inspired by [T3 Code](https://github.com/pingdotgg/t3code)'s functionality and
+inbox-style UX, I wanted a better way to manage my Claude agents, so I built
+this.
 
 ![claude-inbox with one working session, one snoozed and the settled section folded](docs/screenshot.png)
 
