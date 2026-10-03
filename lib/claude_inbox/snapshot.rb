@@ -35,6 +35,7 @@ module ClaudeInbox
       pr = s.pr
       {
         "id" => row.key, "label" => row.label, "state" => s.effective_state, "actionable" => s.actionable?,
+        "waiting" => s.waiting_on_work? || nil, "terminal" => s.terminal? || nil,
         "cwd" => s.cwd, "line" => s.summary, "wake_at" => row.wake_at, "remote" => s.remote_url,
         "pr" => pr && {"short" => pr.short, "state" => pr.state&.downcase, "url" => pr.url}
       }.compact

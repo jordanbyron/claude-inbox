@@ -76,8 +76,18 @@ module ClaudeInbox
         @sessions = sessions.reject { |s| @hidden.include?(s.key) || @forgotten.include?(s.key) }
         # Another front end edits state.json between polls. Every edit here
         # saves at once, so reading the file back first loses nothing of ours.
-        @entries = self.class.merge_entries(@path ? load : @entries, @sessions, @clock.call)
+        @entries = self.class.merge_entries(disk_entries || @entries, @sessions, @clock.call)
         save
+      end
+    end
+
+    # Picks up another front end's edit as soon as the file changes, so the
+    # screen and the snapshot show it without waiting for the next poll.
+    def reload_if_changed
+      @mutex.synchronize do
+        return unless @path && File.exist?(@path) && File.mtime(@path) != @mtime
+        @entries = disk_entries || @entries
+        @mtime = File.mtime(@path)
       end
     end
 
@@ -154,12 +164,19 @@ module ClaudeInbox
     end
 
     def load
-      Records.read(@path)["sessions"] || {}
+      disk_entries || {}
+    end
+
+    # Nil when the file is missing or torn mid-write, so a caller keeps what
+    # it has rather than forgetting every pin and snooze.
+    def disk_entries
+      Records.read(@path)["sessions"]
     end
 
     def save
       return unless @path
       Records.save(@path, {"version" => 1, "sessions" => @entries})
+      @mtime = File.mtime(@path)
     end
   end
 end

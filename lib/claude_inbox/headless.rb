@@ -30,9 +30,11 @@ module ClaudeInbox
       loop { step }
     end
 
+    # Between polls it watches for another front end's edit, as the screen does.
     def step
-      kind, *rest = @queue.pop
+      kind, *rest = @queue.pop(timeout: 1)
       @store.update(rest[0]) if kind == :sessions
+      @store.reload_if_changed if kind.nil?
       @snapshot.write(@store.sections(@clock.call), @clock.call)
     end
 

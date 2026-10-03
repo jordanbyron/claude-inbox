@@ -172,6 +172,7 @@ module ClaudeInbox
     def render
       t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       now = Time.now
+      @store.reload_if_changed
       all = @store.sections(now)
       @snapshot.write(all, now)
       sections = filtered(all)
