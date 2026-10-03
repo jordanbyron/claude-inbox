@@ -175,7 +175,7 @@ module ClaudeInbox
       end
     end
 
-    def header_chips(sections, compact:, listening: nil)
+    def header_chips(sections, compact:, listening:)
       pinned = sections.pinned.size
       needing = sections.needs_you.size
       working = sections.active.count { |r| r.session.effective_state == "working" && !r.session.waiting_on_work? }
