@@ -113,3 +113,8 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   it). That is what a switch request is addressed by. The transcript moves to
   another project directory when the session changes its working directory,
   but keeps its name.
+- In a plugin pane that holds the keys, an arrow scrolls the body a row while
+  the tree is taller than the window, and only walks the focus ring between
+  the pane's buttons once it cannot scroll (2.1.288). So the pane turns a
+  person's one-row scroll into a cursor move itself, in a `ui.scroll` hook,
+  rather than relying on the ring.

@@ -266,6 +266,17 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // An arrow in a focused pane scrolls its body a row while the tree is taller than the
+  // window, and only walks the ring once it cannot: so the person's single-row scroll
+  // moves the cursor instead, and the wheel, the page keys and the pane's own scrolls pass.
+  on('ui.scroll', { requestId: PANE }, async ($, e, next) => {
+    if (e.origin.kind !== 'person' || e.pointer !== undefined || Math.abs(e.by) !== 1) return next(e)
+    const flat = groupsOf(await read($, rows), await read($, folds)).flatMap(group => group.items)
+    const at = Math.min(await read($, cursor), Math.max(0, flat.length - 1))
+    await moveTo($, flat, at + e.by)
+    return {}
+  })
+
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const list = await read($, rows)
@@ -434,7 +445,7 @@ export const register: Register = (on, options) => {
         {/* Drawn nowhere: one Button per item for the ring and Enter, then the hotkeys. */}
         <Box height={0} overflow="hidden">
           {flat.map(item => (
-            <Button key={itemKey(item)} plain label="" onPress={enter(item)} />
+            <Button key={itemKey(item)} plain label="" onPress={enter(item)} autoFocus={item === selected ? true : undefined} />
           ))}
           {keys}
         </Box>
