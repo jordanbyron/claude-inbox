@@ -17,7 +17,6 @@ RSpec.describe ClaudeInbox::SlashCommands do
         }.each { |path, body| FileUtils.mkdir_p(File.dirname(path)) && File.write(path, body) }
         list = described_class.list(cwd: proj, home: home)
         expect(list.map(&:name)).to eq(%w[component deploy shared unslop])
-        expect(list.map(&:source)).to eq(%w[user project project user])
         expect(list.find { |c| c.name == "shared" }.description).to eq("from project")
         expect(list.find { |c| c.name == "deploy" }.description).to eq("Ship it")
         expect(list.find { |c| c.name == "component" }.description).to eq("")
@@ -59,7 +58,6 @@ RSpec.describe ClaudeInbox::SlashCommands do
       }.each { |path, body| FileUtils.mkdir_p(File.dirname(path)) && File.write(path, body) }
       list = described_class.list(cwd: home, home: home)
       expect(list.map(&:name)).to eq(%w[anthropic-skills:docs skill-creator:eval skill-creator:skill-creator])
-      expect(list.map(&:source)).to eq(%w[synced plugin plugin])
     end
   end
 
@@ -70,7 +68,7 @@ RSpec.describe ClaudeInbox::SlashCommands do
   end
 
   it "matches by prefix first, then anywhere in the name, ignoring case" do
-    cmds = %w[review code-review unslop Babysit].map { |n| described_class::Command.new(n, "", "user") }
+    cmds = %w[review code-review unslop Babysit].map { |n| described_class::Command.new(n, "") }
     expect(described_class.match(cmds, "re").map(&:name)).to eq(%w[review code-review])
     expect(described_class.match(cmds, "b").map(&:name)).to eq(%w[Babysit])
     expect(described_class.match(cmds, "").map(&:name)).to eq(%w[review code-review unslop Babysit])
