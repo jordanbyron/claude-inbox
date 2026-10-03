@@ -18,9 +18,7 @@ module ClaudeInbox
         next if @prev[i] == line
         buf << TTY::Cursor.move_to(0, i) << line
       end
-      if @prev.size > lines.size
-        (lines.size...@prev.size).each { |i| buf << TTY::Cursor.move_to(0, i) << TTY::Cursor.clear_line }
-      end
+      (lines.size...@prev.size).each { |i| buf << TTY::Cursor.move_to(0, i) << TTY::Cursor.clear_line }
       @out.print buf unless buf.empty?
       @out.flush
       @prev = lines
