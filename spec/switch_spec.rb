@@ -7,9 +7,10 @@ RSpec.describe ClaudeInbox::Switch do
 
   it "is a request for the session that asked, and hands over an attachable id once" do
     Dir.mktmpdir do |dir|
-      switch = described_class.new(path: File.join(dir, "switch.json"))
+      path = File.join(dir, "switch.json")
+      switch = described_class.new(path: path)
       expect(switch.requested_for?("uuid-1")).to be(false)
-      switch.request("abc12345", "uuid-1", now)
+      ClaudeInbox::Records.save(path, {"id" => "abc12345", "from" => "uuid-1", "at" => now.to_i})
       expect(switch.requested_for?("uuid-1")).to be(true)
       expect(switch.requested_for?("uuid-2")).to be(false)
       expect(switch.requested_for?(nil)).to be(false)
@@ -23,7 +24,7 @@ RSpec.describe ClaudeInbox::Switch do
     Dir.mktmpdir do |dir|
       path = File.join(dir, "switch.json")
       switch = described_class.new(path: path)
-      switch.request("terminal-uuid", "uuid-1", now)
+      ClaudeInbox::Records.save(path, {"id" => "terminal-uuid", "from" => "uuid-1", "at" => now.to_i})
       expect(switch.take(%w[abc12345])).to be_nil
       expect(File.exist?(path)).to be(false)
     end
