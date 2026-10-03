@@ -94,6 +94,10 @@ CI.run do
 
   step "Tests: rspec", "bundle", "exec", "rspec"
 
+  step "Mod: validate", "claude", "plugin", "validate", "mod"
+
+  step "Mod: tests", "claude", "plugin", "test", "mod"
+
   head_is_pushed = system("git merge-base --is-ancestor HEAD @{push}", out: File::NULL, err: File::NULL)
 
   if !success?

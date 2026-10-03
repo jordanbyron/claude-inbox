@@ -50,8 +50,8 @@ There's no hosted CI. `bin/ci` runs on your machine and reports back with
 four seconds.
 
 1. Push your branch and open the PR.
-2. Run `bin/ci`. It runs `bundle install`, `standardrb`, `bundle-audit` and
-   `rspec`.
+2. Run `bin/ci`. It runs `bundle install`, `standardrb`, `bundle-audit`,
+   `rspec`, and `claude plugin validate` and `claude plugin test` on `mod/`.
 3. If every step passes and HEAD is on the remote, it runs `gh signoff`,
    which sets a green `signoff` status on the PR.
 4. Merge.
@@ -67,6 +67,7 @@ While iterating:
 bundle exec rspec
 bundle exec standardrb --fix
 bundle exec bundle-audit check --update
+claude plugin test mod   # the Claude Code pane
 gh signoff status        # is HEAD signed off?
 ```
 
