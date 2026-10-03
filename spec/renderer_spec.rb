@@ -171,7 +171,7 @@ RSpec.describe ClaudeInbox::Renderer do
   it "shows the listener in the header: its port, red when it couldn't listen, nothing when off" do
     snapshot = ->(state, lan: false) {
       ClaudeInbox::Remote::Listener::Snapshot.new(state: state, port: 7433, lan: lan, urls: nil, firewall: nil,
-        allowed_modes: [], recent: [], held_by: nil, fixture: false)
+        allowed_modes: [], recent: [], held_by: nil, fixture: false, error: nil)
     }
     header = ->(listening, width: 120) {
       renderer.frame(sections, view.with(width: width, height: 10, listening: listening)).lines.first
@@ -196,7 +196,7 @@ RSpec.describe ClaudeInbox::Renderer do
   it "puts N in the footer only while listening on the LAN" do
     snapshot = ->(lan) {
       ClaudeInbox::Remote::Listener::Snapshot.new(state: :listening, port: 7433, lan: lan, urls: nil, firewall: nil,
-        allowed_modes: [], recent: [], held_by: nil, fixture: false)
+        allowed_modes: [], recent: [], held_by: nil, fixture: false, error: nil)
     }
     footer = ->(listening) {
       renderer.frame(sections, view.with(width: 200, height: 10, listening: listening)).lines.last

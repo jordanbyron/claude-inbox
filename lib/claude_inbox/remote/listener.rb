@@ -58,17 +58,13 @@ module ClaudeInbox
       # lock, as `held_by`) or :failed (for good, as `error` says). `urls` and
       # `firewall` are nil until `refresh`.
       Snapshot = Data.define(:state, :port, :lan, :urls, :firewall, :allowed_modes, :recent, :held_by, :fixture, :error) do
-        def initialize(error: nil, **) = super
-
         # Over a VPN only an address reaches the Mac: multicast DNS, which
         # the .local name needs, stays on the LAN.
         def pairing_url = (lan && urls&.[](1)) || urls&.first
       end
 
       # `count` is how many times `via` got `result`, the last at `at`.
-      Outcome = Data.define(:at, :via, :result, :count) do
-        def initialize(at:, via:, result:, count: 1) = super
-      end
+      Outcome = Data.define(:at, :via, :result, :count)
 
       # App's `listen:` from the flags, else the environment; nil when neither
       # asks for it. --listen-lan wins over --listen, whichever came last.

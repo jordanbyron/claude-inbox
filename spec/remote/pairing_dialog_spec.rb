@@ -5,7 +5,7 @@ RSpec.describe ClaudeInbox::Remote::PairingDialog do
   let(:listening) do
     ClaudeInbox::Remote::Listener::Snapshot.new(
       state: :listening, port: 7433, lan: false, urls: ["http://127.0.0.1:7433/##{token}"],
-      firewall: nil, allowed_modes: %w[default plan], recent: [], held_by: nil, fixture: false
+      firewall: nil, allowed_modes: %w[default plan], recent: [], held_by: nil, fixture: false, error: nil
     )
   end
   let(:snapshot) { [listening] }
@@ -84,8 +84,8 @@ RSpec.describe ClaudeInbox::Remote::PairingDialog do
 
   it "lists what phones asked for lately, newest first" do
     snapshot[0] = listening.with(recent: [
-      ClaudeInbox::Remote::Listener::Outcome.new(Time.local(2026, 9, 24, 12, 1), "192.168.1.30", "token rejected"),
-      ClaudeInbox::Remote::Listener::Outcome.new(Time.local(2026, 9, 24, 12, 3), "192.168.1.30", "started 31472308")
+      ClaudeInbox::Remote::Listener::Outcome.new(Time.local(2026, 9, 24, 12, 1), "192.168.1.30", "token rejected", 1),
+      ClaudeInbox::Remote::Listener::Outcome.new(Time.local(2026, 9, 24, 12, 3), "192.168.1.30", "started 31472308", 1)
     ])
     lines = dialog.frame(120).map { |l| l.delete("│").strip }
     expect(lines.each_cons(2).find { |a, _| a == "recent:" }&.last).to eq("12:03  192.168.1.30  started 31472308")
