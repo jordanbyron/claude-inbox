@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
-require_relative "actions"
 require_relative "sessions"
-require_relative "snapshot"
 
 module ClaudeInbox
   # Asks `claude agents` for the list off the main thread, every INTERVAL
@@ -17,7 +15,7 @@ module ClaudeInbox
     INTERVAL = 4
     ACTIONS_INTERVAL = 0.5
 
-    def initialize(client:, store:, pull_requests:, reaper:, queue:, snapshot: Snapshot.disabled, actions: Actions.disabled,
+    def initialize(client:, store:, pull_requests:, reaper:, queue:, snapshot:, actions:,
       interval: INTERVAL, clock: -> { Time.now })
       @client = client
       @clock = clock
