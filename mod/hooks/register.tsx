@@ -105,6 +105,15 @@ function groupsOf(list: InboxRow[], folded: Folds, current: InboxRow | null): { 
   )
 }
 
+async function listed($: EngineInterface): Promise<Item[]> {
+  return groupsOf(await read($, rows), await read($, folds), await read($, current)).flatMap(group => group.items)
+}
+
+// The stored cursor may point past a list that has shrunk since it was set.
+function onList(flat: Item[], at: number): number {
+  return Math.min(at, Math.max(0, flat.length - 1))
+}
+
 async function readJson<T>($: EngineInterface, path: string, fallback: T): Promise<T> {
   try {
     return JSON.parse(await $.fs.read(path)) as T
@@ -268,9 +277,9 @@ export const register: Register = (on, options) => {
   // The ring walks the items' hidden Buttons and nothing else: entering the pane it lands on
   // the cursor's item, the arrows move it to the next, and the cursor follows.
   on('ui.focus', { requestId: PANE }, async ($, e, next) => {
-    const flat = groupsOf(await read($, rows), await read($, folds), await read($, current)).flatMap(group => group.items)
+    const flat = await listed($)
     if (e.element === undefined) {
-      const item = flat[Math.min(await read($, cursor), Math.max(0, flat.length - 1))]
+      const item = flat[onList(flat, await read($, cursor))]
       return item ? next({ ...e, element: itemKey(item) }) : next(e)
     }
     const at = flat.findIndex(item => itemKey(item) === e.element)
@@ -284,8 +293,8 @@ export const register: Register = (on, options) => {
   // moves the cursor instead, and the wheel, the page keys and the pane's own scrolls pass.
   on('ui.scroll', { requestId: PANE }, async ($, e, next) => {
     if (e.origin.kind !== 'person' || e.pointer !== undefined || Math.abs(e.by) !== 1) return next(e)
-    const flat = groupsOf(await read($, rows), await read($, folds), await read($, current)).flatMap(group => group.items)
-    const at = Math.min(await read($, cursor), Math.max(0, flat.length - 1))
+    const flat = await listed($)
+    const at = onList(flat, await read($, cursor))
     await moveTo($, flat, at + e.by)
     return {}
   })
@@ -300,7 +309,7 @@ export const register: Register = (on, options) => {
     const ageS = (await nowS($)) - written
     const groups = groupsOf(list, folded, viewing)
     const flat = groups.flatMap(group => group.items)
-    const at = Math.min(await read($, cursor), Math.max(0, flat.length - 1))
+    const at = onList(flat, await read($, cursor))
     const selected = flat[at]
     const row = selected?.kind === 'row' ? selected.row : undefined
     const section = selected?.kind === 'fold' ? selected.section : row === viewing ? undefined : row?.section
