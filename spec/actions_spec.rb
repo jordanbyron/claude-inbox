@@ -23,8 +23,8 @@ RSpec.describe ClaudeInbox::Actions do
       expect(described_class.new(dir: dir, clock: -> { now }).drain(store)).to eq(3)
       expect(Dir.children(dir)).to be_empty
       sections = store.sections
-      expect(sections.settled.map(&:id)).to eq(%w[a])
-      expect(sections.pinned.map(&:id)).to eq(%w[b])
+      expect(sections.settled.map(&:key)).to eq(%w[a])
+      expect(sections.pinned.map(&:key)).to eq(%w[b])
       expect(store.entry("b")["wake_at"]).to eq(now.to_i + 3600)
     end
   end
@@ -48,7 +48,7 @@ RSpec.describe ClaudeInbox::Actions do
       expect(Dir.children(dir).sort).to eq(%w[1.json 2.json])
       store.update([session(id: "a", state: "done"), session(id: "new", state: "done")])
       expect(actions.drain(store)).to eq(2)
-      expect(store.sections.pinned.map(&:id)).to eq(%w[new])
+      expect(store.sections.pinned.map(&:key)).to eq(%w[new])
       expect(store.entry("new")["settled_at"]).to eq(now.to_i)
       write.call(dir, "2.json", {"action" => "settle", "id" => "gone", "at" => (now.to_i - 60) * 1000})
       expect(actions.drain(store)).to eq(0)
