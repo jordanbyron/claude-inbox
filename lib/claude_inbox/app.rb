@@ -20,6 +20,7 @@ require_relative "reaper"
 require_relative "poller"
 require_relative "rate_limits"
 require_relative "session_request"
+require_relative "snapshot"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
@@ -28,10 +29,11 @@ module ClaudeInbox
     # The reaper deletes sessions and the listener lets other machines in,
     # so both are off unless `bin/claude-inbox` switches them on.
     def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
-      rate_limits: RateLimits.new, reaper: Reaper.disabled, listen: nil, out: $stdout, input: $stdin, color: true,
-      terminal: Terminal.new(out, input), queue: Queue.new)
+      rate_limits: RateLimits.new, reaper: Reaper.disabled, snapshot: Snapshot.disabled, listen: nil, out: $stdout,
+      input: $stdin, color: true, terminal: Terminal.new(out, input), queue: Queue.new)
       @client = client
       @store = store
+      @snapshot = snapshot
       @rate_limits = rate_limits
       @terminal = terminal
       @color = color
@@ -168,7 +170,9 @@ module ClaudeInbox
     def render
       t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       now = Time.now
-      sections = filtered(@store.sections(now))
+      all = @store.sections(now)
+      @snapshot.write(all, now)
+      sections = filtered(all)
       width, height = @terminal.size
       body_h = Renderer.body_height(height)
       ensure_selection(sections)

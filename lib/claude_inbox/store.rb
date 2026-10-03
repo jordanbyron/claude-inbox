@@ -74,7 +74,9 @@ module ClaudeInbox
         @hidden &= keys
         @forgotten &= keys
         @sessions = sessions.reject { |s| @hidden.include?(s.key) || @forgotten.include?(s.key) }
-        @entries = self.class.merge_entries(@entries, @sessions, @clock.call)
+        # Another front end edits state.json between polls. Every edit here
+        # saves at once, so reading the file back first loses nothing of ours.
+        @entries = self.class.merge_entries(@path ? load : @entries, @sessions, @clock.call)
         save
       end
     end
