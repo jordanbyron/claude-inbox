@@ -17,7 +17,7 @@ module ClaudeInbox
     # connection limits, the static files and the Pairing token, in front of
     # Start. Like the Poller it reaches App only through the queue, and it
     # never writes to the terminal: every failure becomes a response or a
-    # notice.
+    # notice. It is App's only way into Remote.
     class Listener
       DEFAULT_PORT = 7433
       DEFAULT_MODES = %w[default auto plan].freeze
