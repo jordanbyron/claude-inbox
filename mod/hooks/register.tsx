@@ -92,7 +92,7 @@ function viewKey(item: Item): string {
   return `view:${itemKey(item)}`
 }
 
-// The session the pane sits in leads, in a group of its own with no title.
+// The session the pane sits in leads, in a group of its own.
 function groupsOf(list: InboxRow[], folded: Folds, current: InboxRow | null): { section: Section | null; items: Item[] }[] {
   const lead = current ? [{ section: null, items: [{ kind: 'row', row: current } as Item] }] : []
   return lead.concat(
@@ -399,11 +399,9 @@ export const register: Register = (on, options) => {
         {notice === null && flat.length === 0 && <Text dimColor>No sessions.</Text>}
         {groups.map(group => (
           <Box flexDirection="column" marginTop={1}>
-            {group.section !== null && (
-              <Text bold dimColor>
-                {TITLE[group.section]} · {list.filter(one => one.section === group.section).length}
-              </Text>
-            )}
+            <Text bold dimColor>
+              {group.section === null ? 'This session' : `${TITLE[group.section]} · ${list.filter(one => one.section === group.section).length}`}
+            </Text>
             {group.items.map(item => {
               const isHere = item === selected
               if (item.kind === 'fold') {

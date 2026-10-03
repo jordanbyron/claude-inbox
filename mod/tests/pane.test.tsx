@@ -97,7 +97,7 @@ test("rows sit under the gem's sections, Settled folded until za opens it", asyn
   }
 })
 
-test('the session the pane sits in leads the list, untitled, with its own keys', async ($, on) => {
+test('the session the pane sits in leads the list under This session, with its own keys', async ($, on) => {
   mock.env(on, { HOME: '/Users/me' })
   mock.clock(on, { now: 1_700_000_000_000 })
   const [viewing, ...others] = ROWS
@@ -113,6 +113,7 @@ test('the session the pane sits in leads the list, untitled, with its own keys',
     return { value: undefined }
   })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /^This session$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /needs an answer/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Needs you/ })).toBeUndefined()
   await ui.press({ key: 'row:a1' })
