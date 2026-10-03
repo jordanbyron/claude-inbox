@@ -425,7 +425,7 @@ module ClaudeInbox
       while id
         @store.acknowledge(id)
         @switch.clear
-        from = @store.sessions.find { |s| s.key == id }&.session_id
+        from = session_for(id)&.session_id
         @terminal.release { @client.attach(id) { @switch.requested_for?(from) } }
         id = @switch.take(@store.sessions.select(&:actionable?).map(&:key))
       end
