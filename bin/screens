@@ -46,7 +46,7 @@ SCRIPT = [
 master, slave = PTY.open
 slave.winsize = [rows, cols]
 pid = spawn(
-  {"CLAUDE_INBOX_NO_REAP" => "1", "TERM" => "xterm-256color"},
+  {"TERM" => "xterm-256color"},
   "ruby", File.join(root, "bin", "claude-inbox"),
   "--fixture", File.join(root, "spec", "fixtures", "agents.json"), "--no-color",
   in: slave, out: slave, err: slave

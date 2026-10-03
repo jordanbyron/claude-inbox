@@ -23,7 +23,7 @@ bin/claude-inbox                                        # live
 bin/claude-inbox --fixture spec/fixtures/agents.json    # no daemon needed
 CLAUDE_INBOX_STDERR=/tmp/err.log bin/claude-inbox       # crash traces off the alt screen
 DEBUG=1 bin/claude-inbox                                # slow-frame notes in /tmp/inbox-debug.log
-CLAUDE_INBOX_NO_REAP=1 bin/claude-inbox                 # never delete an idle session
+bin/claude-inbox --reap                                 # delete sessions idle 14 days
 bin/screens                                             # drive the fixture in a pty, print every screen
 ```
 
