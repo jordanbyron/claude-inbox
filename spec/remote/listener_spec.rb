@@ -94,9 +94,7 @@ RSpec.describe ClaudeInbox::Remote::Listener do
     it "answers to this Mac's names and addresses in LAN mode" do
       lan = described_class.new(**listener_args, lan: true)
       [["mac-mini.local:7433", 200], ["192.168.1.20:7433", 200], ["evil.example", 421]].each do |host, status|
-        sock = FakeSocket.new("GET / HTTP/1.1\r\nHost: #{host}\r\n\r\n")
-        lan.handle(sock, via: "192.168.1.30")
-        expect(sock.written).to match(/\AHTTP\/1\.1 #{status} /)
+        expect(Phone.new(lan).get("/", host: host).status).to eq(status)
       end
     end
 
