@@ -147,6 +147,10 @@ function ago(seconds: number): string {
   return seconds < 60 ? 'just now' : `${Math.floor(seconds / 60)}m ago`
 }
 
+async function inboxFile($: EngineInterface, path: string): Promise<string> {
+  return `${(await $.env.get('HOME')) ?? ''}/${path}`
+}
+
 async function nowS($: EngineInterface): Promise<number> {
   return Math.floor((await $.clock.now()) / 1000)
 }
@@ -154,9 +158,9 @@ async function nowS($: EngineInterface): Promise<number> {
 // Leaves one request for the inbox to apply; its poller takes it within half a second
 // and the next snapshot shows the row where the gem's own rules put it.
 async function ask($: EngineInterface, host: Host, action: Action): Promise<void> {
-  const home = (await $.env.get('HOME')) ?? ''
+  const actions = await inboxFile($, ACTIONS)
   const at = Math.floor(await $.clock.now())
-  await $.fs.write(`${home}/${ACTIONS}/${host.session}-${at}.json`, JSON.stringify({ ...action, at }))
+  await $.fs.write(`${actions}/${host.session}-${at}.json`, JSON.stringify({ ...action, at }))
 }
 
 // Asks the inbox attached to this session for another one. It takes the file when it
@@ -164,8 +168,7 @@ async function ask($: EngineInterface, host: Host, action: Action): Promise<void
 // this session. The session id is read each time: it is the transcript's name, which the
 // daemon reports as sessionId, and a /clear may mint a new one mid-session.
 async function requestSwitch($: EngineInterface, host: Host, id: string): Promise<void> {
-  const home = (await $.env.get('HOME')) ?? ''
-  const path = `${home}/${SWITCH}`
+  const path = await inboxFile($, SWITCH)
   const from = await $.session.id().catch(() => host.session)
   const at = await nowS($)
   await $.fs.write(path, JSON.stringify({ id, from, at }))
@@ -199,9 +202,9 @@ function startHeadless($: EngineInterface, host: Host, now: number): void {
 }
 
 async function poll($: EngineInterface, host: Host): Promise<void> {
-  const home = (await $.env.get('HOME')) ?? ''
+  const file = await inboxFile($, SNAPSHOT)
   const now = await nowS($)
-  const snapshot = await readJson<Snapshot | null>($, `${home}/${SNAPSHOT}`, null)
+  const snapshot = await readJson<Snapshot | null>($, file, null)
   const written = snapshot?.written_at ?? 0
   if (snapshot !== null) {
     const all = ORDER.flatMap(section => (snapshot.sections?.[section] ?? []).map(one => rowOf(section, one)))
