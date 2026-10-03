@@ -4,6 +4,8 @@ export type Section = 'pinned' | 'needs_you' | 'active' | 'snoozed' | 'settled'
 export type InboxRow = {
   section: Section
   id?: string
+  // The daemon's sessionId, the name $.session.id() gives the session the pane sits in.
+  session?: string
   label: string
   state: string
   actionable: boolean
@@ -23,6 +25,6 @@ export type Pending = 'g' | 'z' | 's' | null
 
 declare module 'claude-code' {
   interface PluginState {
-    'inbox-pane': { rows: InboxRow[]; writtenAt: number; cursor: number; folds: Folds; pending: Pending }
+    'inbox-pane': { rows: InboxRow[]; current: InboxRow | null; writtenAt: number; cursor: number; folds: Folds; pending: Pending }
   }
 }

@@ -10,6 +10,7 @@ export const SNAPSHOT = `{
     "needs_you": [
       {
         "id": "a1",
+        "session": "u-a1",
         "label": "needs an answer",
         "state": "blocked",
         "actionable": true,
@@ -19,6 +20,7 @@ export const SNAPSHOT = `{
     "active": [
       {
         "id": "b2",
+        "session": "u-b2",
         "label": "still going",
         "state": "working",
         "actionable": true,
@@ -34,6 +36,7 @@ export const SNAPSHOT = `{
     "settled": [
       {
         "id": "c3",
+        "session": "u-c3",
         "label": "put away",
         "state": "done",
         "actionable": true,

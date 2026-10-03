@@ -20,16 +20,19 @@ const ROWS = [
 const seeded = (value: unknown) => ({ value: { value, version: 1 } })
 
 // Answers what a session start asks of the engine, with a fresh snapshot so no headless
-// inbox starts, and records the panes it opens. `polled` settles with the start's first poll.
-const startable = (on: On) => {
+// inbox starts, and records the panes it opens and the state it sets. `polled` settles
+// with the start's first poll.
+const startable = (on: On, sections: Record<string, unknown[]> = {}) => {
   const opened: string[] = []
+  const set: Record<string, unknown> = {}
   let done = () => {}
   const polled = new Promise<void>(resolve => (done = resolve))
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: undefined }))
   on('session.id', () => ({ value: 'u-test' }))
-  on('fs.read', () => ({ value: JSON.stringify({ written_at: 1_700_000_000, sections: {} }) }))
+  on('fs.read', () => ({ value: JSON.stringify({ written_at: 1_700_000_000, sections }) }))
   on('state.set', async ($, e, next) => {
+    set[e.key] = e.value
     const result = await next(e)
     if (e.key === 'writtenAt') done()
     return result
@@ -38,7 +41,7 @@ const startable = (on: On) => {
     opened.push(e.id)
     return { value: { isPlaced: true } }
   })
-  return { opened, polled }
+  return { opened, polled, set }
 }
 
 test('without the gem the pane says so, on every surface that seats a pane', async ($, on) => {
@@ -92,6 +95,37 @@ test("rows sit under the gem's sections, Settled folded until za opens it", asyn
     await ui.press({ key: 'g' })
     await ui.unmount()
   }
+})
+
+test('the session the pane sits in shows under the header, out of its section and counts', async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  const [viewing, ...others] = ROWS
+  on('state.get', ($, e, next) => {
+    if (e.key === 'rows') return seeded(others)
+    if (e.key === 'current') return seeded(viewing)
+    if (e.key === 'writtenAt') return seeded(1_700_000_000)
+    return next(e)
+  })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /current · / })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /needs an answer/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Needs you/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', key: 'row:a1' })).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a poll lifts the row whose session is this one out of the list', async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  const { polled, set } = startable(on, {
+    needs_you: [{ id: 'a1', session: 'u-test', label: 'mine' }],
+    active: [{ id: 'b2', session: 'u-b2', label: 'other' }],
+  })
+  await $.session.start({ cwd: '/tmp/proj', surface: 'terminal', isInteractive: true })
+  await polled
+  expect((set.current as { id?: string } | null)?.id).toBe('a1')
+  expect((set.rows as { id?: string }[]).map(row => row.id)).toEqual(['b2'])
 })
 
 test('x leaves a settle request for the inbox to apply', async ($, on) => {

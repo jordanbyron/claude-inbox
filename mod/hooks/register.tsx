@@ -18,7 +18,9 @@ const SWITCH_MS = 3000
 const SNAPSHOT = '.config/claude-inbox/snapshot.json'
 const ACTIONS = '.config/claude-inbox/actions'
 const SWITCH = '.config/claude-inbox/switch.json'
+// The sessions to switch to; the one this pane sits in is lifted out into `current`.
 const rows = atom({ plugin: 'inbox-pane', key: 'rows' } as const, [])
+const current = atom({ plugin: 'inbox-pane', key: 'current' } as const, null)
 const writtenAt = atom({ plugin: 'inbox-pane', key: 'writtenAt' } as const, 0)
 const cursor = atom({ plugin: 'inbox-pane', key: 'cursor' } as const, 0)
 const folds = atom({ plugin: 'inbox-pane', key: 'folds' } as const, { snoozed: true, settled: true })
@@ -26,6 +28,7 @@ const pending = atom({ plugin: 'inbox-pane', key: 'pending' } as const, null)
 
 export type SnapshotRow = {
   id?: string
+  session?: string
   label?: string
   state?: string
   actionable?: boolean
@@ -111,6 +114,7 @@ export function rowOf(section: Section, one: SnapshotRow): InboxRow {
   return {
     section,
     id: one.id,
+    session: one.session,
     label: one.label ?? one.id ?? '',
     state: one.state ?? 'unknown',
     actionable: one.actionable === true,
@@ -191,7 +195,11 @@ async function poll($: EngineInterface, host: Host): Promise<void> {
   const snapshot = await readJson<Snapshot | null>($, `${home}/${SNAPSHOT}`, null)
   const written = snapshot?.written_at ?? 0
   if (snapshot !== null) {
-    await update($, rows, () => ORDER.flatMap(section => (snapshot.sections?.[section] ?? []).map(one => rowOf(section, one))))
+    const all = ORDER.flatMap(section => (snapshot.sections?.[section] ?? []).map(one => rowOf(section, one)))
+    // Read on every poll: a /clear mints a new session id mid-session.
+    const id = await $.session.id().catch(() => host.session)
+    await update($, current, () => all.find(one => one.session === id) ?? null)
+    await update($, rows, () => all.filter(one => one.session !== id))
   }
   await update($, writtenAt, () => written)
   if (now - written > STALE_S) startHeadless($, host, now)
@@ -281,6 +289,7 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const list = await read($, rows)
+    const viewing = await read($, current)
     const folded = await read($, folds)
     const chord = await read($, pending)
     const written = await read($, writtenAt)
@@ -379,8 +388,22 @@ export const register: Register = (on, options) => {
               {glyph} {n}
             </Text>
           ))}
-          {list.length === 0 && <Text dimColor>nothing running</Text>}
+          {list.length === 0 && viewing === null && <Text dimColor>nothing running</Text>}
         </Box>
+        {viewing !== null && (
+          <Box>
+            <Text dimColor>current · </Text>
+            <Text bold wrap="truncate-end">
+              {viewing.label}
+            </Text>
+            {viewing.pr ? (
+              <Text color={PR_COLOR[viewing.pr.state]}>
+                {' '}
+                {viewing.pr.short} {viewing.pr.state}
+              </Text>
+            ) : null}
+          </Box>
+        )}
         {notice !== null && <Text color="yellow">{notice}</Text>}
         {notice === null && flat.length === 0 && <Text dimColor>No sessions.</Text>}
         {groups.map(group => (
