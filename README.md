@@ -246,7 +246,8 @@ a fullscreen terminal. It shows what the running inbox shows, and starts
 once to load the pane in every session. It adds
 `~/.config/claude-inbox/mod` to `CLAUDE_CODE_PLUGIN_DIRS` in
 `~/.claude/settings.json`. `claude-inbox install --force` also removes any
-other copy of the pane listed there.
+other copy of the pane listed there, and points the pane at this copy's
+`claude-inbox`.
 
 That path is a link the inbox points at the installed version on every
 launch, so it survives `gem update`.

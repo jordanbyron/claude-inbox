@@ -66,9 +66,26 @@ RSpec.describe ClaudeInbox::Mod do
       File.write(settings, JSON.generate("env" => {"CLAUDE_CODE_PLUGIN_DIRS" => dirs}))
       expect(described_class.install(settings: settings, link: link, dir: dir).removed).to eq([])
       expect(JSON.parse(File.read(settings))["env"]["CLAUDE_CODE_PLUGIN_DIRS"]).to eq(dirs)
-      installed = described_class.install(settings: settings, link: link, dir: dir, force: true)
-      expect(installed).to eq(described_class::Installed.new(added: false, removed: [described_class::DIR]))
+      installed = described_class.install(settings: settings, link: link, dir: dir, force: true, command: nil)
+      expect(installed).to eq(described_class::Installed.new(added: false, removed: [described_class::DIR], command_set: false))
       expect(JSON.parse(File.read(settings))["env"]["CLAUDE_CODE_PLUGIN_DIRS"]).to eq("/other:#{link}")
+    end
+  end
+
+  it "forced, makes the pane run this copy's command, or the one on PATH" do
+    Dir.mktmpdir do |dir|
+      settings = File.join(dir, "settings.json")
+      link = File.join(dir, "mod")
+      config = ->(command) { {"inbox-pane" => {"options" => {"command" => command}}} }
+      File.write(settings, JSON.generate("pluginConfigs" => config.call("/gone/worktree/bin/claude-inbox")))
+      described_class.install(settings: settings, link: link, dir: dir, command: "/checkout/bin/claude-inbox")
+      expect(JSON.parse(File.read(settings))["pluginConfigs"]).to eq(config.call("/gone/worktree/bin/claude-inbox"))
+      installed = described_class.install(settings: settings, link: link, dir: dir, force: true, command: "/checkout/bin/claude-inbox")
+      expect(installed.command_set).to be(true)
+      expect(JSON.parse(File.read(settings))["pluginConfigs"]).to eq(config.call("/checkout/bin/claude-inbox"))
+      described_class.install(settings: settings, link: link, dir: dir, force: true, command: nil)
+      expect(JSON.parse(File.read(settings))["pluginConfigs"]).to eq("inbox-pane" => {"options" => {}})
+      expect(described_class.install(settings: settings, link: link, dir: dir, force: true, command: nil).command_set).to be(false)
     end
   end
 
