@@ -186,6 +186,21 @@ RSpec.describe ClaudeInbox::Store do
       expect(described_class.sectionize(%w[a b].map { |i| session(id: i) }, entries, now).pinned.map(&:id)).to eq(%w[b a])
     end
 
+    it "reads along without saving when not writable, and sees the writer's edits on each poll" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "state.json")
+        writer = described_class.new(path: path, clock: -> { now })
+        reader = described_class.new(path: path, clock: -> { now }, writable: false)
+        writer.update([session(id: "a")])
+        reader.update([session(id: "a")])
+        reader.toggle_pin("a")
+        expect(JSON.parse(File.read(path))["sessions"]["a"]["pinned"]).to be_nil
+        writer.settle("a")
+        reader.update([session(id: "a")])
+        expect(reader.sections.settled.map(&:id)).to eq(%w[a])
+      end
+    end
+
     it "toggle_pin sets and clears pinned via the store" do
       clock = -> { now }
       Dir.mktmpdir do |dir|

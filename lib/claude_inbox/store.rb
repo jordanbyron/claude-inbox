@@ -56,9 +56,13 @@ module ClaudeInbox
 
     DEFAULT_PATH = File.join(Dir.home, ".config", "claude-inbox", "state.json")
 
-    def initialize(path: DEFAULT_PATH, clock: -> { Time.now })
+    # A store that is not `writable` reads the file but never saves it: the
+    # second inbox open at once, which reads along with the first rather
+    # than overwriting what it and the pane's requests settled.
+    def initialize(path: DEFAULT_PATH, clock: -> { Time.now }, writable: true)
       @path = path
       @clock = clock
+      @writable = writable
       @mutex = Mutex.new
       @sessions = []
       @hidden = Set.new
@@ -74,7 +78,7 @@ module ClaudeInbox
         @hidden &= keys
         @forgotten &= keys
         @sessions = sessions.reject { |s| @hidden.include?(s.key) || @forgotten.include?(s.key) }
-        @entries = self.class.merge_entries(@entries, @sessions, @clock.call)
+        @entries = self.class.merge_entries(@writable ? @entries : load, @sessions, @clock.call)
         save
       end
     end
@@ -156,7 +160,7 @@ module ClaudeInbox
     end
 
     def save
-      return unless @path
+      return unless @path && @writable
       Records.save(@path, {"version" => 1, "sessions" => @entries})
     end
   end
