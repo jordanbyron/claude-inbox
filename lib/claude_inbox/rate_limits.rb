@@ -30,7 +30,7 @@ module ClaudeInbox
     # time, or nil.
     # Parses only when the file has changed, since render asks several times
     # a second.
-    def windows(now = Time.now)
+    def windows(now)
       mtime = File.mtime(@path)
       return nil if now - mtime > STALE_AFTER
       @data = parse if mtime != @mtime
