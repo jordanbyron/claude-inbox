@@ -18,11 +18,12 @@ end
 
 if ARGV.first == "install"
   begin
-    added = ClaudeInbox::Mod.install
+    installed = ClaudeInbox::Mod.install(force: ARGV.include?("--force"))
   rescue JSON::ParserError
     abort "claude-inbox: ~/.claude/settings.json is not valid JSON, so it was left alone"
   end
-  puts added ? "Added the pane to ~/.claude/settings.json. New Claude Code sessions load it; /inbox opens it." :
+  installed.removed.each { |dir| puts "Removed #{dir} from ~/.claude/settings.json." }
+  puts installed.added ? "Added the pane to ~/.claude/settings.json. New Claude Code sessions load it; /inbox opens it." :
     "The pane is already in ~/.claude/settings.json."
   exit
 end

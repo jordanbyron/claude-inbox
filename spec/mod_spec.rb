@@ -49,12 +49,26 @@ RSpec.describe ClaudeInbox::Mod do
       settings = File.join(dir, "settings.json")
       link = File.join(dir, "mod")
       File.write(settings, JSON.generate("model" => "opus", "env" => {"CLAUDE_CODE_PLUGIN_DIRS" => "/other"}))
-      expect(described_class.install(settings: settings, link: link, dir: dir)).to be(true)
-      expect(described_class.install(settings: settings, link: link, dir: dir)).to be(false)
+      expect(described_class.install(settings: settings, link: link, dir: dir).added).to be(true)
+      expect(described_class.install(settings: settings, link: link, dir: dir).added).to be(false)
       json = JSON.parse(File.read(settings))
       expect(json["model"]).to eq("opus")
       expect(json["env"]["CLAUDE_CODE_PLUGIN_DIRS"]).to eq("/other:#{link}")
       expect(File.readlink(link)).to eq(dir)
+    end
+  end
+
+  it "forced, drops the other folders holding the pane and keeps the rest" do
+    Dir.mktmpdir do |dir|
+      settings = File.join(dir, "settings.json")
+      link = File.join(dir, "mod")
+      dirs = ["/other", described_class::DIR, link].join(":")
+      File.write(settings, JSON.generate("env" => {"CLAUDE_CODE_PLUGIN_DIRS" => dirs}))
+      expect(described_class.install(settings: settings, link: link, dir: dir).removed).to eq([])
+      expect(JSON.parse(File.read(settings))["env"]["CLAUDE_CODE_PLUGIN_DIRS"]).to eq(dirs)
+      installed = described_class.install(settings: settings, link: link, dir: dir, force: true)
+      expect(installed).to eq(described_class::Installed.new(added: false, removed: [described_class::DIR]))
+      expect(JSON.parse(File.read(settings))["env"]["CLAUDE_CODE_PLUGIN_DIRS"]).to eq("/other:#{link}")
     end
   end
 
