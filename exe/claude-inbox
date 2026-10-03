@@ -58,9 +58,13 @@ if argv.include?("--headless")
   exit(ClaudeInbox::Headless.new(client: opts[:client], store: opts[:store]).run ? 0 : 1)
 end
 
-# The inbox you can see is the snapshot's writer: a headless one gives way.
-# Held for the life of this process by this reference.
+# The first inbox you can see is the snapshot's writer: a headless one gives
+# way to it, and a second inbox reads along without writing. Held for the
+# life of this process by this reference.
 writer_lock = fixture ? ClaudeInbox::WriterLock.disabled : ClaudeInbox::WriterLock.new
-writer_lock.take(evict: true)
+unless writer_lock.take(role: "inbox")
+  opts[:snapshot] = ClaudeInbox::Snapshot.disabled
+  opts[:actions] = ClaudeInbox::Actions.disabled
+end
 
 ClaudeInbox::App.new(**opts).run

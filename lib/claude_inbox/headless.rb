@@ -23,7 +23,7 @@ module ClaudeInbox
 
     # False when the lock is held, by an inbox or another headless process.
     def run
-      return false unless @lock.take
+      return false unless @lock.take(role: "headless")
       @poller.start
       loop { @queue.pop }
     end

@@ -29,8 +29,6 @@ module ClaudeInbox
       @actions = actions
       @interval = interval
       @wake = Queue.new
-      @paused = false
-      @lock = Mutex.new
     end
 
     def start
@@ -43,17 +41,6 @@ module ClaudeInbox
     def stop
       @thread&.kill
       @applier&.kill
-    end
-
-    # Only skips polls while another process holds the terminal; a poll
-    # already under way finishes. Forking from another thread meanwhile, as
-    # a remote start does, is fine: Subprocess puts every child in its own
-    # session, away from the tty.
-    def pause = @lock.synchronize { @paused = true }
-
-    def resume
-      @lock.synchronize { @paused = false }
-      soon
     end
 
     def soon = @wake << true
@@ -111,7 +98,7 @@ module ClaudeInbox
       loop do
         @wake.pop(timeout: @interval)
         @wake.clear
-        once unless paused?
+        once
       rescue SystemStackError, ScriptError, SecurityError => e
         @queue << [:error, e.message]
       end
@@ -125,7 +112,5 @@ module ClaudeInbox
         @queue << [:error, e.message]
       end
     end
-
-    def paused? = @lock.synchronize { @paused }
   end
 end
