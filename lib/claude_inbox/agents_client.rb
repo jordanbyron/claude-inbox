@@ -46,9 +46,11 @@ module ClaudeInbox
     # that exists disables attach too. So we watch the child's command line
     # and, the moment it becomes the agents view, terminate it. The user then
     # lands back in the inbox instead of native agent view.
-    def attach(id)
+    # The block, polled with the command line, ends the attach early when it
+    # answers true: how a switch request from another front end is honoured.
+    def attach(id, &stop)
       pid = Process.spawn(*Subprocess.command(@bin, "attach", id))
-      watchdog = Thread.new { kill_when_agents_view(pid) }
+      watchdog = Thread.new { kill_when_agents_view(pid, &stop) }
       _, status = Process.wait2(pid)
       status
     ensure
@@ -219,15 +221,18 @@ module ClaudeInbox
       }
     end
 
-    def kill_when_agents_view(pid)
+    def kill_when_agents_view(pid, &stop)
       loop do
         sleep WATCH_INTERVAL
         cmd = Subprocess.capture("ps", "-o", "command=", "-p", pid.to_s).out
         break if cmd.empty?
-        next unless cmd.split[1] == "agents"
+        next unless cmd.split[1] == "agents" || stop&.call
         Debug.log("watchdog saw #{cmd.inspect}")
         Process.kill("TERM", pid)
-        sleep 1
+        10.times do
+          sleep 0.1
+          break if Subprocess.capture("ps", "-o", "pid=", "-p", pid.to_s).out.empty?
+        end
         Process.kill("KILL", pid)
         break
       end

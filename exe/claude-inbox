@@ -10,6 +10,7 @@ end
 
 require "claude_inbox/app"
 require "claude_inbox/config"
+require "claude_inbox/writer_lock"
 require "tmpdir"
 
 fixture = ARGV.include?("--fixture")
@@ -44,8 +45,28 @@ else
   opts[:client] = ClaudeInbox::AgentsClient.new
   opts[:store] = ClaudeInbox::Store.new
   opts[:reaper] = ClaudeInbox::Reaper.new(opts[:client], opts[:store])
+  opts[:snapshot] = ClaudeInbox::Snapshot.new
+  opts[:switch] = ClaudeInbox::Switch.new
+  opts[:actions] = ClaudeInbox::Actions.new
   opts[:listen] = listen
 end
 opts[:color] = false if argv.include?("--no-color")
+
+if argv.include?("--headless")
+  abort "claude-inbox: --headless takes no --fixture" if fixture
+  require "claude_inbox/headless"
+  exit(ClaudeInbox::Headless.new(client: opts[:client], store: opts[:store]).run ? 0 : 1)
+end
+
+# The first inbox you can see is the snapshot's writer: a headless one gives
+# way to it, and a second inbox reads along, writing and deleting nothing.
+# Held for the life of this process by this reference.
+writer_lock = fixture ? ClaudeInbox::WriterLock.disabled : ClaudeInbox::WriterLock.new
+unless writer_lock.take(role: "inbox")
+  opts[:store] = ClaudeInbox::Store.new(writable: false, relay: ClaudeInbox::Actions.new)
+  opts[:reaper] = ClaudeInbox::Reaper.disabled
+  opts[:snapshot] = ClaudeInbox::Snapshot.disabled
+  opts[:actions] = ClaudeInbox::Actions.disabled
+end
 
 ClaudeInbox::App.new(**opts).run

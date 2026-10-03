@@ -20,6 +20,7 @@ module ClaudeInbox
     # should see it, but after REAP_AFTER of not seeing it, you never will.
     UNREAPABLE = %w[working].freeze
     SECTIONS = %i[pinned needs_you active snoozed settled].freeze
+    NotWritable = Class.new(StandardError)
     # Sections long enough to be worth hiding behind a fold toggle.
     FOLDABLE_SECTIONS = %i[snoozed settled].freeze
 
@@ -56,9 +57,15 @@ module ClaudeInbox
 
     DEFAULT_PATH = File.join(Dir.home, ".config", "claude-inbox", "state.json")
 
-    def initialize(path: DEFAULT_PATH, clock: -> { Time.now })
+    # A store that is not `writable` reads the file but never saves it: the
+    # second inbox open at once, which reads along with the first rather
+    # than overwriting what it and the pane's requests settled, and sends
+    # its own edits to the first through the `relay` as requests.
+    def initialize(path: DEFAULT_PATH, clock: -> { Time.now }, writable: true, relay: nil)
       @path = path
       @clock = clock
+      @writable = writable
+      @relay = relay
       @mutex = Mutex.new
       @sessions = []
       @hidden = Set.new
@@ -74,7 +81,7 @@ module ClaudeInbox
         @hidden &= keys
         @forgotten &= keys
         @sessions = sessions.reject { |s| @hidden.include?(s.key) || @forgotten.include?(s.key) }
-        @entries = self.class.merge_entries(@entries, @sessions, @clock.call)
+        @entries = self.class.merge_entries(@writable ? @entries : load, @sessions, @clock.call)
         save
       end
     end
@@ -85,17 +92,19 @@ module ClaudeInbox
 
     def sessions = @mutex.synchronize { @sessions.dup }
 
-    def snooze(id, choice) = edit(id) { |e| e.snooze(choice, @clock.call) }
+    def writable? = @writable
 
-    def wake(id) = edit(id) { |e| e.wake(@clock.call) }
+    def snooze(id, choice) = edit(id, "snooze", choice: choice.to_s) { |e| e.snooze(choice, @clock.call) }
 
-    def acknowledge(id) = edit(id) { |e| e.acknowledge(@clock.call) }
+    def wake(id) = edit(id, "wake") { |e| e.wake(@clock.call) }
 
-    def settle(id) = edit(id) { |e| e.settle(@clock.call) }
+    def acknowledge(id) = edit(id, "acknowledge") { |e| e.acknowledge(@clock.call) }
+
+    def settle(id) = edit(id, "settle") { |e| e.settle(@clock.call) }
 
     def mark_reap_failed(id, message) = edit(id) { |e| e.mark_reap_failed(@clock.call, message) }
 
-    def toggle_pin(id) = edit(id) { |e| e.toggle_pin(@clock.call) }
+    def toggle_pin(id) = edit(id, "pin") { |e| e.toggle_pin(@clock.call) }
 
     def set_alias(id, name) = edit(id) { |e| e.alias = name }
 
@@ -144,11 +153,17 @@ module ClaudeInbox
 
     private
 
-    def edit(id)
+    # A store that cannot save still makes the change here, for the screen,
+    # and asks the writer for it by `action` through the relay, so the next
+    # poll finds it done rather than undone. An edit with no request form
+    # would only be undone, so it is refused outright.
+    def edit(id, action = nil, **detail)
+      raise NotWritable, "another claude-inbox owns state.json" if !@writable && action.nil?
       @mutex.synchronize do
         yield Entry.new(@entries[id] ||= Entry.blank(@clock.call).to_h)
         save
       end
+      @relay&.request(action, id, **detail) if !@writable && action
     end
 
     def load
@@ -156,7 +171,7 @@ module ClaudeInbox
     end
 
     def save
-      return unless @path
+      return unless @path && @writable
       Records.save(@path, {"version" => 1, "sessions" => @entries})
     end
   end

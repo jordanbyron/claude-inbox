@@ -20,6 +20,9 @@ require_relative "reaper"
 require_relative "poller"
 require_relative "rate_limits"
 require_relative "session_request"
+require_relative "actions"
+require_relative "snapshot"
+require_relative "switch"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
@@ -28,10 +31,13 @@ module ClaudeInbox
     # The reaper deletes sessions and the listener lets other machines in,
     # so both are off unless `bin/claude-inbox` switches them on.
     def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
-      rate_limits: RateLimits.new, reaper: Reaper.disabled, listen: nil, out: $stdout, input: $stdin, color: true,
+      rate_limits: RateLimits.new, reaper: Reaper.disabled, snapshot: Snapshot.disabled, switch: Switch.disabled,
+      actions: Actions.disabled, listen: nil, out: $stdout, input: $stdin, color: true,
       terminal: Terminal.new(out, input), queue: Queue.new)
       @client = client
       @store = store
+      @snapshot = snapshot
+      @switch = switch
       @rate_limits = rate_limits
       @terminal = terminal
       @color = color
@@ -40,7 +46,7 @@ module ClaudeInbox
       @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
       @queue = queue
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests,
-        reaper: reaper, queue: @queue)
+        reaper: reaper, queue: @queue, snapshot: snapshot, actions: actions)
       @listener = listen ? Remote::Listener.new(client: client, store: store, queue: @queue, **listen) : Remote::Listener.disabled
       @logs = Logs.new(client)
       @peek = Peek.new(@logs)
@@ -112,7 +118,6 @@ module ClaudeInbox
         kind, *rest = @queue.pop(true)
         case kind
         when :sessions
-          @store.update(rest[0])
           @last_poll = Time.now
           @error = nil
         when :error then @error = rest[0]
@@ -168,7 +173,9 @@ module ClaudeInbox
     def render
       t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       now = Time.now
-      sections = filtered(@store.sections(now))
+      all = @store.sections(now)
+      @snapshot.write(all, now)
+      sections = filtered(all)
       width, height = @terminal.size
       body_h = Renderer.body_height(height)
       ensure_selection(sections)
@@ -241,6 +248,13 @@ module ClaudeInbox
       s = selected_session
       return true if @selected&.row? && !s&.terminal?
       notice("you're in that terminal right now — nothing to snooze") if s&.terminal?
+      false
+    end
+
+    # The edits with no request form, which a second inbox cannot keep.
+    def require_writable(verb)
+      return true if @store.writable?
+      notice("another claude-inbox owns state.json — #{verb} there")
       false
     end
 
@@ -404,12 +418,17 @@ module ClaudeInbox
       notice("settled — u brings it back")
     end
 
+    # The pane in the attached session may ask for a different one: the
+    # attach ends and the next starts without passing through the list. The
+    # poller keeps running meanwhile, so the pane's snapshot stays fresh.
     def attach(id)
-      @store.acknowledge(id)
-      @poller.pause
-      @terminal.release { @client.attach(id) }
-    ensure
-      @poller.resume
+      while id
+        @store.acknowledge(id)
+        @switch.clear
+        from = @store.sessions.find { |s| s.key == id }&.session_id
+        @terminal.release { @client.attach(id) { @switch.requested_for?(from) } }
+        id = @switch.take(@store.sessions.select(&:actionable?).map(&:key))
+      end
     end
 
     # ----- modals -----------------------------------------------------------
@@ -425,13 +444,13 @@ module ClaudeInbox
     end
 
     def open_alias_editor
-      return unless require_storable
+      return unless require_storable && require_writable("rename")
       current = @store.alias_for(@selected.key) || ""
       @modal = Dialog::Prompt.new(:alias, @selected.key, current)
     end
 
     def open_pr_editor
-      return unless require_storable
+      return unless require_storable && require_writable("link a pull request")
       current = @store.pr_for(@selected.key) || selected_session&.pr&.url || ""
       @modal = Dialog::Prompt.new(:pr, @selected.key, current)
     end

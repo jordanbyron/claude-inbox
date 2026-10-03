@@ -186,6 +186,43 @@ RSpec.describe ClaudeInbox::Store do
       expect(described_class.sectionize(%w[a b].map { |i| session(id: i) }, entries, now).pinned.map(&:id)).to eq(%w[b a])
     end
 
+    it "reads along without saving when not writable, and sees the writer's edits on each poll" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "state.json")
+        writer = described_class.new(path: path, clock: -> { now })
+        reader = described_class.new(path: path, clock: -> { now }, writable: false)
+        writer.update([session(id: "a")])
+        reader.update([session(id: "a")])
+        reader.toggle_pin("a")
+        expect(JSON.parse(File.read(path))["sessions"]["a"]["pinned"]).to be_nil
+        writer.settle("a")
+        reader.update([session(id: "a")])
+        expect(reader.sections.settled.map(&:id)).to eq(%w[a])
+      end
+    end
+
+    it "relays an edit it cannot keep to the writer as a request, and shows it meanwhile" do
+      Dir.mktmpdir do |dir|
+        requests = File.join(dir, "actions")
+        writer = described_class.new(path: File.join(dir, "state.json"), clock: -> { now })
+        reader = described_class.new(path: File.join(dir, "state.json"), clock: -> { now }, writable: false,
+          relay: ClaudeInbox::Actions.new(dir: requests, clock: -> { now }))
+        writer.update([session(id: "a")])
+        reader.update([session(id: "a")])
+        reader.snooze("a", :h1)
+        reader.toggle_pin("a")
+        expect(reader.sections.pinned.map(&:id)).to eq(%w[a])
+        expect(ClaudeInbox::Actions.new(dir: requests, clock: -> { now }).drain(writer)).to eq(2)
+        expect(writer.entry("a")["wake_at"]).to eq(now.to_i + 3600)
+        expect(writer.entry("a")["pinned"]).to be(true)
+        reader.update([session(id: "a")])
+        expect(reader.sections.pinned.map(&:id)).to eq(%w[a])
+        expect(reader).not_to be_writable
+        expect { reader.set_alias("a", "x") }.to raise_error(ClaudeInbox::Store::NotWritable)
+        expect { reader.set_pr("a", "https://github.com/o/r/pull/1") }.to raise_error(ClaudeInbox::Store::NotWritable)
+      end
+    end
+
     it "toggle_pin sets and clears pinned via the store" do
       clock = -> { now }
       Dir.mktmpdir do |dir|

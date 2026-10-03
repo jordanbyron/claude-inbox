@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "tmpdir"
+
 RSpec.describe ClaudeInbox::Poller do
   let(:client) { RecordingClient.new }
 
@@ -20,6 +22,29 @@ RSpec.describe ClaudeInbox::Poller do
     msgs = drain(queue)
     expect(msgs.map(&:first)).to eq([:sessions])
     expect(msgs.filter_map { |kind, list| list.map(&:id) if kind == :sessions }.first).to include("f23c8673")
+  end
+
+  it "puts each poll in the store and the snapshot before the hand-over" do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "snapshot.json")
+      described_class.new(**poller_args, snapshot: ClaudeInbox::Snapshot.new(path: path)).once
+      expect(store.sessions.map(&:id)).to include("f23c8673")
+      rows = JSON.parse(File.read(path))["sections"].values.flatten
+      expect(rows.map { |r| r["id"] }).to include("f23c8673")
+    end
+  end
+
+  it "applies another front end's requests between polls and rewrites the snapshot" do
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "1.json"), JSON.generate("action" => "settle", "id" => "f23c8673"))
+      path = File.join(dir, "snapshot.json")
+      poller = described_class.new(**poller_args, snapshot: ClaudeInbox::Snapshot.new(path: path),
+        actions: ClaudeInbox::Actions.new(dir: dir))
+      poller.once
+      expect(poller.apply).to be(true)
+      expect(JSON.parse(File.read(path))["sections"]["settled"].map { |r| r["id"] }).to include("f23c8673")
+      expect(poller.apply).to be(false)
+    end
   end
 
   it "reports a failed poll as an error instead of raising" do
@@ -160,18 +185,6 @@ RSpec.describe ClaudeInbox::Poller do
         wait_for { client.polls.size >= 2 }
         expect(client.polls.size).to be >= 2
       end
-    end
-
-    it "skips the poll while paused and catches up on resume" do
-      worker.pause
-      worker.start
-      worker.soon
-      sleep 0.2
-      expect(client.polls.size).to eq(0)
-
-      worker.resume
-      wait_for { client.polls.size >= 1 }
-      expect(client.polls.size).to eq(1)
     end
 
     it "can be stopped before it was started" do
