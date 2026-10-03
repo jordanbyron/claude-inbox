@@ -9,10 +9,8 @@ RSpec.describe ClaudeInbox::WriterLock do
       first = described_class.new(path: path)
       second = described_class.new(path: path)
       expect(first.take(role: "headless")).to be(true)
-      expect(first).to be_held
       expect(File.read(path)).to eq("headless #{Process.pid}")
       expect(second.take(role: "headless")).to be(false)
-      expect(second).not_to be_held
       first.release
       expect(second.take(role: "headless")).to be(true)
     end
@@ -25,7 +23,7 @@ RSpec.describe ClaudeInbox::WriterLock do
       expect(first.take(role: "inbox")).to be(true)
       expect(described_class.new(path: path).take(role: "inbox")).to be(false)
       expect(described_class.new(path: path).take(role: "headless")).to be(false)
-      expect(first).to be_held
+      expect(File.read(path)).to eq("inbox #{Process.pid}")
     end
   end
 

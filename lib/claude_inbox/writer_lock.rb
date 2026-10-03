@@ -37,8 +37,6 @@ module ClaudeInbox
       file.flock(File::LOCK_EX | File::LOCK_NB) ? hold(file, role) : refuse(file)
     end
 
-    def held? = !@file.nil?
-
     def release
       @file&.close
       @file = nil
