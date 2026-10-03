@@ -18,7 +18,7 @@ module ClaudeInbox
 
     # Whether the session `from` has asked to go elsewhere.
     def requested_for?(from)
-      return false if @path.nil? || from.nil? || !File.exist?(@path)
+      return false if from.nil?
       Records.read(@path)["from"] == from
     end
 
