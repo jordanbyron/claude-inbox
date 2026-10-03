@@ -97,7 +97,7 @@ test("rows sit under the gem's sections, Settled folded until za opens it", asyn
   }
 })
 
-test('the session the pane sits in shows under the header, out of its section and counts', async ($, on) => {
+test('the session the pane sits in leads the list, untitled, with its own keys', async ($, on) => {
   mock.env(on, { HOME: '/Users/me' })
   mock.clock(on, { now: 1_700_000_000_000 })
   const [viewing, ...others] = ROWS
@@ -107,11 +107,18 @@ test('the session the pane sits in shows under the header, out of its section an
     if (e.key === 'writtenAt') return seeded(1_700_000_000)
     return next(e)
   })
+  const written: string[] = []
+  on('fs.write', ($, e) => {
+    written.push(e.path)
+    return { value: undefined }
+  })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect(await ui.find({ type: 'Text', text: /current · / })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /needs an answer/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /Needs you/ })).toBeUndefined()
-  expect(await ui.find({ type: 'Button', key: 'row:a1' })).toBeUndefined()
+  await ui.press({ key: 'row:a1' })
+  expect(written).toEqual([])
+  await ui.press({ key: 'x' })
+  expect(written).toEqual(['/Users/me/.config/claude-inbox/actions/pane-1700000000000.json'])
   await ui.unmount()
 })
 
