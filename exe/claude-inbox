@@ -16,6 +16,17 @@ if ARGV.include?("--mod-dir")
   exit
 end
 
+if ARGV.first == "install"
+  begin
+    added = ClaudeInbox::Mod.install
+  rescue JSON::ParserError
+    abort "claude-inbox: ~/.claude/settings.json is not valid JSON, so it was left alone"
+  end
+  puts added ? "Added the pane to ~/.claude/settings.json. New Claude Code sessions load it; /inbox opens it." :
+    "The pane is already in ~/.claude/settings.json."
+  exit
+end
+
 require "claude_inbox/app"
 require "claude_inbox/config"
 require "claude_inbox/writer_lock"

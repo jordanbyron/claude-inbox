@@ -44,6 +44,31 @@ RSpec.describe ClaudeInbox::Mod do
     end
   end
 
+  it "installs into Claude Code's settings once, keeping what is there" do
+    Dir.mktmpdir do |dir|
+      settings = File.join(dir, "settings.json")
+      link = File.join(dir, "mod")
+      File.write(settings, JSON.generate("model" => "opus", "env" => {"CLAUDE_CODE_PLUGIN_DIRS" => "/other"}))
+      expect(described_class.install(settings: settings, link: link, dir: dir)).to be(true)
+      expect(described_class.install(settings: settings, link: link, dir: dir)).to be(false)
+      json = JSON.parse(File.read(settings))
+      expect(json["model"]).to eq("opus")
+      expect(json["env"]["CLAUDE_CODE_PLUGIN_DIRS"]).to eq("/other:#{link}")
+      expect(File.readlink(link)).to eq(dir)
+    end
+  end
+
+  it "makes the settings file when there is none, and leaves one it cannot read" do
+    Dir.mktmpdir do |dir|
+      settings = File.join(dir, ".claude", "settings.json")
+      described_class.install(settings: settings, link: File.join(dir, "mod"), dir: dir)
+      expect(JSON.parse(File.read(settings))).to eq("env" => {"CLAUDE_CODE_PLUGIN_DIRS" => File.join(dir, "mod")})
+      File.write(settings, "{ nope")
+      expect { described_class.install(settings: settings, link: File.join(dir, "mod"), dir: dir) }.to raise_error(JSON::ParserError)
+      expect(File.read(settings)).to eq("{ nope")
+    end
+  end
+
   it "ships beside lib" do
     expect(File.exist?(File.join(described_class::DIR, ".claude-plugin", "plugin.json"))).to be(true)
   end
