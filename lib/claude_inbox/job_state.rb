@@ -50,7 +50,7 @@ module ClaudeInbox
       nil
     end
 
-    attr_reader :detail, :needs, :result, :pr_urls, :color, :intent, :bridge_id
+    attr_reader :pr_urls, :color, :intent, :bridge_id
 
     def initialize(hash)
       @detail = hash["detail"]
@@ -96,7 +96,7 @@ module ClaudeInbox
 
     private
 
-    attr_reader :tempo, :kinds, :tasks, :flags
+    attr_reader :detail, :needs, :result, :tempo, :kinds, :tasks, :flags
 
     # The agent itself is not thinking. On its own this means little — a
     # session whose process died leaves the same reading behind — so it only
