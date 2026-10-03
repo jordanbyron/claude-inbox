@@ -28,17 +28,22 @@ module ClaudeInbox
     def drain(store)
       return 0 unless @dir && File.directory?(@dir)
       keys = store.sessions.select(&:actionable?).map(&:key)
-      Dir.glob(File.join(@dir, "*.json")).sort.count do |path|
-        request = parse(path)
-        next false if request.nil?
-        File.delete(path)
-        apply(store, request, keys)
-      end
-    rescue Errno::ENOENT
-      0
+      Dir.glob(File.join(@dir, "*.json")).sort.count { |path| take(path, store, keys) }
     end
 
     private
+
+    # One file: false when it is left for a later pass or dropped, true once
+    # applied. Another drainer may take it first, which is nothing to report.
+    def take(path, store, keys)
+      request = parse(path)
+      return false if request.nil?
+      return false if !keys.include?(request["id"]) && young?(request)
+      File.delete(path)
+      apply(store, request, keys)
+    rescue Errno::ENOENT
+      false
+    end
 
     # Nil leaves the file for the next pass: it is torn or early, and young.
     def parse(path)
@@ -50,10 +55,14 @@ module ClaudeInbox
       (File.mtime(path) < @clock.call - GRACE) ? {} : nil
     end
 
+    def young?(request)
+      at = request["at"].to_i / 1000
+      at.positive? && Time.at(at) >= @clock.call - GRACE
+    end
+
     def apply(store, request, keys)
       id = request["id"]
-      return keep_young(request) unless keys.include?(id)
-      return false unless VERBS.include?(request["action"])
+      return false unless keys.include?(id) && VERBS.include?(request["action"])
       case request["action"]
       when "settle" then store.settle(id)
       when "wake" then store.wake(id)
@@ -63,15 +72,6 @@ module ClaudeInbox
         store.snooze(id, request["choice"].to_sym)
       end
       true
-    end
-
-    # A request naming a session the store has not seen is written back for
-    # a later pass, until it is older than the grace.
-    def keep_young(request)
-      at = request["at"].to_i / 1000
-      return false if at <= 0 || Time.at(at) < @clock.call - GRACE
-      File.write(File.join(@dir, "#{request["id"]}-#{at}.json"), JSON.generate(request))
-      false
     end
   end
 end

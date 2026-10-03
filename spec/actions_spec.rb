@@ -43,11 +43,13 @@ RSpec.describe ClaudeInbox::Actions do
     Dir.mktmpdir do |dir|
       actions = described_class.new(dir: dir, clock: -> { now })
       write.call(dir, "1.json", {"action" => "settle", "id" => "new", "at" => (now.to_i - 2) * 1000})
+      write.call(dir, "2.json", {"action" => "pin", "id" => "new", "at" => (now.to_i - 2) * 1000})
       expect(actions.drain(store)).to eq(0)
-      expect(Dir.children(dir).size).to eq(1)
+      expect(Dir.children(dir).sort).to eq(%w[1.json 2.json])
       store.update([session(id: "a", state: "done"), session(id: "new", state: "done")])
-      expect(actions.drain(store)).to eq(1)
-      expect(store.sections.settled.map(&:id)).to eq(%w[new])
+      expect(actions.drain(store)).to eq(2)
+      expect(store.sections.pinned.map(&:id)).to eq(%w[new])
+      expect(store.entry("new")["settled_at"]).to eq(now.to_i)
       write.call(dir, "2.json", {"action" => "settle", "id" => "gone", "at" => (now.to_i - 60) * 1000})
       expect(actions.drain(store)).to eq(0)
       expect(Dir.children(dir)).to be_empty

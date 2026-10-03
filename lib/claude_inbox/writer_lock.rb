@@ -46,7 +46,10 @@ module ClaudeInbox
 
     private
 
+    # After reading the holder the position sits at the end, and truncate does
+    # not move it, so the write is rewound first or it lands after NUL padding.
     def hold(file, role)
+      file.rewind
       file.truncate(0)
       file.write("#{role} #{Process.pid}")
       file.flush

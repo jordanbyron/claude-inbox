@@ -34,6 +34,7 @@ RSpec.describe ClaudeInbox::WriterLock do
       path = File.join(dir, "writer.lock")
       File.write(path, "headless 999999999")
       expect(described_class.new(path: path).take(role: "inbox")).to be(true)
+      expect(File.read(path)).to eq("inbox #{Process.pid}")
     end
   end
 
