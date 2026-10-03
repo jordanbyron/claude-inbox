@@ -9,7 +9,7 @@ RSpec.describe ClaudeInbox::SessionRequest do
     it "builds the same hash the form's values do, once resolved against the same settings" do
       # An empty home, so the developer's own ~/.claude settings stay out of the form's defaults.
       Dir.mktmpdir do |home|
-        form = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, pastel: Pastel.new(enabled: false), home: home)
+        form = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, color: false, home: home)
         values = described_class.from_params({"prompt" => "", "cwd" => Dir.pwd})
         expect(described_class.resolve(values, form.defaults)).to eq(form.values)
       end

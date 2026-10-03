@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "pastel"
 require_relative "agents_client"
 require_relative "images"
 require_relative "session_request"
@@ -27,9 +28,9 @@ module ClaudeInbox
     # editable field spends these on its own text instead.
     CYCLE = {:left => -1, :right => 1, "h" => -1, "l" => 1, " " => 1}.freeze
 
-    def initialize(cwd:, pastel:, home: Dir.home, clipboard: Images.method(:from_clipboard))
-      @p = pastel
-      @theme = Theme.new(enabled: pastel.enabled)
+    def initialize(cwd:, color:, home: Dir.home, clipboard: Images.method(:from_clipboard))
+      @p = Pastel.new(enabled: color)
+      @theme = Theme.new(enabled: color)
       @home = home
       @clipboard = clipboard
       @fields = [
