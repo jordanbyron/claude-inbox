@@ -21,6 +21,7 @@ require_relative "poller"
 require_relative "rate_limits"
 require_relative "session_request"
 require_relative "snapshot"
+require_relative "switch"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
@@ -29,11 +30,12 @@ module ClaudeInbox
     # The reaper deletes sessions and the listener lets other machines in,
     # so both are off unless `bin/claude-inbox` switches them on.
     def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
-      rate_limits: RateLimits.new, reaper: Reaper.disabled, snapshot: Snapshot.disabled, listen: nil, out: $stdout,
-      input: $stdin, color: true, terminal: Terminal.new(out, input), queue: Queue.new)
+      rate_limits: RateLimits.new, reaper: Reaper.disabled, snapshot: Snapshot.disabled, switch: Switch.disabled,
+      listen: nil, out: $stdout, input: $stdin, color: true, terminal: Terminal.new(out, input), queue: Queue.new)
       @client = client
       @store = store
       @snapshot = snapshot
+      @switch = switch
       @rate_limits = rate_limits
       @terminal = terminal
       @color = color
@@ -408,10 +410,16 @@ module ClaudeInbox
       notice("settled — u brings it back")
     end
 
+    # Another front end may ask, mid-attach, for a different session: the
+    # attach ends and the next one starts without passing through the list.
     def attach(id)
-      @store.acknowledge(id)
       @poller.pause
-      @terminal.release { @client.attach(id) }
+      while id
+        @store.acknowledge(id)
+        @switch.clear
+        @terminal.release { @client.attach(id) { @switch.requested? } }
+        id = @switch.take
+      end
     ensure
       @poller.resume
     end

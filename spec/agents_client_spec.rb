@@ -189,4 +189,15 @@ RSpec.describe ClaudeInbox::AgentsClient do
   it "mentions a file the way the CLI's own prompt does, spaces escaped" do
     expect(described_class.mention("/tmp/Screen Shot.png")).to eq("@/tmp/Screen\\ Shot.png")
   end
+
+  it "ends an attach early when the block says so" do
+    Dir.mktmpdir do |dir|
+      bin = File.join(dir, "claude")
+      File.write(bin, "#!/bin/sh\nsleep 5\n")
+      File.chmod(0o755, bin)
+      started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      described_class.new(bin: bin).attach("abc12345") { true }
+      expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 3
+    end
+  end
 end

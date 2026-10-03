@@ -45,6 +45,7 @@ else
   opts[:store] = ClaudeInbox::Store.new
   opts[:reaper] = ClaudeInbox::Reaper.new(opts[:client], opts[:store])
   opts[:snapshot] = ClaudeInbox::Snapshot.new
+  opts[:switch] = ClaudeInbox::Switch.new
   opts[:listen] = listen
 end
 opts[:color] = false if argv.include?("--no-color")
