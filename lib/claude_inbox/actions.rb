@@ -25,16 +25,16 @@ module ClaudeInbox
       @sent = 0
     end
 
-    # Leaves one request for the writer, as the pane does; `from` names the
-    # asker, and a count keeps two requests in one millisecond apart.
-    def request(action, id, choice: nil, from: "inbox-#{Process.pid}")
+    # Leaves one request for the writer, as the pane does, named for this
+    # inbox; a count keeps two requests in one millisecond apart.
+    def request(action, id, choice: nil)
       return unless @dir
       FileUtils.mkdir_p(@dir)
       at = (@clock.call.to_f * 1000).to_i
       request = {"action" => action, "id" => id, "at" => at}
       request["choice"] = choice if choice
       @sent += 1
-      File.write(File.join(@dir, "#{from}-#{at}-#{@sent}.json"), JSON.generate(request))
+      File.write(File.join(@dir, "inbox-#{Process.pid}-#{at}-#{@sent}.json"), JSON.generate(request))
     end
 
     # Applies every request on disk to `store` and returns how many it took.
