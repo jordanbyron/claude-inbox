@@ -23,6 +23,7 @@ if ARGV.first == "install"
     abort "claude-inbox: ~/.claude/settings.json is not valid JSON, so it was left alone"
   end
   installed.removed.each { |dir| puts "Removed #{dir} from ~/.claude/settings.json." }
+  puts "The pane now runs #{ClaudeInbox::Mod::COMMAND || "claude-inbox from your PATH"}." if installed.command_set
   puts installed.added ? "Added the pane to ~/.claude/settings.json. New Claude Code sessions load it; /inbox opens it." :
     "The pane is already in ~/.claude/settings.json."
   exit

@@ -12,6 +12,8 @@ module ClaudeInbox
     LINK = File.join(Dir.home, ".config", "claude-inbox", "mod")
     NAME = "inbox-pane"
     CHECKOUT = File.exist?(File.expand_path("../../.git", __dir__))
+    # What the pane runs headless: a checkout's own, or the gem's from PATH.
+    COMMAND = CHECKOUT ? File.expand_path("../../bin/claude-inbox", __dir__) : nil
 
     # Points the link at this gem's mod folder and returns the link. A folder
     # of that name that is not a link is left alone. From a checkout only a
@@ -29,23 +31,29 @@ module ClaudeInbox
       link
     end
 
-    Installed = Data.define(:added, :removed)
+    Installed = Data.define(:added, :removed, :command_set)
 
     # Links the mod and adds the link to CLAUDE_CODE_PLUGIN_DIRS in Claude
     # Code's user settings, keeping any folders already there; forced, it
-    # drops the other folders holding this plugin, such as a worktree's.
-    # Raises JSON::ParserError rather than rewrite a settings file it cannot
-    # read.
-    def self.install(settings: File.join(Dir.home, ".claude", "settings.json"), link: LINK, dir: DIR, force: false)
+    # drops the other folders holding this plugin, such as a worktree's, and
+    # sets the command the pane runs to this copy's. Raises JSON::ParserError
+    # rather than rewrite a settings file it cannot read.
+    def self.install(settings: File.join(Dir.home, ".claude", "settings.json"), link: LINK, dir: DIR, force: false, command: COMMAND)
       self.link(link: link, dir: dir, force: true)
       json = File.exist?(settings) ? JSON.parse(File.read(settings)) : {}
       env = json["env"] ||= {}
       dirs = env["CLAUDE_CODE_PLUGIN_DIRS"].to_s.split(File::PATH_SEPARATOR).map(&:strip).reject(&:empty?)
       kept = dirs.reject { |d| force && d != link && plugin?(d) }
       wanted = kept.include?(link) ? kept : [*kept, link]
-      installed = Installed.new(added: !kept.include?(link), removed: dirs - kept)
-      return installed if wanted == dirs
+      options = json.dig("pluginConfigs", NAME, "options") || {}
+      replace = force && options["command"] != command
+      installed = Installed.new(added: !kept.include?(link), removed: dirs - kept, command_set: replace)
+      return installed if wanted == dirs && !replace
 
+      if replace
+        command ? options["command"] = command : options.delete("command")
+        ((json["pluginConfigs"] ||= {})[NAME] ||= {})["options"] = options
+      end
       env["CLAUDE_CODE_PLUGIN_DIRS"] = wanted.join(File::PATH_SEPARATOR)
       FileUtils.mkdir_p(File.dirname(settings))
       File.write("#{settings}.tmp", JSON.pretty_generate(json) + "\n")
