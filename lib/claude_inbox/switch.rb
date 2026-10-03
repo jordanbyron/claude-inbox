@@ -16,8 +16,6 @@ module ClaudeInbox
       @path = path
     end
 
-    def request(id, from, now) = @path && Records.save(@path, {"id" => id, "from" => from, "at" => now.to_i})
-
     # Whether the session `from` has asked to go elsewhere.
     def requested_for?(from)
       return false if @path.nil? || from.nil? || !File.exist?(@path)
