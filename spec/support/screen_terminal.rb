@@ -2,14 +2,12 @@
 
 # Stands in for Terminal: a fixed size and the last frame painted, as text.
 class ScreenTerminal
-  attr_reader :lines
+  attr_reader :lines, :size
 
-  def initialize(width: 80, height: 27)
-    @size = [width, height]
+  def initialize
+    @size = [80, 27]
     @lines = []
   end
-
-  attr_reader :size
 
   def paint(lines) = @lines = lines.map { |l| ClaudeInbox::Text.strip_ansi(l) }
 
