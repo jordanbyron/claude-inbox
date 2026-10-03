@@ -58,11 +58,13 @@ module ClaudeInbox
 
     # A store that is not `writable` reads the file but never saves it: the
     # second inbox open at once, which reads along with the first rather
-    # than overwriting what it and the pane's requests settled.
-    def initialize(path: DEFAULT_PATH, clock: -> { Time.now }, writable: true)
+    # than overwriting what it and the pane's requests settled, and sends
+    # its own edits to the first through the `relay` as requests.
+    def initialize(path: DEFAULT_PATH, clock: -> { Time.now }, writable: true, relay: nil)
       @path = path
       @clock = clock
       @writable = writable
+      @relay = relay
       @mutex = Mutex.new
       @sessions = []
       @hidden = Set.new
@@ -89,13 +91,15 @@ module ClaudeInbox
 
     def sessions = @mutex.synchronize { @sessions.dup }
 
-    def snooze(id, choice) = edit(id) { |e| e.snooze(choice, @clock.call) }
+    def writable? = @writable
 
-    def wake(id) = edit(id) { |e| e.wake(@clock.call) }
+    def snooze(id, choice) = edit(id, "snooze", choice: choice.to_s) { |e| e.snooze(choice, @clock.call) }
 
-    def acknowledge(id) = edit(id) { |e| e.acknowledge(@clock.call) }
+    def wake(id) = edit(id, "wake") { |e| e.wake(@clock.call) }
 
-    def settle(id) = edit(id) { |e| e.settle(@clock.call) }
+    def acknowledge(id) = edit(id, "acknowledge") { |e| e.acknowledge(@clock.call) }
+
+    def settle(id) = edit(id, "settle") { |e| e.settle(@clock.call) }
 
     def mark_reap_failed(id, message) = edit(id) { |e| e.mark_reap_failed(@clock.call, message) }
 
@@ -148,11 +152,16 @@ module ClaudeInbox
 
     private
 
-    def edit(id)
+    # A store that cannot save still makes the change here, for the screen,
+    # and asks the writer for it by `action` through the relay, so the next
+    # poll finds it done rather than undone. An edit with no action is the
+    # caller's to refuse when the store is not writable.
+    def edit(id, action = nil, **detail)
       @mutex.synchronize do
         yield Entry.new(@entries[id] ||= Entry.blank(@clock.call).to_h)
         save
       end
+      @relay&.request(action, id, **detail) if !@writable && action
     end
 
     def load

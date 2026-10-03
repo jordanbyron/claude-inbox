@@ -201,6 +201,24 @@ RSpec.describe ClaudeInbox::Store do
       end
     end
 
+    it "relays an edit it cannot keep to the writer as a request, and shows it meanwhile" do
+      Dir.mktmpdir do |dir|
+        requests = File.join(dir, "actions")
+        writer = described_class.new(path: File.join(dir, "state.json"), clock: -> { now })
+        reader = described_class.new(path: File.join(dir, "state.json"), clock: -> { now }, writable: false,
+          relay: ClaudeInbox::Actions.new(dir: requests, clock: -> { now }))
+        writer.update([session(id: "a")])
+        reader.update([session(id: "a")])
+        reader.snooze("a", :h1)
+        expect(reader.sections.snoozed.map(&:id)).to eq(%w[a])
+        expect(ClaudeInbox::Actions.new(dir: requests, clock: -> { now }).drain(writer)).to eq(1)
+        expect(writer.entry("a")["wake_at"]).to eq(now.to_i + 3600)
+        reader.update([session(id: "a")])
+        expect(reader.sections.snoozed.map(&:id)).to eq(%w[a])
+        expect(reader).not_to be_writable
+      end
+    end
+
     it "toggle_pin sets and clears pinned via the store" do
       clock = -> { now }
       Dir.mktmpdir do |dir|

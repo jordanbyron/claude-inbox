@@ -11,7 +11,7 @@ module ClaudeInbox
   # the store cannot honour after that, or a verb it lacks, is dropped.
   class Actions
     DEFAULT_DIR = File.join(Dir.home, ".config", "claude-inbox", "actions")
-    VERBS = %w[settle wake pin snooze].freeze
+    VERBS = %w[settle wake pin snooze acknowledge].freeze
     SNOOZES = %w[m15 h1 tomorrow_9am until_woken].freeze
     # A file still being written parses as nothing for milliseconds; a
     # session not yet polled appears within one poll.
@@ -22,6 +22,19 @@ module ClaudeInbox
     def initialize(dir: DEFAULT_DIR, clock: -> { Time.now })
       @dir = dir
       @clock = clock
+      @sent = 0
+    end
+
+    # Leaves one request for the writer, as the pane does; `from` names the
+    # asker, and a count keeps two requests in one millisecond apart.
+    def request(action, id, choice: nil, from: "inbox-#{Process.pid}")
+      return unless @dir
+      FileUtils.mkdir_p(@dir)
+      at = (@clock.call.to_f * 1000).to_i
+      request = {"action" => action, "id" => id, "at" => at}
+      request["choice"] = choice if choice
+      @sent += 1
+      File.write(File.join(@dir, "#{from}-#{at}-#{@sent}.json"), JSON.generate(request))
     end
 
     # Applies every request on disk to `store` and returns how many it took.
@@ -67,6 +80,7 @@ module ClaudeInbox
       when "settle" then store.settle(id)
       when "wake" then store.wake(id)
       when "pin" then store.toggle_pin(id)
+      when "acknowledge" then store.acknowledge(id)
       when "snooze"
         return false unless SNOOZES.include?(request["choice"])
         store.snooze(id, request["choice"].to_sym)
