@@ -10,8 +10,6 @@ export type InboxRow = {
   state: string
   actionable: boolean
   isWaiting: boolean
-  isTerminal: boolean
-  cwd?: string
   line?: string
   wakeAt?: number | 'until_woken'
   remote?: string
