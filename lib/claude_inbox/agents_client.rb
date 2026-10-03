@@ -195,7 +195,6 @@ module ClaudeInbox
     end
 
     def origins_from(rows)
-      return {} if rows.empty?
       self.class.origins(rows, ps_commands(rows.map { |_, ppid, _| ppid }.uniq))
     end
 
