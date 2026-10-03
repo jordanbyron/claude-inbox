@@ -227,7 +227,7 @@ async function moveTo($: EngineInterface, flat: Item[], to: number): Promise<voi
 async function setFold($: EngineInterface, list: InboxRow[], current: InboxRow | null, name: Fold | undefined, open: boolean): Promise<void> {
   await update($, pending, () => null)
   if (!name) return
-  const folded = await update($, folds, f => ({ ...(f ?? { snoozed: true, settled: true }), [name]: !open }))
+  const folded = await update($, folds, f => ({ ...f, [name]: !open }))
   // The item under the cursor may have just become a fold, or the fold its rows.
   const groups = groupsOf(list, folded, current)
   const at = groups.findIndex(group => group.section === name)
