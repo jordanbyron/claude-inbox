@@ -69,8 +69,6 @@ module ClaudeInbox
       # When `claude rm` last refused this session, so the Reaper backs off.
       def reap_failed_at = @h["reap_failed_at"]
 
-      def reap_error = @h["reap_error"]
-
       def stale?(now) = last_seen && now.to_i - last_seen > PRUNE_AFTER
 
       def observe(session, now)
