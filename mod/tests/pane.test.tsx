@@ -12,7 +12,7 @@ const PANE = {
 const ROWS = [
   { section: 'needs_you', id: 'a1', label: 'needs an answer', state: 'blocked', actionable: true, line: 'confirm: drop it?' },
   { section: 'active', id: 'b2', label: 'still going', state: 'working', actionable: true, line: 'running bin/ci', pr: { short: '#7', state: 'open', url: 'https://github.com/o/r/pull/7' } },
-  { section: 'active', id: 'uuid-term', label: 'a terminal', state: 'working', actionable: false, isTerminal: true },
+  { section: 'active', id: 'uuid-term', label: 'a terminal', state: 'working', actionable: false },
   { section: 'settled', id: 'c3', label: 'put away', state: 'done', actionable: true },
 ]
 

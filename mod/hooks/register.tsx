@@ -33,8 +33,6 @@ export type SnapshotRow = {
   state?: string
   actionable?: boolean
   waiting?: boolean
-  terminal?: boolean
-  cwd?: string
   line?: string
   wake_at?: number | 'until_woken'
   remote?: string
@@ -132,8 +130,6 @@ export function rowOf(section: Section, one: SnapshotRow): InboxRow {
     state: one.state ?? 'unknown',
     actionable: one.actionable === true,
     isWaiting: one.waiting === true,
-    isTerminal: one.terminal === true,
-    cwd: one.cwd,
     line: one.line,
     wakeAt: one.wake_at,
     remote: one.remote,
