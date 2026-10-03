@@ -137,7 +137,7 @@ RSpec.describe ClaudeInbox::Poller do
     it "does not bring the row back until the daemon has dropped it" do
       poller.once
       drain(queue).each { |kind, list| store.update(list) if kind == :sessions }
-      expect(store.sections.all.map(&:id)).to include("f23c8673")
+      expect(store.sections.all.map(&:key)).to include("f23c8673")
 
       client.rm("f23c8673")
       store.forget("f23c8673")
@@ -145,7 +145,7 @@ RSpec.describe ClaudeInbox::Poller do
       msgs = drain(queue)
       expect(msgs.filter_map { |kind, list| list.map(&:id) if kind == :sessions }.first).to include("f23c8673")
       msgs.each { |kind, list| store.update(list) if kind == :sessions }
-      expect(store.sections.all.map(&:id)).not_to include("f23c8673")
+      expect(store.sections.all.map(&:key)).not_to include("f23c8673")
       expect(store.sessions.map(&:id)).not_to include("f23c8673")
     end
   end

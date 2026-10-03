@@ -20,7 +20,7 @@ RSpec.describe ClaudeInbox::Store::Sections do
   end
 
   it "finds a row by its selection, or nothing" do
-    expect(sec.row(selection.row("a")).id).to eq("a")
+    expect(sec.row(selection.row("a")).key).to eq("a")
     expect(sec.row(selection.row("uuid")).session.session_id).to eq("uuid")
     expect(sec.row(selection.row("nope"))).to be_nil
     expect(sec.row(selection.fold(:settled))).to be_nil

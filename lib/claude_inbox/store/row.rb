@@ -5,8 +5,6 @@ module ClaudeInbox
     # A session paired with its Entry (nil until a poll has recorded one), with
     # the triage rules as its methods; each takes `now`, so a Row is pure.
     Row = Struct.new(:session, :entry) do
-      def id = session.id
-
       def key = session.key
 
       def selectable? = !key.nil?
