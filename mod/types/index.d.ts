@@ -23,6 +23,6 @@ export type Pending = 'g' | 'z' | 's' | null
 
 declare module 'claude-code' {
   interface PluginState {
-    'inbox-pane': { rows: InboxRow[]; writtenAt: number; cursor: number; folds: Folds; pending: Pending; editedAt: number }
+    'inbox-pane': { rows: InboxRow[]; writtenAt: number; cursor: number; folds: Folds; pending: Pending }
   }
 }

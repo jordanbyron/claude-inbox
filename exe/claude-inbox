@@ -8,9 +8,11 @@ if ARGV.include?("--version")
   exit
 end
 
-# Where the Claude Code mod ships, for CLAUDE_CODE_PLUGIN_DIRS.
+require "claude_inbox/mod"
+
+# The stable path to the Claude Code pane, for CLAUDE_CODE_PLUGIN_DIRS.
 if ARGV.include?("--mod-dir")
-  puts File.expand_path("../mod", __dir__)
+  puts ClaudeInbox::Mod.link
   exit
 end
 
@@ -68,5 +70,7 @@ end
 # Held for the life of this process by this reference.
 writer_lock = fixture ? ClaudeInbox::WriterLock.disabled : ClaudeInbox::WriterLock.new
 writer_lock.take(evict: true)
+# So the pane settings.json names is this version's, after a gem update too.
+ClaudeInbox::Mod.link unless fixture
 
 ClaudeInbox::App.new(**opts).run

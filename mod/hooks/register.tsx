@@ -4,7 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Folds, InboxRow, Pending, Section } from '../types'
 
 const PANE = 'inbox'
-const POLL_MS = 1000
+const POLL_MS = 500
 // Older than this and the writer has quit: it rewrites every 5 s even when nothing changed.
 const STALE_S = 30
 // How long a headless start gets to produce a fresh snapshot before another is tried.
@@ -13,17 +13,16 @@ const RESTART_S = 60
 const CHORD_MS = 5000
 // How long an attached inbox gets to take a switch request before the pane gives up on it.
 const SWITCH_MS = 3000
-// The gem's files, under HOME. The snapshot is read; state.json and switch.json take the pane's writes.
+// The gem's files, under HOME. The snapshot is read; the actions directory and switch.json
+// take the pane's requests, which the gem applies: nothing here edits the gem's own state.
 const SNAPSHOT = '.config/claude-inbox/snapshot.json'
-const GEM_STATE = '.config/claude-inbox/state.json'
+const ACTIONS = '.config/claude-inbox/actions'
 const SWITCH = '.config/claude-inbox/switch.json'
 const rows = atom({ plugin: 'inbox-pane', key: 'rows' } as const, [])
 const writtenAt = atom({ plugin: 'inbox-pane', key: 'writtenAt' } as const, 0)
 const cursor = atom({ plugin: 'inbox-pane', key: 'cursor' } as const, 0)
 const folds = atom({ plugin: 'inbox-pane', key: 'folds' } as const, { snoozed: true, settled: true })
 const pending = atom({ plugin: 'inbox-pane', key: 'pending' } as const, null)
-// When the pane last wrote state.json, in ms: a snapshot older than that still shows the row where it was.
-const editedAt = atom({ plugin: 'inbox-pane', key: 'editedAt' } as const, 0)
 
 type SnapshotRow = {
   id?: string
@@ -39,28 +38,15 @@ type SnapshotRow = {
   pr?: { short?: string; state?: string; url?: string }
 }
 type Snapshot = { written_at?: number; sections?: Partial<Record<Section, SnapshotRow[]>> }
-// One entry of state.json, the keys the gem's Store::Entry writes.
-type Entry = {
-  pinned?: boolean
-  pinned_at?: number
-  wake_at?: number | 'until_woken'
-  snoozed_at?: number
-  settled_at?: number
-  revived_at?: number
-  state_since?: number
-}
-type GemState = { version: number; sessions: Record<string, Entry> }
-// The headless inbox this module may start: which command, and whether one of ours is up.
-type Headless = { command: string; startedAt: number; isRunning: boolean }
+// This session, as the gem's files name it, and the headless inbox this module may start.
+type Host = { session: string; command: string; headlessStartedAt: number; isHeadlessRunning: boolean }
 type Fold = 'snoozed' | 'settled'
 type Item = { kind: 'row'; row: InboxRow } | { kind: 'fold'; section: Fold; count: number }
 type Snooze = 'm15' | 'h1' | 'tomorrow_9am' | 'until_woken'
-// Where a row lands right after an edit here, before the snapshot confirms it.
-type Landing = { section: Section; wakeAt?: number | 'until_woken' }
+type Action = { action: 'settle' | 'wake' | 'pin'; id: string } | { action: 'snooze'; id: string; choice: Snooze }
 
 const ORDER: Section[] = ['pinned', 'needs_you', 'active', 'snoozed', 'settled']
 const TITLE: Record<Section, string> = { pinned: 'Pinned', needs_you: 'Needs you', active: 'Active', snoozed: 'Snoozed', settled: 'Settled' }
-const NEEDS_YOU = new Set(['blocked', 'failed'])
 const GLYPH: Record<string, string> = { blocked: '●', failed: '✗', working: '◐', idle: '◌', done: '✓', stopped: '✓' }
 const COLOR: Record<string, string> = { blocked: 'red', failed: 'red', working: 'green', idle: 'cyan' }
 const PR_COLOR: Record<string, string> = { open: 'green', draft: 'yellow', merged: 'magenta', closed: 'red' }
@@ -70,7 +56,6 @@ const SNOOZE: Record<string, { choice: Snooze; label: string }> = {
   '3': { choice: 'tomorrow_9am', label: 'tomorrow 9am' },
   '4': { choice: 'until_woken', label: 'until woken' },
 }
-
 // What each chord's second key does, drawn under the footer while it waits.
 const MENU: Record<'g' | 'z' | 's', [string, string][]> = {
   g: [
@@ -145,119 +130,67 @@ function wakeLabel(wakeAt: number | 'until_woken'): string {
   return `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`
 }
 
+function ago(seconds: number): string {
+  return seconds < 60 ? 'just now' : `${Math.floor(seconds / 60)}m ago`
+}
+
 async function nowS($: EngineInterface): Promise<number> {
   return Math.floor((await $.clock.now()) / 1000)
 }
 
-// Store::Entry.snooze_until, so a snooze set here wakes when the gem's would.
-function wakeAt(choice: Snooze, now: number): number | 'until_woken' {
-  if (choice === 'm15') return now + 15 * 60
-  if (choice === 'h1') return now + 3600
-  if (choice === 'until_woken') return 'until_woken'
-  const at = new Date(now * 1000)
-  at.setHours(9, 0, 0, 0)
-  if (at.getTime() / 1000 <= now) at.setDate(at.getDate() + 1)
-  return Math.floor(at.getTime() / 1000)
-}
-
-const MUTATE: Record<'settle' | 'wake' | 'pin', (entry: Entry, now: number) => void> = {
-  settle: (entry, now) => {
-    entry.settled_at = now
-    delete entry.wake_at
-    delete entry.snoozed_at
-    delete entry.revived_at
-  },
-  wake: (entry, now) => {
-    delete entry.wake_at
-    delete entry.snoozed_at
-    delete entry.settled_at
-    entry.revived_at = now
-  },
-  pin: (entry, now) => {
-    if (entry.pinned) {
-      delete entry.pinned
-      delete entry.pinned_at
-    } else {
-      entry.pinned = true
-      entry.pinned_at = now
-    }
-  },
-}
-
-// Where Store::Row#section puts a row once each edit lands.
-function landingOf(row: InboxRow, action: 'settle' | 'wake' | 'pin'): Landing {
-  const plain: Section = NEEDS_YOU.has(row.state) ? 'needs_you' : 'active'
-  if (action === 'settle') return { section: 'settled' }
-  if (action === 'wake') return { section: plain }
-  return { section: row.section === 'pinned' ? plain : 'pinned' }
-}
-
-// The gem's Store::Entry mutators, applied to its file; the gem reads it back as soon as it changes.
-// The row moves here at once, and the next snapshot has the gem's word on it.
-async function edit($: EngineInterface, id: string, change: (entry: Entry, now: number) => void, landing: Landing): Promise<void> {
+// Leaves one request for the inbox to apply; its poller takes it within half a second
+// and the next snapshot shows the row where the gem's own rules put it.
+async function ask($: EngineInterface, host: Host, action: Action): Promise<void> {
   const home = (await $.env.get('HOME')) ?? ''
-  const gem = await readJson<Partial<GemState>>($, `${home}/${GEM_STATE}`, {})
-  const sessions = gem.sessions ?? {}
-  const now = await nowS($)
-  const entry = sessions[id] ?? (sessions[id] = { state_since: now })
-  change(entry, now)
-  await $.fs.write(`${home}/${GEM_STATE}`, JSON.stringify({ version: gem.version ?? 1, sessions }))
-  await update($, editedAt, () => now * 1000).catch(() => undefined)
-  // Best effort: the snapshot brings the gem's own placement within a second anyway.
-  await update($, rows, list => (list ?? []).map(row => (row.id === id ? { ...row, section: landing.section, wakeAt: landing.wakeAt } : row))).catch(
-    () => undefined,
-  )
+  const at = Math.floor(await $.clock.now())
+  await $.fs.write(`${home}/${ACTIONS}/${host.session}-${at}.json`, JSON.stringify({ ...action, at }))
 }
 
-// Asks the inbox holding the terminal to attach to `id`. It takes the file when it
-// does; a file still there after SWITCH_MS means no inbox is attached to take it.
-async function requestSwitch($: EngineInterface, id: string): Promise<void> {
+// Asks the inbox attached to this session for another one. It takes the file when it
+// does; a file still there after SWITCH_MS means no inbox is attached to this session.
+async function requestSwitch($: EngineInterface, host: Host, id: string): Promise<void> {
   const home = (await $.env.get('HOME')) ?? ''
   const path = `${home}/${SWITCH}`
-  await $.fs.write(path, JSON.stringify({ id, at: await nowS($) }))
+  await $.fs.write(path, JSON.stringify({ id, from: host.session, at: await nowS($) }))
   $.ui.toast(`switching to ${id}…`)
   $.clock.after(SWITCH_MS, () => {
     void $.fs.exists(path).then(async isStillThere => {
       if (!isStillThere) return
       await $.fs.write(path, '')
-      $.ui.toast('no inbox is attached to switch: run claude-inbox, attach from it, and press Enter here')
+      $.ui.toast('no inbox is attached to this session: run claude-inbox, attach from it, and press Enter here')
     })
   })
 }
 
-// One headless inbox per machine: the gem holds a lock, so a second start exits at once.
-function startHeadless($: EngineInterface, headless: Headless, now: number): void {
-  if (headless.isRunning || now - headless.startedAt < RESTART_S) return
-  headless.startedAt = now
-  headless.isRunning = true
+// Only while no inbox writes the snapshot; the gem's writer lock turns a second one away.
+function startHeadless($: EngineInterface, host: Host, now: number): void {
+  if (host.isHeadlessRunning || now - host.headlessStartedAt < RESTART_S) return
+  host.headlessStartedAt = now
+  host.isHeadlessRunning = true
   void (async () => {
     try {
-      const child = $.process.spawn({ argv: [headless.command, '--headless'] })
+      const child = $.process.spawn({ argv: [host.command, '--headless'] })
       for await (const piece of child) {
-        if ('text' in piece) $.ui.log(`${headless.command} --headless: ${piece.text.trim()}`, { to: 'debug' })
+        if ('text' in piece) $.ui.log(`${host.command} --headless: ${piece.text.trim()}`, { to: 'debug' })
       }
     } catch (error) {
-      $.ui.log(`${headless.command} --headless did not start: ${String(error)}`, { to: 'debug' })
+      $.ui.log(`${host.command} --headless did not start: ${String(error)}`, { to: 'debug' })
     } finally {
-      headless.isRunning = false
+      host.isHeadlessRunning = false
     }
   })()
 }
 
-async function poll($: EngineInterface, headless: Headless): Promise<void> {
+async function poll($: EngineInterface, host: Host): Promise<void> {
   const home = (await $.env.get('HOME')) ?? ''
   const now = await nowS($)
-  const path = `${home}/${SNAPSHOT}`
-  const snapshot = await readJson<Snapshot | null>($, path, null)
+  const snapshot = await readJson<Snapshot | null>($, `${home}/${SNAPSHOT}`, null)
   const written = snapshot?.written_at ?? 0
-  // A snapshot from before the pane's last edit would put the row back where it was; the gem's
-  // next write, within a second or two, carries the edit.
-  const mtimeMs = snapshot === null ? 0 : await $.fs.stat(path).then(stat => stat.mtimeMs).catch(() => 0)
-  if (snapshot !== null && mtimeMs > (await read($, editedAt))) {
+  if (snapshot !== null) {
     await update($, rows, () => ORDER.flatMap(section => (snapshot.sections?.[section] ?? []).map(one => rowOf(section, one))))
   }
   await update($, writtenAt, () => written)
-  if (now - written > STALE_S) startHeadless($, headless, now)
+  if (now - written > STALE_S) startHeadless($, host, now)
 }
 
 // Puts the ring on the item's hidden Button, so Enter acts on it, and scrolls it into view.
@@ -292,22 +225,23 @@ async function startChord($: EngineInterface, key: Pending): Promise<void> {
 
 export const register: Register = (on, options) => {
   const command = typeof options.command === 'string' && options.command !== '' ? options.command : 'claude-inbox'
-  const headless: Headless = { command, startedAt: 0, isRunning: false }
+  const host: Host = { session: 'pane', command, headlessStartedAt: 0, isHeadlessRunning: false }
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'inbox', description: 'Open the inbox of background sessions' })
     const started = await next(e)
+    host.session = await $.session.id()
     // A pinned line outlives a reload, so an earlier version's is cleared here.
     $.ui.status(undefined)
-    void poll($, headless)
-    $.clock.every(POLL_MS, () => void poll($, headless))
+    void poll($, host)
+    $.clock.every(POLL_MS, () => void poll($, host))
     const opened = await $.ui.open({ id: PANE, title: 'Inbox', columns: 48 })
     if (!opened.isPlaced) $.ui.log(`inbox: /inbox opens the pane (${opened.reason})`, { to: 'debug' })
     return started
   })
 
   on('command.run', { command: 'inbox' }, async $ => {
-    void poll($, headless)
+    void poll($, host)
     const opened = await $.ui.open({ id: PANE, title: 'Inbox', focus: true, columns: 48 })
     const surfaces = (await $.session.surfaces()).join(', ') || 'none'
     if (!opened.isPlaced) return { text: `Inbox pane not drawn: ${opened.reason}. Surfaces: ${surfaces}.` }
@@ -347,7 +281,7 @@ export const register: Register = (on, options) => {
       written === 0
         ? `claude-inbox is not running: starting ${command} --headless.`
         : ageS > STALE_S
-          ? `claude-inbox stopped ${Math.floor(ageS / 60)}m ago; rows are stale.`
+          ? `claude-inbox stopped ${ago(ageS)}; rows are stale.`
           : null
 
     // The gem's header chips, compact: a glyph and a count per section that has rows.
@@ -363,13 +297,14 @@ export const register: Register = (on, options) => {
 
     const onRow = (action: 'settle' | 'wake' | 'pin', verb: string) => () => {
       if (!row?.id || !row.actionable) return $.ui.toast('nothing here can be changed from the pane')
-      void edit($, row.id, MUTATE[action], landingOf(row, action)).then(() => $.ui.toast(`${verb} ${row.label}`))
+      void ask($, host, { action, id: row.id }).then(() => $.ui.toast(`${verb} ${row.label}`))
     }
     const key = (hotkey: string, onPress: () => void) => <Button key={hotkey} hotkey={hotkey} plain label="" onPress={onPress} />
-    // Enter on an item: a fold opens, a row asks the attached inbox to switch to it.
+    // Enter on an item: a fold opens, a row the inbox can attach to asks for the switch.
     const enter = (item: Item) => () => {
       if (item.kind === 'fold') return void setFold($, list, item.section, true)
-      if (item.row.id) void requestSwitch($, item.row.id)
+      if (!item.row.id || !item.row.actionable) return $.ui.toast('this session cannot be attached')
+      void requestSwitch($, host, item.row.id)
     }
 
     // Only the keys a chord allows are mounted while it waits, so any other key is a no-op.
@@ -386,16 +321,10 @@ export const register: Register = (on, options) => {
             ? Object.entries(SNOOZE).map(([digit, { choice, label }]) =>
                 key(digit, () => {
                   if (!row?.id || !row.actionable) return $.ui.toast('nothing here can be snoozed')
-                  const snooze = (entry: Entry, now: number) => {
-                    entry.wake_at = wakeAt(choice, now)
-                    entry.snoozed_at = now
-                  }
-                  void nowS($).then(now =>
-                    edit($, row.id ?? '', snooze, { section: 'snoozed', wakeAt: wakeAt(choice, now) }).then(() => {
-                      void update($, pending, () => null)
-                      $.ui.toast(`snoozed ${row.label} ${label}`)
-                    }),
-                  )
+                  void ask($, host, { action: 'snooze', id: row.id, choice }).then(() => {
+                    void update($, pending, () => null)
+                    $.ui.toast(`snoozed ${row.label} ${label}`)
+                  })
                 }),
               )
             : [

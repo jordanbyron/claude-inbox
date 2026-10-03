@@ -242,12 +242,16 @@ than fifteen minutes old.
 
 The same inbox as a pane inside Claude Code, docked beside the transcript in
 a fullscreen terminal. It shows what the running inbox shows, and starts
-`claude-inbox --headless` when none is running. To load it in every session,
-add the folder `claude-inbox --mod-dir` prints to `~/.claude/settings.json`:
+`claude-inbox --headless` when none is running. Run `claude-inbox --mod-dir`
+once, then put the path it prints in `~/.claude/settings.json` to load the
+pane in every session:
 
 ```json
-"env": { "CLAUDE_CODE_PLUGIN_DIRS": "/path/from/claude-inbox/--mod-dir" }
+"env": { "CLAUDE_CODE_PLUGIN_DIRS": "/Users/you/.config/claude-inbox/mod" }
 ```
+
+That path is a link the inbox points at the installed version on every
+launch, so it survives `gem update`.
 
 `/inbox` opens it, `ctrl+x tab` focuses it and `esc` leaves. The keys are the
 ones above, with `ge` for `G`, `n` `p` for `Tab` `Shift+Tab`, and no `a`,

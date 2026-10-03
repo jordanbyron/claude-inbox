@@ -11,6 +11,7 @@ const PANE = {
 const ROWS = [
   { section: 'needs_you', id: 'a1', label: 'needs an answer', state: 'blocked', actionable: true, line: 'confirm: drop it?' },
   { section: 'active', id: 'b2', label: 'still going', state: 'working', actionable: true, line: 'running bin/ci', pr: { short: '#7', state: 'open', url: 'https://github.com/o/r/pull/7' } },
+  { section: 'active', id: 'uuid-term', label: 'a terminal', state: 'working', actionable: false, isTerminal: true },
   { section: 'settled', id: 'c3', label: 'put away', state: 'done', actionable: true },
 ]
 
@@ -27,6 +28,15 @@ test('without the gem the pane says so, on every surface that seats a pane', asy
   }
 })
 
+test('a snapshot older than thirty seconds is called stale, just now before a minute', async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  on('state.get', ($, e, next) => (e.key === 'writtenAt' ? seeded(1_700_000_000 - 45) : next(e)))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /stopped just now; rows are stale/ })).toBeDefined()
+  await ui.unmount()
+})
+
 test("rows sit under the gem's sections, Settled folded until za opens it", async ($, on) => {
   mock.env(on, { HOME: '/Users/me' })
   mock.clock(on, { now: 1_700_000_000_000 })
@@ -38,7 +48,7 @@ test("rows sit under the gem's sections, Settled folded until za opens it", asyn
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
     expect(await ui.find({ type: 'Text', text: /Needs you · 1/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /Active · 1/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Active · 2/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /Settled · 1/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /confirm: drop it\?/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /#7 open/ })).toBeDefined()
@@ -61,20 +71,39 @@ test("rows sit under the gem's sections, Settled folded until za opens it", asyn
   }
 })
 
-test('x on an actionable row writes a settle into state.json', async ($, on) => {
+test('x leaves a settle request for the inbox to apply', async ($, on) => {
   mock.env(on, { HOME: '/Users/me' })
   mock.clock(on, { now: 1_700_000_000_000 })
   on('state.get', ($, e, next) => (e.key === 'rows' ? seeded(ROWS) : e.key === 'writtenAt' ? seeded(1_700_000_000) : next(e)))
-  const written: string[] = []
-  on('fs.read', ($, e, next) => (e.path.endsWith('state.json') ? { value: '{"version":1,"sessions":{}}' } : next(e)))
+  const written: { path: string; text: string }[] = []
   on('fs.write', ($, e) => {
-    written.push(e.text)
+    written.push({ path: e.path, text: e.text })
     return { value: undefined }
   })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'x' })
   expect(written.length).toBe(1)
-  expect(JSON.parse(written[0] ?? '{}').sessions.a1.settled_at).toBe(1_700_000_000)
+  expect(written[0]?.path).toBe('/Users/me/.config/claude-inbox/actions/pane-1700000000000.json')
+  expect(JSON.parse(written[0]?.text ?? '{}')).toEqual({ action: 'settle', id: 'a1', at: 1_700_000_000_000 })
+  await ui.unmount()
+})
+
+test('Enter asks the attached inbox for the row, naming this session, and refuses a terminal', async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  on('state.get', ($, e, next) => (e.key === 'rows' ? seeded(ROWS) : e.key === 'writtenAt' ? seeded(1_700_000_000) : next(e)))
+  const written: { path: string; text: string }[] = []
+  on('fs.write', ($, e) => {
+    written.push({ path: e.path, text: e.text })
+    return { value: undefined }
+  })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'row:uuid-term' })
+  expect(written.length).toBe(0)
+  await ui.press({ key: 'row:b2' })
+  expect(written.length).toBe(1)
+  expect(written[0]?.path).toBe('/Users/me/.config/claude-inbox/switch.json')
+  expect(JSON.parse(written[0]?.text ?? '{}')).toEqual({ id: 'b2', from: 'pane', at: 1_700_000_000 })
   await ui.unmount()
 })
 
