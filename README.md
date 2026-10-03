@@ -249,6 +249,8 @@ once to load the pane in every session. It adds
 other copy of the pane listed there, and points the pane at this copy's
 `claude-inbox`.
 
+![The inbox pane docked beside a Claude Code transcript](docs/pane.png)
+
 That path is a link the inbox points at the installed version on every
 launch, so it survives `gem update`.
 
