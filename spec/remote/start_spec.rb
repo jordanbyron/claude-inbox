@@ -10,7 +10,7 @@ RSpec.describe ClaudeInbox::Remote::Start do
   let(:queue) { Queue.new }
   let(:trusted) { [] }
   let(:settings) { {} }
-  let(:options) { {} }
+  let(:options) { {fixture: false} }
   let(:remote_start) do
     described_class.new(client: client, store: store, queue: queue,
       allowed_modes: ClaudeInbox::Remote::Listener::DEFAULT_MODES, images_dir: File.join(tmp, "images"),
