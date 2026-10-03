@@ -70,6 +70,19 @@ RSpec.describe ClaudeInbox::Actions do
     end
   end
 
+  it "leaves requests the way the pane does, two in one moment kept apart, and takes them back" do
+    Dir.mktmpdir do |dir|
+      actions = described_class.new(dir: File.join(dir, "actions"), clock: -> { now })
+      actions.request("acknowledge", "a", from: "inbox-1")
+      actions.request("snooze", "b", choice: "m15", from: "inbox-1")
+      ms = now.to_i * 1000
+      expect(Dir.children(File.join(dir, "actions")).sort).to eq(["inbox-1-#{ms}-1.json", "inbox-1-#{ms}-2.json"])
+      expect(actions.drain(store)).to eq(2)
+      expect(store.entry("a")["acknowledged_at"]).to eq(now.to_i)
+      expect(store.entry("b")["wake_at"]).to eq(now.to_i + 900)
+    end
+  end
+
   it "does nothing when disabled or without the directory" do
     expect(described_class.disabled.drain(store)).to eq(0)
     expect(described_class.new(dir: "/nonexistent/claude-inbox").drain(store)).to eq(0)

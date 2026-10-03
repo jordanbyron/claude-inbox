@@ -63,7 +63,7 @@ end
 # Held for the life of this process by this reference.
 writer_lock = fixture ? ClaudeInbox::WriterLock.disabled : ClaudeInbox::WriterLock.new
 unless writer_lock.take(role: "inbox")
-  opts[:store] = ClaudeInbox::Store.new(writable: false)
+  opts[:store] = ClaudeInbox::Store.new(writable: false, relay: ClaudeInbox::Actions.new)
   opts[:reaper] = ClaudeInbox::Reaper.disabled
   opts[:snapshot] = ClaudeInbox::Snapshot.disabled
   opts[:actions] = ClaudeInbox::Actions.disabled

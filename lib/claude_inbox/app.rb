@@ -251,6 +251,13 @@ module ClaudeInbox
       false
     end
 
+    # The edits with no request form, which a second inbox cannot keep.
+    def require_writable(verb)
+      return true if @store.writable?
+      notice("another claude-inbox owns state.json — #{verb} there")
+      false
+    end
+
     def notice(msg)
       @notice = [msg, Time.now + 4]
     end
@@ -437,13 +444,13 @@ module ClaudeInbox
     end
 
     def open_alias_editor
-      return unless require_storable
+      return unless require_storable && require_writable("rename")
       current = @store.alias_for(@selected.key) || ""
       @modal = Dialog::Prompt.new(:alias, @selected.key, current)
     end
 
     def open_pr_editor
-      return unless require_storable
+      return unless require_storable && require_writable("link a pull request")
       current = @store.pr_for(@selected.key) || selected_session&.pr&.url || ""
       @modal = Dialog::Prompt.new(:pr, @selected.key, current)
     end
