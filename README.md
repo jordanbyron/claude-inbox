@@ -7,13 +7,38 @@ lists and adds snooze, settle, pinning and each session's pull request.
 
 ## Install
 
+Requires Ruby 3.2+ and `claude` on PATH.
+
 ```
 gem install claude-inbox
 claude-inbox
 ```
 
-Requires Ruby 3.2+ and `claude` on PATH. Put arguments you want on every
-launch in `~/.config/claude-inbox/config`.
+Put arguments you want on every launch in `~/.config/claude-inbox/config`.
+
+To add the pane to every Claude Code session:
+
+```
+claude-inbox install
+```
+
+`claude-inbox install --force` also replaces any other copy of the pane.
+
+## Claude Code pane
+
+The same inbox as a pane inside Claude Code, docked beside the transcript in
+a fullscreen terminal.
+
+![The inbox pane docked beside a Claude Code transcript](docs/pane.png)
+
+`/inbox` opens it, `ctrl+x tab` focuses it and `esc` leaves. The keys are the
+ones below, with `ge` for `G`, `n` `p` for `Tab` `Shift+Tab`, and no `a`,
+`P`, `X`, `Ctrl-x`, `/` or `R`. `Enter` switches to the session when you
+attached through `claude-inbox`.
+
+It opens when a session starts. To stop that, set
+`pluginConfigs.inbox-pane.options.openOnStart` to `false` in
+`~/.claude/settings.json`.
 
 ## Sections
 
@@ -132,26 +157,6 @@ input=$(cat)
 limits=$(echo "$input" | jq -c '.rate_limits // empty')
 [ -n "$limits" ] && echo "$limits" > ~/.claude/rate_limits.json.tmp && mv ~/.claude/rate_limits.json.tmp ~/.claude/rate_limits.json
 ```
-
-## Claude Code pane
-
-The same inbox as a pane inside Claude Code, docked beside the transcript in
-a fullscreen terminal. It starts `claude-inbox --headless` when no inbox is
-running.
-
-![The inbox pane docked beside a Claude Code transcript](docs/pane.png)
-
-Run `claude-inbox install` once to load the pane in every session.
-`claude-inbox install --force` also replaces any other copy of the pane.
-
-`/inbox` opens it, `ctrl+x tab` focuses it and `esc` leaves. The keys are the
-ones above, with `ge` for `G`, `n` `p` for `Tab` `Shift+Tab`, and no `a`,
-`P`, `X`, `Ctrl-x`, `/` or `R`. `Enter` switches to the session when you
-attached through `claude-inbox`.
-
-It opens when a session starts. To stop that, set
-`pluginConfigs.inbox-pane.options.openOnStart` to `false` in
-`~/.claude/settings.json`.
 
 ## Contributing
 
