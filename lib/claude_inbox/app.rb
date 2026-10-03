@@ -20,6 +20,7 @@ require_relative "reaper"
 require_relative "poller"
 require_relative "rate_limits"
 require_relative "session_request"
+require_relative "actions"
 require_relative "snapshot"
 require_relative "switch"
 
@@ -31,7 +32,8 @@ module ClaudeInbox
     # so both are off unless `bin/claude-inbox` switches them on.
     def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
       rate_limits: RateLimits.new, reaper: Reaper.disabled, snapshot: Snapshot.disabled, switch: Switch.disabled,
-      listen: nil, out: $stdout, input: $stdin, color: true, terminal: Terminal.new(out, input), queue: Queue.new)
+      actions: Actions.disabled, listen: nil, out: $stdout, input: $stdin, color: true,
+      terminal: Terminal.new(out, input), queue: Queue.new)
       @client = client
       @store = store
       @snapshot = snapshot
@@ -44,7 +46,7 @@ module ClaudeInbox
       @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
       @queue = queue
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests,
-        reaper: reaper, queue: @queue)
+        reaper: reaper, queue: @queue, snapshot: snapshot, actions: actions)
       @listener = listen ? Remote::Listener.new(client: client, store: store, queue: @queue, **listen) : Remote::Listener.disabled
       @logs = Logs.new(client)
       @peek = Peek.new(@logs)
@@ -116,7 +118,6 @@ module ClaudeInbox
         kind, *rest = @queue.pop(true)
         case kind
         when :sessions
-          @store.update(rest[0])
           @last_poll = Time.now
           @error = nil
         when :error then @error = rest[0]
@@ -172,7 +173,6 @@ module ClaudeInbox
     def render
       t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
       now = Time.now
-      @store.reload_if_changed
       all = @store.sections(now)
       @snapshot.write(all, now)
       sections = filtered(all)
@@ -411,18 +411,17 @@ module ClaudeInbox
       notice("settled — u brings it back")
     end
 
-    # Another front end may ask, mid-attach, for a different session: the
-    # attach ends and the next one starts without passing through the list.
+    # The pane in the attached session may ask for a different one: the
+    # attach ends and the next starts without passing through the list. The
+    # poller keeps running meanwhile, so the pane's snapshot stays fresh.
     def attach(id)
-      @poller.pause
       while id
         @store.acknowledge(id)
         @switch.clear
-        @terminal.release { @client.attach(id) { @switch.requested? } }
-        id = @switch.take
+        from = @store.sessions.find { |s| s.key == id }&.session_id
+        @terminal.release { @client.attach(id) { @switch.requested_for?(from) } }
+        id = @switch.take(@store.sessions.select(&:actionable?).map(&:key))
       end
-    ensure
-      @poller.resume
     end
 
     # ----- modals -----------------------------------------------------------

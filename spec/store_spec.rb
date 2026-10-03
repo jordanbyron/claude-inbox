@@ -186,39 +186,6 @@ RSpec.describe ClaudeInbox::Store do
       expect(described_class.sectionize(%w[a b].map { |i| session(id: i) }, entries, now).pinned.map(&:id)).to eq(%w[b a])
     end
 
-    it "keeps an edit another writer made to state.json between polls" do
-      Dir.mktmpdir do |dir|
-        path = File.join(dir, "state.json")
-        store = described_class.new(path: path, clock: -> { now })
-        store.update([session(id: "a")])
-        data = JSON.parse(File.read(path))
-        data["sessions"]["a"]["pinned"] = true
-        File.write(path, JSON.generate(data))
-        store.update([session(id: "a")])
-        expect(store.sections.pinned.map(&:id)).to eq(%w[a])
-      end
-    end
-
-    it "reloads another writer's edit when the file changes, and keeps its own on a torn read" do
-      Dir.mktmpdir do |dir|
-        path = File.join(dir, "state.json")
-        store = described_class.new(path: path, clock: -> { now })
-        store.update([session(id: "a")])
-        store.reload_if_changed
-        expect(store.sections.pinned).to be_empty
-        data = JSON.parse(File.read(path))
-        data["sessions"]["a"]["pinned"] = true
-        File.write(path, JSON.generate(data))
-        File.utime(now + 5, now + 5, path)
-        store.reload_if_changed
-        expect(store.sections.pinned.map(&:id)).to eq(%w[a])
-        File.write(path, "{\"version\":1,\"sess")
-        File.utime(now + 10, now + 10, path)
-        store.reload_if_changed
-        expect(store.sections.pinned.map(&:id)).to eq(%w[a])
-      end
-    end
-
     it "toggle_pin sets and clears pinned via the store" do
       clock = -> { now }
       Dir.mktmpdir do |dir|

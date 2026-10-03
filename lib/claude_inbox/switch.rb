@@ -4,9 +4,9 @@ require_relative "records"
 
 module ClaudeInbox
   # A request from another front end to attach to a different session: one
-  # file, written by the asker and taken by the inbox holding the terminal.
-  # Only an inbox attached to a session can act on it, which is why the
-  # asker gives up on a request nobody takes.
+  # file, written by the asker and taken by the inbox attached to the asker's
+  # own session. Only that inbox can act on it, which is why the asker gives
+  # up on a request nobody takes, and why the request names who asked.
   class Switch
     DEFAULT_PATH = File.join(Dir.home, ".config", "claude-inbox", "switch.json")
 
@@ -16,15 +16,19 @@ module ClaudeInbox
       @path = path
     end
 
-    def request(id, now) = @path && Records.save(@path, {"id" => id, "at" => now.to_i})
+    def request(id, from, now) = @path && Records.save(@path, {"id" => id, "from" => from, "at" => now.to_i})
 
-    def requested? = !@path.nil? && File.exist?(@path)
+    # Whether the session `from` has asked to go elsewhere.
+    def requested_for?(from)
+      return false if @path.nil? || from.nil? || !File.exist?(@path)
+      Records.read(@path)["from"] == from
+    end
 
-    # The requested id, and the request is gone; nil without one.
-    def take
+    # The requested id if it is one of `attachable`, and the request is gone either way.
+    def take(attachable)
       id = Records.read(@path)["id"]
       clear
-      (id.is_a?(String) && !id.empty?) ? id : nil
+      attachable.include?(id) ? id : nil
     end
 
     def clear

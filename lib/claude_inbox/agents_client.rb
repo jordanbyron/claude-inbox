@@ -229,7 +229,10 @@ module ClaudeInbox
         next unless cmd.split[1] == "agents" || stop&.call
         Debug.log("watchdog saw #{cmd.inspect}")
         Process.kill("TERM", pid)
-        sleep 1
+        10.times do
+          sleep 0.1
+          break if Subprocess.capture("ps", "-o", "pid=", "-p", pid.to_s).out.empty?
+        end
         Process.kill("KILL", pid)
         break
       end

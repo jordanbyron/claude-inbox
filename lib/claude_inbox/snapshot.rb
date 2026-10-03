@@ -17,15 +17,19 @@ module ClaudeInbox
       @path = path
       @body = nil
       @written_at = nil
+      @mutex = Mutex.new
     end
 
+    # Called from the poller's threads and the screen's alike.
     def write(sections, now)
       return unless @path
       body = sections.to_h.to_h { |name, rows| [name.to_s, rows.map { |row| row_hash(row) }] }
-      return if body == @body && now.to_i - @written_at < HEARTBEAT
-      @body = body
-      @written_at = now.to_i
-      Records.save(@path, {"version" => 1, "written_at" => @written_at, "sections" => body})
+      @mutex.synchronize do
+        return if body == @body && now.to_i - @written_at < HEARTBEAT
+        @body = body
+        @written_at = now.to_i
+        Records.save(@path, {"version" => 1, "written_at" => @written_at, "sections" => body})
+      end
     end
 
     private
