@@ -73,10 +73,10 @@ RSpec.describe ClaudeInbox::Actions do
   it "leaves requests the way the pane does, two in one moment kept apart, and takes them back" do
     Dir.mktmpdir do |dir|
       actions = described_class.new(dir: File.join(dir, "actions"), clock: -> { now })
-      actions.request("acknowledge", "a", from: "inbox-1")
-      actions.request("snooze", "b", choice: "m15", from: "inbox-1")
+      actions.request("acknowledge", "a")
+      actions.request("snooze", "b", choice: "m15")
       ms = now.to_i * 1000
-      expect(Dir.children(File.join(dir, "actions")).sort).to eq(["inbox-1-#{ms}-1.json", "inbox-1-#{ms}-2.json"])
+      expect(Dir.children(File.join(dir, "actions")).sort).to eq(["inbox-#{Process.pid}-#{ms}-1.json", "inbox-#{Process.pid}-#{ms}-2.json"])
       expect(actions.drain(store)).to eq(2)
       expect(store.entry("a")["acknowledged_at"]).to eq(now.to_i)
       expect(store.entry("b")["wake_at"]).to eq(now.to_i + 900)
