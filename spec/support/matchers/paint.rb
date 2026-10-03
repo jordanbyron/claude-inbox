@@ -10,8 +10,7 @@ RSpec::Matchers.define :paint do |text|
   chain(:on_selected_row) { @where = :selected_row }
 
   match do |app|
-    app.step
-    lines = app.instance_variable_get(:@terminal).lines
+    lines = screen(app)
     @painted = case @where
     when :status_line then lines.first
     when :footer then lines.last
