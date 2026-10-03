@@ -7,7 +7,7 @@ RSpec.describe ClaudeInbox::Snapshot do
   let(:merged) { ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: "MERGED", resolved_at: now.to_i - 60) }
   let(:sections) do
     entries = {"b" => {"last_state" => "done", "state_since" => now.to_i - 90, "alias" => "renamed", "wake_at" => "until_woken"}}
-    ClaudeInbox::Store.sectionize([session(id: "a", state: "blocked"), session(id: "b", state: "done", prs: [merged])], entries, now)
+    ClaudeInbox::Store.sectionize([session(id: "a", state: "blocked", session_id: "u-a"), session(id: "b", state: "done", prs: [merged])], entries, now)
   end
 
   it "writes each section's rows as the screen shows them" do
@@ -17,7 +17,7 @@ RSpec.describe ClaudeInbox::Snapshot do
       data = JSON.parse(File.read(path))
       expect(data["written_at"]).to eq(now.to_i)
       expect(data["sections"].keys).to eq(%w[pinned needs_you active snoozed settled])
-      expect(data["sections"]["needs_you"].map { |r| r["id"] }).to eq(%w[a])
+      expect(data["sections"]["needs_you"].map { |r| r.slice("id", "session") }).to eq([{"id" => "a", "session" => "u-a"}])
       row = data["sections"]["snoozed"].first
       expect(row.slice("id", "label", "state", "actionable", "wake_at")).to eq(
         "id" => "b", "label" => "renamed", "state" => "done", "actionable" => true, "wake_at" => "until_woken"

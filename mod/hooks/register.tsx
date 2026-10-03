@@ -18,7 +18,9 @@ const SWITCH_MS = 3000
 const SNAPSHOT = '.config/claude-inbox/snapshot.json'
 const ACTIONS = '.config/claude-inbox/actions'
 const SWITCH = '.config/claude-inbox/switch.json'
+// The sessions to switch to; the one this pane sits in is lifted out into `current`.
 const rows = atom({ plugin: 'inbox-pane', key: 'rows' } as const, [])
+const current = atom({ plugin: 'inbox-pane', key: 'current' } as const, null)
 const writtenAt = atom({ plugin: 'inbox-pane', key: 'writtenAt' } as const, 0)
 const cursor = atom({ plugin: 'inbox-pane', key: 'cursor' } as const, 0)
 const folds = atom({ plugin: 'inbox-pane', key: 'folds' } as const, { snoozed: true, settled: true })
@@ -26,6 +28,7 @@ const pending = atom({ plugin: 'inbox-pane', key: 'pending' } as const, null)
 
 export type SnapshotRow = {
   id?: string
+  session?: string
   label?: string
   state?: string
   actionable?: boolean
@@ -89,13 +92,17 @@ function viewKey(item: Item): string {
   return `view:${itemKey(item)}`
 }
 
-function groupsOf(list: InboxRow[], folded: Folds): { section: Section; items: Item[] }[] {
-  return ORDER.flatMap(section => {
-    const own = list.filter(row => row.section === section)
-    if (own.length === 0) return []
-    const items: Item[] = isFold(section) && folded[section] ? [{ kind: 'fold', section, count: own.length }] : own.map(row => ({ kind: 'row', row }))
-    return [{ section, items }]
-  })
+// The session the pane sits in leads, in a group of its own.
+function groupsOf(list: InboxRow[], folded: Folds, current: InboxRow | null): { section: Section | null; items: Item[] }[] {
+  const lead = current ? [{ section: null, items: [{ kind: 'row', row: current } as Item] }] : []
+  return lead.concat(
+    ORDER.flatMap(section => {
+      const own = list.filter(row => row.section === section)
+      if (own.length === 0) return []
+      const items: Item[] = isFold(section) && folded[section] ? [{ kind: 'fold', section, count: own.length }] : own.map(row => ({ kind: 'row', row }))
+      return [{ section, items }]
+    }),
+  )
 }
 
 async function readJson<T>($: EngineInterface, path: string, fallback: T): Promise<T> {
@@ -111,6 +118,7 @@ export function rowOf(section: Section, one: SnapshotRow): InboxRow {
   return {
     section,
     id: one.id,
+    session: one.session,
     label: one.label ?? one.id ?? '',
     state: one.state ?? 'unknown',
     actionable: one.actionable === true,
@@ -191,7 +199,11 @@ async function poll($: EngineInterface, host: Host): Promise<void> {
   const snapshot = await readJson<Snapshot | null>($, `${home}/${SNAPSHOT}`, null)
   const written = snapshot?.written_at ?? 0
   if (snapshot !== null) {
-    await update($, rows, () => ORDER.flatMap(section => (snapshot.sections?.[section] ?? []).map(one => rowOf(section, one))))
+    const all = ORDER.flatMap(section => (snapshot.sections?.[section] ?? []).map(one => rowOf(section, one)))
+    // Read on every poll: a /clear mints a new session id mid-session.
+    const id = await $.session.id().catch(() => host.session)
+    await update($, current, () => all.find(one => one.session === id) ?? null)
+    await update($, rows, () => all.filter(one => one.session !== id))
   }
   await update($, writtenAt, () => written)
   if (now - written > STALE_S) startHeadless($, host, now)
@@ -212,14 +224,14 @@ async function moveTo($: EngineInterface, flat: Item[], to: number): Promise<voi
   if (item) await ringOn($, item)
 }
 
-async function setFold($: EngineInterface, list: InboxRow[], name: Fold | undefined, open: boolean): Promise<void> {
+async function setFold($: EngineInterface, list: InboxRow[], current: InboxRow | null, name: Fold | undefined, open: boolean): Promise<void> {
   await update($, pending, () => null)
   if (!name) return
   const folded = await update($, folds, f => ({ ...(f ?? { snoozed: true, settled: true }), [name]: !open }))
   // The item under the cursor may have just become a fold, or the fold its rows.
-  const flat = groupsOf(list, folded).flatMap(group => group.items)
-  const at = flat.findIndex(item => (item.kind === 'fold' ? item.section : item.row.section) === name)
-  if (at >= 0) await moveTo($, flat, at)
+  const groups = groupsOf(list, folded, current)
+  const at = groups.findIndex(group => group.section === name)
+  if (at >= 0) await moveTo($, groups.flatMap(group => group.items), groups.slice(0, at).flatMap(group => group.items).length)
 }
 
 async function startChord($: EngineInterface, key: Pending): Promise<void> {
@@ -256,7 +268,7 @@ export const register: Register = (on, options) => {
   // The ring walks the items' hidden Buttons and nothing else: entering the pane it lands on
   // the cursor's item, the arrows move it to the next, and the cursor follows.
   on('ui.focus', { requestId: PANE }, async ($, e, next) => {
-    const flat = groupsOf(await read($, rows), await read($, folds)).flatMap(group => group.items)
+    const flat = groupsOf(await read($, rows), await read($, folds), await read($, current)).flatMap(group => group.items)
     if (e.element === undefined) {
       const item = flat[Math.min(await read($, cursor), Math.max(0, flat.length - 1))]
       return item ? next({ ...e, element: itemKey(item) }) : next(e)
@@ -272,7 +284,7 @@ export const register: Register = (on, options) => {
   // moves the cursor instead, and the wheel, the page keys and the pane's own scrolls pass.
   on('ui.scroll', { requestId: PANE }, async ($, e, next) => {
     if (e.origin.kind !== 'person' || e.pointer !== undefined || Math.abs(e.by) !== 1) return next(e)
-    const flat = groupsOf(await read($, rows), await read($, folds)).flatMap(group => group.items)
+    const flat = groupsOf(await read($, rows), await read($, folds), await read($, current)).flatMap(group => group.items)
     const at = Math.min(await read($, cursor), Math.max(0, flat.length - 1))
     await moveTo($, flat, at + e.by)
     return {}
@@ -281,16 +293,17 @@ export const register: Register = (on, options) => {
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     const list = await read($, rows)
+    const viewing = await read($, current)
     const folded = await read($, folds)
     const chord = await read($, pending)
     const written = await read($, writtenAt)
     const ageS = (await nowS($)) - written
-    const groups = groupsOf(list, folded)
+    const groups = groupsOf(list, folded, viewing)
     const flat = groups.flatMap(group => group.items)
     const at = Math.min(await read($, cursor), Math.max(0, flat.length - 1))
     const selected = flat[at]
     const row = selected?.kind === 'row' ? selected.row : undefined
-    const section = selected?.kind === 'fold' ? selected.section : row?.section
+    const section = selected?.kind === 'fold' ? selected.section : row === viewing ? undefined : row?.section
     const fold = section && isFold(section) ? section : undefined
     const heads = groups.map(group => flat.indexOf(group.items[0] as Item))
     const notice =
@@ -318,7 +331,8 @@ export const register: Register = (on, options) => {
     const key = (hotkey: string, onPress: () => void) => <Button key={hotkey} hotkey={hotkey} plain label="" onPress={onPress} />
     // Enter on an item: a fold opens, a row the inbox can attach to asks for the switch.
     const enter = (item: Item) => () => {
-      if (item.kind === 'fold') return void setFold($, list, item.section, true)
+      if (item.kind === 'fold') return void setFold($, list, viewing, item.section, true)
+      if (item.row === viewing) return $.ui.toast('you are in this session')
       if (!item.row.id || !item.row.actionable) return $.ui.toast('this session cannot be attached')
       void requestSwitch($, host, item.row.id)
     }
@@ -329,9 +343,9 @@ export const register: Register = (on, options) => {
         ? [key('g', () => void moveTo($, flat, 0)), key('e', () => void moveTo($, flat, flat.length - 1))]
         : chord === 'z'
           ? [
-              key('a', () => void setFold($, list, fold, fold ? folded[fold] : false)),
-              key('o', () => void setFold($, list, fold, true)),
-              key('c', () => void setFold($, list, fold, false)),
+              key('a', () => void setFold($, list, viewing, fold, fold ? folded[fold] : false)),
+              key('o', () => void setFold($, list, viewing, fold, true)),
+              key('c', () => void setFold($, list, viewing, fold, false)),
             ]
           : chord === 's'
             ? Object.entries(SNOOZE).map(([digit, { choice, label }]) =>
@@ -350,7 +364,7 @@ export const register: Register = (on, options) => {
                 key('n', () => void moveTo($, flat, heads.find(h => h > at) ?? heads[0] ?? 0)),
                 key('p', () => void moveTo($, flat, heads.filter(h => h < at).pop() ?? heads[heads.length - 1] ?? 0)),
                 key('z', () => void startChord($, 'z')),
-                key('h', () => void setFold($, list, fold, false)),
+                key('h', () => void setFold($, list, viewing, fold, false)),
                 key('l', selected ? enter(selected) : () => undefined),
                 key('x', onRow('settle', 'settled')),
                 key('u', onRow('wake', 'woke')),
@@ -379,14 +393,14 @@ export const register: Register = (on, options) => {
               {glyph} {n}
             </Text>
           ))}
-          {list.length === 0 && <Text dimColor>nothing running</Text>}
+          {list.length === 0 && viewing === null && <Text dimColor>nothing running</Text>}
         </Box>
         {notice !== null && <Text color="yellow">{notice}</Text>}
         {notice === null && flat.length === 0 && <Text dimColor>No sessions.</Text>}
         {groups.map(group => (
           <Box flexDirection="column" marginTop={1}>
             <Text bold dimColor>
-              {TITLE[group.section]} · {list.filter(one => one.section === group.section).length}
+              {group.section === null ? 'This session' : `${TITLE[group.section]} · ${list.filter(one => one.section === group.section).length}`}
             </Text>
             {group.items.map(item => {
               const isHere = item === selected
