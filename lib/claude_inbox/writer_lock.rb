@@ -4,8 +4,9 @@ require "fileutils"
 
 module ClaudeInbox
   # One snapshot writer per machine: the inbox you can see, else a headless
-  # one. The inbox takes the lock over from a headless process, which it ends;
-  # a headless process that finds the lock held exits instead.
+  # one. The file names the holder's role beside its pid, so an inbox takes
+  # the lock over from a headless process, which it ends, and never from
+  # another inbox; a headless process that finds the lock held exits.
   class WriterLock
     DEFAULT_PATH = File.join(Dir.home, ".config", "claude-inbox", "writer.lock")
     EVICT_TRIES = 20
@@ -17,23 +18,23 @@ module ClaudeInbox
       @file = nil
     end
 
-    # True once held. With `evict`, the holder is sent TERM and the lock
-    # waited for; without, a held lock is simply refused.
-    def take(evict: false)
+    # True once held. Only a headless holder is evicted, and only by an inbox.
+    def take(role:)
       return true unless @path
       FileUtils.mkdir_p(File.dirname(@path))
       file = File.open(@path, File::RDWR | File::CREAT, 0o600)
-      return hold(file) if file.flock(File::LOCK_EX | File::LOCK_NB)
-      return refuse(file) unless evict
-      holder = file.read.to_i
-      Process.kill("TERM", holder) if holder.positive? && holder != Process.pid
+      return hold(file, role) if file.flock(File::LOCK_EX | File::LOCK_NB)
+      holder_role, holder = file.read.split
+      return refuse(file) unless role == "inbox" && holder_role == "headless"
+      Process.kill("TERM", holder.to_i) if holder.to_i.positive? && holder.to_i != Process.pid
       EVICT_TRIES.times do
-        return hold(file) if file.flock(File::LOCK_EX | File::LOCK_NB)
+        return hold(file, role) if file.flock(File::LOCK_EX | File::LOCK_NB)
         sleep 0.1
       end
       refuse(file)
     rescue Errno::ESRCH, Errno::EPERM
-      retry_take(file)
+      # The holder the file names is gone already: the lock is free.
+      file.flock(File::LOCK_EX | File::LOCK_NB) ? hold(file, role) : refuse(file)
     end
 
     def held? = !@file.nil?
@@ -45,9 +46,9 @@ module ClaudeInbox
 
     private
 
-    def hold(file)
+    def hold(file, role)
       file.truncate(0)
-      file.write(Process.pid.to_s)
+      file.write("#{role} #{Process.pid}")
       file.flush
       @file = file
       true
@@ -56,12 +57,6 @@ module ClaudeInbox
     def refuse(file)
       file.close
       false
-    end
-
-    # The holder recorded in the file is gone already: the lock is free.
-    def retry_take(file)
-      hold(file) if file.flock(File::LOCK_EX | File::LOCK_NB)
-      held? || refuse(file)
     end
   end
 end

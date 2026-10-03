@@ -24,7 +24,7 @@ const cursor = atom({ plugin: 'inbox-pane', key: 'cursor' } as const, 0)
 const folds = atom({ plugin: 'inbox-pane', key: 'folds' } as const, { snoozed: true, settled: true })
 const pending = atom({ plugin: 'inbox-pane', key: 'pending' } as const, null)
 
-type SnapshotRow = {
+export type SnapshotRow = {
   id?: string
   label?: string
   state?: string
@@ -106,7 +106,7 @@ async function readJson<T>($: EngineInterface, path: string, fallback: T): Promi
   }
 }
 
-function rowOf(section: Section, one: SnapshotRow): InboxRow {
+export function rowOf(section: Section, one: SnapshotRow): InboxRow {
   const pr = one.pr?.short && one.pr.url ? { short: one.pr.short, state: one.pr.state ?? '', url: one.pr.url } : undefined
   return {
     section,
@@ -147,15 +147,19 @@ async function ask($: EngineInterface, host: Host, action: Action): Promise<void
 }
 
 // Asks the inbox attached to this session for another one. It takes the file when it
-// does; a file still there after SWITCH_MS means no inbox is attached to this session.
+// does; a file still there after SWITCH_MS, and still ours, means no inbox is attached to
+// this session. The session id is read each time: it is the transcript's name, which the
+// daemon reports as sessionId, and a /clear may mint a new one mid-session.
 async function requestSwitch($: EngineInterface, host: Host, id: string): Promise<void> {
   const home = (await $.env.get('HOME')) ?? ''
   const path = `${home}/${SWITCH}`
-  await $.fs.write(path, JSON.stringify({ id, from: host.session, at: await nowS($) }))
+  const from = await $.session.id().catch(() => host.session)
+  const at = await nowS($)
+  await $.fs.write(path, JSON.stringify({ id, from, at }))
   $.ui.toast(`switching to ${id}…`)
   $.clock.after(SWITCH_MS, () => {
-    void $.fs.exists(path).then(async isStillThere => {
-      if (!isStillThere) return
+    void readJson<{ from?: string; at?: number } | null>($, path, null).then(async left => {
+      if (left === null || left.from !== from || left.at !== at) return
       await $.fs.write(path, '')
       $.ui.toast('no inbox is attached to this session: run claude-inbox, attach from it, and press Enter here')
     })

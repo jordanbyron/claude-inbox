@@ -12,7 +12,7 @@ require "claude_inbox/mod"
 
 # The stable path to the Claude Code pane, for CLAUDE_CODE_PLUGIN_DIRS.
 if ARGV.include?("--mod-dir")
-  puts ClaudeInbox::Mod.link
+  puts ClaudeInbox::Mod.link(force: true)
   exit
 end
 
@@ -66,11 +66,15 @@ if argv.include?("--headless")
   exit(ClaudeInbox::Headless.new(client: opts[:client], store: opts[:store]).run ? 0 : 1)
 end
 
-# The inbox you can see is the snapshot's writer: a headless one gives way.
-# Held for the life of this process by this reference.
+# The first inbox you can see is the snapshot's writer: a headless one gives
+# way to it, and a second inbox reads along without writing. Held for the
+# life of this process by this reference.
 writer_lock = fixture ? ClaudeInbox::WriterLock.disabled : ClaudeInbox::WriterLock.new
-writer_lock.take(evict: true)
-# So the pane settings.json names is this version's, after a gem update too.
+unless writer_lock.take(role: "inbox")
+  opts[:snapshot] = ClaudeInbox::Snapshot.disabled
+  opts[:actions] = ClaudeInbox::Actions.disabled
+end
+# So the pane settings.json names is the installed version's, after a gem update too.
 ClaudeInbox::Mod.link unless fixture
 
 ClaudeInbox::App.new(**opts).run

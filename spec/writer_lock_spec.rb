@@ -8,25 +8,36 @@ RSpec.describe ClaudeInbox::WriterLock do
       path = File.join(dir, "writer.lock")
       first = described_class.new(path: path)
       second = described_class.new(path: path)
-      expect(first.take).to be(true)
+      expect(first.take(role: "headless")).to be(true)
       expect(first).to be_held
-      expect(File.read(path)).to eq(Process.pid.to_s)
-      expect(second.take).to be(false)
+      expect(File.read(path)).to eq("headless #{Process.pid}")
+      expect(second.take(role: "headless")).to be(false)
       expect(second).not_to be_held
       first.release
-      expect(second.take).to be(true)
+      expect(second.take(role: "headless")).to be(true)
     end
   end
 
-  it "takes over from a holder that is gone when asked to evict" do
+  it "never evicts an inbox: a second inbox runs without the lock" do
     Dir.mktmpdir do |dir|
       path = File.join(dir, "writer.lock")
-      File.write(path, "999999999")
-      expect(described_class.new(path: path).take(evict: true)).to be(true)
+      first = described_class.new(path: path)
+      expect(first.take(role: "inbox")).to be(true)
+      expect(described_class.new(path: path).take(role: "inbox")).to be(false)
+      expect(described_class.new(path: path).take(role: "headless")).to be(false)
+      expect(first).to be_held
+    end
+  end
+
+  it "takes over from a headless holder that is gone" do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "writer.lock")
+      File.write(path, "headless 999999999")
+      expect(described_class.new(path: path).take(role: "inbox")).to be(true)
     end
   end
 
   it "is always held when disabled" do
-    expect(described_class.disabled.take).to be(true)
+    expect(described_class.disabled.take(role: "inbox")).to be(true)
   end
 end

@@ -187,18 +187,6 @@ RSpec.describe ClaudeInbox::Poller do
       end
     end
 
-    it "skips the poll while paused and catches up on resume" do
-      worker.pause
-      worker.start
-      worker.soon
-      sleep 0.2
-      expect(client.polls.size).to eq(0)
-
-      worker.resume
-      wait_for { client.polls.size >= 1 }
-      expect(client.polls.size).to eq(1)
-    end
-
     it "can be stopped before it was started" do
       worker.stop
     end

@@ -107,3 +107,9 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
 - Terminal.app puts the tty's active process in the tab title, so a poller
   that forks `claude` every few seconds makes the title flicker. Every helper
   subprocess here is started with `setsid` so it has no controlling tty.
+- A background session's `sessionId` in the JSON is the uuid its transcript
+  file is named after, and a plugin's `$.session.id()` inside that session
+  answers the same uuid (checked on 2.1.288: the job's `linkScanPath` ends in
+  it). That is what a switch request is addressed by. The transcript moves to
+  another project directory when the session changes its working directory,
+  but keeps its name.
