@@ -9,6 +9,12 @@
       "title": "claude-inbox command",
       "description": "The claude-inbox executable to run headless when no inbox is writing the snapshot.",
       "default": "claude-inbox"
+    },
+    "openOnStart": {
+      "type": "boolean",
+      "title": "Open on start",
+      "description": "Open the pane when a session starts. Off, /inbox opens it.",
+      "default": true
     }
   }
 }

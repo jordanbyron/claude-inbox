@@ -1,3 +1,4 @@
+import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
 const PANE = {
@@ -17,6 +18,28 @@ const ROWS = [
 
 // The op's result rides under `value`, so a seeded read is `{ value: { value, version } }`.
 const seeded = (value: unknown) => ({ value: { value, version: 1 } })
+
+// Answers what a session start asks of the engine, with a fresh snapshot so no headless
+// inbox starts, and records the panes it opens. `polled` settles with the start's first poll.
+const startable = (on: On) => {
+  const opened: string[] = []
+  let done = () => {}
+  const polled = new Promise<void>(resolve => (done = resolve))
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', () => ({ value: undefined }))
+  on('session.id', () => ({ value: 'u-test' }))
+  on('fs.read', () => ({ value: JSON.stringify({ written_at: 1_700_000_000, sections: {} }) }))
+  on('state.set', async ($, e, next) => {
+    const result = await next(e)
+    if (e.key === 'writtenAt') done()
+    return result
+  })
+  on('ui.open', ($, e) => {
+    opened.push(e.id)
+    return { value: { isPlaced: true } }
+  })
+  return { opened, polled }
+}
 
 test('without the gem the pane says so, on every surface that seats a pane', async ($, on) => {
   mock.env(on, { HOME: '/Users/me' })
@@ -113,4 +136,22 @@ test('an unfocused pane says how to focus it', async ($, on) => {
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal', props: { ...PANE.props, isFocused: false } })
   expect(await ui.find({ type: 'Text', text: /takes you here/ })).toBeDefined()
   await ui.unmount()
+})
+
+test('the pane opens when a session starts', async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  const { opened, polled } = startable(on)
+  await $.session.start({ cwd: '/tmp/proj', surface: 'terminal', isInteractive: true })
+  await polled
+  expect(opened).toEqual(['inbox'])
+})
+
+test('with openOnStart off only /inbox opens it', { options: { openOnStart: false } }, async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  const { opened, polled } = startable(on)
+  await $.session.start({ cwd: '/tmp/proj', surface: 'terminal', isInteractive: true })
+  await polled
+  expect(opened).toEqual([])
 })
