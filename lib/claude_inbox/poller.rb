@@ -1,25 +1,32 @@
 # frozen_string_literal: true
 
+require_relative "actions"
 require_relative "sessions"
+require_relative "snapshot"
 
 module ClaudeInbox
   # Asks `claude agents` for the list off the main thread, every INTERVAL
-  # seconds and on demand, and hands what it finds to App over the shared
-  # queue: [:sessions, list] for each hand-over, [:error, msg] when a poll
-  # fails, [:notice, text] when the reaper took something. Nothing here
-  # touches App's state directly; the queue is the whole of the interface.
-  # One worker runs every poll, so two can never overlap and publish the
-  # list out of order.
+  # seconds and on demand, puts what it finds in the store and the snapshot,
+  # and tells App over the shared queue: [:sessions, list] for each
+  # hand-over, [:error, msg] when a poll fails, [:notice, text] when the
+  # reaper took something. Between polls it applies what another front end
+  # asked for. Nothing here touches App's state directly; the queue is the
+  # whole of the interface. One worker runs every poll, so two can never
+  # overlap and publish the list out of order.
   class Poller
     INTERVAL = 4
+    ACTIONS_INTERVAL = 0.5
 
-    def initialize(client:, store:, pull_requests:, reaper:, queue:, interval: INTERVAL, clock: -> { Time.now })
+    def initialize(client:, store:, pull_requests:, reaper:, queue:, snapshot: Snapshot.disabled, actions: Actions.disabled,
+      interval: INTERVAL, clock: -> { Time.now })
       @client = client
       @clock = clock
       @store = store
       @pull_requests = pull_requests
       @reaper = reaper
       @queue = queue
+      @snapshot = snapshot
+      @actions = actions
       @interval = interval
       @wake = Queue.new
       @paused = false
@@ -30,9 +37,13 @@ module ClaudeInbox
       return if @thread&.alive?
       soon
       @thread = Thread.new { worker }
+      @applier = Thread.new { applier }
     end
 
-    def stop = @thread&.kill
+    def stop
+      @thread&.kill
+      @applier&.kill
+    end
 
     # Only skips polls while another process holds the terminal; a poll
     # already under way finishes. Forking from another thread meanwhile, as
@@ -59,22 +70,40 @@ module ClaudeInbox
       sessions = Sessions.load(client: @client, pull_requests: @pull_requests, overrides: @store.pr_overrides)
       doomed = @reaper.due(sessions, now)
       @store.hide(doomed)
-      @queue << [:sessions, sessions]
+      publish(sessions)
       reaped = []
       begin
         reaped = @reaper.sweep(sessions.select { |s| doomed.include?(s.key) }, now)
       ensure
         @store.release(doomed - reaped)
       end
-      @queue << [:sessions, sessions] if reaped != doomed
+      publish(sessions) if reaped != doomed
       @queue << [:notice, @reaper.report(reaped)] if reaped.any?
       fresh, moved = @pull_requests.refresh(sessions)
-      @queue << [:sessions, fresh] if moved
+      publish(fresh) if moved
     rescue => e
       @queue << [:error, e.message]
     end
 
+    # Applies the requests another front end left, and says whether any landed.
+    def apply
+      return false unless @actions.drain(@store) > 0
+      write_snapshot
+      true
+    end
+
     private
+
+    def publish(sessions)
+      @store.update(sessions)
+      write_snapshot
+      @queue << [:sessions, sessions]
+    end
+
+    def write_snapshot
+      now = @clock.call
+      @snapshot.write(@store.sections(now), now)
+    end
 
     # Past StandardError `once` does not catch, and a dead worker would end
     # polling with nothing on screen to say so.
@@ -84,6 +113,15 @@ module ClaudeInbox
         @wake.clear
         once unless paused?
       rescue SystemStackError, ScriptError, SecurityError => e
+        @queue << [:error, e.message]
+      end
+    end
+
+    def applier
+      loop do
+        sleep ACTIONS_INTERVAL
+        apply
+      rescue => e
         @queue << [:error, e.message]
       end
     end
