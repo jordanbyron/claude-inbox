@@ -210,12 +210,16 @@ RSpec.describe ClaudeInbox::Store do
         writer.update([session(id: "a")])
         reader.update([session(id: "a")])
         reader.snooze("a", :h1)
-        expect(reader.sections.snoozed.map(&:id)).to eq(%w[a])
-        expect(ClaudeInbox::Actions.new(dir: requests, clock: -> { now }).drain(writer)).to eq(1)
+        reader.toggle_pin("a")
+        expect(reader.sections.pinned.map(&:id)).to eq(%w[a])
+        expect(ClaudeInbox::Actions.new(dir: requests, clock: -> { now }).drain(writer)).to eq(2)
         expect(writer.entry("a")["wake_at"]).to eq(now.to_i + 3600)
+        expect(writer.entry("a")["pinned"]).to be(true)
         reader.update([session(id: "a")])
-        expect(reader.sections.snoozed.map(&:id)).to eq(%w[a])
+        expect(reader.sections.pinned.map(&:id)).to eq(%w[a])
         expect(reader).not_to be_writable
+        expect { reader.set_alias("a", "x") }.to raise_error(ClaudeInbox::Store::NotWritable)
+        expect { reader.set_pr("a", "https://github.com/o/r/pull/1") }.to raise_error(ClaudeInbox::Store::NotWritable)
       end
     end
 
