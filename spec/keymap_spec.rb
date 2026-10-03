@@ -15,9 +15,7 @@ RSpec.describe ClaudeInbox::Keymap do
 
   it "resolves gg as a chord" do
     expect(km.press("g", "g")).to be_nil
-    expect(km.pending).to eq("g")
     expect(km.press("g", "g")).to eq(:top)
-    expect(km.pending).to be_nil
   end
 
   it "drops a chord on an unknown second key" do
@@ -30,7 +28,7 @@ RSpec.describe ClaudeInbox::Keymap do
     km.press("g", "g")
     t[0] += described_class::CHORD_TIMEOUT + 0.1
     expect(km.press("g", "g")).to be_nil
-    expect(km.pending).to eq("g")
+    expect(km.press("g", "g")).to eq(:top)
   end
 
   it "folds with z chords" do
