@@ -49,4 +49,10 @@ else
 end
 opts[:color] = false if argv.include?("--no-color")
 
+if argv.include?("--headless")
+  abort "claude-inbox: --headless takes no --fixture" if fixture
+  require "claude_inbox/headless"
+  exit(ClaudeInbox::Headless.new(client: opts[:client], store: opts[:store]).run ? 0 : 1)
+end
+
 ClaudeInbox::App.new(**opts).run

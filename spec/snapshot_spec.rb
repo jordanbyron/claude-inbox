@@ -22,7 +22,7 @@ RSpec.describe ClaudeInbox::Snapshot do
       expect(row.slice("id", "label", "state", "actionable", "wake_at")).to eq(
         "id" => "b", "label" => "renamed", "state" => "done", "actionable" => true, "wake_at" => "until_woken"
       )
-      expect(row["pr"]).to eq("short" => "#7", "state" => "merged")
+      expect(row["pr"]).to eq("short" => "#7", "state" => "merged", "url" => "https://github.com/o/r/pull/7")
     end
   end
 
