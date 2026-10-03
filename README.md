@@ -250,7 +250,9 @@ once to load the pane in every session. It adds
 That path is a link the inbox points at the installed version on every
 launch, so it survives `gem update`.
 
-`/inbox` opens it, `ctrl+x tab` focuses it and `esc` leaves. The keys are the
+It opens when a session starts, unless you set
+`pluginConfigs.inbox-pane.options.openOnStart` to `false` in
+`~/.claude/settings.json`. `/inbox` opens it, `ctrl+x tab` focuses it and `esc` leaves. The keys are the
 ones above, with `ge` for `G`, `n` `p` for `Tab` `Shift+Tab`, and no `a`,
 `P`, `X`, `Ctrl-x`, `/` or `R`. `Enter` switches to the session when you
 attached through `claude-inbox`.

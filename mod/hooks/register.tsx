@@ -239,6 +239,7 @@ export const register: Register = (on, options) => {
     $.ui.status(undefined)
     void poll($, host)
     $.clock.every(POLL_MS, () => void poll($, host))
+    if (options.openOnStart === false) return started
     const opened = await $.ui.open({ id: PANE, title: 'Inbox', columns: 48 })
     if (!opened.isPlaced) $.ui.log(`inbox: /inbox opens the pane (${opened.reason})`, { to: 'debug' })
     return started
