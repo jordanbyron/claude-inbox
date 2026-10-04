@@ -37,11 +37,6 @@ module ClaudeInbox
       file.flock(File::LOCK_EX | File::LOCK_NB) ? hold(file, role) : refuse(file)
     end
 
-    def release
-      @file&.close
-      @file = nil
-    end
-
     private
 
     # After reading the holder the position sits at the end, and truncate does
@@ -51,7 +46,7 @@ module ClaudeInbox
       file.truncate(0)
       file.write("#{role} #{Process.pid}")
       file.flush
-      @file = file
+      @file = file # only kept so GC never closes it and drops the flock
       true
     end
 
