@@ -155,6 +155,12 @@ async function nowS($: EngineInterface): Promise<number> {
   return Math.floor((await $.clock.now()) / 1000)
 }
 
+// Read each time: it is the transcript's name, which the daemon reports as sessionId,
+// and a /clear may mint a new one mid-session.
+async function sessionId($: EngineInterface, host: Host): Promise<string> {
+  return $.session.id().catch(() => host.session)
+}
+
 // Leaves one request for the inbox to apply; its poller takes it within half a second
 // and the next snapshot shows the row where the gem's own rules put it.
 async function ask($: EngineInterface, host: Host, action: Action): Promise<void> {
@@ -165,11 +171,10 @@ async function ask($: EngineInterface, host: Host, action: Action): Promise<void
 
 // Asks the inbox attached to this session for another one. It takes the file when it
 // does; a file still there after SWITCH_MS, and still ours, means no inbox is attached to
-// this session. The session id is read each time: it is the transcript's name, which the
-// daemon reports as sessionId, and a /clear may mint a new one mid-session.
+// this session.
 async function requestSwitch($: EngineInterface, host: Host, id: string): Promise<void> {
   const path = await inboxFile($, SWITCH)
-  const from = await $.session.id().catch(() => host.session)
+  const from = await sessionId($, host)
   const at = await nowS($)
   await $.fs.write(path, JSON.stringify({ id, from, at }))
   $.ui.toast(`switching to ${id}…`)
@@ -208,8 +213,7 @@ async function poll($: EngineInterface, host: Host): Promise<void> {
   const written = snapshot?.written_at ?? 0
   if (snapshot !== null) {
     const all = ORDER.flatMap(section => (snapshot.sections?.[section] ?? []).map(one => rowOf(section, one)))
-    // Read on every poll: a /clear mints a new session id mid-session.
-    const id = await $.session.id().catch(() => host.session)
+    const id = await sessionId($, host)
     await update($, current, () => all.find(one => one.session === id) ?? null)
     await update($, rows, () => all.filter(one => one.session !== id))
   }
