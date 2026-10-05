@@ -75,6 +75,19 @@ RSpec.describe ClaudeInbox::App do
       expect(app).to paint("comma3x led flashing").on_selected_row
     end
 
+    it "holds the screen when the attach fails, so its reason can be read" do
+      client.fail_attach
+      row = screen(app).index { |l| l.include?("comma3x led flashing") } + 1
+      press(app, "\e[<0;5;#{row}M")
+      expect(terminal.pauses).to eq(1)
+    end
+
+    it "goes straight back to the list after an attach that worked" do
+      row = screen(app).index { |l| l.include?("comma3x led flashing") } + 1
+      press(app, "\e[<0;5;#{row}M")
+      expect(terminal.pauses).to eq(0)
+    end
+
     it "refuses on a terminal row instead of attaching, same as Enter" do
       row = screen(app).index { |l| l.include?("claude-inbox-38") } + 1
       press(app, "\e[<0;5;#{row}M")

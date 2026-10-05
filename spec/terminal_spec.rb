@@ -57,6 +57,13 @@ RSpec.describe ClaudeInbox::Terminal do
     expect(drain(out)).to include(described_class::ALT_ON)
   end
 
+  it "holds the screen for a key and says how to go on" do
+    input = StringIO.new("x")
+    described_class.new(out, input).pause
+    expect(out.string).to include("press any key")
+    expect(input).to be_eof
+  end
+
   it "hands the tty back in the mode it found it, not a stock cooked one" do
     input = ModedInput.new
     terminal = described_class.new(out, input)

@@ -76,6 +76,14 @@ module ClaudeInbox
       enter
     end
 
+    # Inside `release`: keeps what a failed child printed on the screen
+    # until a key is pressed, since `enter` would cover it at once.
+    def pause
+      @out.print "\r\npress any key to return to claude-inbox"
+      @out.flush
+      @input.tty? ? @input.getch : @input.getc
+    end
+
     # [cols, rows]. Cached: querying the terminal can fall back to spawning
     # `tput`, which is far too slow to do on every frame. Refreshed by
     # `resized`, which WINCH and re-entry both call.

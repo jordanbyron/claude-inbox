@@ -420,13 +420,16 @@ module ClaudeInbox
 
     # The pane in the attached session may ask for a different one: the
     # attach ends and the next starts without passing through the list. The
-    # poller keeps running meanwhile, so the pane's snapshot stays fresh.
+    # poller keeps running meanwhile, so the pane's snapshot stays fresh. A
+    # failed attach leaves its reason on screen until a key is pressed.
     def attach(id)
       while id
         @store.acknowledge(id)
         @switch.clear
         from = session_for(id)&.session_id
-        @terminal.release { @client.attach(id) { @switch.requested_for?(from) } }
+        @terminal.release do
+          @terminal.pause unless @client.attach(id) { @switch.requested_for?(from) }
+        end
         id = @switch.take(@store.sessions.select(&:actionable?).map(&:key))
       end
     end
