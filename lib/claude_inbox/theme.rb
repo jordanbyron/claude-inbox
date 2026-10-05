@@ -13,7 +13,7 @@ module ClaudeInbox
       define_method(:"#{hue}_bold") { |text| color(text, hue, bold: true) }
     end
 
-    def initialize(enabled: true)
+    def initialize(enabled:)
       @enabled = enabled
     end
 

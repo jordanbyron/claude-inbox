@@ -22,7 +22,7 @@ module ClaudeInbox
 
     RESET = "\e[39m"
 
-    def initialize(enabled: true)
+    def initialize(enabled:)
       @enabled = enabled
     end
 
