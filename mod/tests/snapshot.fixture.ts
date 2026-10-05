@@ -13,8 +13,7 @@ export const SNAPSHOT = `{
         "session": "u-a1",
         "label": "needs an answer",
         "state": "blocked",
-        "actionable": true,
-        "cwd": "/tmp/proj"
+        "actionable": true
       }
     ],
     "active": [
@@ -24,7 +23,6 @@ export const SNAPSHOT = `{
         "label": "still going",
         "state": "working",
         "actionable": true,
-        "cwd": "/tmp/proj",
         "pr": {
           "short": "#7",
           "state": "open",
@@ -39,8 +37,7 @@ export const SNAPSHOT = `{
         "session": "u-c3",
         "label": "put away",
         "state": "done",
-        "actionable": true,
-        "cwd": "/tmp/proj"
+        "actionable": true
       }
     ]
   }
