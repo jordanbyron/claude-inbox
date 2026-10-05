@@ -13,7 +13,7 @@ module ClaudeInbox
   #
   # Pure: filesystem in, plain values out. Nothing here runs `claude`.
   module SlashCommands
-    Command = Struct.new(:name, :description, :source) do
+    Command = Struct.new(:name, :description) do
       def to_s = "/#{name}"
     end
 
@@ -26,8 +26,8 @@ module ClaudeInbox
     def list(cwd:, home: Dir.home)
       found = {}
       add = ->(cmd) { found[cmd.name] ||= cmd }
-      from_dir(File.join(cwd, ".claude"), "project").each(&add)
-      from_dir(File.join(home, ".claude"), "user").each(&add)
+      from_dir(File.join(cwd, ".claude")).each(&add)
+      from_dir(File.join(home, ".claude")).each(&add)
       plugins(home).each(&add)
       synced(home).each(&add)
       found.values.sort_by(&:name)
@@ -39,25 +39,25 @@ module ClaudeInbox
       starts + rest.select { |c| c.name.downcase.include?(q) }
     end
 
-    def from_dir(dir, source, prefix: nil)
-      skills(File.join(dir, "skills"), source, prefix:) +
-        commands(File.join(dir, "commands"), source, prefix:)
+    def from_dir(dir, prefix: nil)
+      skills(File.join(dir, "skills"), prefix:) +
+        commands(File.join(dir, "commands"), prefix:)
     end
 
-    def skills(dir, source, prefix: nil)
+    def skills(dir, prefix: nil)
       Dir.glob(File.join(dir, "*", "SKILL.md")).sort.filter_map do |path|
         meta = frontmatter(path)
         next if meta["user-invocable"] == "false"
         name = File.basename(File.dirname(path))
-        Command.new(qualify(prefix, name), meta["description"].to_s, source)
+        Command.new(qualify(prefix, name), meta["description"].to_s)
       end
     end
 
     # A command file's name is its own; a subdirectory only groups them.
-    def commands(dir, source, prefix: nil)
+    def commands(dir, prefix: nil)
       Dir.glob(File.join(dir, "**", "*.md")).sort.map do |path|
         name = File.basename(path, ".md")
-        Command.new(qualify(prefix, name), frontmatter(path)["description"].to_s, source)
+        Command.new(qualify(prefix, name), frontmatter(path)["description"].to_s)
       end
     end
 
@@ -71,7 +71,7 @@ module ClaudeInbox
       (installed["plugins"] || {}).flat_map do |key, entries|
         plugin = key.split("@").first
         Array(entries).filter_map { |e| e["installPath"] if e.is_a?(Hash) }.uniq.flat_map do |root|
-          from_dir(root, "plugin", prefix: plugin)
+          from_dir(root, prefix: plugin)
         end
       end
     end
@@ -80,7 +80,7 @@ module ClaudeInbox
     # ~/.claude/skills/synced and answer to the anthropic-skills prefix.
     def synced(home)
       Dir.glob(File.join(home, ".claude", "skills", "synced", "*", "")).flat_map do |bucket|
-        skills(bucket, "synced", prefix: SYNCED_PLUGIN)
+        skills(bucket, prefix: SYNCED_PLUGIN)
       end
     end
 
