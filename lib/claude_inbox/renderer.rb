@@ -11,12 +11,6 @@ module ClaudeInbox
   # `width` columns wide) plus a parallel Array of selectable items.
   # Pure: no terminal, no IO, no clock beyond the `now` it is handed.
   class Renderer
-    Item = Struct.new(:kind, :row, :section) do
-      def selection = (kind == :fold_toggle) ? Store::Selection.fold(section) : Store::Selection.row(row.key)
-
-      def key = selection.key
-    end
-
     Frame = Struct.new(:lines, :items, :top, :list_width)
 
     CHROME_ROWS = 2 # header + footer
@@ -254,13 +248,13 @@ module ClaudeInbox
         items << nil << nil
         if Store.folded?(name, view.expanded)
           lines << fold_toggle_line(name, rows.size, selected, width)
-          items << Item.new(:fold_toggle, nil, name)
+          items << Store::Selection.fold(name)
           next
         end
         rows.each do |row|
           row_lines(row, name, selected, width, view.now, view.tick).each_with_index do |l, i|
             lines << l
-            items << ((i.zero? && row.selectable?) ? Item.new(:row, row, name) : nil)
+            items << ((i.zero? && row.selectable?) ? Store::Selection.row(row.key) : nil)
           end
         end
       end
