@@ -32,8 +32,8 @@ module ClaudeInbox
     # so both are off unless `bin/claude-inbox` switches them on.
     def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
       rate_limits: RateLimits.new, reaper: Reaper.disabled, snapshot: Snapshot.disabled, switch: Switch.disabled,
-      actions: Actions.disabled, listen: nil, out: $stdout, input: $stdin, color: true,
-      terminal: Terminal.new(out, input), queue: Queue.new)
+      actions: Actions.disabled, listen: nil, input: $stdin, color: true,
+      terminal: Terminal.new($stdout, input), queue: Queue.new)
       @client = client
       @store = store
       @snapshot = snapshot
@@ -43,7 +43,7 @@ module ClaudeInbox
       @color = color
       @renderer = Renderer.new(color: color)
       @input = input
-      @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
+      @reader = TTY::Reader.new(input: input, output: $stdout, interrupt: :noop)
       @queue = queue
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests,
         reaper: reaper, queue: @queue, snapshot: snapshot, actions: actions)
