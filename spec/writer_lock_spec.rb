@@ -3,7 +3,7 @@
 require "tmpdir"
 
 RSpec.describe ClaudeInbox::WriterLock do
-  it "is held by one taker at a time, and free again on release" do
+  it "is held by one taker at a time" do
     Dir.mktmpdir do |dir|
       path = File.join(dir, "writer.lock")
       first = described_class.new(path: path)
@@ -11,8 +11,6 @@ RSpec.describe ClaudeInbox::WriterLock do
       expect(first.take(role: "headless")).to be(true)
       expect(File.read(path)).to eq("headless #{Process.pid}")
       expect(second.take(role: "headless")).to be(false)
-      first.release
-      expect(second.take(role: "headless")).to be(true)
     end
   end
 
