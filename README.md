@@ -101,6 +101,9 @@ session and `Ctrl-O` starts it and attaches.
 Paste an image on macOS, or drop a file into the prompt, and refer to it as
 `[Image #1]`. Type `/` for a menu of your skills.
 
+Type in Directory to pick from recent and trusted directories; `Ctrl-U`
+lists them all.
+
 ## How sessions move
 
 A snoozed session wakes when its timer runs out, when you press `u`, or when

@@ -62,13 +62,7 @@ module ClaudeInbox
         }
       end
 
-      # Where sessions ran lately, newest first, then every directory whose
-      # trust dialog was accepted: the likely choices first. Only an order;
-      # the CLI still decides where a session may start.
-      def dir_paths
-        recent = @store.sessions.sort_by { |s| -s.started_at.to_i }.filter_map { |s| s.cwd && SessionRequest.strip_worktree(s.cwd) }
-        (recent + @trust.call).uniq.select { |dir| File.directory?(dir) }
-      end
+      def dir_paths = SessionRequest.directories(@store.sessions, @trust.call)
 
       # Checked cheapest first, and nothing is written to disk until every
       # check has passed. A retry with the same Idempotency-Key gets the

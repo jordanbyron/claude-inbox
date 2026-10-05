@@ -23,6 +23,7 @@ require_relative "session_request"
 require_relative "actions"
 require_relative "snapshot"
 require_relative "switch"
+require_relative "trust"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
@@ -32,7 +33,7 @@ module ClaudeInbox
     # so both are off unless `bin/claude-inbox` switches them on.
     def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
       rate_limits: RateLimits.new, reaper: Reaper.disabled, snapshot: Snapshot.disabled, switch: Switch.disabled,
-      actions: Actions.disabled, listen: nil, out: $stdout, input: $stdin, color: true,
+      actions: Actions.disabled, listen: nil, out: $stdout, input: $stdin, color: true, trust: Trust.method(:projects),
       terminal: Terminal.new(out, input), queue: Queue.new)
       @client = client
       @store = store
@@ -41,6 +42,7 @@ module ClaudeInbox
       @rate_limits = rate_limits
       @terminal = terminal
       @color = color
+      @trust = trust
       @renderer = Renderer.new(color: color)
       @input = input
       @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
@@ -475,7 +477,8 @@ module ClaudeInbox
 
     def open_new_session
       cwd = selected_session&.cwd || Dir.pwd
-      @modal = NewSessionForm.new(cwd: SessionRequest.strip_worktree(cwd), color: @color)
+      dirs = SessionRequest.directories(@store.sessions, @trust.call)
+      @modal = NewSessionForm.new(cwd: SessionRequest.strip_worktree(cwd), color: @color, dirs: dirs)
     end
 
     # `attach:` hands the terminal over as soon as the session starts. Without
