@@ -188,7 +188,7 @@ module ClaudeInbox
     # origin, terminal when unlisted) and the bridge a remote one is served
     # over, and drops the unattended ones, whose parent is the row worth
     # showing.
-    def assign_origins(sessions, origins, bridges = {})
+    def assign_origins(sessions, origins, bridges)
       sessions
         .map { |s| s.interactive? ? s.with(origin: origins.fetch(s.pid, :terminal), bridge_id: bridges[s.pid]) : s }
         .reject(&:unattended?)
