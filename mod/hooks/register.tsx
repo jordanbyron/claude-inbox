@@ -395,8 +395,8 @@ export const register: Register = (on, options) => {
 
     return (
       <Box flexDirection="column">
-        {/* The header shares the pane's top row with the engine's close mark, which takes the last cells. */}
-        <Box columnGap={2} paddingRight={3}>
+        {/* The engine draws its close mark on a row of its own above the body, so the header can't share it. */}
+        <Box columnGap={2}>
           <Text color="cyan" bold>
             claude-inbox
           </Text>
@@ -437,11 +437,14 @@ export const register: Register = (on, options) => {
                       {one.label}
                       {one.wakeAt !== undefined ? ` · ${wakeLabel(one.wakeAt)}` : ''}
                     </Text>
+                    {/* The label gives up its cells to the PR chip, which would otherwise wrap under it. */}
                     {one.pr ? (
-                      <Text color={isQuiet ? undefined : PR_COLOR[one.pr.state]} dimColor={isQuiet}>
-                        {' '}
-                        {one.pr.short} {one.pr.state}
-                      </Text>
+                      <Box flexShrink={0}>
+                        <Text color={isQuiet ? undefined : PR_COLOR[one.pr.state]} dimColor={isQuiet}>
+                          {' '}
+                          {one.pr.short} {one.pr.state}
+                        </Text>
+                      </Box>
                     ) : null}
                   </Box>
                   {!isQuiet && one.line !== undefined ? (
