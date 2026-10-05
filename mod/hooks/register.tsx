@@ -80,7 +80,7 @@ function isFold(section: Section): section is Fold {
   return section === 'snoozed' || section === 'settled'
 }
 
-// The hidden Button standing for an item: the ring walks these with the arrows.
+// The Button drawn for an item, its label: the ring walks these with the arrows, a click presses one.
 function itemKey(item: Item): string {
   return item.kind === 'fold' ? `fold:${item.section}` : `row:${item.row.id ?? item.row.label}`
 }
@@ -221,7 +221,7 @@ async function poll($: EngineInterface, host: Host): Promise<void> {
   if (now - written > STALE_S) startHeadless($, host, now)
 }
 
-// Puts the ring on the item's hidden Button, so Enter acts on it, and scrolls it into view.
+// Puts the ring on the item's Button, so Enter acts on it, and scrolls it into view.
 async function ringOn($: EngineInterface, item: Item): Promise<void> {
   await $.ui.focus({ requestId: PANE, key: itemKey(item) }).catch(() => undefined)
   await $.ui.scroll({ in: PANE, to: { key: viewKey(item) }, block: 'nearest' }).catch(() => undefined)
@@ -277,7 +277,7 @@ export const register: Register = (on, options) => {
     return { text: `Inbox pane open on ${surfaces}. ctrl+x tab focuses it; the keys are claude-inbox's.` }
   })
 
-  // The ring walks the items' hidden Buttons and nothing else: entering the pane it lands on
+  // The ring walks the items' Buttons and nothing else: entering the pane it lands on
   // the cursor's item, the arrows move it to the next, and the cursor follows.
   on('ui.focus', { requestId: PANE }, async ($, e, next) => {
     const flat = await listed($)
@@ -341,8 +341,10 @@ export const register: Register = (on, options) => {
       void ask($, host, { action, id: row.id }).then(() => $.ui.toast(`${verb} ${row.label}`))
     }
     const key = (hotkey: string, onPress: () => void) => <Button key={hotkey} hotkey={hotkey} plain label="" onPress={onPress} />
-    // Enter on an item: a fold opens, a row the inbox can attach to asks for the switch.
+    // Enter or a click on an item: the cursor lands on it, a fold opens, a row the inbox can
+    // attach to asks for the switch.
     const enter = (item: Item) => () => {
+      void moveTo($, flat, flat.indexOf(item))
       if (item.kind === 'fold') return void setFold($, list, viewing, item.section, true)
       if (item.row === viewing) return $.ui.toast('you are in this session')
       if (!item.row.id || !item.row.actionable) return $.ui.toast('this session cannot be attached')
@@ -420,7 +422,7 @@ export const register: Register = (on, options) => {
                 return (
                   <Box key={viewKey(item)}>
                     <Text color={isHere ? 'yellow' : undefined}>{isHere ? '› ' : '  '}</Text>
-                    <Text dimColor>▸ {item.count} folded · za opens</Text>
+                    <Button key={itemKey(item)} plain dimColor label={`▸ ${item.count} folded · za opens`} onPress={enter(item)} autoFocus={isHere || undefined} />
                   </Box>
                 )
               }
@@ -433,10 +435,17 @@ export const register: Register = (on, options) => {
                     <Text color={COLOR[one.state]} dimColor={isQuiet || one.state === 'done'}>
                       {GLYPH[one.state] ?? '·'}{' '}
                     </Text>
-                    <Text bold={isHere} dimColor={isQuiet && !isHere} wrap="truncate-end">
-                      {one.label}
-                      {one.wakeAt !== undefined ? ` · ${wakeLabel(one.wakeAt)}` : ''}
-                    </Text>
+                    {/* A Button cannot truncate, so its Box clips a long label to the row. */}
+                    <Box height={1} flexShrink={1} overflow="hidden">
+                      <Button
+                        key={itemKey(item)}
+                        plain
+                        dimColor={isQuiet && !isHere}
+                        label={one.wakeAt !== undefined ? `${one.label} · ${wakeLabel(one.wakeAt)}` : one.label}
+                        onPress={enter(item)}
+                        autoFocus={isHere || undefined}
+                      />
+                    </Box>
                     {/* The label gives up its cells to the PR chip, which would otherwise wrap under it. */}
                     {one.pr ? (
                       <Box flexShrink={0}>
@@ -472,11 +481,8 @@ export const register: Register = (on, options) => {
             </Box>
           )}
         </Box>
-        {/* Drawn nowhere: one Button per item for the ring and Enter, then the hotkeys. */}
+        {/* Drawn nowhere: the hotkeys. */}
         <Box height={0} overflow="hidden">
-          {flat.map(item => (
-            <Button key={itemKey(item)} plain label="" onPress={enter(item)} autoFocus={item === selected ? true : undefined} />
-          ))}
           {keys}
         </Box>
       </Box>

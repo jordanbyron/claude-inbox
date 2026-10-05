@@ -37,8 +37,8 @@ a fullscreen terminal.
 
 `/inbox` opens it, `ctrl+x tab` focuses it and `esc` leaves. The keys are the
 ones below, with `ge` for `G`, `n` `p` for `Tab` `Shift+Tab`, and no `a`,
-`P`, `X`, `Ctrl-x`, `/` or `R`. `Enter` switches to the session when you
-attached through `claude-inbox`.
+`P`, `X`, `Ctrl-x`, `/` or `R`. `Enter`, or a click on a row, switches to the
+session when you attached through `claude-inbox`.
 
 It opens when a session starts. To stop that, set
 `pluginConfigs.inbox-pane.options.openOnStart` to `false` in
