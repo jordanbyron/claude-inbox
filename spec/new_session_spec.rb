@@ -296,6 +296,57 @@ RSpec.describe ClaudeInbox::NewSessionForm do
     expect(form.press("y", "y")).to eq(:cancel)
   end
 
+  describe "recent directories" do
+    let(:dirs) { %w[code/inbox code/site work/site].map { |d| File.join(home, d).tap { |p| FileUtils.mkdir_p(p) } } }
+    let(:form) { described_class.new(cwd: Dir.pwd, color: false, home: home, dirs: dirs) }
+
+    it "stays shut until the field is edited, so tabbing through keeps the directory" do
+      2.times { form.press(:tab, "\t") }
+      expect(form.menu).to be_nil
+      expect(form.footer).to include("^U recent")
+      form.press(:tab, "\t")
+      expect(form.focused.key).to eq(:model)
+      expect(form.values[:cwd]).to eq(Dir.pwd)
+    end
+
+    it "lists them all on a cleared field, under the Directory row, by their shortest labels" do
+      2.times { form.press(:tab, "\t") }
+      form.press(:ctrl_u, "\x15")
+      expect(form.menu.map(&:label)).to eq(%w[inbox code/site work/site])
+      rows = form.screen(100, 30)
+      at = rows.index { |r| r.include?("Directory") }
+      expect(rows[at + 1]).to include("inbox", "~/code/inbox")
+      expect(rows.index { |r| r.include?("Model") }).to eq(at + 4)
+    end
+
+    it "narrows as you type and picks with arrows and enter, then closes" do
+      2.times { form.press(:tab, "\t") }
+      form.press(:ctrl_u, "\x15")
+      type(form, "site")
+      expect(form.menu.map(&:label)).to eq(%w[code/site work/site])
+      form.press(:down, "\e[B")
+      expect(form.press(:return, "\r")).to eq(:changed)
+      expect(form.values[:cwd]).to eq(dirs[2])
+      expect(form.menu).to be_nil
+      expect(form.focused.key).to eq(:cwd)
+      form.press(:return, "\r")
+      expect(form.focused.key).to eq(:model)
+    end
+
+    it "gives tab back to path completion once escaped or when nothing matches" do
+      2.times { form.press(:tab, "\t") }
+      form.press(:ctrl_u, "\x15")
+      type(form, "#{home}/wo")
+      expect(form.menu.map(&:label)).to eq(%w[work/site])
+      form.press(:escape, "\e")
+      expect(form.menu).to be_nil
+      form.press(:tab, "\t")
+      expect(form.focused.value.to_s).to eq("#{home}/work/")
+      type(form, "zz")
+      expect(form.menu).to be_nil
+    end
+  end
+
   describe "slash commands" do
     # Three skills in home and one command in the project.
     let(:proj) { Dir.mktmpdir }

@@ -14,12 +14,13 @@ RSpec.describe ClaudeInbox::App do
   let(:store) { ClaudeInbox::Store.new(path: nil) }
   let(:pull_requests) { ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil) }
   let(:queue) { Queue.new }
+  let(:trusted) { [] }
 
   let(:app) do
     described_class.new(
       client: client, store: store, pull_requests: pull_requests,
       rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
-      terminal: terminal, input: StringIO.new, color: false, queue: queue
+      terminal: terminal, input: StringIO.new, color: false, queue: queue, trust: -> { trusted }
     )
   end
 
@@ -230,6 +231,16 @@ RSpec.describe ClaudeInbox::App do
     # --bg` is most likely to fail (nothing there to answer its first-run
     # trust prompt), so the form has to hand the composed prompt back rather
     # than dropping it once the spawn is known to have failed.
+    it "offers the trusted directories as the Directory field is typed in" do
+      Dir.mktmpdir("picked") do |dir|
+        trusted.replace([dir])
+        press(app, "n", "\e[B", "\e[B", ctrl_u, *"picked".chars)
+        expect(screen(app).join("\n")).to include(File.basename(dir))
+        press(app, "\r")
+        expect(screen(app).find { |l| l.include?("Directory") }).to include("/#{File.basename(dir)}")
+      end
+    end
+
     it "reopens the form with the prompt and the error, instead of losing it, when the spawn fails" do
       client.fail_spawn("claude --bg failed: not a trusted directory")
       press(app, "n", *"fix the thing".chars, "\e[B", "\e[B", ctrl_u, *Dir.pwd.chars, ctrl_s)

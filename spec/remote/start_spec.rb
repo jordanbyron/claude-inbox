@@ -54,6 +54,14 @@ RSpec.describe ClaudeInbox::Remote::Start do
       expect(phone.get("/api/options").json["dirs"].map { |d| d["label"] }).to eq(%w[code/app a/x/app b/x/app])
     end
 
+    it "folds a trusted worktree into its repo" do
+      trusted.replace([
+        File.join(project, ".claude", "worktrees", "wip").tap { |dir| FileUtils.mkdir_p(dir) },
+        project
+      ])
+      expect(phone.get("/api/options").json["dirs"].map { |d| d["path"] }).to eq([project])
+    end
+
     it "says when it is a fixture, so a test inbox can't pass for a real one" do
       options[:fixture] = true
       expect(phone.get("/api/options").json["fixture"]).to be(true)

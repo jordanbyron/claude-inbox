@@ -80,6 +80,16 @@ module ClaudeInbox
     # writing over the same files. Fall back to the repo it was cut from.
     def self.strip_worktree(cwd) = cwd.to_s.sub(%r{/\.claude/worktrees/[^/]+(?:/.*)?\z}, "")
 
+    # Where sessions ran lately, newest first, then every directory whose
+    # trust dialog was accepted: the likely choices first. Only an order;
+    # the CLI still decides where a session may start. Every worktree gets
+    # trusted on its own, so each folds into its repo rather than crowding
+    # the list.
+    def self.directories(sessions, trusted)
+      recent = sessions.sort_by { |s| -s.started_at.to_i }.filter_map(&:cwd)
+      (recent + trusted).map { |dir| strip_worktree(dir) }.uniq.select { |dir| File.directory?(dir) }
+    end
+
     # The daemon's summary line can echo the prompt to the terminal, so no
     # control character but tab and newline gets that far. A CRLF, the
     # newline an HTTP client may send, is taken as a newline.

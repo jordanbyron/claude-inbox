@@ -19,6 +19,12 @@ module ClaudeInbox
     # string on :choice ones — `kind` says which.
     Field = Struct.new(:key, :label, :kind, :value, :choices)
 
+    # A directory the Directory field offers, shown by its shortest
+    # distinct label as the phone's form shows it.
+    Place = Struct.new(:path, :label, :description) do
+      def to_s = label
+    end
+
     # The screen shows what "default" resolves to; `values` makes it nil.
     DEFAULT = "default"
 
@@ -28,11 +34,13 @@ module ClaudeInbox
     # editable field spends these on its own text instead.
     CYCLE = {:left => -1, :right => 1, "h" => -1, "l" => 1, " " => 1}.freeze
 
-    def initialize(cwd:, color:, home: Dir.home, clipboard: Images.method(:from_clipboard))
+    def initialize(cwd:, color:, dirs: [], home: Dir.home, clipboard: Images.method(:from_clipboard))
       @p = Pastel.new(enabled: color)
       @theme = Theme.new(enabled: color)
       @home = home
       @clipboard = clipboard
+      @places = dirs.map { |path| Place.new(path, SessionRequest.label(path, dirs), path.sub(/\A#{Regexp.escape(home)}(?=\/|\z)/, "~")) }
+      @dir_settled = cwd.to_s
       @fields = [
         Field.new(:prompt, "Prompt", :multiline, TextBuffer.new),
         Field.new(:name, "Name", :text, TextBuffer.new),
@@ -67,7 +75,7 @@ module ClaudeInbox
       @error = nil
       @candidates = nil
       return :changed if menu && menu_press(name)
-      before = command_query
+      before = menu_query
       case name
       when :escape then return escape_pressed
       when :ctrl_s then return submit(attach: false)
@@ -81,7 +89,7 @@ module ClaudeInbox
       else
         editable? ? focused.value.press(name, raw) : choose(name, raw)
       end
-      edited = before && command_query && command_query != before
+      edited = before && menu_query && menu_query != before
       @pick = 0 if edited
       @dismissed = nil if edited
       :changed
@@ -104,10 +112,12 @@ module ClaudeInbox
       :changed
     end
 
+    # Slash commands while one is being typed in the prompt; the recent and
+    # trusted directories once the Directory field is edited.
     def menu
-      q = command_query
+      q = menu_query
       return nil if q.nil? || @dismissed == q
-      found = SlashCommands.match(commands, q)
+      found = (focused.key == :cwd) ? places(q) : SlashCommands.match(commands, q)
       found.empty? ? nil : found
     end
 
@@ -145,9 +155,12 @@ module ClaudeInbox
       out << ""
       out << "  " + field_label(field(:prompt)) + @p.dim("  ⏎ newline")
       out += prompt_box(field(:prompt), inner_w, prompt_h)
-      out += menu_rows
+      out += menu_rows if focused.key == :prompt
       out << ""
-      @fields[1..].each { |f| out << "  " + field_label(f) + field_value(f, inner_w - 16) }
+      @fields[1..].each do |f|
+        out << "  " + field_label(f) + field_value(f, inner_w - 16)
+        out += menu_rows if f.key == :cwd && focused.key == :cwd
+      end
       out.first(height) + [""] * [height - out.size, 0].max
     end
 
@@ -163,6 +176,7 @@ module ClaudeInbox
         when :choice then [["← → h l", "change"], ["⏎", "next"]]
         else [["⏎", "next"]]
         end
+      keys.unshift(["^U", "recent"]) if focused.key == :cwd && @places.any?
       keys += [["^S", "start"], ["^O", "start & open"],
         ["⇥", (focused.key == :cwd) ? "complete / next" : "next"], ["esc", "cancel"]]
       hints(keys)
@@ -180,9 +194,25 @@ module ClaudeInbox
 
     private
 
-    def command_query
-      return nil unless focused.key == :prompt
-      focused.value.head[/(?:\A|\s)\/(\S*)\z/, 1]
+    def menu_query
+      case focused.key
+      when :prompt then focused.value.head[/(?:\A|\s)\/(\S*)\z/, 1]
+      when :cwd then focused.value.to_s unless focused.value.to_s == @dir_settled
+      end
+    end
+
+    def places(query)
+      q = query.downcase
+      found = @places.select { |d| d.path.downcase.include?(q) || d.description.downcase.include?(q) }
+      starts, rest = found.partition { |d| d.label.downcase.start_with?(q) }
+      starts + rest
+    end
+
+    # A path put in the field by a pick or a completion rather than typed,
+    # so the menu stays shut until the next edit.
+    def settle_dir(path)
+      field(:cwd).value.replace(path)
+      @dir_settled = path
     end
 
     # Project commands live under the Directory field's path, so they
@@ -229,14 +259,18 @@ module ClaudeInbox
       when :up, :ctrl_p then @pick = (@pick - 1) % menu.size
       when :down, :ctrl_n then @pick = (@pick + 1) % menu.size
       when :tab, :return, :enter then accept(picked)
-      when :escape then @dismissed = command_query
+      when :escape then @dismissed = menu_query
       else return false
       end
       true
     end
 
-    def accept(cmd)
-      focused.value.replace_before(command_query.grapheme_clusters.size + 1, "#{cmd} ")
+    def accept(item)
+      if focused.key == :cwd
+        settle_dir(item.path)
+      else
+        focused.value.replace_before(menu_query.grapheme_clusters.size + 1, "#{item} ")
+      end
       @pick = 0
     end
 
@@ -328,10 +362,10 @@ module ClaudeInbox
       matches = Dir.glob(listing ? "#{base}/*" : "#{base}*").select { |d| File.directory?(d) }.sort
       return nil if matches.empty?
       if matches.size == 1
-        focused.value.replace("#{matches.first}/")
+        settle_dir("#{matches.first}/")
       else
         @candidates = matches.map { |d| File.basename(d) }
-        focused.value.replace(common_prefix(matches))
+        settle_dir(common_prefix(matches))
       end
       :changed
     end
