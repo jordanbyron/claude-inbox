@@ -73,7 +73,7 @@ module ClaudeInbox
       row.key
     rescue AgentsClient::Error => e
       reason = e.message.lines.first.to_s.strip
-      @store.mark_reap_failed(row.key, reason)
+      @store.mark_reap_failed(row.key)
       write(log, row, now_i, "kept — #{reason}")
       nil
     end

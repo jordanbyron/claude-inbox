@@ -133,9 +133,8 @@ module ClaudeInbox
 
       # So the Reaper backs off instead of shelling out every poll at a
       # worktree that is never going to let go of its unpushed commits.
-      def mark_reap_failed(now, message)
+      def mark_reap_failed(now)
         @h["reap_failed_at"] = now.to_i
-        @h["reap_error"] = message.to_s.lines.first&.strip
       end
     end
   end
