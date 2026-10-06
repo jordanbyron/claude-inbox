@@ -39,6 +39,8 @@ module ClaudeInbox
 
     # Hands the terminal to the child; caller must have restored cooked mode.
     # Returns when the user detaches. Detaching never stops the session.
+    # False when the attach failed on its own, as a session that cannot be
+    # woken does: the CLI prints why and exits 1.
     #
     # Pressing ← inside an attached session detaches it and then `claude
     # attach` execs itself in place as `claude agents` (same pid). There is
@@ -52,7 +54,7 @@ module ClaudeInbox
       pid = Process.spawn(*Subprocess.command(@bin, "attach", id))
       watchdog = Thread.new { kill_when_agents_view(pid, &stop) }
       _, status = Process.wait2(pid)
-      status
+      status.success? || !status.exited?
     ensure
       watchdog&.kill
     end

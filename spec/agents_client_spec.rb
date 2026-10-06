@@ -200,4 +200,15 @@ RSpec.describe ClaudeInbox::AgentsClient do
       expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 3
     end
   end
+
+  it "reports an attach the CLI failed, and not one it ended itself" do
+    Dir.mktmpdir do |dir|
+      bin = File.join(dir, "claude")
+      File.write(bin, "#!/bin/sh\n[ \"$2\" = bad ] && exit 1\nsleep 5\n")
+      File.chmod(0o755, bin)
+      client = described_class.new(bin: bin)
+      expect(client.attach("bad") { false }).to be(false)
+      expect(client.attach("abc12345") { true }).to be(true)
+    end
+  end
 end
