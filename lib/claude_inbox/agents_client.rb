@@ -158,8 +158,8 @@ module ClaudeInbox
       File.exist?(path) && File.zero?(path)
     end
 
-    def wait_gone(pid, timeout: 5)
-      deadline = Time.now + timeout
+    def wait_gone(pid)
+      deadline = Time.now + 5
       while Time.now < deadline
         Process.kill(0, pid)
         sleep 0.1
