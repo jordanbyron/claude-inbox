@@ -17,11 +17,5 @@ class ScreenTerminal
 
   def pause = @pauses += 1
 
-  def enter = nil
-
-  def restore = nil
-
-  def resized = nil
-
   def invalidate = nil
 end
