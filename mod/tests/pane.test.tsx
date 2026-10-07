@@ -157,6 +157,8 @@ test('Enter asks the attached inbox for the row, naming this session, and refuse
   mock.env(on, { HOME: '/Users/me' })
   mock.clock(on, { now: 1_700_000_000_000 })
   on('state.get', ($, e, next) => (e.key === 'rows' ? seeded(ROWS) : e.key === 'writtenAt' ? seeded(1_700_000_000) : next(e)))
+  on('ui.close', () => ({ value: undefined }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
   const written: { path: string; text: string }[] = []
   on('fs.write', ($, e) => {
     written.push({ path: e.path, text: e.text })
@@ -172,10 +174,35 @@ test('Enter asks the attached inbox for the row, naming this session, and refuse
   await ui.unmount()
 })
 
+test('a switch hands the keys back to the prompt before it asks, so a return lands there', async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  on('state.get', ($, e, next) => (e.key === 'rows' ? seeded(ROWS) : e.key === 'writtenAt' ? seeded(1_700_000_000) : next(e)))
+  const calls: string[] = []
+  on('ui.close', ($, e) => {
+    calls.push(`close ${e.id}`)
+    return { value: undefined }
+  })
+  on('ui.open', ($, e) => {
+    calls.push(`open ${e.id}${e.focus ? ' focused' : ''}`)
+    return { value: { isPlaced: true } }
+  })
+  on('fs.write', ($, e) => {
+    calls.push(`write ${e.path}`)
+    return { value: undefined }
+  })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'row:b2' })
+  expect(calls).toEqual(['close inbox', 'open inbox', 'write /Users/me/.config/claude-inbox/switch.json'])
+  await ui.unmount()
+})
+
 test('a click on a row puts the cursor on it before it asks for the switch', async ($, on) => {
   mock.env(on, { HOME: '/Users/me' })
   mock.clock(on, { now: 1_700_000_000_000 })
   on('state.get', ($, e, next) => (e.key === 'rows' ? seeded(ROWS) : e.key === 'writtenAt' ? seeded(1_700_000_000) : next(e)))
+  on('ui.close', () => ({ value: undefined }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
   const written: { path: string; text: string }[] = []
   on('fs.write', ($, e) => {
     written.push({ path: e.path, text: e.text })

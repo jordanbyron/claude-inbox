@@ -4,6 +4,7 @@ import type { EngineInterface, Register } from 'claude-code'
 import type { Folds, InboxRow, Pending, Section } from '../types'
 
 const PANE = 'inbox'
+const OPEN = { id: PANE, title: 'Inbox', columns: 48 } as const
 const POLL_MS = 500
 // Older than this and the writer has quit: it rewrites every 5 s even when nothing changed.
 const STALE_S = 30
@@ -173,6 +174,7 @@ async function ask($: EngineInterface, host: Host, action: Action): Promise<void
 // does; a file still there after SWITCH_MS, and still ours, means no inbox is attached to
 // this session.
 async function requestSwitch($: EngineInterface, host: Host, id: string): Promise<void> {
+  await handBackKeys($)
   const path = await inboxFile($, SWITCH)
   const from = await sessionId($, host)
   const at = await nowS($)
@@ -185,6 +187,14 @@ async function requestSwitch($: EngineInterface, host: Host, id: string): Promis
       $.ui.toast('no inbox is attached to this session: run claude-inbox, attach from it, and press Enter here')
     })
   })
+}
+
+// The pane keeps the keys while its session is away, so coming back to it would put the
+// person's typing in the pane. The engine has no blur: reopening without `focus` is the
+// one way to give the keys to the prompt.
+async function handBackKeys($: EngineInterface): Promise<void> {
+  await $.ui.close({ id: PANE })
+  await $.ui.open(OPEN)
 }
 
 // Only while no inbox writes the snapshot; the gem's writer lock turns a second one away.
@@ -264,14 +274,14 @@ export const register: Register = (on, options) => {
     void poll($, host)
     $.clock.every(POLL_MS, () => void poll($, host))
     if (options.openOnStart === false) return started
-    const opened = await $.ui.open({ id: PANE, title: 'Inbox', columns: 48 })
+    const opened = await $.ui.open(OPEN)
     if (!opened.isPlaced) $.ui.log(`inbox: /inbox opens the pane (${opened.reason})`, { to: 'debug' })
     return started
   })
 
   on('command.run', { command: 'inbox' }, async $ => {
     void poll($, host)
-    const opened = await $.ui.open({ id: PANE, title: 'Inbox', focus: true, columns: 48 })
+    const opened = await $.ui.open({ ...OPEN, focus: true })
     const surfaces = (await $.session.surfaces()).join(', ') || 'none'
     if (!opened.isPlaced) return { text: `Inbox pane not drawn: ${opened.reason}. Surfaces: ${surfaces}.` }
     return { text: `Inbox pane open on ${surfaces}. ctrl+x tab focuses it; the keys are claude-inbox's.` }
