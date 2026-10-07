@@ -55,12 +55,4 @@ RSpec.describe ClaudeInbox::Logs do
     sleep 0.05 # time for the worker to make any request it was going to
     expect(asked).to eq(%w[abc12345])
   end
-
-  it "ignores a request with nothing to fetch" do
-    logs.want(nil)
-    clock.advance(described_class::DEBOUNCE)
-    logs.tick
-    sleep 0.05
-    expect(asked).to be_empty
-  end
 end

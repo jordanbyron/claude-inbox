@@ -30,7 +30,6 @@ module ClaudeInbox
     end
 
     def want(id)
-      return if id.nil?
       @pending = id
       @pending_at = @clock.call
     end
