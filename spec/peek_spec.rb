@@ -9,35 +9,25 @@ RSpec.describe ClaudeInbox::Peek do
   let(:clock) { StillClock.new(now) }
   let(:logs) { ClaudeInbox::Logs.new(client, clock: clock) }
   let(:row) { ClaudeInbox::Store::Row.new(session, nil) }
-  let(:selection) { ClaudeInbox::Store::Selection }
   let(:terminal) { {id: nil, kind: "interactive", state: nil} }
 
   before { logs.start }
   after { logs.stop }
 
   it "shows nothing while closed" do
-    peek.select(selection.row("abc12345"), session)
+    peek.select(session)
     expect(peek.view(row, 10)).to be_nil
   end
 
-  it "shows a placeholder when nothing is selected" do
-    peek.select(selection.row("abc12345"), nil)
-    peek.toggle
-    v = peek.view(nil, 10)
-    expect(v.lines).to eq(["(nothing selected)"])
-    expect(v.title).to eq("abc12345")
-    expect(v.subtitle).to be_nil
-  end
-
   it "stays closed on a fold, which has no session to show" do
-    peek.select(ClaudeInbox::Store::Selection.fold(:settled), nil)
+    peek.select(nil)
     peek.toggle
     expect(peek.view(nil, 10)).to be_nil
   end
 
   it "explains a terminal session instead of fetching its logs" do
     r = ClaudeInbox::Store::Row.new(session(**terminal, status: "idle", session_id: "u1", pid: 42), nil)
-    peek.select(selection.row(r.key), r.session)
+    peek.select(r.session)
     peek.toggle
     v = peek.view(r, 10)
     expect(v.lines).to eq([described_class::TERMINAL_NOTE, "", "pid 42 · /tmp/proj", "session u1"])
@@ -50,7 +40,7 @@ RSpec.describe ClaudeInbox::Peek do
       session(**terminal, status: "idle", session_id: "u2", pid: 7, origin: :remote, bridge_id: "cse_01AB"),
       nil
     )
-    peek.select(selection.row(r.key), r.session)
+    peek.select(r.session)
     peek.toggle
     expect(peek.view(r, 10).lines.first).to eq(described_class::REMOTE_NOTE)
     expect(peek.view(r, 10).lines.last).to eq("https://claude.ai/code/session_01AB")
@@ -58,7 +48,7 @@ RSpec.describe ClaudeInbox::Peek do
 
   it "says loading until the worker answers, then shows the logs" do
     r = row
-    peek.select(selection.row(r.key), r.session)
+    peek.select(r.session)
     peek.toggle
     expect(peek.view(r, 10).lines).to eq(["(loading…)"])
 
@@ -70,14 +60,14 @@ RSpec.describe ClaudeInbox::Peek do
 
   it "waits out the debounce before asking" do
     r = row
-    peek.select(selection.row(r.key), r.session)
+    peek.select(r.session)
     logs.tick
     expect(logs.cached("abc12345")).to be_nil
   end
 
   it "scrolls back from the tail and no further than the history allows" do
     r = row
-    peek.select(selection.row(r.key), r.session)
+    peek.select(r.session)
     peek.toggle
     clock.advance(ClaudeInbox::Logs::DEBOUNCE)
     logs.tick
@@ -96,18 +86,18 @@ RSpec.describe ClaudeInbox::Peek do
 
   it "forgets the scroll on a new selection" do
     r = row
-    peek.select(selection.row(r.key), r.session)
+    peek.select(r.session)
     peek.toggle
     clock.advance(ClaudeInbox::Logs::DEBOUNCE)
     logs.tick
     expect(wait_for { logs.cached(r.session.id) }).not_to be_nil
     peek.scroll(3)
-    peek.select(selection.row(r.key), r.session)
+    peek.select(r.session)
     expect(peek.view(r, 4).lines).to eq((1..10).map { |i| "line #{i}" })
   end
 
   it "closes on demand" do
-    peek.select(selection.row("abc12345"), session)
+    peek.select(session)
     peek.toggle
     expect(peek.open?).to be(true)
     peek.close
@@ -120,7 +110,7 @@ RSpec.describe ClaudeInbox::Peek do
       ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: state)
     end
     r = ClaudeInbox::Store::Row.new(session(status: "idle", waiting_for: "permission prompt", prs: prs), nil)
-    peek.select(selection.row(r.key), r.session)
+    peek.select(r.session)
     peek.toggle
     started = now.strftime("started %b %-d %H:%M")
     expect(peek.view(r, 10).subtitle).to eq("working · idle · permission prompt · abc12345 · #{started} · #7 open · #7 ?")

@@ -16,7 +16,6 @@ module ClaudeInbox
       @logs = logs
       @open = false
       @offset = 0
-      @selected = nil
       @session = nil
     end
 
@@ -30,8 +29,7 @@ module ClaudeInbox
     def close = @open = false
 
     # Called on every selection change; a fold has no session.
-    def select(selection, session)
-      @selected = selection
+    def select(session)
       @session = session
       @offset = 0
       @logs.want(session.id) if session&.actionable?
@@ -42,17 +40,16 @@ module ClaudeInbox
       @offset = [@offset + delta, 0].max
     end
 
-    # `row` is the selected row as the frame shows it, or nil when nothing is
-    # selected. Answers nil when there is no pane to paint.
+    # `row` is the selected row as the frame shows it, or nil on a fold or
+    # with nothing selected. Answers nil when there is no pane to paint.
     def view(row, body_h)
-      return nil unless @open && @selected&.row?
-      View.new(scrolled(body(row), body_h), row&.label || @selected.key, subtitle(row))
+      return nil unless @open && row
+      View.new(scrolled(body(row), body_h), row.label, subtitle(row))
     end
 
     private
 
     def body(row)
-      return ["(nothing selected)"] unless row
       return interactive_note(row.session) if row.session.interactive?
       @logs.cached(row.session.id) || ["(loading…)"]
     end
@@ -62,7 +59,6 @@ module ClaudeInbox
     end
 
     def subtitle(row)
-      return nil unless row
       s = row.session
       parts = [s.effective_state, s.status, s.waiting_for, s.id, s.started_at&.strftime("started %b %-d %H:%M")].compact
       parts += s.prs.map { |pr| "#{pr.short} #{pr.state&.downcase || "?"}" }

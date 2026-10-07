@@ -227,7 +227,7 @@ module ClaudeInbox
 
     def select(selection)
       @selected = selection
-      @peek.select(selection, selected_session)
+      @peek.select(selected_session)
     end
 
     def session_for(key) = @store.sessions.find { |s| s.key == key }
