@@ -142,7 +142,7 @@ RSpec.describe ClaudeInbox::PullRequests do
       asked = 0
       allow(first).to receive(:fetch) do |u|
         asked += 1
-        ClaudeInbox::PullRequest.new(number: 7, url: u, state: "MERGED", title: "seven", resolved_at: now.to_i - 60)
+        ClaudeInbox::PullRequest.new(number: 7, url: u, state: "MERGED", resolved_at: now.to_i - 60)
       end
       expect(first.status(url)).to be_merged
       expect(asked).to eq(1)
@@ -152,7 +152,6 @@ RSpec.describe ClaudeInbox::PullRequests do
       allow(second).to receive(:fetch).and_raise("asked gh about a PR already known to be merged")
       pr = second.status(url)
       expect(pr).to be_merged
-      expect(pr.title).to eq("seven")
       expect(pr.resolved_at).to eq(now.to_i - 60)
     end
   end

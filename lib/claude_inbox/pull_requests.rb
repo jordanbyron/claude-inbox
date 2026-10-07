@@ -10,7 +10,7 @@ module ClaudeInbox
   # DRAFT, the same as Claude Code's own cache: OPEN, DRAFT, MERGED, CLOSED,
   # or nil when nothing has told us yet. `resolved_at` is when it was merged
   # or closed, in epoch seconds, once gh has said.
-  PullRequest = Struct.new(:number, :url, :state, :title, :resolved_at) do
+  PullRequest = Struct.new(:number, :url, :state, :resolved_at) do
     def short = number ? "##{number}" : url.to_s.sub(%r{\Ahttps?://(www\.)?}, "")
 
     def merged? = state == "MERGED"
@@ -115,7 +115,7 @@ module ClaudeInbox
       h = JSON.parse(json)
       state = (h["state"] == "OPEN" && h["isDraft"]) ? "DRAFT" : h["state"]
       resolved_at = h["closedAt"] && Time.iso8601(h["closedAt"]).to_i
-      PullRequest.new(number: h["number"], url: h["url"] || url, state: state, title: h["title"], resolved_at: resolved_at)
+      PullRequest.new(number: h["number"], url: h["url"] || url, state: state, resolved_at: resolved_at)
     rescue JSON::ParserError, ArgumentError
       nil
     end
@@ -140,7 +140,7 @@ module ClaudeInbox
       number = url[%r{/pull/(\d+)}, 1]&.to_i
       cached = resolved[url] || claude_cache[url]
       PullRequest.new(number: cached&.dig("number") || number, url: url, state: cached&.dig("state"),
-        title: cached&.dig("title"), resolved_at: cached&.dig("resolved_at"))
+        resolved_at: cached&.dig("resolved_at"))
     end
 
     # Same shape as Claude Code's cache, so `seed` reads both alike.
@@ -154,13 +154,13 @@ module ClaudeInbox
 
     # Under @mutex.
     def remember(pr)
-      resolved[pr.url] = {"number" => pr.number, "state" => pr.state, "title" => pr.title, "resolved_at" => pr.resolved_at}
+      resolved[pr.url] = {"number" => pr.number, "state" => pr.state, "resolved_at" => pr.resolved_at}
       return unless @resolved_path
       Records.save(@resolved_path, resolved)
     end
 
     def fetch(url)
-      r = Subprocess.capture(@gh, "pr", "view", url, "--json", "number,state,isDraft,title,url,closedAt")
+      r = Subprocess.capture(@gh, "pr", "view", url, "--json", "number,state,isDraft,url,closedAt")
       r.success? ? self.class.parse(url, r.out) : nil
     rescue SystemCallError
       nil

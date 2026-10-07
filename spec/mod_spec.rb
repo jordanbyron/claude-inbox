@@ -107,7 +107,7 @@ RSpec.describe ClaudeInbox::Mod do
   it "writes the snapshot the pane's fixture says it reads" do
     fixture = File.read(File.join(described_class::DIR, "tests", "snapshot.fixture.ts"))[/`([\s\S]*)`/, 1]
     now = Time.at(1_789_600_000)
-    pr = ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: "OPEN", title: "t")
+    pr = ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: "OPEN")
     sessions = [
       session(id: "a1", state: "blocked", name: "needs an answer", session_id: "u-a1"),
       session(id: "b2", state: "working", name: "still going", prs: [pr], session_id: "u-b2"),
