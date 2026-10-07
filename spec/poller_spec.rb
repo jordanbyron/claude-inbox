@@ -42,9 +42,8 @@ RSpec.describe ClaudeInbox::Poller do
       poller = described_class.new(**poller_args, snapshot: ClaudeInbox::Snapshot.new(path: path),
         actions: ClaudeInbox::Actions.new(dir: dir))
       poller.once
-      expect(poller.apply).to be(true)
+      poller.apply
       expect(JSON.parse(File.read(path))["sections"]["settled"].map { |r| r["id"] }).to include("f23c8673")
-      expect(poller.apply).to be(false)
     end
   end
 

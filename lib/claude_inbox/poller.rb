@@ -70,11 +70,9 @@ module ClaudeInbox
       @queue << [:error, e.message]
     end
 
-    # Applies the requests another front end left, and says whether any landed.
+    # Applies the requests another front end left.
     def apply
-      return false unless @actions.drain(@store) > 0
-      write_snapshot
-      true
+      write_snapshot if @actions.drain(@store) > 0
     end
 
     private
