@@ -342,11 +342,16 @@ export const register: Register = (on, options) => {
     }
     const key = (hotkey: string, onPress: () => void) => <Button key={hotkey} hotkey={hotkey} plain label="" onPress={onPress} />
     // Enter or a click on an item: the cursor lands on it, a fold opens, a row the inbox can
-    // attach to asks for the switch.
+    // attach to asks for the switch. Off the terminal no inbox can attach, so a row opens
+    // its claude.ai/code page instead.
     const enter = (item: Item) => () => {
       void moveTo($, flat, flat.indexOf(item))
       if (item.kind === 'fold') return void setFold($, list, viewing, item.section, true)
       if (item.row === viewing) return $.ui.toast('you are in this session')
+      if (e.surface !== 'terminal') {
+        if (item.row.remote) return void $.process.run(['open', item.row.remote])
+        return $.ui.toast('turn on Remote Control for this session to open it from here')
+      }
       if (!item.row.id || !item.row.actionable) return $.ui.toast('this session cannot be attached')
       void requestSwitch($, host, item.row.id)
     }
