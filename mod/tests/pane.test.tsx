@@ -172,6 +172,30 @@ test('Enter asks the attached inbox for the row, naming this session, and refuse
   await ui.unmount()
 })
 
+test('on the desktop Enter opens the row on claude.ai/code instead of asking for a switch', async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  const remote = ROWS.map(one => (one.id === 'b2' ? { ...one, remote: 'https://claude.ai/code/session_b2' } : one))
+  on('state.get', ($, e, next) => (e.key === 'rows' ? seeded(remote) : e.key === 'writtenAt' ? seeded(1_700_000_000) : next(e)))
+  const written: string[] = []
+  on('fs.write', ($, e) => {
+    written.push(e.path)
+    return { value: undefined }
+  })
+  const ran: (readonly string[])[] = []
+  on('process.run', ($, e) => {
+    ran.push(e.argv)
+    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+  })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  await ui.press({ key: 'row:a1' })
+  expect(ran.length).toBe(0)
+  await ui.press({ key: 'row:b2' })
+  expect(ran).toEqual([['open', 'https://claude.ai/code/session_b2']])
+  expect(written.length).toBe(0)
+  await ui.unmount()
+})
+
 test('a click on a row puts the cursor on it before it asks for the switch', async ($, on) => {
   mock.env(on, { HOME: '/Users/me' })
   mock.clock(on, { now: 1_700_000_000_000 })
