@@ -23,7 +23,7 @@ module ClaudeInbox
 
     # The project wins over the home directory when both define the same
     # name, as it does in the CLI.
-    def list(cwd:, home: Dir.home)
+    def list(cwd:, home:)
       found = {}
       add = ->(cmd) { found[cmd.name] ||= cmd }
       from_dir(File.join(cwd, ".claude")).each(&add)
@@ -44,7 +44,7 @@ module ClaudeInbox
         commands(File.join(dir, "commands"), prefix:)
     end
 
-    def skills(dir, prefix: nil)
+    def skills(dir, prefix:)
       Dir.glob(File.join(dir, "*", "SKILL.md")).sort.filter_map do |path|
         meta = frontmatter(path)
         next if meta["user-invocable"] == "false"
@@ -54,7 +54,7 @@ module ClaudeInbox
     end
 
     # A command file's name is its own; a subdirectory only groups them.
-    def commands(dir, prefix: nil)
+    def commands(dir, prefix:)
       Dir.glob(File.join(dir, "**", "*.md")).sort.map do |path|
         name = File.basename(path, ".md")
         Command.new(qualify(prefix, name), frontmatter(path)["description"].to_s)
