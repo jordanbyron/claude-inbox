@@ -64,7 +64,7 @@ module ClaudeInbox
       ["za", "fold"], ["/", "filter"], ["q", "quit"]
     ].freeze
 
-    def initialize(color: true, home: Dir.home)
+    def initialize(color:, home: Dir.home)
       @p = Pastel.new(enabled: color)
       @theme = Theme.new(enabled: color)
       @palette = Palette.new(enabled: color)
