@@ -561,7 +561,7 @@ RSpec.describe ClaudeInbox::Store do
       store.update([s])
 
       expect(store.row(s).reap_failed_at).to be_nil
-      store.mark_reap_failed("a", "rm failed: worktree has unpushed commits\nmore")
+      store.mark_reap_failed("a")
       row = store.row(s)
       expect(row.session).to eq(s)
       expect(row.reap_failed_at).to eq(now.to_i)

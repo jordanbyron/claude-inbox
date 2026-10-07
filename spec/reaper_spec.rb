@@ -67,7 +67,6 @@ RSpec.describe ClaudeInbox::Reaper do
     reaper = described_class.new(RecordingClient.new(refuse: %w[unpushed]), store, log_path: log_path)
     expect(reaper.sweep(sessions, now)).to eq(%w[clean])
     expect(store.entry("unpushed")["reap_failed_at"]).to eq(now.to_i)
-    expect(store.entry("unpushed")["reap_error"]).to include("unpushed commits")
     expect(store.entry("clean")).to be_nil
     expect(File.read(log_path)).to include("kept — rm failed: worktree has unpushed commits")
   end

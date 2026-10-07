@@ -192,10 +192,9 @@ RSpec.describe ClaudeInbox::Store::Entry do
       expect(entry.to_h).to eq({})
     end
 
-    it "mark_reap_failed keeps the first line of the refusal" do
-      entry.mark_reap_failed(now, "rm failed: worktree has unpushed commits\nmore")
+    it "mark_reap_failed records when the reap was refused" do
+      entry.mark_reap_failed(now)
       expect(entry.reap_failed_at).to eq(now.to_i)
-      expect(entry.to_h["reap_error"]).to eq("rm failed: worktree has unpushed commits")
     end
   end
 

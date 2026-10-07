@@ -102,7 +102,7 @@ module ClaudeInbox
 
     def settle(id) = edit(id, "settle") { |e| e.settle(@clock.call) }
 
-    def mark_reap_failed(id, message) = edit(id) { |e| e.mark_reap_failed(@clock.call, message) }
+    def mark_reap_failed(id) = edit(id) { |e| e.mark_reap_failed(@clock.call) }
 
     def toggle_pin(id) = edit(id, "pin") { |e| e.toggle_pin(@clock.call) }
 
