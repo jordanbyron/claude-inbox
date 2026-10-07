@@ -89,9 +89,8 @@ module ClaudeInbox
       place(Pasted.new(@pastes = (@pastes || 0) + 1, text))
     end
 
-    # Handles one keypress — readline's editing keys, plus printable text —
-    # or returns false when the key is not ours and the caller should deal
-    # with it (Tab, Enter, Escape, anything else unprintable).
+    # Handles one keypress: readline's editing keys, plus printable text.
+    # Anything else (Tab, Enter, Escape) is ignored.
     def press(name, raw)
       case name
       when :left then @cursor = [@cursor - 1, 0].max
@@ -104,10 +103,9 @@ module ClaudeInbox
       when :ctrl_k then delete(@cursor, @g.size - @cursor)
       when :ctrl_w then delete_word
       else
-        return false unless raw.is_a?(String) && raw.match?(/\A[[:print:]]+\z/)
+        return unless raw.is_a?(String) && raw.match?(/\A[[:print:]]+\z/)
         insert(raw)
       end
-      true
     end
 
     # The text as a single row of at most `width` columns, scrolled right so
