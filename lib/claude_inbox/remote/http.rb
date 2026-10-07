@@ -12,7 +12,7 @@ module ClaudeInbox
       TOKEN = /\A[!#$%&'*+\-.^_`|~0-9A-Za-z]+\z/
 
       REASONS = {
-        100 => "Continue", 200 => "OK", 201 => "Created", 400 => "Bad Request", 401 => "Unauthorized",
+        200 => "OK", 201 => "Created", 400 => "Bad Request", 401 => "Unauthorized",
         403 => "Forbidden", 404 => "Not Found", 405 => "Method Not Allowed", 409 => "Conflict",
         411 => "Length Required", 413 => "Content Too Large", 415 => "Unsupported Media Type",
         421 => "Misdirected Request", 422 => "Unprocessable Content", 500 => "Internal Server Error",
