@@ -59,9 +59,9 @@ module ClaudeInbox
       watchdog&.kill
     end
 
-    def stop(id) = run(@bin, "stop", id)
+    def stop(id) = run("stop", id)
 
-    def rm(id) = run(@bin, "rm", id)
+    def rm(id) = run("rm", id)
 
     MODELS = %w[default fable opus sonnet haiku].freeze
     EFFORTS = %w[default low medium high xhigh max].freeze
@@ -239,9 +239,9 @@ module ClaudeInbox
       nil
     end
 
-    def run(*argv)
-      r = Subprocess.capture(*argv)
-      raise Error, "#{argv[1]} failed: #{r.err.strip}" unless r.success?
+    def run(verb, id)
+      r = Subprocess.capture(@bin, verb, id)
+      raise Error, "#{verb} failed: #{r.err.strip}" unless r.success?
       true
     end
 
