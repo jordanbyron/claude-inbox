@@ -11,7 +11,6 @@ module ClaudeInbox
   # the store cannot honour after that, or a verb it lacks, is dropped.
   class Actions
     DEFAULT_DIR = File.join(Dir.home, ".config", "claude-inbox", "actions")
-    VERBS = %w[settle wake pin snooze acknowledge].freeze
     SNOOZES = %w[m15 h1 tomorrow_9am until_woken].freeze
     # A file still being written parses as nothing for milliseconds; a
     # session not yet polled appears within one poll.
@@ -75,7 +74,7 @@ module ClaudeInbox
 
     def apply(store, request, keys)
       id = request["id"]
-      return false unless keys.include?(id) && VERBS.include?(request["action"])
+      return false unless keys.include?(id)
       case request["action"]
       when "settle" then store.settle(id)
       when "wake" then store.wake(id)
@@ -84,6 +83,8 @@ module ClaudeInbox
       when "snooze"
         return false unless SNOOZES.include?(request["choice"])
         store.snooze(id, request["choice"].to_sym)
+      else
+        return false
       end
       true
     end
