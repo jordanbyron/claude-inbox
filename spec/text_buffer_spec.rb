@@ -45,11 +45,13 @@ RSpec.describe ClaudeInbox::TextBuffer do
     expect(b.to_s).to eq("ab")
   end
 
-  it "hands back keys it has no use for" do
+  it "ignores keys it has no use for" do
     b = described_class.new
-    expect(b.press(:tab, "\t")).to be(false)
-    expect(b.press(:escape, "\e")).to be(false)
-    expect(b.press("x", "x")).to be(true)
+    b.press(:tab, "\t")
+    b.press(:escape, "\e")
+    expect(b.to_s).to eq("")
+    b.press("x", "x")
+    expect(b.to_s).to eq("x")
   end
 
   it "scrolls a single row to keep the cursor in view" do
