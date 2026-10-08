@@ -242,7 +242,6 @@ module ClaudeInbox
     def run(verb, id)
       r = Subprocess.capture(@bin, verb, id)
       raise Error, "#{verb} failed: #{r.err.strip}" unless r.success?
-      true
     end
 
     def start_bg(argv, cwd, what)
@@ -275,7 +274,7 @@ module ClaudeInbox
     # terminal round-trips through cooked mode and back.
     def attach(id) = system("sh", "-c", "printf 'fake attach to %s\\npress enter to detach: ' \"$1\"; read -r _", "attach", id)
 
-    def stop(_id) = true
+    def stop(_id) = nil
 
     def spawn(prompt:, cwd:, **)
       sleep 0.5
@@ -284,6 +283,6 @@ module ClaudeInbox
 
     def adopt(session_id:, cwd:, pid:) = "adop7ed0"
 
-    def rm(_id) = true
+    def rm(_id) = nil
   end
 end
