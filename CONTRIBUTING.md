@@ -27,7 +27,7 @@ bin/claude-inbox --reap                                 # delete sessions idle 1
 bin/screens                                             # drive the fixture in a pty, print every screen
 ```
 
-`--fixture` reads `agents.json`, `logs_raw.txt` and `jobs/` from the
+`--fixture` reads `agents.json` and `jobs/` from the
 directory of the file you pass, so a fixture can live anywhere.
 
 To check a refactor against the real screen, run `bin/screens` on `main` and

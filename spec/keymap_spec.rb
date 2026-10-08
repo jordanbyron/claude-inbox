@@ -41,14 +41,13 @@ RSpec.describe ClaudeInbox::Keymap do
   it "maps actions" do
     expect(km.press(:return, "\r")).to eq(:activate)
     expect(km.press("l", "l")).to eq(:activate)
-    expect(km.press("h", "h")).to eq(:collapse)
+    expect(km.press("h", "h")).to eq(:fold_close)
     expect(km.press("s", "s")).to eq(:snooze)
     expect(km.press("u", "u")).to eq(:wake)
     expect(km.press("a", "a")).to eq(:alias)
     expect(km.press("x", "x")).to eq(:settle)
     expect(km.press("X", "X")).to eq(:stop)
     expect(km.press(:ctrl_x, "\x18")).to eq(:delete)
-    expect(km.press("p", "p")).to eq(:toggle_peek)
     expect(km.press("n", "n")).to eq(:new_session)
     expect(km.press("N", "N")).to eq(:remote_pairing)
     expect(km.press("t", "t")).to eq(:toggle_pin)
@@ -60,12 +59,5 @@ RSpec.describe ClaudeInbox::Keymap do
     expect(km.press("/", "/")).to eq(:filter)
     expect(km.press("q", "q")).to eq(:quit)
     expect(km.press(:ctrl_c, "\x03")).to eq(:quit)
-  end
-
-  it "scrolls the peek pane with J/K and ^e/^y" do
-    expect(km.press("J", "J")).to eq(:peek_down)
-    expect(km.press("K", "K")).to eq(:peek_up)
-    expect(km.press(:ctrl_e, "\x05")).to eq(:peek_down)
-    expect(km.press(:ctrl_y, "\x19")).to eq(:peek_up)
   end
 end

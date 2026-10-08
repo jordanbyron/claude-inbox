@@ -70,10 +70,8 @@ Vim bindings. Arrows and the mouse work too.
 | `Ctrl-d` `Ctrl-u` | half page down / up (`Ctrl-f` `Ctrl-b` full page) |
 | `Enter` `l` | attach (`←` or `Ctrl+Z` returns here), adopt a remote session, or expand Snoozed / Settled |
 | `Tab` `Shift+Tab` | next / previous section |
-| `h` | close the peek pane, else collapse the current fold |
+| `h` | collapse the current fold |
 | `za` `zo` `zc` | toggle / open / close the fold under the cursor |
-| `p` | toggle the read-only peek pane |
-| `J` `K` (`Ctrl-e` `Ctrl-y`) | scroll the peek pane |
 | `n` | new session |
 | `N` | pair a phone |
 | `t` | pin / unpin |

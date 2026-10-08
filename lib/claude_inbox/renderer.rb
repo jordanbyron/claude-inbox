@@ -11,18 +11,17 @@ module ClaudeInbox
   # `width` columns wide) plus a parallel Array of selectable items.
   # Pure: no terminal, no IO, no clock beyond the `now` it is handed.
   class Renderer
-    Frame = Struct.new(:lines, :items, :top, :list_width)
+    Frame = Struct.new(:lines, :items, :top)
 
     CHROME_ROWS = 2 # header + footer
-    MIN_LIST_WIDTH = 44 # with the peek open, the list keeps at least this many columns
 
     def self.body_height(height) = height - CHROME_ROWS
 
-    # What App hands Renderer for one frame. `peek` is a Peek::View and
-    # `listening` a Remote::Listener::Snapshot.
-    View = Data.define(:width, :height, :now, :selected, :top, :expanded, :peek, :modal, :screen,
+    # What App hands Renderer for one frame. `listening` is a
+    # Remote::Listener::Snapshot.
+    View = Data.define(:width, :height, :now, :selected, :top, :expanded, :modal, :screen,
       :status, :usage, :filter, :filter_editing, :tick, :loading, :listening) do
-      def initialize(width:, height:, now:, selected: nil, top: 0, expanded: {}, peek: nil, modal: nil, screen: nil,
+      def initialize(width:, height:, now:, selected: nil, top: 0, expanded: {}, modal: nil, screen: nil,
         status: nil, usage: nil, filter: nil, filter_editing: false, tick: 0, loading: nil, listening: nil) = super
     end
 
@@ -60,7 +59,7 @@ module ClaudeInbox
 
     KEYS = [
       ["j/k", "move"], ["⏎", "attach"], ["n", "new"], ["t", "pin"], ["s", "snooze"], ["u", "wake"],
-      ["a", "alias"], ["o", "PR"], ["x", "settle"], ["p", "peek"], ["⇥", "section"],
+      ["a", "alias"], ["o", "PR"], ["x", "settle"], ["⇥", "section"],
       ["za", "fold"], ["/", "filter"], ["q", "quit"]
     ].freeze
 
@@ -76,13 +75,12 @@ module ClaudeInbox
     def frame(sections, view)
       return full_screen(sections, view) if view.screen
       width, height, selected = view.width, view.height, view.selected
-      list_w = width_for_list(width, view.peek)
       view_h = Renderer.body_height(height)
       body, items =
         if view.loading
-          [loading_state(list_w, view_h, view.loading, view.tick), []]
+          [loading_state(width, view_h, view.loading, view.tick), []]
         else
-          body_lines(sections, list_w, view)
+          body_lines(sections, width, view)
         end
 
       top = clamp_top(view.top, body.size, view_h, items, selected)
@@ -91,25 +89,12 @@ module ClaudeInbox
       visible += [""] * (view_h - visible.size)
       visible_items += [nil] * (view_h - visible_items.size)
 
-      if view.peek
-        peek_w = width - list_w - 1
-        peek_lines = peek_pane(view.peek, peek_w, view_h)
-        visible = visible.each_with_index.map do |l, i|
-          Text.pad(l, list_w) + @p.dim("│") + Text.pad(peek_lines[i] || "", peek_w)
-        end
-      end
-
       lines = [header(sections, width, view)] + visible.map { |l| Text.pad(l, width) } + [footer(width, view)]
       lines = overlay(lines, view.modal, width) if view.modal
-      Frame.new(lines, [nil] + visible_items + [nil], top, list_w)
+      Frame.new(lines, [nil] + visible_items + [nil], top)
     end
 
     private
-
-    def width_for_list(width, peek)
-      return width unless peek
-      [(width * 0.4).floor, MIN_LIST_WIDTH].max.clamp(0, width)
-    end
 
     def clamp_top(top, size, view_h, items, selected)
       idx = items.index { |item| item && item.key == selected }
@@ -124,7 +109,7 @@ module ClaudeInbox
       body = view.screen[:lines].first(view_h)
       body += [""] * (view_h - body.size)
       lines = [header(sections, width, view)] + body.map { |l| Text.pad(l, width) } + [Text.pad(" " + view.screen[:footer], width)]
-      Frame.new(lines, [nil] * view.height, view.top, width)
+      Frame.new(lines, [nil] * view.height, view.top)
     end
 
     # ----- chrome -------------------------------------------------------------
@@ -391,7 +376,7 @@ module ClaudeInbox
       pr ? base + @p.dim(" · ") + pr : base
     end
 
-    # "#885 open". Only the first PR is shown; the peek subtitle lists them all.
+    # "#885 open". Only the first PR is shown.
     def pr_badge(s, section)
       pr = s.pr
       return nil unless pr
@@ -425,18 +410,6 @@ module ClaudeInbox
     def short_path(path)
       return "" unless path
       path.start_with?(@home) ? path.sub(@home, "~") : path
-    end
-
-    # ----- peek ---------------------------------------------------------------
-
-    def peek_pane(peek, width, height)
-      bar = Text.pad(" " + (peek.title || ""), width)
-      out = [@p.inverse(bar)]
-      out << Text.pad(" " + @p.dim(peek.subtitle.to_s), width) if peek.subtitle
-      body_h = height - out.size
-      wrapped = peek.lines.flat_map { |l| Text.wrap(l, width - 1) }
-      wrapped.last(body_h).each { |l| out << Text.pad(" " + l, width) }
-      out
     end
 
     # ----- modal --------------------------------------------------------------

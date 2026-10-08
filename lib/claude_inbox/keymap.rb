@@ -19,15 +19,13 @@ module ClaudeInbox
       "G" => :bottom,
       :ctrl_d => :half_page_down, :ctrl_u => :half_page_up,
       :ctrl_f => :page_down, :ctrl_b => :page_up,
-      :ctrl_e => :peek_down, :ctrl_y => :peek_up,
-      "J" => :peek_down, "K" => :peek_up,
       # actions
       :return => :activate, :enter => :activate, "l" => :activate,
-      "h" => :collapse,
+      "h" => :fold_close,
       "s" => :snooze, "u" => :wake, "a" => :alias, "x" => :settle, "X" => :stop,
       :ctrl_x => :delete,
       "o" => :open_pr, "P" => :link_pr, "t" => :toggle_pin, "w" => :open_remote,
-      "R" => :refresh, "p" => :toggle_peek, "n" => :new_session, "N" => :remote_pairing,
+      "R" => :refresh, "n" => :new_session, "N" => :remote_pairing,
       :tab => :next_section, :back_tab => :prev_section,
       "/" => :filter, :escape => :escape,
       "q" => :quit, :ctrl_c => :quit
