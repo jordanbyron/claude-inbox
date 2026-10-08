@@ -149,7 +149,7 @@ RSpec.describe ClaudeInbox::Renderer do
   end
 
   it "splits the frame for the peek pane" do
-    peek = ClaudeInbox::Peek::View.new(["line one", "line two"], "t")
+    peek = ClaudeInbox::Peek::View.new(["line one", "line two"], "t", "s")
     f = renderer.frame(sections, view.with(width: 100, height: 12, selected: "f23c8673", peek: peek))
     f.lines.each { |l| expect(ClaudeInbox::Text.width(l)).to eq(100) }
     expect(f.lines[1]).to match(/│/)

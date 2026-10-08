@@ -430,9 +430,9 @@ module ClaudeInbox
     # ----- peek ---------------------------------------------------------------
 
     def peek_pane(peek, width, height)
-      bar = Text.pad(" " + (peek.title || ""), width)
+      bar = Text.pad(" " + peek.title, width)
       out = [@p.inverse(bar)]
-      out << Text.pad(" " + @p.dim(peek.subtitle.to_s), width) if peek.subtitle
+      out << Text.pad(" " + @p.dim(peek.subtitle), width)
       body_h = height - out.size
       wrapped = peek.lines.flat_map { |l| Text.wrap(l, width - 1) }
       wrapped.last(body_h).each { |l| out << Text.pad(" " + l, width) }
