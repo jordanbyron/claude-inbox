@@ -62,7 +62,6 @@ module ClaudeInbox
     def replace(text)
       @g = text.grapheme_clusters
       @cursor = @g.size
-      self
     end
 
     # Everything before the cursor, as one string.
@@ -246,7 +245,6 @@ module ClaudeInbox
     def place(chip)
       @g.insert(@cursor, chip)
       @cursor += 1
-      chip
     end
 
     def delete(at, length)
