@@ -51,7 +51,7 @@ opts = {}
 if fixture
   agents = argv[argv.index("--fixture") + 1]
   fixtures = File.dirname(agents)
-  opts[:client] = ClaudeInbox::FixtureClient.new(agents, logs: File.binread(File.join(fixtures, "logs_raw.txt")))
+  opts[:client] = ClaudeInbox::FixtureClient.new(agents)
   opts[:store] = ClaudeInbox::Store.new(path: nil)
   opts[:pull_requests] = ClaudeInbox::PullRequests.new(cache_path: File.join(fixtures, "gh-pr-status-cache.json"), resolved_path: nil, gh: nil)
   # Its own token, lock and images, so a test inbox can neither rotate the

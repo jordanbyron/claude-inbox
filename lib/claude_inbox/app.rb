@@ -8,8 +8,6 @@ require_relative "text_buffer"
 require_relative "store"
 require_relative "renderer"
 require_relative "terminal"
-require_relative "logs"
-require_relative "peek"
 require_relative "keymap"
 require_relative "remote/listener"
 require_relative "mouse"
@@ -50,11 +48,8 @@ module ClaudeInbox
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests,
         reaper: reaper, queue: @queue, snapshot: snapshot, actions: actions)
       @listener = listen ? Remote::Listener.new(client: client, store: store, queue: @queue, **listen) : Remote::Listener.disabled
-      @logs = Logs.new(client)
-      @peek = Peek.new(@logs)
       @selected = nil
       @row_items = []
-      @list_width = nil
       @top = 0
       @expanded = Hash.new(false)
       @keymap = Keymap.new
@@ -73,18 +68,15 @@ module ClaudeInbox
       @terminal.enter
       @poller.start
       @listener.start
-      @logs.start
       main_loop
     ensure
       @poller.stop
-      @logs.stop
       @terminal.restore
       @listener.stop
     end
 
     def step(input = nil)
       drain_queue
-      @logs.tick
       if @resize
         @resize = false
         @terminal.resized
@@ -184,13 +176,12 @@ module ClaudeInbox
       @tick += 1
       view = Renderer::View.new(
         width: width, height: height, now: now, selected: @selected&.key, top: @top, expanded: @expanded,
-        peek: @peek.view(sections.row(@selected), body_h), modal: modal_lines(width), screen: screen_lines(width, body_h),
+        modal: modal_lines(width), screen: screen_lines(width, body_h),
         status: status_text(now), usage: @rate_limits.windows(now), filter: @filter, filter_editing: @filter_editing,
         tick: @tick / 2, loading: loading_for, listening: @listener.snapshot
       )
       frame = @renderer.frame(sections, view)
       @row_items = frame.items
-      @list_width = frame.list_width
       @top = frame.top
       @terminal.paint(frame.lines)
       dt = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
@@ -227,7 +218,6 @@ module ClaudeInbox
 
     def select(selection)
       @selected = selection
-      @peek.select(selected_session)
     end
 
     def session_for(key) = @store.sessions.find { |s| s.key == key }
@@ -294,7 +284,7 @@ module ClaudeInbox
     def handle_mouse(event)
       return if @modal || @filter_editing
       case event.kind
-      when :click then click_row(event.row, event.col)
+      when :click then click_row(event.row)
       when :scroll_up then perform(:up)
       when :scroll_down then perform(:down)
       end
@@ -303,8 +293,7 @@ module ClaudeInbox
     # Clicking a row selects it and attaches, same as landing on it with
     # j/k and pressing Enter — activate already knows how to expand a fold
     # or refuse a terminal/remote row, so this doesn't repeat that.
-    def click_row(row, col)
-      return if @list_width && col > @list_width
+    def click_row(row)
       item = row_item_at(row)
       return unless item
       select(item)
@@ -331,10 +320,7 @@ module ClaudeInbox
       when :page_up then move(-page)
       when :next_section then jump_section(1)
       when :prev_section then jump_section(-1)
-      when :peek_down then @peek.scroll(-1)
-      when :peek_up then @peek.scroll(1)
       when :activate then activate
-      when :collapse then collapse
       when :fold_open then set_expanded(true)
       when :fold_close then set_expanded(false)
       when :fold_toggle then set_expanded(!@expanded[current_fold_section])
@@ -349,7 +335,6 @@ module ClaudeInbox
       when :stop then open_confirm(:stop)
       when :delete then open_confirm(:delete)
       when :refresh then @poller.soon
-      when :toggle_peek then toggle_peek
       when :new_session then open_new_session
       when :remote_pairing then @modal = @listener.pairing_dialog
       when :filter then start_filter
@@ -387,23 +372,10 @@ module ClaudeInbox
       @expanded[name] = value if name
     end
 
-    # vim-ish "h": close whatever is open, innermost first.
-    def collapse
-      if @peek.open? then @peek.close
-      elsif (name = current_fold_section) && @expanded[name] then @expanded[name] = false
-      end
-      @terminal.invalidate
-    end
-
     def activate
       return @expanded[@selected.key] = true if @selected&.fold?
       return @modal = Dialog::Confirm.new(:adopt, @selected.key) if selected_session&.remote?
       attach(@selected.key) if require_actionable
-    end
-
-    def toggle_peek
-      @peek.toggle
-      @terminal.invalidate
     end
 
     def wake_selected

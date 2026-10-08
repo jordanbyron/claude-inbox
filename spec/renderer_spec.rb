@@ -148,14 +148,6 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(f.top).to be > 0
   end
 
-  it "splits the frame for the peek pane" do
-    peek = ClaudeInbox::Peek::View.new(["line one", "line two"], "t")
-    f = renderer.frame(sections, view.with(width: 100, height: 12, selected: "f23c8673", peek: peek))
-    f.lines.each { |l| expect(ClaudeInbox::Text.width(l)).to eq(100) }
-    expect(f.lines[1]).to match(/│/)
-    expect(f.lines.join("\n")).to include("line two")
-  end
-
   it "overlays a modal in the centre without ellipses" do
     f = renderer.frame(sections, view.with(width: 60, height: 12, modal: ["┌──┐", "│hi│", "└──┘"]))
     f.lines.each { |l| expect(ClaudeInbox::Text.width(l)).to eq(60) }

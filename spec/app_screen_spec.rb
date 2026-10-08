@@ -102,14 +102,6 @@ RSpec.describe ClaudeInbox::App do
       press(app, "\e[<0;5;#{row}M")
       expect(app).to paint("app store release strategy")
     end
-
-    it "ignores a click past the list column, such as one landing in the peek pane" do
-      press(app, "p")
-      row = screen(app).index { |l| l.include?("comma3x not booting") } + 1
-      col = screen(app)[row - 1].index("│") + 5
-      press(app, "\e[<0;#{col};#{row}M")
-      expect(client.attached).to be_empty
-    end
   end
 
   it "moves the selection on a wheel tick, the same way j/k would" do

@@ -7,7 +7,7 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   can still carry a `pid` and `status: idle`.
 - Interactive sessions (a `claude` you started in a terminal yourself) appear
   in the JSON with no `id` and no `state`, only `status`, and cannot be
-  attached, peeked or stopped from outside. The JSON calls a terminal you
+  attached or stopped from outside. The JSON calls a terminal you
   opened, a Remote Control worker, a sub-agent and a headless `claude -p` run
   all "interactive", each named after its directory. The process tree tells
   them apart: a remote worker runs with `--sdk-url` under a `claude rc`
@@ -80,7 +80,7 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   run-together garbage. Feeding it through a screen grid (`VtScreen`)
   produces readable text.
 - `claude logs` fails with "job not found" for a finished session whose
-  process the supervisor has reaped. The peek pane shows a notice instead.
+  process the supervisor has reaped.
 - `claude attach --help` says `←` returns to agent view and `Ctrl+Z` drops
   to the shell. Under the hood `←` makes the attach process exec `claude
   agents` in place, same pid, using its own executable path, so a PATH shim

@@ -27,13 +27,6 @@ module ClaudeInbox
       classify_origins(parse(r.out))
     end
 
-    # Raw terminal replay for a session, or nil when the daemon can't serve it
-    # (finished sessions whose process is gone report "job not found").
-    def logs(id)
-      r = Subprocess.capture(@bin, "logs", id)
-      (r.success? && !r.out.empty?) ? r.out : nil
-    end
-
     # Poll interval for the agents-view watchdog below.
     WATCH_INTERVAL = 0.05
 
@@ -254,10 +247,9 @@ module ClaudeInbox
 
   # Reads a committed JSON fixture instead of the daemon.
   class FixtureClient < AgentsClient
-    def initialize(path, logs: nil, origins: {}, bridges: {})
+    def initialize(path, origins: {}, bridges: {})
       super(jobs_dir: File.join(File.dirname(path), "jobs"))
       @path = path
-      @logs = logs
       @origins = origins
       @bridges = bridges
     end
@@ -268,8 +260,6 @@ module ClaudeInbox
     def list
       assign_origins(parse(File.read(@path)), @origins, @bridges)
     end
-
-    def logs(_id) = @logs
 
     # Stand-in child: prints, waits for a line, exits — enough to prove the
     # terminal round-trips through cooked mode and back.
