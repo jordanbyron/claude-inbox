@@ -18,11 +18,10 @@ RSpec.describe ClaudeInbox::Poller do
   end
   let(:poller) { described_class.new(**poller_args) }
 
-  it "hands the list over as sessions on the queue" do
+  it "signals the hand-over as sessions on the queue" do
     poller.once
-    msgs = drain(queue)
-    expect(msgs.map(&:first)).to eq([:sessions])
-    expect(msgs.filter_map { |kind, list| list.map(&:id) if kind == :sessions }.first).to include("f23c8673")
+    expect(drain(queue)).to eq([[:sessions]])
+    expect(store.sessions.map(&:id)).to include("f23c8673")
   end
 
   it "puts each poll in the store and the snapshot before the hand-over" do
@@ -61,24 +60,19 @@ RSpec.describe ClaudeInbox::Poller do
     it "is off unless something arms it, so a poll on its own deletes nothing" do
       poller.once
       expect(client.removed).to be_empty
-      expect(drain(queue).filter_map { |kind, list| list.map(&:id) if kind == :sessions }.first).to include("f23c8673")
+      expect(store.sessions.map(&:id)).to include("f23c8673")
     end
 
     it "keeps what it reaped out of the frame, from the first hand-over on" do
       described_class.new(**poller_args, reaper: reaper).once
       msgs = drain(queue)
       expect(msgs.assoc(:notice)[1]).to eq("reaped f23c8673")
-
-      store.update(msgs.first[1])
-      expect(store.sessions.map(&:id)).not_to include("f23c8673")
-      msgs.each { |kind, list| store.update(list) if kind == :sessions }
       expect(store.sessions.map(&:id)).not_to include("f23c8673")
     end
 
     it "brings a row back when its reap was refused" do
       allow(reaper).to receive(:sweep).and_return([])
       described_class.new(**poller_args, reaper: reaper).once
-      drain(queue).each { |kind, list| store.update(list) if kind == :sessions }
       expect(store.sessions.map(&:id)).to include("f23c8673")
     end
 
@@ -87,7 +81,7 @@ RSpec.describe ClaudeInbox::Poller do
       described_class.new(**poller_args, reaper: reaper).once
       msgs = drain(queue)
       expect(msgs.assoc(:error)[1]).to include("reaped.log")
-      msgs.each { |kind, list| store.update(list) if kind == :sessions }
+      poller.once
       expect(store.sessions.map(&:id)).to include("f23c8673")
     end
 
@@ -97,7 +91,6 @@ RSpec.describe ClaudeInbox::Poller do
         []
       end
       described_class.new(**poller_args, reaper: reaper).once
-      drain(queue).each { |kind, list| store.update(list) if kind == :sessions }
       expect(store.sessions.map(&:id)).not_to include("f23c8673")
     end
 
@@ -113,38 +106,29 @@ RSpec.describe ClaudeInbox::Poller do
       reaper = ClaudeInbox::Reaper.new(client, store, log_path: File::NULL, enabled: true)
 
       described_class.new(**poller_args, reaper: reaper).once
-      drain(queue).each { |kind, list| store.update(list) if kind == :sessions }
       described_class.new(**poller_args, reaper: reaper).once
-      drain(queue).each { |kind, list| store.update(list) if kind == :sessions }
       reaped = client.removed.dup
       expect(reaped.size).to eq(1)
       expect(store.sessions.map(&:id)).to include(refused)
       expect(store.sessions.map(&:id)).not_to include(reaped.first)
 
-      2.times do
-        described_class.new(**poller_args, reaper: reaper).once
-        drain(queue).each { |kind, list| store.update(list) if kind == :sessions }
-      end
+      2.times { described_class.new(**poller_args, reaper: reaper).once }
       expect(store.sessions.map(&:id)).not_to include(reaped.first)
       expect(client.removed).to eq(reaped)
     end
   end
 
-  # App drains the queue into the store, so the race is settled there: `rm`
+  # The poller puts each poll in the store, so the race is settled there: `rm`
   # has returned and `forget` run, but `claude agents` still lists the id on
   # the poll that follows.
   describe "a delete while a poll is in flight" do
     it "does not bring the row back until the daemon has dropped it" do
       poller.once
-      drain(queue).each { |kind, list| store.update(list) if kind == :sessions }
       expect(store.sections.all.map(&:key)).to include("f23c8673")
 
       client.rm("f23c8673")
       store.forget("f23c8673")
       poller.once
-      msgs = drain(queue)
-      expect(msgs.filter_map { |kind, list| list.map(&:id) if kind == :sessions }.first).to include("f23c8673")
-      msgs.each { |kind, list| store.update(list) if kind == :sessions }
       expect(store.sections.all.map(&:key)).not_to include("f23c8673")
       expect(store.sessions.map(&:id)).not_to include("f23c8673")
     end

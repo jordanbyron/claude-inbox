@@ -5,7 +5,7 @@ require_relative "sessions"
 module ClaudeInbox
   # Asks `claude agents` for the list off the main thread, every INTERVAL
   # seconds and on demand, puts what it finds in the store and the snapshot,
-  # and tells App over the shared queue: [:sessions, list] for each
+  # and tells App over the shared queue: [:sessions] after each
   # hand-over, [:error, msg] when a poll fails, [:notice, text] when the
   # reaper took something. Between polls it applies what another front end
   # asked for. Nothing here touches App's state directly; the queue is the
@@ -80,7 +80,7 @@ module ClaudeInbox
     def publish(sessions)
       @store.update(sessions)
       write_snapshot
-      @queue << [:sessions, sessions]
+      @queue << [:sessions]
     end
 
     def write_snapshot
