@@ -10,7 +10,6 @@ module ClaudeInbox
       # Remembers where the frame put the rows, so a click can find one.
       def placed(frame)
         @row_items = frame.items
-        @list_width = frame.list_width
         @top = frame.top
       end
 
@@ -33,7 +32,6 @@ module ClaudeInbox
 
       def select(selection)
         @selected = selection
-        @peek.select(selected_session)
       end
 
       def session_for(key) = @store.sessions.find { |s| s.key == key }
@@ -75,8 +73,7 @@ module ClaudeInbox
       # Clicking a row selects it and attaches, same as landing on it with
       # j/k and pressing Enter — activate already knows how to expand a fold
       # or refuse a terminal/remote row, so this doesn't repeat that.
-      def click_row(row, col)
-        return if @list_width && col > @list_width
+      def click_row(row)
         item = row_item_at(row)
         return unless item
         select(item)

@@ -4,12 +4,10 @@ require "strscan"
 require "unicode/display_width"
 
 module ClaudeInbox
-  # A deliberately small cursor-addressed screen model. `claude logs` emits a
-  # replay of the session's terminal output — cursor moves, erase-line, SGR —
-  # not plain text, and words are often separated by cursor motion instead of
-  # spaces. Stripping escapes therefore yields garbage; feeding them through a
-  # grid does not. This is not a VT emulator: it handles the handful of
-  # sequences the replay actually uses and ignores the rest.
+  # A deliberately small cursor-addressed screen model that turns captured
+  # terminal output into the lines it would show; bin/screens reads the
+  # inbox's own frames through it. This is not a VT emulator: it handles the
+  # handful of sequences claude's output actually uses and ignores the rest.
   class VtScreen
     CSI = /\e\[([0-9;?]*)([A-Za-z@`])/
     OSC = /\e\][^\a\e]*(?:\a|\e\\)?/

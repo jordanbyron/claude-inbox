@@ -19,8 +19,6 @@ SCRIPT = [
   ["tab", "\t", 0.4],
   ["za on the settled fold", "za", 0.4],
   ["gg", "gg", 0.4],
-  ["peek", "p", 0.8],
-  ["peek off", "p", 0.4],
   ["snooze 15m", "s1", 0.4],
   ["j onto a done row", "j", 0.4],
   ["pin", "t", 0.4],

@@ -129,7 +129,7 @@ module ClaudeInbox
       # Its own token, lock and images, so a test inbox can neither rotate the
       # token phones are paired with nor hold the real inbox's lock.
       dir = File.join(Dir.tmpdir, "claude-inbox-fixture")
-      {client: FixtureClient.new(options[:fixture], logs: File.binread(File.join(fixtures, "logs_raw.txt"))),
+      {client: FixtureClient.new(options[:fixture]),
        store: Store.new(path: nil),
        pull_requests: PullRequests.new(cache_path: File.join(fixtures, "gh-pr-status-cache.json"), resolved_path: nil, gh: nil),
        listen: options[:listen]&.merge(fixture: true, pairing: Remote::Pairing.new(path: File.join(dir, "listen.json")),
