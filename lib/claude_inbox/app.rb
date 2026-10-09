@@ -131,8 +131,6 @@ module ClaudeInbox
         when :remote_started then remote_started(*rest)
         end
       end
-    rescue ThreadError
-      nil
     end
 
     # ----- main loop --------------------------------------------------------
