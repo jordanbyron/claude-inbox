@@ -19,7 +19,6 @@ module ClaudeInbox
     # UNSETTLEABLE on purpose: `failed` earns a permanent row because you
     # should see it, but after REAP_AFTER of not seeing it, you never will.
     UNREAPABLE = %w[working].freeze
-    SECTIONS = %i[pinned needs_you active snoozed settled].freeze
     NotWritable = Class.new(StandardError)
     # Sections long enough to be worth hiding behind a fold toggle.
     FOLDABLE_SECTIONS = %i[snoozed settled].freeze
