@@ -61,11 +61,13 @@ module ClaudeInbox
     def parse(path)
       request = JSON.parse(File.read(path))
       request = {} unless request.is_a?(Hash)
-      return request if File.mtime(path) < @clock.call - GRACE
+      return request if stale?(path)
       (request.key?("id") && request.key?("action")) ? request : nil
     rescue JSON::ParserError
-      (File.mtime(path) < @clock.call - GRACE) ? {} : nil
+      stale?(path) ? {} : nil
     end
+
+    def stale?(path) = File.mtime(path) < @clock.call - GRACE
 
     def young?(request)
       at = request["at"].to_i / 1000
