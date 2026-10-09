@@ -83,7 +83,7 @@ RSpec.describe ClaudeInbox::Images do
 
     it "keeps two images saved in the same millisecond apart" do
       now = Time.at(1_789_400_000)
-      paths = 2.times.map { described_class.save(samples[".png"], dir: dir, now: now) }
+      paths = 2.times.map { described_class.save(samples[".png"], dir: dir, now: now, index: 1) }
       expect(paths.uniq.size).to eq(2)
       expect(paths.all? { |path| File.binread(path) == samples[".png"] }).to be(true)
     end
@@ -91,7 +91,7 @@ RSpec.describe ClaudeInbox::Images do
     it "refuses anything else and writes nothing" do
       images = File.join(dir, "images")
       [Random.new(7).bytes(64), "BM\x3A\0\0\0".b, "<svg xmlns='http://www.w3.org/2000/svg'/>", ""].each do |bytes|
-        expect { described_class.save(bytes, dir: images) }.to raise_error(described_class::Unsupported)
+        expect { described_class.save(bytes, dir: images, index: 1) }.to raise_error(described_class::Unsupported)
       end
       expect(Dir.exist?(images)).to be(false)
     end
@@ -101,7 +101,7 @@ RSpec.describe ClaudeInbox::Images do
       old, kept, notes = %w[old.jpg kept.webp notes.txt].map { |name| File.join(dir, name) }
       FileUtils.touch([old, notes], mtime: now - 15 * 24 * 3600)
       FileUtils.touch(kept, mtime: now - 60)
-      described_class.save(samples[".png"], dir: dir, now: now)
+      described_class.save(samples[".png"], dir: dir, now: now, index: 1)
       expect(File.exist?(old)).to be(false)
       expect(File.exist?(kept)).to be(true)
       expect(File.exist?(notes)).to be(true)
