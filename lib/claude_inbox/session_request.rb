@@ -78,7 +78,7 @@ module ClaudeInbox
     # A session's cwd may sit inside a worktree another agent is using;
     # carrying that into a new prompt would spawn the new agent there too,
     # writing over the same files. Fall back to the repo it was cut from.
-    def self.strip_worktree(cwd) = cwd.to_s.sub(%r{/\.claude/worktrees/[^/]+(?:/.*)?\z}, "")
+    def self.strip_worktree(cwd) = cwd.sub(%r{/\.claude/worktrees/[^/]+(?:/.*)?\z}, "")
 
     # Where sessions ran lately, newest first, then every directory whose
     # trust dialog was accepted: the likely choices first. Only an order;

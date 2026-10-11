@@ -40,11 +40,11 @@ module ClaudeInbox
       @home = home
       @clipboard = clipboard
       @places = dirs.map { |path| Place.new(path, SessionRequest.label(path, dirs), path.sub(/\A#{Regexp.escape(home)}(?=\/|\z)/, "~")) }
-      @dir_settled = cwd.to_s
+      @dir_settled = cwd
       @fields = [
         Field.new(:prompt, "Prompt", :multiline, TextBuffer.new),
         Field.new(:name, "Name", :text, TextBuffer.new),
-        Field.new(:cwd, "Directory", :text, TextBuffer.new(cwd.to_s)),
+        Field.new(:cwd, "Directory", :text, TextBuffer.new(cwd)),
         Field.new(:model, "Model", :choice, DEFAULT, AgentsClient::MODELS),
         Field.new(:effort, "Effort", :choice, DEFAULT, AgentsClient::EFFORTS),
         Field.new(:permission_mode, "Permissions", :choice, DEFAULT, AgentsClient::PERMISSION_MODES),
