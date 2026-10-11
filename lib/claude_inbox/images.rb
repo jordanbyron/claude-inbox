@@ -41,7 +41,7 @@ module ClaudeInbox
     # `index` orders the images one request brings; the random part keeps
     # two requests saving in the same millisecond apart. Readable by the
     # owner only: a photo can be anything.
-    def self.save(bytes, dir: DEFAULT_DIR, now: Time.now, index: 1)
+    def self.save(bytes, dir:, index:, now: Time.now)
       data = bytes.b
       ext = extension(data)
       raise Unsupported, "not a PNG, JPEG, GIF or WebP image" unless ext
