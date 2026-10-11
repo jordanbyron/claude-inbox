@@ -9,8 +9,8 @@
 class RecordingClient < ClaudeInbox::FixtureClient
   attr_reader :removed, :stopped, :attached, :spawns
 
-  def initialize(path = File.join(Drivers::FIXTURES, "agents.json"), refuse: [], **opts)
-    super(path, **opts)
+  def initialize(refuse: [], **opts)
+    super(File.join(Drivers::FIXTURES, "agents.json"), **opts)
     @refuse = refuse
     @removed = []
     @stopped = []
