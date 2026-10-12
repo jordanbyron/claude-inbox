@@ -28,7 +28,8 @@ module ClaudeInbox
       # Ethernet and Wi-Fi (en*) first: the first private address is the one
       # `c` copies, and a VM's bridge is no use to a phone.
       def self.addresses(interfaces = Socket.getifaddrs)
-        interfaces.select { |i| i.addr&.ip? }.sort_by.with_index { |i, n| [i.name.start_with?("en") ? 0 : 1, n] }.map(&:addr)
+        en, rest = interfaces.select { |i| i.addr&.ip? }.partition { |i| i.name.start_with?("en") }
+        (en + rest).map(&:addr)
       end
 
       # :off, :on or :block_all; nil without macOS's application firewall.
