@@ -27,7 +27,6 @@ module ClaudeInbox
     # Leaves one request for the writer, as the pane does, named for this
     # inbox; a count keeps two requests in one millisecond apart.
     def request(action, id, choice: nil)
-      return unless @dir
       FileUtils.mkdir_p(@dir)
       at = (@clock.call.to_f * 1000).to_i
       request = {"action" => action, "id" => id, "at" => at}
