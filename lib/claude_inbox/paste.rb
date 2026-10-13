@@ -24,7 +24,7 @@ module ClaudeInbox
 
     def feed(raw)
       out = []
-      rest = raw.to_s
+      rest = raw
       until rest.empty?
         if @open
           body, close, rest = rest.partition(CLOSE)

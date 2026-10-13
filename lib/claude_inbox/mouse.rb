@@ -14,7 +14,7 @@ module ClaudeInbox
     # "esc gg" glues onto one read (see App#split_keys), so this scans
     # rather than matching once.
     def self.events(raw)
-      raw.to_s.scan(SEQUENCE).filter_map do |cb, col, row, type|
+      raw.scan(SEQUENCE).filter_map do |cb, col, row, type|
         kind = kind_for(cb.to_i, type)
         Event.new(kind, row.to_i, col.to_i) if kind
       end
