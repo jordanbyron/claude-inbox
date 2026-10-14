@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "tty-box"
+require_relative "text"
 require_relative "text_buffer"
 
 module ClaudeInbox
@@ -51,12 +52,11 @@ module ClaudeInbox
       end
     end
 
-    # `X` stop, `Ctrl-x` delete, Enter on a remote row and the first launch
-    # without the Claude Code pane all ask first and
+    # `X` stop, `Ctrl-x` delete and Enter on a remote row all ask first and
     # all take `y`, but the words differ because the outcomes do: read the
     # box before answering.
     class Confirm < Dialog
-      TITLES = {stop: " Stop ", delete: " Delete ", adopt: " Adopt ", install: " Claude Code pane "}.freeze
+      TITLES = {stop: " Stop ", delete: " Delete ", adopt: " Adopt "}.freeze
 
       def title = TITLES.fetch(kind)
 
@@ -69,9 +69,6 @@ module ClaudeInbox
         when :adopt
           ["  Pull this session into the daemon?", "  Its phone session ends and a",
             "  new one takes its place.", "", "  y  adopt it", "  esc  cancel"]
-        when :install
-          ["  Add the inbox as a pane in every", "  Claude Code session? Later, run", "  claude-inbox install.",
-            "", "  y  add it", "  esc  not now"]
         end
       end
 
@@ -79,6 +76,45 @@ module ClaudeInbox
         return :confirm if key == "y"
         return :cancel if name == :escape || key == "n" || key == "q"
         nil
+      end
+    end
+
+    # The first launch without the Claude Code pane asks once whether to add
+    # it, and has to say what the pane is to someone who has never seen it.
+    class PaneOffer < Confirm
+      WIDTH = 60
+      SKETCH = [
+        "  ┌──────────────────────────┬─────────────────────┐",
+        "  │ > fix the flaky spec     │ 📥 Inbox            │",
+        "  │                          │ ● needs you   docs  │",
+        "  │ Reading app.rb…          │ ⠋ working     api   │",
+        "  │                          │ ✓ done        auth  │",
+        "  └──────────────────────────┴─────────────────────┘"
+      ].freeze
+
+      def initialize = super(:install, nil)
+
+      def title = " ✨ The inbox, inside Claude Code "
+
+      # Drawn by hand: TTY::Box measures an emoji as one column, which
+      # pushes the right border out on every line that has one.
+      def frame(width, _caret = nil)
+        inner = [width - 4, WIDTH].min - 2
+        ["┌#{title}#{"─" * (inner - Text.width(title))}┐",
+          *lines(inner, nil).map { |l| "│#{Text.pad(Text.truncate(l, inner), inner)}│" },
+          "└#{"─" * inner}┘"]
+      end
+
+      def lines(_width, _caret)
+        ["", *SKETCH, "",
+          "  📥 Every session, docked beside the transcript",
+          "  🔀 Switch sessions without leaving the one you're in",
+          "  💤 Snooze, pin and settle with the same keys",
+          "  🚪 /inbox opens it, ctrl+x tab focuses it",
+          "",
+          "      y  add it to Claude Code      esc  not now",
+          "",
+          "  Asked once. Later: claude-inbox install"]
       end
     end
 

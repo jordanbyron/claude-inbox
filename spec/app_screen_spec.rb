@@ -202,7 +202,7 @@ RSpec.describe ClaudeInbox::App do
     after { FileUtils.rm_rf(tmp) }
 
     it "adds the pane to Claude Code's settings on y" do
-      expect(app).to paint("Claude Code session? Later, run")
+      expect(app).to paint("docked beside the transcript")
       press(app, "y")
       expect(app).to paint("added the pane").in_status_line
       expect(JSON.parse(File.read(settings))["env"]["CLAUDE_CODE_PLUGIN_DIRS"]).to eq(File.join(tmp, "mod"))
@@ -210,7 +210,7 @@ RSpec.describe ClaudeInbox::App do
 
     it "leaves the settings alone when dismissed, and does not ask again" do
       press(app, "\e")
-      expect(app).not_to paint("Claude Code session?")
+      expect(app).not_to paint("docked beside the transcript")
       expect(File.exist?(settings)).to be(false)
       expect(offer.take).to be(false)
     end

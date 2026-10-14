@@ -67,7 +67,7 @@ module ClaudeInbox
       @quit = false
       @resize = false
       @pane_offer = pane_offer
-      @modal = Dialog::Confirm.new(:install, nil) if pane_offer.take
+      @modal = Dialog::PaneOffer.new if pane_offer.take
     end
 
     def run
