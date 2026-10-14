@@ -364,40 +364,38 @@ RSpec.describe ClaudeInbox::Remote::Listener do
   end
 
   describe ".options" do
+    let(:local) { {lan: false, port: nil} }
+
     it "is nil unless a flag or the environment asks for the listener" do
-      expect(described_class.options(["--fixture", "x.json"], {})).to be_nil
-      expect(described_class.options(["--listen-allow-modes=plan"], {})).to be_nil
-      expect(described_class.options([], {"CLAUDE_INBOX_LISTEN" => " "})).to be_nil
+      expect(described_class.options({})).to be_nil
+      expect(described_class.options({}, modes: "plan")).to be_nil
+      expect(described_class.options({"CLAUDE_INBOX_LISTEN" => " "})).to be_nil
     end
 
     it "listens on loopback at 7433 for phone-safe modes unless told otherwise" do
-      expect(described_class.options(["--listen"], {})).to eq({port: 7433, lan: false, allowed_modes: %w[default auto plan]})
-      expect(described_class.options(["--listen=8080"], {})[:port]).to eq(8080)
-      expect(described_class.options(["--listen-lan"], {})).to eq({port: 7433, lan: true, allowed_modes: %w[default auto plan]})
-      expect(described_class.options(["--listen-lan=9000"], {})[:port]).to eq(9000)
-      expect(described_class.options(["--listen=0"], {})[:port]).to eq(0)
-    end
-
-    it "widens to the LAN only when --listen-lan says so, whatever order the flags came in" do
-      expect(described_class.options(["--listen-lan", "--listen=8080"], {})).to eq({port: 7433, lan: true, allowed_modes: %w[default auto plan]})
-      expect(described_class.options(["--listen=8080", "--listen-lan=9000"], {})[:lan]).to be(true)
+      expect(described_class.options({}, flag: local)).to eq({port: 7433, lan: false, allowed_modes: %w[default auto plan]})
+      expect(described_class.options({}, flag: {lan: false, port: "8080"})[:port]).to eq(8080)
+      expect(described_class.options({}, flag: {lan: true, port: nil})).to eq({port: 7433, lan: true, allowed_modes: %w[default auto plan]})
+      expect(described_class.options({}, flag: {lan: true, port: "9000"})[:port]).to eq(9000)
+      expect(described_class.options({}, flag: {lan: false, port: "0"})[:port]).to eq(0)
     end
 
     it "reads the environment when no flag is given, and a flag over it" do
-      expect(described_class.options([], {"CLAUDE_INBOX_LISTEN" => "7500"})).to eq({port: 7500, lan: false, allowed_modes: %w[default auto plan]})
-      expect(described_class.options([], {"CLAUDE_INBOX_LISTEN" => "lan"})).to eq({port: 7433, lan: true, allowed_modes: %w[default auto plan]})
-      expect(described_class.options([], {"CLAUDE_INBOX_LISTEN" => "lan:7500"})).to eq({port: 7500, lan: true, allowed_modes: %w[default auto plan]})
-      expect(described_class.options(["--listen"], {"CLAUDE_INBOX_LISTEN" => "lan"})[:lan]).to be(false)
-      expect(described_class.options([], {"CLAUDE_INBOX_LISTEN" => "lan", "CLAUDE_INBOX_LISTEN_ALLOW_MODES" => "plan"})[:allowed_modes]).to eq(%w[plan])
-      expect(described_class.options(["--listen", "--listen-allow-modes=default, acceptEdits"], {})[:allowed_modes]).to eq(%w[default acceptEdits])
+      expect(described_class.options({"CLAUDE_INBOX_LISTEN" => "7500"})).to eq({port: 7500, lan: false, allowed_modes: %w[default auto plan]})
+      expect(described_class.options({"CLAUDE_INBOX_LISTEN" => "lan"})).to eq({port: 7433, lan: true, allowed_modes: %w[default auto plan]})
+      expect(described_class.options({"CLAUDE_INBOX_LISTEN" => "lan:7500"})).to eq({port: 7500, lan: true, allowed_modes: %w[default auto plan]})
+      expect(described_class.options({"CLAUDE_INBOX_LISTEN" => "lan"}, flag: local)[:lan]).to be(false)
+      expect(described_class.options({"CLAUDE_INBOX_LISTEN" => "lan", "CLAUDE_INBOX_LISTEN_ALLOW_MODES" => "plan"})[:allowed_modes]).to eq(%w[plan])
+      expect(described_class.options({"CLAUDE_INBOX_LISTEN_ALLOW_MODES" => "plan"}, flag: local, modes: "default, acceptEdits")[:allowed_modes])
+        .to eq(%w[default acceptEdits])
     end
 
     it "refuses a port or a mode it can't use" do
-      expect { described_class.options(["--listen=http"], {}) }.to raise_error(ArgumentError)
-      expect { described_class.options(["--listen=70000"], {}) }.to raise_error(ArgumentError)
-      expect { described_class.options(["--listen="], {}) }.to raise_error(ArgumentError)
-      expect { described_class.options([], {"CLAUDE_INBOX_LISTEN" => "yes"}) }.to raise_error(ArgumentError)
-      expect { described_class.options(["--listen", "--listen-allow-modes=plan,yolo"], {}) }.to raise_error(ArgumentError) { |error|
+      expect { described_class.options({}, flag: {lan: false, port: "http"}) }.to raise_error(ArgumentError)
+      expect { described_class.options({}, flag: {lan: false, port: "70000"}) }.to raise_error(ArgumentError)
+      expect { described_class.options({}, flag: {lan: false, port: ""}) }.to raise_error(ArgumentError)
+      expect { described_class.options({"CLAUDE_INBOX_LISTEN" => "yes"}) }.to raise_error(ArgumentError)
+      expect { described_class.options({}, flag: local, modes: "plan,yolo") }.to raise_error(ArgumentError) { |error|
         expect(error.message).to include("yolo")
       }
     end
