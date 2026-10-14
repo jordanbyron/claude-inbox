@@ -41,8 +41,7 @@ if ARGV.first == "update"
     puts((updater.kind == :gem) ? "claude-inbox #{ClaudeInbox::VERSION} is the latest release." : "main is up to date.")
     exit
   end
-  puts((update.kind == :gem) ? "Installing claude-inbox #{update.latest} over #{update.current}..." :
-    "main is #{update.behind} behind, fast-forwarding to #{update.latest}...")
+  puts update.installing
   applied = updater.apply
   abort "claude-inbox: #{applied.output.strip}" unless applied.success?
   puts((update.kind == :gem) ? "Installed claude-inbox #{update.latest}." : "main is at #{update.latest}.")
@@ -51,6 +50,7 @@ end
 
 require "claude_inbox/app"
 require "claude_inbox/config"
+require "claude_inbox/updater"
 require "claude_inbox/writer_lock"
 require "tmpdir"
 
@@ -92,6 +92,9 @@ else
   opts[:actions] = ClaudeInbox::Actions.new
   opts[:pane_offer] = ClaudeInbox::Mod::Offer.new
   opts[:listen] = listen
+  opts[:updater] = ClaudeInbox::Updater.new unless argv.include?("--no-update-check")
+  # The typed arguments, not the config's: a relaunch reads the config again.
+  opts[:argv] = ARGV
 end
 opts[:color] = false if argv.include?("--no-color")
 
@@ -99,6 +102,15 @@ if argv.include?("--headless")
   abort "claude-inbox: --headless takes no --fixture" if fixture
   require "claude_inbox/headless"
   exit(ClaudeInbox::Headless.new(client: opts[:client], store: opts[:store]).run ? 0 : 1)
+end
+
+# Only what a check within the day already found: a cold launch never waits
+# on the network. The relaunch is the new version's launch; a failure leaves
+# this one to start as usual.
+if argv.include?("--auto-update") && (update = opts[:updater]&.cached)
+  puts update.installing
+  applied = opts[:updater].apply
+  applied.success? ? opts[:updater].relaunch(ARGV) : warn("claude-inbox: #{applied.output.strip}")
 end
 
 # The first inbox you can see is the snapshot's writer: a headless one gives

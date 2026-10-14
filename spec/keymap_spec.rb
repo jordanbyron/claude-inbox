@@ -55,6 +55,7 @@ RSpec.describe ClaudeInbox::Keymap do
     expect(km.press("o", "o")).to eq(:open_pr)
     expect(km.press("w", "w")).to eq(:open_remote)
     expect(km.press("P", "P")).to eq(:link_pr)
+    expect(km.press("U", "U")).to eq(:update)
     expect(km.press(:tab, "\t")).to eq(:next_section)
     expect(km.press(:back_tab, "\e[Z")).to eq(:prev_section)
     expect(km.press("/", "/")).to eq(:filter)
