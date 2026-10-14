@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "tty-box"
+require_relative "text"
 require_relative "text_buffer"
 
 module ClaudeInbox
@@ -75,6 +76,45 @@ module ClaudeInbox
         return :confirm if key == "y"
         return :cancel if name == :escape || key == "n" || key == "q"
         nil
+      end
+    end
+
+    # The first launch without the Claude Code pane asks once whether to add
+    # it, and has to say what the pane is to someone who has never seen it.
+    class PaneOffer < Confirm
+      WIDTH = 60
+      SKETCH = [
+        "  ┌──────────────────────────┬─────────────────────┐",
+        "  │ > fix the flaky spec     │ 📥 Inbox            │",
+        "  │                          │ ● needs you   docs  │",
+        "  │ Reading app.rb…          │ ⠋ working     api   │",
+        "  │                          │ ✓ done        auth  │",
+        "  └──────────────────────────┴─────────────────────┘"
+      ].freeze
+
+      def initialize = super(:install, nil)
+
+      def title = " ✨ The inbox, inside Claude Code "
+
+      # Drawn by hand: TTY::Box measures an emoji as one column, which
+      # pushes the right border out on every line that has one.
+      def frame(width, _caret = nil)
+        inner = [width - 4, WIDTH].min - 2
+        ["┌#{title}#{"─" * (inner - Text.width(title))}┐",
+          *lines(inner, nil).map { |l| "│#{Text.pad(Text.truncate(l, inner), inner)}│" },
+          "└#{"─" * inner}┘"]
+      end
+
+      def lines(_width, _caret)
+        ["", *SKETCH, "",
+          "  • Every session, docked beside the transcript",
+          "  • Switch sessions without leaving the one you're in",
+          "  • Snooze, pin and settle with the same keys",
+          "  • /inbox opens it, ctrl+x tab focuses it",
+          "",
+          "  You can install this later with claude-inbox install",
+          "",
+          "      y  add it to Claude Code      esc  not now"]
       end
     end
 

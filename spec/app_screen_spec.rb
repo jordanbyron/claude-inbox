@@ -188,6 +188,34 @@ RSpec.describe ClaudeInbox::App do
     end
   end
 
+  describe "offering the Claude Code pane on the first launch without it" do
+    let(:tmp) { Dir.mktmpdir }
+    let(:settings) { File.join(tmp, "settings.json") }
+    let(:offer) { ClaudeInbox::Mod::Offer.new(marker: File.join(tmp, "pane-offered"), settings: settings, link: File.join(tmp, "mod")) }
+    let(:app) do
+      described_class.new(
+        client: client, store: store, pull_requests: pull_requests, terminal: terminal, input: StringIO.new,
+        color: false, queue: queue, trust: -> { trusted }, pane_offer: offer
+      )
+    end
+
+    after { FileUtils.rm_rf(tmp) }
+
+    it "adds the pane to Claude Code's settings on y" do
+      expect(app).to paint("docked beside the transcript")
+      press(app, "y")
+      expect(app).to paint("added the pane").in_status_line
+      expect(JSON.parse(File.read(settings))["env"]["CLAUDE_CODE_PLUGIN_DIRS"]).to eq(File.join(tmp, "mod"))
+    end
+
+    it "leaves the settings alone when dismissed, and does not ask again" do
+      press(app, "\e")
+      expect(app).not_to paint("docked beside the transcript")
+      expect(File.exist?(settings)).to be(false)
+      expect(offer.take).to be(false)
+    end
+  end
+
   describe "adopting a remote session" do
     let(:client) { RecordingClient.new(origins: {57405 => :remote}) }
 

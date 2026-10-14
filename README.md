@@ -26,6 +26,7 @@ To add the pane to every Claude Code session:
 claude-inbox install
 ```
 
+The inbox offers to do this once, the first time it starts without the pane.
 `claude-inbox install --force` also replaces any other copy of the pane.
 
 ## Claude Code pane

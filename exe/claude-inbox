@@ -70,6 +70,7 @@ else
   opts[:snapshot] = ClaudeInbox::Snapshot.new
   opts[:switch] = ClaudeInbox::Switch.new
   opts[:actions] = ClaudeInbox::Actions.new
+  opts[:pane_offer] = ClaudeInbox::Mod::Offer.new
   opts[:listen] = listen
 end
 opts[:color] = false if argv.include?("--no-color")
@@ -89,6 +90,7 @@ unless writer_lock.take(role: "inbox")
   opts[:reaper] = ClaudeInbox::Reaper.disabled
   opts[:snapshot] = ClaudeInbox::Snapshot.disabled
   opts[:actions] = ClaudeInbox::Actions.disabled
+  opts[:pane_offer] = ClaudeInbox::Mod::Offer.disabled
 end
 # So the pane settings.json names is the installed version's, after a gem update too.
 ClaudeInbox::Mod.link unless fixture

@@ -11,6 +11,7 @@ module ClaudeInbox
     DIR = File.expand_path("../../mod", __dir__)
     LINK = File.join(Dir.home, ".config", "claude-inbox", "mod")
     NAME = "inbox-pane"
+    SETTINGS = File.join(Dir.home, ".claude", "settings.json")
     CHECKOUT = File.exist?(File.expand_path("../../.git", __dir__))
     # What the pane runs headless: a checkout's own, or the gem's from PATH.
     COMMAND = CHECKOUT ? File.expand_path("../../bin/claude-inbox", __dir__) : nil
@@ -38,7 +39,7 @@ module ClaudeInbox
     # drops the other folders holding this plugin, such as a worktree's, and
     # sets the command the pane runs to this copy's. Raises JSON::ParserError
     # rather than rewrite a settings file it cannot read.
-    def self.install(settings: File.join(Dir.home, ".claude", "settings.json"), link: LINK, dir: DIR, force: false, command: COMMAND)
+    def self.install(settings: SETTINGS, link: LINK, dir: DIR, force: false, command: COMMAND)
       self.link(link: link, dir: dir, force: true)
       json = File.exist?(settings) ? JSON.parse(File.read(settings)) : {}
       env = json["env"] ||= {}
@@ -59,6 +60,40 @@ module ClaudeInbox
       File.write("#{settings}.tmp", JSON.pretty_generate(json) + "\n")
       File.rename("#{settings}.tmp", settings)
       installed
+    end
+
+    # Whether any folder in CLAUDE_CODE_PLUGIN_DIRS holds the pane, a
+    # worktree's included. A settings file it cannot read counts as yes, since
+    # install would refuse to touch it.
+    def self.installed?(settings: SETTINGS)
+      json = File.exist?(settings) ? JSON.parse(File.read(settings)) : {}
+      json.dig("env", "CLAUDE_CODE_PLUGIN_DIRS").to_s.split(File::PATH_SEPARATOR).any? { |d| plugin?(d.strip) }
+    rescue JSON::ParserError, Errno::EACCES
+      true
+    end
+
+    # Asks once, on the first launch that finds the pane missing, whether to
+    # add it. Whatever the answer, a marker file keeps it from asking again.
+    class Offer
+      MARKER = File.join(Dir.home, ".config", "claude-inbox", "pane-offered")
+
+      def self.disabled = new(marker: nil)
+
+      def initialize(marker: MARKER, settings: SETTINGS, link: LINK)
+        @marker = marker
+        @settings = settings
+        @link = link
+      end
+
+      # True once: the first time it is asked while the pane is missing.
+      def take
+        return false if @marker.nil? || File.exist?(@marker) || Mod.installed?(settings: @settings)
+        FileUtils.mkdir_p(File.dirname(@marker))
+        FileUtils.touch(@marker)
+        true
+      end
+
+      def install = Mod.install(settings: @settings, link: @link)
     end
 
     def self.plugin?(folder)

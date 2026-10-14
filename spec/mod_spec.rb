@@ -100,6 +100,39 @@ RSpec.describe ClaudeInbox::Mod do
     end
   end
 
+  it "counts the pane installed when any plugin folder holds it, or when settings cannot be read" do
+    Dir.mktmpdir do |dir|
+      settings = File.join(dir, "settings.json")
+      expect(described_class.installed?(settings: settings)).to be(false)
+      File.write(settings, JSON.generate("env" => {"CLAUDE_CODE_PLUGIN_DIRS" => "/other"}))
+      expect(described_class.installed?(settings: settings)).to be(false)
+      File.write(settings, JSON.generate("env" => {"CLAUDE_CODE_PLUGIN_DIRS" => "/other:#{described_class::DIR}"}))
+      expect(described_class.installed?(settings: settings)).to be(true)
+      File.write(settings, "{ nope")
+      expect(described_class.installed?(settings: settings)).to be(true)
+    end
+  end
+
+  describe ClaudeInbox::Mod::Offer do
+    it "offers the pane once, and never while it is installed" do
+      Dir.mktmpdir do |dir|
+        settings = File.join(dir, "settings.json")
+        offer = described_class.new(marker: File.join(dir, "config", "pane-offered"), settings: settings, link: File.join(dir, "mod"))
+        File.write(settings, JSON.generate("env" => {"CLAUDE_CODE_PLUGIN_DIRS" => ClaudeInbox::Mod::DIR}))
+        expect(offer.take).to be(false)
+        File.write(settings, "{}")
+        expect(offer.take).to be(true)
+        expect(offer.take).to be(false)
+        offer.install
+        expect(JSON.parse(File.read(settings))["env"]["CLAUDE_CODE_PLUGIN_DIRS"]).to eq(File.join(dir, "mod"))
+      end
+    end
+
+    it "offers nothing when disabled" do
+      expect(described_class.disabled.take).to be(false)
+    end
+  end
+
   it "ships beside lib" do
     expect(File.exist?(File.join(described_class::DIR, ".claude-plugin", "plugin.json"))).to be(true)
   end
