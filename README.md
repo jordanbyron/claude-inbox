@@ -95,8 +95,9 @@ Vim bindings. Arrows and the mouse work too.
 ### New session
 
 `n` opens a form for the prompt, name, directory, model, effort, permissions,
-worktree, Remote Control and color, which tints the row as `/color` would. `Tab` moves between fields, `Ctrl-S` starts the
-session and `Ctrl-O` starts it and attaches.
+worktree, Remote Control and color, which tints the row as `/color` would.
+`Tab` moves between fields, `Ctrl-S` starts the session and `Ctrl-O` starts
+it and attaches.
 
 Paste an image on macOS, or drop a file into the prompt, and refer to it as
 `[Image #1]`. Type `/` for a menu of your skills.
