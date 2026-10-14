@@ -30,6 +30,7 @@ require_relative "app/triaging"
 require_relative "app/navigating"
 require_relative "app/attaching"
 require_relative "app/spawning"
+require_relative "app/stopping"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
@@ -41,6 +42,7 @@ module ClaudeInbox
     include Navigating
     include Attaching
     include Spawning
+    include Stopping
 
     # The reaper deletes sessions and the listener lets other machines in,
     # so both are off unless `bin/claude-inbox` switches them on.
@@ -290,11 +292,6 @@ module ClaudeInbox
 
     # ----- modals -----------------------------------------------------------
 
-    def open_confirm(kind)
-      return unless require_actionable
-      @modal = Dialog::Confirm.new(kind, @selected.key)
-    end
-
     def open_pr
       pr = selected_session&.pr
       return notice("no pull request linked — P sets one") unless pr
@@ -343,28 +340,11 @@ module ClaudeInbox
       end
     end
 
-    def stop_session(id)
-      in_background do
-        @client.stop(id)
-        @poller.soon
-      end
-    end
-
     def install_pane
       @pane_offer.install
       notice("added the pane — new Claude Code sessions load it; /inbox opens it")
     rescue JSON::ParserError
       notice("~/.claude/settings.json is not valid JSON, so it was left alone")
-    end
-
-    def delete_session(id)
-      notice("deleting #{id}…")
-      in_background do
-        @client.rm(id)
-        @store.forget(id)
-        @queue << [:notice, "deleted #{id}"]
-        @poller.soon
-      end
     end
   end
 end
