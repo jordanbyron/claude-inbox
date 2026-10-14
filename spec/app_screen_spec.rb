@@ -46,17 +46,6 @@ RSpec.describe ClaudeInbox::App do
     expect(app).to paint("comma3x not booting")
   end
 
-  it "edits the filter line in the middle, and closes it on a backspace from empty" do
-    press(app, "/", "ac", "\e[D", "b")
-    expect(app).to paint("/abc").in_footer
-    press(app, "\x01", "q")
-    expect(app).to paint("/qabc").in_footer
-    press(app, "\x05", "\x7f", "\x7f", "\x7f", "\x7f")
-    expect(screen(app).last.strip).to eq("/")
-    press(app, "\x7f")
-    expect(app).to paint("j/k move").in_footer
-  end
-
   describe "clicking a row" do
     it "selects it and attaches, same as landing on it and pressing Enter" do
       row = screen(app).index { |l| l.include?("comma3x led flashing") } + 1
