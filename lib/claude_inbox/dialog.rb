@@ -112,9 +112,9 @@ module ClaudeInbox
           "  • Snooze, pin and settle with the same keys",
           "  • /inbox opens it, ctrl+x tab focuses it",
           "",
-          "      y  add it to Claude Code      esc  not now",
+          "  You can install this later with claude-inbox install",
           "",
-          "  Asked once. Later: claude-inbox install"]
+          "      y  add it to Claude Code      esc  not now"]
       end
     end
 

@@ -31,7 +31,7 @@ RSpec.describe ClaudeInbox::Dialog do
 
     it "offers the Claude Code pane and says how to add it later" do
       install = described_class::PaneOffer.new
-      expect(install.frame(80).join("\n")).to include "Later: claude-inbox install"
+      expect(install.frame(80).join("\n")).to include "later with claude-inbox install"
       expect(install.press("y", "y")).to eq(:confirm)
     end
 
