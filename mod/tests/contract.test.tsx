@@ -5,11 +5,12 @@ import type { SnapshotRow } from '../hooks/register'
 import type { Section } from '../types'
 import { SNAPSHOT } from './snapshot.fixture'
 
-type Fixture = { written_at: number; sections: Record<Section, SnapshotRow[]> }
+type Fixture = { written_at: number; update?: string; sections: Record<Section, SnapshotRow[]> }
 
 test("the rows the pane reads are the ones the gem's Snapshot writes", () => {
   const snapshot = JSON.parse(SNAPSHOT) as Fixture
   expect(snapshot.written_at).toBe(1_789_600_000)
+  expect(snapshot.update).toBe('v0.6.0 available')
   const rows = (Object.keys(snapshot.sections) as Section[]).flatMap(section => snapshot.sections[section].map(one => rowOf(section, one)))
   expect(rows.map(row => [row.section, row.id, row.label, row.state, row.actionable])).toEqual([
     ['needs_you', 'a1', 'needs an answer', 'blocked', true],

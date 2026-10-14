@@ -44,6 +44,21 @@ RSpec.describe ClaudeInbox::Snapshot do
     end
   end
 
+  it "carries the update notice once told of one, and a new notice alone rewrites the file" do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "snapshot.json")
+      snapshot = described_class.new(path: path)
+      snapshot.write(sections, now)
+      expect(JSON.parse(File.read(path))).not_to have_key("update")
+      snapshot.update = "v0.6.0 available"
+      snapshot.write(sections, now + 1)
+      expect(JSON.parse(File.read(path))["update"]).to eq("v0.6.0 available")
+      File.write(path, "stale")
+      snapshot.write(sections, now + 2)
+      expect(File.read(path)).to eq("stale")
+    end
+  end
+
   it "writes nothing when disabled" do
     expect { described_class.disabled.write(sections, now) }.not_to raise_error
   end

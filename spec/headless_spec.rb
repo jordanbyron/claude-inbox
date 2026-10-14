@@ -14,4 +14,52 @@ RSpec.describe ClaudeInbox::Headless do
       expect(headless.run).to be(false)
     end
   end
+
+  describe "the update check" do
+    let(:tmp) { Dir.mktmpdir }
+    let(:path) { File.join(tmp, "snapshot.json") }
+    let(:runs) { [] }
+    let(:fetch) { ->(_) { '{"version":"0.6.0"}' } }
+    let(:updater) do
+      ClaudeInbox::Updater.new(checkout: false, version: "0.5.0", cache_path: File.join(tmp, "update.json"), fetch: fetch,
+        run: ->(*argv) { runs << argv })
+    end
+    let(:headless) do
+      described_class.new(client: RecordingClient.new, store: ClaudeInbox::Store.new(path: nil),
+        pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil),
+        actions: ClaudeInbox::Actions.disabled, snapshot: ClaudeInbox::Snapshot.new(path: path),
+        lock: ClaudeInbox::WriterLock.new(path: File.join(tmp, "writer.lock")), updater: updater)
+    end
+    let(:thread) { Thread.new { headless.run } }
+
+    after do
+      thread.kill
+      FileUtils.remove_entry(tmp)
+    end
+
+    it "puts a newer release's notice in the snapshot and installs nothing" do
+      thread
+      expect(wait_for(timeout: 6) { File.exist?(path) && JSON.parse(File.read(path))["update"] == "v0.6.0 available" }).to be(true)
+      expect(JSON.parse(File.read(path))["sections"].values.flatten.map { |r| r["id"] }).to include("f23c8673")
+      expect(runs).to be_empty
+    end
+
+    context "when the check cannot reach rubygems.org" do
+      let(:fetched) { [] }
+      let(:fetch) do
+        lambda do |url|
+          fetched << url
+          raise ClaudeInbox::Updater::Error, "rubygems.org is unreachable"
+        end
+      end
+
+      # Asleep on its queue after the fetch: the check is over and polling goes on.
+      it "keeps polling, with no notice in the snapshot" do
+        thread
+        expect(wait_for { fetched.any? && thread.status == "sleep" && File.exist?(path) }).to be(true)
+        expect(JSON.parse(File.read(path))).not_to have_key("update")
+        expect(runs).to be_empty
+      end
+    end
+  end
 end

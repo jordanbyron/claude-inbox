@@ -24,6 +24,7 @@ export type Pending = 'g' | 'z' | 's' | null
 
 declare module 'claude-code' {
   interface PluginState {
-    'inbox-pane': { rows: InboxRow[]; current: InboxRow | null; writtenAt: number; cursor: number; folds: Folds; pending: Pending }
+    // `update` is the gem's notice for a newer release ("v0.6.0 available"), null while this one is the latest.
+    'inbox-pane': { rows: InboxRow[]; current: InboxRow | null; writtenAt: number; update: string | null; cursor: number; folds: Folds; pending: Pending }
   }
 }

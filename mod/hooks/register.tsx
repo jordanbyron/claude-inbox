@@ -23,6 +23,7 @@ const SWITCH = '.config/claude-inbox/switch.json'
 const rows = atom({ plugin: 'inbox-pane', key: 'rows' } as const, [])
 const current = atom({ plugin: 'inbox-pane', key: 'current' } as const, null)
 const writtenAt = atom({ plugin: 'inbox-pane', key: 'writtenAt' } as const, 0)
+const newer = atom({ plugin: 'inbox-pane', key: 'update' } as const, null)
 const cursor = atom({ plugin: 'inbox-pane', key: 'cursor' } as const, 0)
 const folds = atom({ plugin: 'inbox-pane', key: 'folds' } as const, { snoozed: true, settled: true })
 const pending = atom({ plugin: 'inbox-pane', key: 'pending' } as const, null)
@@ -40,7 +41,7 @@ export type SnapshotRow = {
   color?: string
   pr?: { short?: string; state?: string; url?: string }
 }
-type Snapshot = { written_at?: number; sections?: Partial<Record<Section, SnapshotRow[]>> }
+type Snapshot = { written_at?: number; update?: string; sections?: Partial<Record<Section, SnapshotRow[]>> }
 // This session, as the gem's files name it, and the headless inbox this module may start.
 type Host = { session: string; command: string; headlessStartedAt: number; isHeadlessRunning: boolean }
 type Fold = keyof Folds
@@ -233,6 +234,7 @@ async function poll($: EngineInterface, host: Host): Promise<void> {
     const id = await sessionId($, host)
     await update($, current, () => all.find(one => one.session === id) ?? null)
     await update($, rows, () => all.filter(one => one.session !== id))
+    await update($, newer, () => snapshot.update ?? null)
   }
   await update($, writtenAt, () => written)
   if (now - written > STALE_S) startHeadless($, host, now)
@@ -326,6 +328,7 @@ export const register: Register = (on, options) => {
     const folded = await read($, folds)
     const chord = await read($, pending)
     const written = await read($, writtenAt)
+    const release = await read($, newer)
     const ageS = (await nowS($)) - written
     const groups = groupsOf(list, folded, viewing)
     const flat = groups.flatMap(group => group.items)
@@ -427,6 +430,8 @@ export const register: Register = (on, options) => {
           {list.length === 0 && viewing === null && <Text dimColor>nothing running</Text>}
         </Box>
         {notice !== null && <Text color="yellow">{notice}</Text>}
+        {/* No key for it: the pane cannot replace the process under Claude Code, so it names the command. */}
+        {notice === null && release !== null && <Text dimColor>{release} · claude-inbox update</Text>}
         {notice === null && flat.length === 0 && <Text dimColor>No sessions.</Text>}
         {groups.map(group => (
           <Box flexDirection="column" marginTop={1}>

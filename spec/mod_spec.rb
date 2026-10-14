@@ -149,7 +149,9 @@ RSpec.describe ClaudeInbox::Mod do
     entries = {"c3" => {"last_state" => "done", "state_since" => now.to_i - 90, "settled_at" => now.to_i - 60}}
     Dir.mktmpdir do |dir|
       path = File.join(dir, "snapshot.json")
-      ClaudeInbox::Snapshot.new(path: path).write(ClaudeInbox::Store.sectionize(sessions, entries, now), now)
+      snapshot = ClaudeInbox::Snapshot.new(path: path)
+      snapshot.update = "v0.6.0 available"
+      snapshot.write(ClaudeInbox::Store.sectionize(sessions, entries, now), now)
       expect(JSON.parse(File.read(path))).to eq(JSON.parse(fixture))
     end
   end

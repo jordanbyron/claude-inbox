@@ -435,12 +435,13 @@ RSpec.describe ClaudeInbox::App do
         exec: ->(*argv) { execs << argv }
       )
     end
+    let(:snapshot_path) { File.join(tmp, "snapshot.json") }
     let(:app) do
       described_class.new(
         client: client, store: store, pull_requests: pull_requests,
         rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
         terminal: terminal, input: StringIO.new, out: out, color: false, queue: queue,
-        updater: updater, argv: ["--listen-lan"]
+        snapshot: ClaudeInbox::Snapshot.new(path: snapshot_path), updater: updater, argv: ["--listen-lan"]
       )
     end
 
@@ -459,6 +460,11 @@ RSpec.describe ClaudeInbox::App do
       expect(out.string).to include("Installing claude-inbox 0.6.0 over 0.5.0...", "Successfully installed")
       expect(execs).to eq([["claude-inbox", "--listen-lan"]])
       expect(terminal.pauses).to eq(0)
+    end
+
+    it "puts the notice in the snapshot for the pane" do
+      expect(wait_for { screen(app).first.include?("v0.6.0 available") }).to be(true)
+      expect(JSON.parse(File.read(snapshot_path))["update"]).to eq("v0.6.0 available")
     end
 
     it "holds a failed install's error on screen, then relaunches this version rather than stay at the shell" do
@@ -492,6 +498,7 @@ RSpec.describe ClaudeInbox::App do
           screen(app).first.include?("up to date")
         }).to be(true)
         expect(screen(app).first).not_to include("U updates")
+        expect(JSON.parse(File.read(snapshot_path))).not_to have_key("update")
         expect(execs).to be_empty
         expect(out.string).to be_empty
       end
