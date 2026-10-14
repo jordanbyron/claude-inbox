@@ -37,6 +37,7 @@ export type SnapshotRow = {
   line?: string
   wake_at?: number | 'until_woken'
   remote?: string
+  color?: string
   pr?: { short?: string; state?: string; url?: string }
 }
 type Snapshot = { written_at?: number; sections?: Partial<Record<Section, SnapshotRow[]>> }
@@ -52,6 +53,11 @@ const TITLE: Record<Section, string> = { pinned: 'Pinned', needs_you: 'Needs you
 const GLYPH: Record<string, string> = { blocked: '●', failed: '✗', working: '◐', idle: '◌', done: '✓', stopped: '✓' }
 const COLOR: Record<string, string> = { blocked: 'red', failed: 'red', working: 'green', idle: 'cyan' }
 const PR_COLOR: Record<string, string> = { open: 'green', draft: 'yellow', merged: 'magenta', closed: 'red' }
+// `/color`'s names as a label's background. A Button keeps the terminal's own ink, light on a dark
+// theme, so each is a deep 256-color shade of the hue the gem's Palette draws rather than the hue itself.
+const TINT: Record<string, string> = {
+  red: '#870000', green: '#005f00', yellow: '#875f00', blue: '#005f87', purple: '#5f0087', cyan: '#005f5f', orange: '#af5f00', pink: '#87005f',
+}
 const SNOOZE: Record<string, { choice: Snooze; label: string }> = {
   '1': { choice: 'm15', label: '15m' },
   '2': { choice: 'h1', label: '1h' },
@@ -134,6 +140,7 @@ export function rowOf(section: Section, one: SnapshotRow): InboxRow {
     line: one.line,
     wakeAt: one.wake_at,
     remote: one.remote,
+    color: one.color,
     pr,
   }
 }
@@ -438,6 +445,7 @@ export const register: Register = (on, options) => {
               }
               const one = item.row
               const isQuiet = isFold(one.section)
+              const tint = one.color ? TINT[one.color] : undefined
               return (
                 <Box key={viewKey(item)} flexDirection="column">
                   <Box>
@@ -445,8 +453,9 @@ export const register: Register = (on, options) => {
                     <Text color={COLOR[one.state]} dimColor={isQuiet || one.state === 'done'}>
                       {GLYPH[one.state] ?? '·'}{' '}
                     </Text>
-                    {/* A Button cannot truncate, so its Box clips a long label to the row. */}
-                    <Box height={1} flexShrink={1} overflow="hidden">
+                    {/* A Button cannot truncate, so its Box clips a long label to the row. A Button takes no
+                        color either, so a session's /color is the Box's background rather than the label's ink. */}
+                    <Box key={`label:${itemKey(item)}`} height={1} flexShrink={1} overflow="hidden" backgroundColor={tint}>
                       <Button
                         key={itemKey(item)}
                         plain

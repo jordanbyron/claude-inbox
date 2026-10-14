@@ -13,6 +13,7 @@ export type InboxRow = {
   line?: string
   wakeAt?: number | 'until_woken'
   remote?: string
+  color?: string
   pr?: { short: string; state: string; url: string }
 }
 
