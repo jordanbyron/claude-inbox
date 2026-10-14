@@ -67,13 +67,12 @@ module ClaudeInbox
       Outcome = Data.define(:at, :via, :result, :count)
 
       # App's `listen:` from the flags, else the environment; nil when neither
-      # asks for it. --listen-lan wins over --listen, whichever came last.
-      def self.options(argv, env)
-        flags = argv.filter_map { |arg| arg.match(/\A--listen(-lan)?(?:=(.*))?\z/) }
+      # asks for it. `flag` is the listen flag's `lan:` and `port:`, and
+      # `modes` --listen-allow-modes, both as typed.
+      def self.options(env, flag: nil, modes: nil)
         lan, port =
-          if flags.any?
-            flag = flags.reverse.find { |m| m[1] } || flags.last
-            [!flag[1].nil?, flag[2]]
+          if flag
+            flag.values_at(:lan, :port)
           elsif !(value = env["CLAUDE_INBOX_LISTEN"].to_s.strip).empty?
             m = value.match(/\A(?:(lan)(?::(.*))?|(\d+))\z/i)
             raise ArgumentError, "CLAUDE_INBOX_LISTEN is a port, lan or lan:PORT, not #{value}" unless m
@@ -81,7 +80,7 @@ module ClaudeInbox
           else
             return nil
           end
-        modes = argv.filter_map { |arg| arg[/\A--listen-allow-modes=(.*)\z/, 1] }.last || env["CLAUDE_INBOX_LISTEN_ALLOW_MODES"]
+        modes ||= env["CLAUDE_INBOX_LISTEN_ALLOW_MODES"]
         {port: port_option(port), lan: lan, allowed_modes: modes_option(modes)}
       end
 
