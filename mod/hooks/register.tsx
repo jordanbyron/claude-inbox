@@ -53,9 +53,10 @@ const TITLE: Record<Section, string> = { pinned: 'Pinned', needs_you: 'Needs you
 const GLYPH: Record<string, string> = { blocked: '●', failed: '✗', working: '◐', idle: '◌', done: '✓', stopped: '✓' }
 const COLOR: Record<string, string> = { blocked: 'red', failed: 'red', working: 'green', idle: 'cyan' }
 const PR_COLOR: Record<string, string> = { open: 'green', draft: 'yellow', merged: 'magenta', closed: 'red' }
-// `/color`'s names as the gem's Palette draws them: purple is ansi magenta, orange and pink are 256-color 208 and 205.
+// `/color`'s names as a label's background. A Button keeps the terminal's own ink, light on a dark
+// theme, so each is a deep 256-color shade of the hue the gem's Palette draws rather than the hue itself.
 const TINT: Record<string, string> = {
-  red: 'red', green: 'green', yellow: 'yellow', blue: 'blue', purple: 'magenta', cyan: 'cyan', orange: '#ff8700', pink: '#ff5faf',
+  red: '#870000', green: '#005f00', yellow: '#875f00', blue: '#005f87', purple: '#5f0087', cyan: '#005f5f', orange: '#af5f00', pink: '#87005f',
 }
 const SNOOZE: Record<string, { choice: Snooze; label: string }> = {
   '1': { choice: 'm15', label: '15m' },
@@ -448,16 +449,13 @@ export const register: Register = (on, options) => {
               return (
                 <Box key={viewKey(item)} flexDirection="column">
                   <Box>
-                    <Text color={isHere ? 'yellow' : undefined}>{isHere ? '›' : ' '}</Text>
-                    {/* A Button takes no color, so a session's /color is a stripe at the row's edge, not on its label. */}
-                    <Text color={tint} dimColor={isQuiet}>
-                      {tint ? '▎' : ' '}
-                    </Text>
+                    <Text color={isHere ? 'yellow' : undefined}>{isHere ? '› ' : '  '}</Text>
                     <Text color={COLOR[one.state]} dimColor={isQuiet || one.state === 'done'}>
                       {GLYPH[one.state] ?? '·'}{' '}
                     </Text>
-                    {/* A Button cannot truncate, so its Box clips a long label to the row. */}
-                    <Box height={1} flexShrink={1} overflow="hidden">
+                    {/* A Button cannot truncate, so its Box clips a long label to the row. A Button takes no
+                        color either, so a session's /color is the Box's background rather than the label's ink. */}
+                    <Box key={`label:${itemKey(item)}`} height={1} flexShrink={1} overflow="hidden" backgroundColor={tint}>
                       <Button
                         key={itemKey(item)}
                         plain

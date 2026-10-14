@@ -217,13 +217,14 @@ test('a click on a row puts the cursor on it before it asks for the switch', asy
   await ui.unmount()
 })
 
-test("a session's /color draws a stripe in the gem's shade, and no color draws none", async ($, on) => {
+test("a session's /color is its label's background, and no color draws none", async ($, on) => {
   mock.env(on, { HOME: '/Users/me' })
   mock.clock(on, { now: 1_700_000_000_000 })
   const [blocked, working] = ROWS
   on('state.get', ($, e, next) => (e.key === 'rows' ? seeded([{ ...blocked, color: 'orange' }, working]) : e.key === 'writtenAt' ? seeded(1_700_000_000) : next(e)))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  expect((await ui.findAll({ type: 'Text', text: /^▎$/ })).map(one => one.props.color)).toEqual(['#ff8700'])
+  expect((await ui.find({ key: 'label:row:a1' }))?.props.backgroundColor).toBe('#af5f00')
+  expect((await ui.find({ key: 'label:row:b2' }))?.props.backgroundColor).toBeUndefined()
   await ui.unmount()
 })
 
