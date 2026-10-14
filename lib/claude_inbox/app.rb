@@ -28,6 +28,7 @@ require_relative "mod"
 require_relative "updater"
 require_relative "app/updating"
 require_relative "app/filtering"
+require_relative "app/triaging"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
@@ -35,6 +36,7 @@ module ClaudeInbox
   class App
     include Updating
     include Filtering
+    include Triaging
 
     # The reaper deletes sessions and the listener lets other machines in,
     # so both are off unless `bin/claude-inbox` switches them on.
@@ -254,22 +256,6 @@ module ClaudeInbox
       false
     end
 
-    # Guard for snooze/wake/alias: anything with a key, since those live in
-    # our own store. A terminal you are sitting in is the one exception.
-    def require_storable
-      s = selected_session
-      return true if @selected&.row? && !s&.terminal?
-      notice("you're in that terminal right now — nothing to snooze") if s&.terminal?
-      false
-    end
-
-    # The edits with no request form, which a second inbox cannot keep.
-    def require_writable(verb)
-      return true if @store.writable?
-      notice("another claude-inbox owns state.json — #{verb} there")
-      false
-    end
-
     def notice(msg)
       @notice = [msg, Time.now + 4]
     end
@@ -417,20 +403,6 @@ module ClaudeInbox
       @terminal.invalidate
     end
 
-    def wake_selected
-      @store.wake(@selected.key) if require_storable
-    end
-
-    def toggle_pin_selected
-      @store.toggle_pin(@selected.key) if require_storable
-    end
-
-    def settle_selected
-      return unless require_storable
-      @store.settle(@selected.key)
-      notice("settled — u brings it back")
-    end
-
     # The pane in the attached session may ask for a different one: the
     # attach ends and the next starts without passing through the list. The
     # poller keeps running meanwhile, so the pane's snapshot stays fresh. A
@@ -449,26 +421,9 @@ module ClaudeInbox
 
     # ----- modals -----------------------------------------------------------
 
-    def open_snooze_menu
-      return unless require_storable
-      @modal = Dialog::Snooze.new(@selected.key)
-    end
-
     def open_confirm(kind)
       return unless require_actionable
       @modal = Dialog::Confirm.new(kind, @selected.key)
-    end
-
-    def open_alias_editor
-      return unless require_storable && require_writable("rename")
-      current = @store.alias_for(@selected.key) || ""
-      @modal = Dialog::Prompt.new(:alias, @selected.key, current)
-    end
-
-    def open_pr_editor
-      return unless require_storable && require_writable("link a pull request")
-      current = @store.pr_for(@selected.key) || selected_session&.pr&.url || ""
-      @modal = Dialog::Prompt.new(:pr, @selected.key, current)
     end
 
     def open_pr
@@ -539,9 +494,7 @@ module ClaudeInbox
       return handle_form_key(name, key) if @modal.is_a?(NewSessionForm)
       case @modal.press(name, key)
       when :cancel then @modal = nil
-      when :snooze
-        @store.snooze(@modal.id, @modal.choice)
-        @modal = nil
+      when :snooze then snooze_chosen
       when :confirm
         kind, id = @modal.kind, @modal.id
         @modal = nil
@@ -603,19 +556,6 @@ module ClaudeInbox
         @queue << [:notice, "deleted #{id}"]
         @poller.soon
       end
-    end
-
-    def save_prompt
-      value = @modal.value.strip
-      if @modal.kind == :alias
-        @store.set_alias(@modal.id, value)
-      elsif value.empty? || PullRequests.valid_url?(value)
-        @store.set_pr(@modal.id, value)
-        @poller.soon
-      else
-        return notice("that's not a github.com pull request url")
-      end
-      @modal = nil
     end
   end
 end
