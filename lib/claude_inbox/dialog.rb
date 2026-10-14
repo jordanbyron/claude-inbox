@@ -51,11 +51,12 @@ module ClaudeInbox
       end
     end
 
-    # `X` stop, `Ctrl-x` delete and Enter on a remote row all ask first and
+    # `X` stop, `Ctrl-x` delete, Enter on a remote row and the first launch
+    # without the Claude Code pane all ask first and
     # all take `y`, but the words differ because the outcomes do: read the
     # box before answering.
     class Confirm < Dialog
-      TITLES = {stop: " Stop ", delete: " Delete ", adopt: " Adopt "}.freeze
+      TITLES = {stop: " Stop ", delete: " Delete ", adopt: " Adopt ", install: " Claude Code pane "}.freeze
 
       def title = TITLES.fetch(kind)
 
@@ -68,6 +69,9 @@ module ClaudeInbox
         when :adopt
           ["  Pull this session into the daemon?", "  Its phone session ends and a",
             "  new one takes its place.", "", "  y  adopt it", "  esc  cancel"]
+        when :install
+          ["  Add the inbox as a pane in every", "  Claude Code session? Later, run", "  claude-inbox install.",
+            "", "  y  add it", "  esc  not now"]
         end
       end
 

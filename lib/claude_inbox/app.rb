@@ -24,6 +24,7 @@ require_relative "actions"
 require_relative "snapshot"
 require_relative "switch"
 require_relative "trust"
+require_relative "mod"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
@@ -34,7 +35,7 @@ module ClaudeInbox
     def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
       rate_limits: RateLimits.new, reaper: Reaper.disabled, snapshot: Snapshot.disabled, switch: Switch.disabled,
       actions: Actions.disabled, listen: nil, out: $stdout, input: $stdin, color: true, trust: Trust.method(:projects),
-      terminal: Terminal.new(out, input), queue: Queue.new)
+      terminal: Terminal.new(out, input), queue: Queue.new, pane_offer: Mod::Offer.disabled)
       @client = client
       @store = store
       @snapshot = snapshot
@@ -65,6 +66,8 @@ module ClaudeInbox
       @last_poll = nil
       @quit = false
       @resize = false
+      @pane_offer = pane_offer
+      @modal = Dialog::Confirm.new(:install, nil) if pane_offer.take
     end
 
     def run
@@ -536,6 +539,7 @@ module ClaudeInbox
         when :stop then stop_session(id)
         when :delete then delete_session(id)
         when :adopt then adopt_session(id)
+        when :install then install_pane
         end
       when :save then save_prompt
       when :copy then @listener.copy_pairing_url
@@ -572,6 +576,13 @@ module ClaudeInbox
         @queue << [:select, id]
         @queue << [:attach, id]
       end
+    end
+
+    def install_pane
+      @pane_offer.install
+      notice("added the pane — new Claude Code sessions load it; /inbox opens it")
+    rescue JSON::ParserError
+      notice("~/.claude/settings.json is not valid JSON, so it was left alone")
     end
 
     def delete_session(id)

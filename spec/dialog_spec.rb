@@ -29,6 +29,12 @@ RSpec.describe ClaudeInbox::Dialog do
       expect(adopt.press("y", "y")).to eq(:confirm)
     end
 
+    it "offers the Claude Code pane and says how to add it later" do
+      install = described_class::Confirm.new(:install, nil)
+      expect(install.frame(60).join("\n")).to include "claude-inbox install."
+      expect(install.press("y", "y")).to eq(:confirm)
+    end
+
     it "takes y and nothing else, and says which it is asking about" do
       stop = described_class::Confirm.new(:stop, "abc12345")
       expect(stop.frame(60).join("\n")).to include "Stop session abc12345?"
