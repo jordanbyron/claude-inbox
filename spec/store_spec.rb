@@ -135,6 +135,14 @@ RSpec.describe ClaudeInbox::Store do
       expect(described_class.sectionize([s], entries, now).settled.map(&:key)).to eq(%w[a])
     end
 
+    it "settles a respawned session on a PR merged before the respawn" do
+      entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 5}}
+      created = ClaudeInbox::JobState.new("createdAt" => Time.at(now.to_i - 7200).utc.iso8601)
+      s = session(id: "a", state: "done", started_at: now - 60, job_state: created,
+        prs: [ClaudeInbox::PullRequest.new(state: "MERGED", resolved_at: now.to_i - 3600)])
+      expect(described_class.sectionize([s], entries, now).settled.map(&:key)).to eq(%w[a])
+    end
+
     it "holds a session in view until gh says when its PR was resolved" do
       entries = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 5}}
       s = session(id: "a", state: "blocked", prs: [ClaudeInbox::PullRequest.new(state: "MERGED")])

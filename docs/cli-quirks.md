@@ -4,7 +4,9 @@ Things the inbox relies on that `claude --help` doesn't tell you. Checked
 against 2.1.273 unless noted; re-check after a CLI upgrade.
 
 - `claude agents --json --all` matches the documented shape. A `done` session
-  can still carry a `pid` and `status: idle`.
+  can still carry a `pid` and `status: idle`. `startedAt` is when the current
+  process started, so a respawn moves it; the job file's `createdAt` keeps
+  when the session began (seen on 2026-10-14, three sessions respawned at once).
 - Interactive sessions (a `claude` you started in a terminal yourself) appear
   in the JSON with no `id` and no `state`, only `status`, and cannot be
   attached, peeked or stopped from outside. The JSON calls a terminal you

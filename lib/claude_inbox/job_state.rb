@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "time"
 
 module ClaudeInbox
   # What the daemon writes about a background session in
@@ -16,7 +17,7 @@ module ClaudeInbox
   # `output.result` what it produced once done. It also carries the PR links the daemon scanned out of the
   # transcript, which PullRequests reads through here, the color `/color`
   # set on the session, which `claude agents --json` drops, and `intent`, the
-  # prompt the session was started from.
+  # prompt the session was started from, and `createdAt`, when it was.
   #
   # Never cached. A color changes the moment you type `/color`, so every poll
   # asks the file again.
@@ -64,7 +65,7 @@ module ClaudeInbox
       nil
     end
 
-    attr_reader :pr_urls, :color, :intent, :bridge_id
+    attr_reader :pr_urls, :color, :intent, :bridge_id, :created_at
 
     def initialize(hash)
       @detail = hash["detail"]
@@ -77,6 +78,7 @@ module ClaudeInbox
       @color = hash["color"]
       @intent = hash["intent"]
       @bridge_id = hash["bridgeSessionId"]
+      @created_at = time(hash["createdAt"])
       @flags = hash["respawnFlags"] || []
     end
 
@@ -122,5 +124,11 @@ module ClaudeInbox
     def count_label = "#{tasks} #{plural("task", tasks)}"
 
     def plural(word, n) = (n == 1) ? word : "#{word}s"
+
+    def time(iso)
+      iso && Time.iso8601(iso)
+    rescue ArgumentError
+      nil
+    end
   end
 end
