@@ -81,9 +81,9 @@ module ClaudeInbox
         row = Row.new(session: session, entry: self)
         @h.delete("wake_at") if row.woken?(now_i)
         @h.delete("snoozed_at") unless wake_at
-        @h.delete("settled_at") if settled_at && !row.hand_settled?
-        @h.delete("acknowledged_at") if acknowledged_at && !row.acknowledged?
-        @h.delete("revived_at") if revived_at && !row.revived?
+        @h.delete("settled_at") unless row.hand_settled?
+        @h.delete("acknowledged_at") unless row.acknowledged?
+        @h.delete("revived_at") unless row.revived?
         self
       end
 
