@@ -26,11 +26,14 @@ require_relative "switch"
 require_relative "trust"
 require_relative "mod"
 require_relative "updater"
+require_relative "app/updating"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
   # child process that takes over the terminal.
   class App
+    include Updating
+
     # The reaper deletes sessions and the listener lets other machines in,
     # so both are off unless `bin/claude-inbox` switches them on.
     def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
@@ -90,7 +93,7 @@ module ClaudeInbox
     end
 
     def step(input = nil)
-      check_for_update unless @update_status
+      ensure_update_checked
       drain_queue
       @logs.tick
       if @resize
@@ -216,48 +219,7 @@ module ClaudeInbox
       return @notice[0] if @notice && now < @notice[1]
       return "⚠ #{@error}" if @error
       return "polling…" unless @last_poll
-      "#{@update.notice} · U updates" if @update
-    end
-
-    # ----- updates ----------------------------------------------------------
-
-    # Once, on the first step: a stale cache means a network round trip, so
-    # it runs off the main thread. A laptop that is offline stays quiet
-    # rather than show an error at every launch; U says what went wrong.
-    def check_for_update
-      @update_status = @updater ? "checking for updates…" : "update check is off — claude-inbox update installs the latest"
-      return unless @updater
-      in_background do
-        @queue << [:update, @updater.check]
-      rescue Updater::Error => e
-        @queue << [:update, nil, e.message]
-      end
-    end
-
-    def update_checked(update, failure = nil)
-      @update = update
-      @snapshot.update = update&.notice
-      @update_status = failure ? "couldn't check for updates: #{failure}" : "up to date"
-    end
-
-    # The install prints on the real screen, and the relaunch replaces this
-    # process. A failed install relaunches this version instead, once its
-    # error has been read, rather than leave the shell showing.
-    def update_inbox
-      return notice(@update_status) unless @update
-      @terminal.release do
-        @out.puts @update.installing
-        applied = @updater.apply
-        @out.puts applied.output unless applied.output.empty?
-        @terminal.pause unless applied.success?
-        relaunch
-      end
-    end
-
-    def relaunch
-      @updater.relaunch(@argv)
-    rescue SystemCallError => e
-      @error = "relaunch failed: #{e.message}"
+      update_notice
     end
 
     def filtered(sections = @store.sections) = sections.matching(@filter&.to_s)
