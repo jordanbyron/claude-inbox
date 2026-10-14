@@ -22,7 +22,7 @@ const seeded = (value: unknown) => ({ value: { value, version: 1 } })
 // Answers what a session start asks of the engine, with a fresh snapshot so no headless
 // inbox starts, and records the panes it opens and the state it sets. `polled` settles
 // with the start's first poll.
-const startable = (on: On, sections: Record<string, unknown[]> = {}) => {
+const startable = (on: On, sections: Record<string, unknown[]> = {}, update?: string) => {
   const opened: string[] = []
   const set: Record<string, unknown> = {}
   let done = () => {}
@@ -30,7 +30,7 @@ const startable = (on: On, sections: Record<string, unknown[]> = {}) => {
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', () => ({ value: undefined }))
   on('session.id', () => ({ value: 'u-test' }))
-  on('fs.read', () => ({ value: JSON.stringify({ written_at: 1_700_000_000, sections }) }))
+  on('fs.read', () => ({ value: JSON.stringify({ written_at: 1_700_000_000, update, sections }) }))
   on('state.set', async ($, e, next) => {
     set[e.key] = e.value
     const result = await next(e)
@@ -61,6 +61,29 @@ test('a snapshot older than thirty seconds is called stale, just now before a mi
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /stopped just now; rows are stale/ })).toBeDefined()
   await ui.unmount()
+})
+
+test('a newer release is one dim line naming the command, and none while this one is the latest', async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  let release: string | null = 'v0.6.0 available'
+  on('state.get', ($, e, next) => (e.key === 'update' ? seeded(release) : e.key === 'writtenAt' ? seeded(1_700_000_000) : next(e)))
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /^v0\.6\.0 available · claude-inbox update$/ })).toBeDefined()
+  await ui.unmount()
+  release = null
+  const latest = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await latest.find({ type: 'Text', text: /claude-inbox update/ })).toBeUndefined()
+  await latest.unmount()
+})
+
+test('a poll takes the notice from the snapshot', async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  const { polled, set } = startable(on, { active: [{ id: 'b2', session: 'u-b2', label: 'other' }] }, 'v0.6.0 available')
+  await $.session.start({ cwd: '/tmp/proj', surface: 'terminal', isInteractive: true })
+  await polled
+  expect(set.update).toBe('v0.6.0 available')
 })
 
 test("rows sit under the gem's sections, Settled folded until za opens it", async ($, on) => {

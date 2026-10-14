@@ -1,10 +1,11 @@
 // What the gem's Snapshot writes for three sessions, a blocked one, a working one
-// with an open pull request and a hand-settled one. The gem's spec/mod_spec.rb
-// writes the same sessions through Snapshot and compares them to this text, so a
-// key renamed on either side fails a test on both.
+// with an open pull request and a hand-settled one, while a newer release is out.
+// The gem's spec/mod_spec.rb writes the same sessions through Snapshot and compares
+// them to this text, so a key renamed on either side fails a test on both.
 export const SNAPSHOT = `{
   "version": 1,
   "written_at": 1789600000,
+  "update": "v0.6.0 available",
   "sections": {
     "pinned": [],
     "needs_you": [

@@ -15,20 +15,25 @@ module ClaudeInbox
 
     def initialize(path: DEFAULT_PATH)
       @path = path
+      @update = nil
       @body = nil
       @written_at = nil
       @mutex = Mutex.new
     end
 
+    # The notice for a newer claude-inbox, or nil. Held here rather than passed
+    # to each write because the poller writes too, without knowing of it.
+    attr_writer :update
+
     # Called from the poller's threads and the screen's alike.
     def write(sections, now)
       return unless @path
-      body = sections.to_h { |name, rows| [name.to_s, rows.map { |row| row_hash(row) }] }
+      body = {"sections" => sections.to_h { |name, rows| [name.to_s, rows.map { |row| row_hash(row) }] }, "update" => @update}.compact
       @mutex.synchronize do
         return if body == @body && now.to_i - @written_at < HEARTBEAT
         @body = body
         @written_at = now.to_i
-        Records.save(@path, {"version" => 1, "written_at" => @written_at, "sections" => body})
+        Records.save(@path, {"version" => 1, "written_at" => @written_at, **body})
       end
     end
 

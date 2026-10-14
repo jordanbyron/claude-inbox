@@ -236,6 +236,7 @@ module ClaudeInbox
 
     def update_checked(update, failure = nil)
       @update = update
+      @snapshot.update = update&.notice
       @update_status = failure ? "couldn't check for updates: #{failure}" : "up to date"
     end
 
