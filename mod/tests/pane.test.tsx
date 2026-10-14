@@ -220,6 +220,38 @@ test('a switch hands the keys back to the prompt before it asks, so a return lan
   await ui.unmount()
 })
 
+test('o and w hand the keys back to the prompt before they open the browser', async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  const remote = { ...ROWS[1], remote: 'https://claude.ai/code/session_b2' }
+  on('state.get', ($, e, next) => (e.key === 'rows' ? seeded([remote]) : e.key === 'writtenAt' ? seeded(1_700_000_000) : next(e)))
+  const calls: string[] = []
+  on('ui.close', ($, e) => {
+    calls.push(`close ${e.id}`)
+    return { value: undefined }
+  })
+  on('ui.open', ($, e) => {
+    calls.push(`open ${e.id}${e.focus ? ' focused' : ''}`)
+    return { value: { isPlaced: true } }
+  })
+  on('process.run', ($, e) => {
+    calls.push(e.argv.join(' '))
+    return { value: { code: 0, stdout: '', stderr: '' } }
+  })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'o' })
+  await ui.press({ key: 'w' })
+  expect(calls).toEqual([
+    'close inbox',
+    'open inbox',
+    'open https://github.com/o/r/pull/7',
+    'close inbox',
+    'open inbox',
+    'open https://claude.ai/code/session_b2',
+  ])
+  await ui.unmount()
+})
+
 test('a click on a row puts the cursor on it before it asks for the switch', async ($, on) => {
   mock.env(on, { HOME: '/Users/me' })
   mock.clock(on, { now: 1_700_000_000_000 })

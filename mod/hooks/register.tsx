@@ -197,12 +197,18 @@ async function requestSwitch($: EngineInterface, host: Host, id: string): Promis
   })
 }
 
-// The pane keeps the keys while its session is away, so coming back to it would put the
-// person's typing in the pane. The engine has no blur: reopening without `focus` is the
-// one way to give the keys to the prompt.
+// Every key that takes the person out of the pane, to another session or the browser, calls
+// this first: the pane would keep the keys while they are away, and their typing on coming
+// back would land in it. The engine has no blur: reopening without `focus` is the one way
+// to give the keys to the prompt.
 async function handBackKeys($: EngineInterface): Promise<void> {
   await $.ui.close({ id: PANE })
   await $.ui.open(OPEN)
+}
+
+async function openInBrowser($: EngineInterface, url: string): Promise<void> {
+  await handBackKeys($)
+  await $.process.run(['open', url])
 }
 
 // Only while no inbox writes the snapshot; the gem's writer lock turns a second one away.
@@ -410,8 +416,8 @@ export const register: Register = (on, options) => {
                     $.ui.toast(copied.isCopied ? `copied: claude attach ${row.id}` : 'no clipboard here'),
                   )
                 }),
-                key('o', () => (row?.pr ? void $.process.run(['open', row.pr.url]) : $.ui.toast('no pull request linked'))),
-                key('w', () => (row?.remote ? void $.process.run(['open', row.remote]) : $.ui.toast('no claude.ai/code page for this session'))),
+                key('o', () => (row?.pr ? void openInBrowser($, row.pr.url) : $.ui.toast('no pull request linked'))),
+                key('w', () => (row?.remote ? void openInBrowser($, row.remote) : $.ui.toast('no claude.ai/code page for this session'))),
                 key('q', () => void $.ui.close({ id: PANE })),
               ]
 
