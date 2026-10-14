@@ -61,6 +61,14 @@ fine to run mid-work. Push, then run `gh signoff`. gh-signoff also refuses a
 dirty working tree, since it can't vouch for commits that don't match what
 you tested.
 
+### From a fork
+
+Setting a status takes write access to this repo, so a maintainer signs off
+PRs from forks. Open your PR against `jordanbyron/claude-inbox` and run
+`bin/ci` for your own feedback. Any signoff it sets lands on your fork, not
+on the PR. A maintainer reads the PR, checks it out, and runs `bin/ci` to sign
+it off. Each push you make after that needs another run.
+
 While iterating:
 
 ```sh
