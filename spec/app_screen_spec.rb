@@ -417,6 +417,87 @@ RSpec.describe ClaudeInbox::App do
     end
   end
 
+  it "says on U that the update check is off when there is no updater" do
+    press(app, "U")
+    expect(app).to paint("update check is off").in_status_line
+  end
+
+  describe "a newer release" do
+    let(:tmp) { Dir.mktmpdir }
+    let(:out) { StringIO.new }
+    let(:execs) { [] }
+    let(:fetch) { ->(_) { '{"version":"0.6.0"}' } }
+    let(:install) { ["Successfully installed claude-inbox-0.6.0\n", true] }
+    let(:updater) do
+      ClaudeInbox::Updater.new(
+        checkout: false, version: "0.5.0", cache_path: File.join(tmp, "update.json"), fetch: fetch,
+        run: ->(*) { ClaudeInbox::Subprocess::Result.new(install[0], "", instance_double(Process::Status, success?: install[1])) },
+        exec: ->(*argv) { execs << argv }
+      )
+    end
+    let(:app) do
+      described_class.new(
+        client: client, store: store, pull_requests: pull_requests,
+        rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
+        terminal: terminal, input: StringIO.new, out: out, color: false, queue: queue,
+        updater: updater, argv: ["--listen-lan"]
+      )
+    end
+
+    # The first poll's landing takes "polling…" out of the header's slot.
+    before { queue << [:sessions] }
+
+    after { FileUtils.remove_entry(tmp) }
+
+    it "offers it in the header, behind any notice, and U installs it and relaunches with the same arguments" do
+      expect(wait_for { screen(app).first.include?("v0.6.0 available · U updates") }).to be(true)
+      press(app, "x")
+      expect(app).to paint("settled — u brings it back").in_status_line
+      expect(app).not_to paint("v0.6.0 available").in_status_line
+
+      press(app, "U")
+      expect(out.string).to include("Installing claude-inbox 0.6.0 over 0.5.0...", "Successfully installed")
+      expect(execs).to eq([["claude-inbox", "--listen-lan"]])
+      expect(terminal.pauses).to eq(0)
+    end
+
+    it "holds a failed install's error on screen, then relaunches this version rather than stay at the shell" do
+      install.replace(["ERROR:  Could not find a valid gem 'claude-inbox'", false])
+      expect(wait_for { screen(app).first.include?("U updates") }).to be(true)
+      press(app, "U")
+      expect(out.string).to include("Could not find a valid gem")
+      expect(terminal.pauses).to eq(1)
+      expect(execs).to eq([["claude-inbox", "--listen-lan"]])
+    end
+
+    context "when the check cannot reach rubygems.org" do
+      let(:fetch) { ->(_) { raise ClaudeInbox::Updater::Error, "rubygems.org is unreachable" } }
+
+      it "keeps the header quiet and lets U say why" do
+        expect(wait_for {
+          press(app, "U")
+          screen(app).first.include?("couldn't check for updates: rubygems.org is unreachable")
+        }).to be(true)
+        expect(screen(app).first).not_to include("⚠")
+        expect(execs).to be_empty
+      end
+    end
+
+    context "when this is the latest release" do
+      let(:fetch) { ->(_) { '{"version":"0.5.0"}' } }
+
+      it "shows nothing, and U says so" do
+        expect(wait_for {
+          press(app, "U")
+          screen(app).first.include?("up to date")
+        }).to be(true)
+        expect(screen(app).first).not_to include("U updates")
+        expect(execs).to be_empty
+        expect(out.string).to be_empty
+      end
+    end
+  end
+
   describe "alias and pull request editors" do
     it "seed their buffer from the store, so reopening shows what was saved" do
       store.set_alias("f23c8673", "auth spike")

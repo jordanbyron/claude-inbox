@@ -91,6 +91,7 @@ Vim bindings. Arrows and the mouse work too.
 | `Ctrl-x` | delete the session, transcript and worktree for good |
 | `/` | filter; `Enter` keeps it, `Esc` clears |
 | `R` | poll now |
+| `U` | update claude-inbox when the header says a newer one is out |
 | `q` | quit |
 
 `X` and `Ctrl-x` both ask for `y` first.

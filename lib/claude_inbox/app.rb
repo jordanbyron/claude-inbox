@@ -25,6 +25,7 @@ require_relative "snapshot"
 require_relative "switch"
 require_relative "trust"
 require_relative "mod"
+require_relative "updater"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
@@ -34,14 +35,17 @@ module ClaudeInbox
     # so both are off unless `bin/claude-inbox` switches them on.
     def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
       rate_limits: RateLimits.new, reaper: Reaper.disabled, snapshot: Snapshot.disabled, switch: Switch.disabled,
-      actions: Actions.disabled, listen: nil, out: $stdout, input: $stdin, color: true, trust: Trust.method(:projects),
-      terminal: Terminal.new(out, input), queue: Queue.new, pane_offer: Mod::Offer.disabled)
+      actions: Actions.disabled, listen: nil, updater: nil, argv: [], out: $stdout, input: $stdin, color: true,
+      trust: Trust.method(:projects), terminal: Terminal.new(out, input), queue: Queue.new, pane_offer: Mod::Offer.disabled)
       @client = client
       @store = store
       @snapshot = snapshot
       @switch = switch
       @rate_limits = rate_limits
       @terminal = terminal
+      @updater = updater
+      @argv = argv
+      @out = out
       @color = color
       @trust = trust
       @renderer = Renderer.new(color: color)
@@ -86,6 +90,7 @@ module ClaudeInbox
     end
 
     def step(input = nil)
+      check_for_update unless @update_status
       drain_queue
       @logs.tick
       if @resize
@@ -127,6 +132,7 @@ module ClaudeInbox
           @error = nil
         when :error then @error = rest[0]
         when :notice then notice(rest[0])
+        when :update then update_checked(*rest)
         when :select then @pending_select = rest[0]
         when :attach then attach(rest[0])
         when :form_started then @modal = nil if @modal.equal?(rest[0])
@@ -209,7 +215,48 @@ module ClaudeInbox
     def status_text(now)
       return @notice[0] if @notice && now < @notice[1]
       return "⚠ #{@error}" if @error
-      "polling…" unless @last_poll
+      return "polling…" unless @last_poll
+      "#{@update.notice} · U updates" if @update
+    end
+
+    # ----- updates ----------------------------------------------------------
+
+    # Once, on the first step: a stale cache means a network round trip, so
+    # it runs off the main thread. A laptop that is offline stays quiet
+    # rather than show an error at every launch; U says what went wrong.
+    def check_for_update
+      @update_status = @updater ? "checking for updates…" : "update check is off — claude-inbox update installs the latest"
+      return unless @updater
+      in_background do
+        @queue << [:update, @updater.check]
+      rescue Updater::Error => e
+        @queue << [:update, nil, e.message]
+      end
+    end
+
+    def update_checked(update, failure = nil)
+      @update = update
+      @update_status = failure ? "couldn't check for updates: #{failure}" : "up to date"
+    end
+
+    # The install prints on the real screen, and the relaunch replaces this
+    # process. A failed install relaunches this version instead, once its
+    # error has been read, rather than leave the shell showing.
+    def update_inbox
+      return notice(@update_status) unless @update
+      @terminal.release do
+        @out.puts @update.installing
+        applied = @updater.apply
+        @out.puts applied.output unless applied.output.empty?
+        @terminal.pause unless applied.success?
+        relaunch
+      end
+    end
+
+    def relaunch
+      @updater.relaunch(@argv)
+    rescue SystemCallError => e
+      @error = "relaunch failed: #{e.message}"
     end
 
     def filtered(sections = @store.sections) = sections.matching(@filter&.to_s)
@@ -350,6 +397,7 @@ module ClaudeInbox
       when :stop then open_confirm(:stop)
       when :delete then open_confirm(:delete)
       when :refresh then @poller.soon
+      when :update then update_inbox
       when :toggle_peek then toggle_peek
       when :new_session then open_new_session
       when :remote_pairing then @modal = @listener.pairing_dialog

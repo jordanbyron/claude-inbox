@@ -26,6 +26,10 @@ module ClaudeInbox
     # nil for a gem.
     Update = Data.define(:kind, :current, :latest, :behind) do
       def notice = (kind == :gem) ? "v#{latest} available" : "main is #{behind} behind"
+
+      def installing
+        (kind == :gem) ? "Installing claude-inbox #{latest} over #{current}..." : "main is #{behind} behind, fast-forwarding to #{latest}..."
+      end
     end
 
     Applied = Data.define(:success, :output) do
@@ -62,18 +66,27 @@ module ClaudeInbox
     # network at most once a day unless forced: what it last heard is kept in
     # the cache file, and a check within the day compares against that.
     def check(force: false)
-      cached = force ? nil : fresh_cache
-      latest = cached || fetch_latest
-      write_cache(latest) unless cached
-      @checkout ? checkout_update(latest) : gem_update(latest)
+      known = force ? nil : fresh_cache
+      latest = known || fetch_latest
+      write_cache(latest) unless known
+      compare(latest)
+    end
+
+    # What a check within the day found, without asking the network: nil
+    # when it found nothing newer, or there was no check.
+    def cached
+      latest = fresh_cache
+      compare(latest) if latest
     end
 
     # Installs the latest: `gem install`, or a fast-forward of main, refused
-    # on another branch or a dirty tree rather than merged over.
+    # on another branch or a dirty tree rather than merged over. Success
+    # drops the cache, so a launch that auto-updates cannot apply the same
+    # version again and again should the launcher still resolve to this one.
     def apply
-      return apply_checkout if @checkout
-      result = @run.call(Gem.ruby, File.join(RbConfig::CONFIG["bindir"], "gem"), "install", "claude-inbox")
-      Applied.new(success: result.success?, output: result.out + result.err)
+      applied = @checkout ? apply_checkout : install_gem
+      FileUtils.rm_f(@cache_path) if applied.success?
+      applied
     end
 
     # Replaces this process with a fresh launch on the same arguments. The
@@ -87,6 +100,13 @@ module ClaudeInbox
     end
 
     private
+
+    def compare(latest) = @checkout ? checkout_update(latest) : gem_update(latest)
+
+    def install_gem
+      result = @run.call(Gem.ruby, File.join(RbConfig::CONFIG["bindir"], "gem"), "install", "claude-inbox")
+      Applied.new(success: result.success?, output: result.out + result.err)
+    end
 
     def gem_update(latest)
       return nil unless Gem::Version.new(latest) > Gem::Version.new(@version)
