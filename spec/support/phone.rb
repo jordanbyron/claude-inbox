@@ -2,22 +2,22 @@
 
 # A phone talking to the Listener: each request goes over as raw HTTP on a
 # FakeSocket, and the answer written back comes out as a Reply. The token
-# and Host it was given go on every request that doesn't name its own. A
+# it was given, and HOST, go on every request that doesn't name its own. A
 # String body goes as is; anything else as JSON.
 class Phone
   VIA = "192.168.1.30"
+  HOST = "127.0.0.1:7433"
 
-  def initialize(server, token: nil, host: "127.0.0.1:7433")
+  def initialize(server, token: nil)
     @server = server
     @token = token
-    @host = host
   end
 
   def get(path, **opts) = request("GET", path, **opts)
 
   def start(params, **opts) = request("POST", "/api/sessions", params, **opts)
 
-  def request(verb, path, body = nil, token: @token, host: @host, type: "application/json", headers: {})
+  def request(verb, path, body = nil, token: @token, host: HOST, type: "application/json", headers: {})
     body = JSON.generate(body) if body && !body.is_a?(String)
     lines = ["#{verb} #{path} HTTP/1.1"]
     lines << "Host: #{host}" if host
