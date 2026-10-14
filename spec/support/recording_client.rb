@@ -30,12 +30,10 @@ class RecordingClient < ClaudeInbox::FixtureClient
     @gate&.pop
     raise ClaudeInbox::AgentsClient::Error, "rm failed: worktree has unpushed commits" if @refuse.include?(id)
     removed << id
-    true
   end
 
   def stop(id)
     stopped << id
-    true
   end
 
   def attach(id)
