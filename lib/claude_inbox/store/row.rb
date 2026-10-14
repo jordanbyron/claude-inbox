@@ -71,7 +71,7 @@ module ClaudeInbox
       def settled?
         return true if hand_settled?
         return false if UNSETTLEABLE.include?(session.effective_state)
-        started = session.started_at.to_i
+        started = session.created_at.to_i
         ours = session.prs.select(&:known?).reject { |pr| pr.resolved_before?(started) }
         ours.any? && ours.all? { |pr| pr.resolved_since?(started) }
       end

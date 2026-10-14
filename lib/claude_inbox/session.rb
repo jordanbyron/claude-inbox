@@ -78,6 +78,10 @@ module ClaudeInbox
     # From `/color`; interactive sessions have no job file, so never one.
     def color = job_state&.color
 
+    # A respawn moves `started_at` to the new process; the job file keeps
+    # when the session itself began.
+    def created_at = job_state&.created_at || started_at
+
     # The prompt this session was started with.
     def intent = job_state&.intent
 
