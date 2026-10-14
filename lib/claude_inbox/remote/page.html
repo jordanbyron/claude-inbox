@@ -124,6 +124,9 @@ code { font: 15px ui-monospace, SFMono-Regular, Menlo, monospace; }
   <label for="permission_mode">Permissions</label>
   <select id="permission_mode"></select>
   <p class="error" id="error-permission_mode"></p>
+  <label for="color">Color</label>
+  <select id="color"></select>
+  <p class="error" id="error-color"></p>
 
   <div class="toggles">
     <label class="toggle">Worktree <input type="checkbox" id="worktree" switch></label>
@@ -152,7 +155,7 @@ code { font: 15px ui-monospace, SFMono-Regular, Menlo, monospace; }
 const MAX_IMAGES = 8;
 const MAX_BODY = 16777216;
 const LONG_EDGE = 2000;
-const FIELDS = ["prompt", "name", "cwd", "model", "effort", "permission_mode", "images"];
+const FIELDS = ["prompt", "name", "cwd", "model", "effort", "permission_mode", "color", "images"];
 const NO_ANSWER = "no answer from the inbox. Is it open with --listen-lan, and is the Mac awake?";
 const REJECTED = "token rejected: press N in the inbox and pair again";
 const TOKEN = /^[A-Za-z0-9_-]{32,}$/;
@@ -223,9 +226,9 @@ function fill() {
   $("cwd").replaceChildren(...dirs.map((d) => new Option(d.label, d.path)), new Option("another directory…", ""));
   $("cwd").value = typed || !dirs.length ? "" : last || dirs[0].path;
   if (typed) $("cwd-other").value = last;
-  for (const [id, list] of [["model", options.models], ["effort", options.efforts], ["permission_mode", options.permission_modes]]) {
+  for (const [id, list] of [["model", options.models], ["effort", options.efforts], ["permission_mode", options.permission_modes], ["color", options.colors]]) {
     const picked = $(id).value;
-    $(id).replaceChildren(...(list || []).map((v) => new Option(v, v)));
+    $(id).replaceChildren(...(list || []).map((v) => new Option(id === "color" && v === "default" ? "none" : v, v)));
     if ((list || []).includes(picked)) $(id).value = picked;
   }
   relabel();
@@ -380,7 +383,7 @@ async function start() {
     const fields = {
       prompt: $("prompt").value, name: $("name").value, cwd: cwd(),
       model: $("model").value, effort: $("effort").value, permission_mode: $("permission_mode").value,
-      worktree: $("worktree").checked, remote: remote
+      color: $("color").value, worktree: $("worktree").checked, remote: remote
     };
     const body = JSON.stringify({...fields, images: images.map((image) => ({data: image.url.slice(image.url.indexOf(",") + 1)}))});
     const size = new Blob([body]).size;

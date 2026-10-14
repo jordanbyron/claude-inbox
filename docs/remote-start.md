@@ -130,7 +130,8 @@ curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 
 The fields match the `n` form. `cwd` takes a path or a directory's label.
 
-- `prompt`, `name`, `cwd`, `model`, `effort`, `permission_mode`, `worktree`
+- `prompt`, `name`, `cwd`, `model`, `effort`, `permission_mode`, `worktree`,
+  `color`
 - `remote`, which follows "Enable Remote Control for all sessions" in
   `/config` when left out, as the form does
 - `images`, up to eight `{"data": "<base64>"}` PNG, JPEG, GIF or WebP images

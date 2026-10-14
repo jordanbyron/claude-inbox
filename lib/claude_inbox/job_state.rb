@@ -4,7 +4,8 @@ require "json"
 
 module ClaudeInbox
   # What the daemon writes about a background session in
-  # ~/.claude/jobs/<id>/state.json. The only reader of that file.
+  # ~/.claude/jobs/<id>/state.json. The only reader of that file, and the
+  # only writer: a new session's color.
   #
   # `claude agents --json` reports one word, `state`, and "working" covers two
   # different situations: the agent is thinking, or the agent is idle and
@@ -46,6 +47,19 @@ module ClaudeInbox
     def self.read(id, jobs_dir:)
       return nil unless id
       new(JSON.parse(File.read(File.join(jobs_dir, id, "state.json"))))
+    rescue JSON::ParserError, SystemCallError
+      nil
+    end
+
+    # The job file is there by the time `claude --bg` returns, and the daemon
+    # updates it read-modify-write, so the color stays through work, stop and
+    # respawn (checked on 2.1.296). A color is cosmetic: failing to write one
+    # must not report a started session as failed.
+    # ponytail: a daemon write racing this one can drop the color; re-apply on poll if that shows up.
+    def self.write_color(id, color, jobs_dir:)
+      path = File.join(jobs_dir, id, "state.json")
+      File.write("#{path}.tmp", JSON.generate(JSON.parse(File.read(path)).merge("color" => color)))
+      File.rename("#{path}.tmp", path)
     rescue JSON::ParserError, SystemCallError
       nil
     end

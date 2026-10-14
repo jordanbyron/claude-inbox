@@ -66,10 +66,16 @@ module ClaudeInbox
     MODELS = %w[default fable opus sonnet haiku].freeze
     EFFORTS = %w[default low medium high xhigh max].freeze
     PERMISSION_MODES = %w[default acceptEdits auto plan bypassPermissions].freeze
+    # The colors `/color` offers, in its order.
+    COLORS = %w[default red blue green yellow purple orange pink cyan].freeze
 
-    # Start a background session. Returns its short id.
-    def spawn(prompt:, cwd:, **opts)
-      start_bg(self.class.spawn_args(@bin, prompt: prompt, **opts), cwd, "claude --bg")
+    # Start a background session. Returns its short id. `claude --bg` takes
+    # no color, and `/color` refuses a prompt after the color, so the color
+    # goes into the job file the way `/color` would put it there.
+    def spawn(prompt:, cwd:, color: nil, **opts)
+      id = start_bg(self.class.spawn_args(@bin, prompt: prompt, **opts), cwd, "claude --bg")
+      JobState.write_color(id, color, jobs_dir: @jobs_dir) if color
+      id
     end
 
     # How a prompt attaches a file: the same @ mention the CLI's own prompt

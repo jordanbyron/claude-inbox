@@ -58,6 +58,7 @@ module ClaudeInbox
           models: AgentsClient::MODELS,
           efforts: AgentsClient::EFFORTS,
           permission_modes: AgentsClient::PERMISSION_MODES & @allowed_modes,
+          colors: AgentsClient::COLORS,
           dirs: paths.map { |path| {path: path, label: SessionRequest.label(path, paths), defaults: @settings.call(path).to_h} }
         }
       end

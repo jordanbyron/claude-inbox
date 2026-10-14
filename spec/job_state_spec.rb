@@ -98,6 +98,16 @@ RSpec.describe ClaudeInbox::JobState do
     expect(described_class.new({}).color).to be_nil
   end
 
+  it "writes a color into the job file, keeping the rest, and leaves a missing file alone" do
+    Dir.mktmpdir do |dir|
+      FileUtils.mkdir_p(File.join(dir, "aaa11111"))
+      File.write(File.join(dir, "aaa11111", "state.json"), JSON.generate("intent" => "go", "color" => "red"))
+      described_class.write_color("aaa11111", "pink", jobs_dir: dir)
+      expect(JSON.parse(File.read(File.join(dir, "aaa11111", "state.json")))).to eq("intent" => "go", "color" => "pink")
+      expect(described_class.write_color("gone0000", "pink", jobs_dir: dir)).to be_nil
+    end
+  end
+
   it "reads the prompt the session was started with" do
     js = described_class.new({"intent" => "Look into the TIAA gateway 403s"})
     expect(js.intent).to eq("Look into the TIAA gateway 403s")
