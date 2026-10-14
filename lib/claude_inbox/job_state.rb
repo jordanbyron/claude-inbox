@@ -59,7 +59,7 @@ module ClaudeInbox
       @tempo = hash["tempo"]
       @kinds = (hash["fan"] || []).filter_map { |f| f["kind"] }
       @tasks = (hash["inFlight"] || {})["tasks"].to_i
-      @pr_urls = (hash["children"] || []).select { |c| c["kind"] == "pr" && c["href"] }.map { |c| c["href"] }
+      @pr_urls = (hash["children"] || []).filter_map { |c| c["href"] if c["kind"] == "pr" }
       @color = hash["color"]
       @intent = hash["intent"]
       @bridge_id = hash["bridgeSessionId"]
