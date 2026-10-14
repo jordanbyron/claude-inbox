@@ -98,7 +98,10 @@ CI.run do
 
   step "Mod: tests", "claude", "plugin", "test", "mod"
 
-  head_is_pushed = system("git merge-base --is-ancestor HEAD @{push}", out: File::NULL, err: File::NULL)
+  # A fork's PR checked out with `gh pr checkout` has no @{push}, so ask
+  # GitHub whether HEAD is the PR's head instead.
+  head_is_pushed = system("git merge-base --is-ancestor HEAD @{push}", out: File::NULL, err: File::NULL) ||
+    `gh pr view --json headRefOid --jq .headRefOid 2>/dev/null`.strip == `git rev-parse HEAD`.strip
 
   if !success?
     failure "Signoff: CI failed. Do not merge.", "Fix the issues and try again."
