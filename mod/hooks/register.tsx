@@ -37,6 +37,7 @@ export type SnapshotRow = {
   line?: string
   wake_at?: number | 'until_woken'
   remote?: string
+  color?: string
   pr?: { short?: string; state?: string; url?: string }
 }
 type Snapshot = { written_at?: number; sections?: Partial<Record<Section, SnapshotRow[]>> }
@@ -52,6 +53,10 @@ const TITLE: Record<Section, string> = { pinned: 'Pinned', needs_you: 'Needs you
 const GLYPH: Record<string, string> = { blocked: '●', failed: '✗', working: '◐', idle: '◌', done: '✓', stopped: '✓' }
 const COLOR: Record<string, string> = { blocked: 'red', failed: 'red', working: 'green', idle: 'cyan' }
 const PR_COLOR: Record<string, string> = { open: 'green', draft: 'yellow', merged: 'magenta', closed: 'red' }
+// `/color`'s names as the gem's Palette draws them: purple is ansi magenta, orange and pink are 256-color 208 and 205.
+const TINT: Record<string, string> = {
+  red: 'red', green: 'green', yellow: 'yellow', blue: 'blue', purple: 'magenta', cyan: 'cyan', orange: '#ff8700', pink: '#ff5faf',
+}
 const SNOOZE: Record<string, { choice: Snooze; label: string }> = {
   '1': { choice: 'm15', label: '15m' },
   '2': { choice: 'h1', label: '1h' },
@@ -134,6 +139,7 @@ export function rowOf(section: Section, one: SnapshotRow): InboxRow {
     line: one.line,
     wakeAt: one.wake_at,
     remote: one.remote,
+    color: one.color,
     pr,
   }
 }
@@ -438,10 +444,15 @@ export const register: Register = (on, options) => {
               }
               const one = item.row
               const isQuiet = isFold(one.section)
+              const tint = one.color ? TINT[one.color] : undefined
               return (
                 <Box key={viewKey(item)} flexDirection="column">
                   <Box>
-                    <Text color={isHere ? 'yellow' : undefined}>{isHere ? '› ' : '  '}</Text>
+                    <Text color={isHere ? 'yellow' : undefined}>{isHere ? '›' : ' '}</Text>
+                    {/* A Button takes no color, so a session's /color is a stripe at the row's edge, not on its label. */}
+                    <Text color={tint} dimColor={isQuiet}>
+                      {tint ? '▎' : ' '}
+                    </Text>
                     <Text color={COLOR[one.state]} dimColor={isQuiet || one.state === 'done'}>
                       {GLYPH[one.state] ?? '·'}{' '}
                     </Text>
