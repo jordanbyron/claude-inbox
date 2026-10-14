@@ -11,7 +11,7 @@ module ClaudeInbox
     Event = Struct.new(:kind, :row, :col)
 
     # A raw keypress can glue several reports together the same way a fast
-    # "esc gg" glues onto one read (see App#split_keys), so this scans
+    # "esc gg" glues onto one read (see Input#split_keys), so this scans
     # rather than matching once.
     def self.events(raw)
       raw.scan(SEQUENCE).filter_map do |cb, col, row, type|

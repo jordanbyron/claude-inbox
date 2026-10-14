@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require "tty-reader"
 require_relative "agents_client"
 require_relative "debug"
 require_relative "dialog"
+require_relative "input"
 require_relative "text_buffer"
 require_relative "store"
 require_relative "renderer"
@@ -12,9 +12,7 @@ require_relative "logs"
 require_relative "peek"
 require_relative "keymap"
 require_relative "remote/listener"
-require_relative "mouse"
 require_relative "new_session_form"
-require_relative "paste"
 require_relative "pull_requests"
 require_relative "reaper"
 require_relative "poller"
@@ -62,8 +60,7 @@ module ClaudeInbox
       @color = color
       @trust = trust
       @renderer = Renderer.new(color: color)
-      @input = input
-      @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
+      @input = Input.new(input, out)
       @queue = queue
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests,
         reaper: reaper, queue: @queue, snapshot: snapshot, actions: actions)
@@ -76,7 +73,6 @@ module ClaudeInbox
       @top = 0
       @expanded = Hash.new(false)
       @keymap = Keymap.new
-      @paste = Paste.new
       @tick = 0
       @modal = nil
       @filter = nil
@@ -114,7 +110,7 @@ module ClaudeInbox
       handle_input(input) if input
       # A paste arrives a character per read and shows nothing until it
       # closes, so a frame per character would only stall a long one.
-      render unless @paste.pasting?
+      render unless @input.pasting?
     end
 
     private
@@ -159,27 +155,16 @@ module ClaudeInbox
     # ----- main loop --------------------------------------------------------
 
     def main_loop
-      step(@paste.pasting? ? read_pasted : @reader.read_keypress(echo: false, raw: false, nonblock: true)) until @quit
-    end
-
-    # As much of an open paste as has arrived, read straight off the tty:
-    # the reader switches echo off and back on around every character, and
-    # on a long paste that is most of the wait.
-    def read_pasted
-      return nil unless @input.wait_readable(0.1)
-      out = +""
-      while out.size < 65_536 && @input.wait_readable(0) && (c = @input.getc)
-        out << c
-      end
-      out
+      step(@input.read) until @quit
     end
 
     def handle_input(raw)
-      @paste.feed(raw).each do |kind, text|
-        next handle_paste(text) if kind == :paste
-        events = Mouse.events(text)
-        next events.each { |e| handle_mouse(e) } if events.any?
-        split_keys(text).each { |k| handle_key(k) }
+      @input.events(raw).each do |kind, *event|
+        case kind
+        when :paste then handle_paste(*event)
+        when :mouse then handle_mouse(*event)
+        when :key then handle_key(*event)
+        end
       end
     end
 
@@ -190,7 +175,7 @@ module ClaudeInbox
     def handle_paste(text)
       return @modal.paste(text) if @modal.is_a?(NewSessionForm)
       typing = @modal ? @modal.is_a?(Dialog::Prompt) : filter_editing?
-      text.each_char { |c| handle_key(c) } if typing
+      @input.typed(text).each { |name, c| handle_key(name, c) } if typing
     end
 
     def render
@@ -237,21 +222,7 @@ module ClaudeInbox
 
     # ----- keys -------------------------------------------------------------
 
-    def key_name(key)
-      @reader.console.keys[key] || key
-    end
-
-    # tty-reader glues ESC to whatever arrives within 100ms, so a fast
-    # "esc gg" comes in as one unknown key "\egg". Vim hands make that
-    # constantly. Unknown ESC-prefixed strings become ESC + the rest.
-    def split_keys(key)
-      return [key] if key.size <= 1 || @reader.console.keys.key?(key)
-      return [key] unless key.start_with?("\e")
-      ["\e"] + key[1..].chars
-    end
-
-    def handle_key(key)
-      name = key_name(key)
+    def handle_key(name, key)
       return handle_modal_key(name, key) if @modal
       return handle_line_key(name, key) if filter_editing?
 
