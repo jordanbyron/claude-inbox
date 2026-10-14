@@ -27,12 +27,14 @@ require_relative "trust"
 require_relative "mod"
 require_relative "updater"
 require_relative "app/updating"
+require_relative "app/filtering"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
   # child process that takes over the terminal.
   class App
     include Updating
+    include Filtering
 
     # The reaper deletes sessions and the listener lets other machines in,
     # so both are off unless `bin/claude-inbox` switches them on.
@@ -69,7 +71,6 @@ module ClaudeInbox
       @paste = Paste.new
       @tick = 0
       @modal = nil
-      @filter = nil
       @last_poll = nil
       @quit = false
       @resize = false
@@ -178,7 +179,7 @@ module ClaudeInbox
     # "y" answers a confirm.
     def handle_paste(text)
       return @modal.paste(text) if @modal.is_a?(NewSessionForm)
-      typing = @modal ? @modal.is_a?(Dialog::Prompt) : @filter_editing
+      typing = @modal ? @modal.is_a?(Dialog::Prompt) : filter_editing?
       text.each_char { |c| handle_key(c) } if typing
     end
 
@@ -195,7 +196,7 @@ module ClaudeInbox
       view = Renderer::View.new(
         width: width, height: height, now: now, selected: @selected&.key, top: @top, expanded: @expanded,
         peek: @peek.view(sections.row(@selected), body_h), modal: modal_lines(width), screen: screen_lines(width, body_h),
-        status: status_text(now), usage: @rate_limits.windows(now), filter: @filter, filter_editing: @filter_editing,
+        status: status_text(now), usage: @rate_limits.windows(now), filter: filter, filter_editing: filter_editing?,
         tick: @tick / 2, loading: loading_for, listening: @listener.snapshot
       )
       frame = @renderer.frame(sections, view)
@@ -221,8 +222,6 @@ module ClaudeInbox
       return "polling…" unless @last_poll
       update_notice
     end
-
-    def filtered(sections = @store.sections) = sections.matching(@filter&.to_s)
 
     def ensure_selection(sections)
       stops = sections.selections(@expanded)
@@ -293,7 +292,7 @@ module ClaudeInbox
     def handle_key(key)
       name = key_name(key)
       return handle_modal_key(name, key) if @modal
-      return handle_line_key(name, key) if @filter_editing
+      return handle_line_key(name, key) if filter_editing?
 
       action = @keymap.press(name, key)
       perform(action) if action
@@ -303,7 +302,7 @@ module ClaudeInbox
     # the normal action table (see handle_key); mouse input defers to the
     # same rule rather than reaching past whatever has focus.
     def handle_mouse(event)
-      return if @modal || @filter_editing
+      return if @modal || filter_editing?
       case event.kind
       when :click then click_row(event.row, event.col)
       when :scroll_up then perform(:up)
@@ -617,29 +616,6 @@ module ClaudeInbox
         return notice("that's not a github.com pull request url")
       end
       @modal = nil
-    end
-
-    # ----- filter line --------------------------------------------------------
-
-    def start_filter
-      @filter ||= TextBuffer.new
-      @filter_editing = true
-    end
-
-    def clear_filter
-      @filter = nil
-      @filter_editing = false
-    end
-
-    def handle_line_key(name, key)
-      case name
-      when :escape then clear_filter
-      when :return, :enter then @filter_editing = false
-      when :backspace, :ctrl_h
-        @filter.empty? ? clear_filter : @filter.press(name, key)
-      else
-        @filter.press(name, key)
-      end
     end
   end
 end
