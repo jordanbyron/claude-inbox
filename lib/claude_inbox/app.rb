@@ -29,6 +29,7 @@ require_relative "updater"
 require_relative "app/updating"
 require_relative "app/filtering"
 require_relative "app/triaging"
+require_relative "app/navigating"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
@@ -37,6 +38,7 @@ module ClaudeInbox
     include Updating
     include Filtering
     include Triaging
+    include Navigating
 
     # The reaper deletes sessions and the listener lets other machines in,
     # so both are off unless `bin/claude-inbox` switches them on.
@@ -141,7 +143,7 @@ module ClaudeInbox
         when :error then @error = rest[0]
         when :notice then notice(rest[0])
         when :update then update_checked(*rest)
-        when :select then @pending_select = rest[0]
+        when :select then select_later(rest[0])
         when :attach then attach(rest[0])
         when :form_started then @modal = nil if @modal.equal?(rest[0])
         when :form_failed then form_failed(*rest)
@@ -204,9 +206,7 @@ module ClaudeInbox
         tick: @tick / 2, loading: loading_for, listening: @listener.snapshot
       )
       frame = @renderer.frame(sections, view)
-      @row_items = frame.items
-      @list_width = frame.list_width
-      @top = frame.top
+      placed(frame)
       @terminal.paint(frame.lines)
       dt = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
       Debug.log("render #{(dt * 1000).round}ms") if dt > 0.05
@@ -226,27 +226,6 @@ module ClaudeInbox
       return "polling…" unless @last_poll
       update_notice
     end
-
-    def ensure_selection(sections)
-      stops = sections.selections(@expanded)
-      pending = @pending_select && Store::Selection.row(@pending_select)
-      if pending && stops.include?(pending)
-        select(pending)
-        @pending_select = nil
-        return
-      end
-      return if stops.include?(@selected)
-      select(stops.first)
-    end
-
-    def select(selection)
-      @selected = selection
-      @peek.select(selected_session)
-    end
-
-    def session_for(key) = @store.sessions.find { |s| s.key == key }
-
-    def selected_session = session_for(@selected&.key)
 
     # Guard for attach/stop: refuse politely on a terminal or remote row.
     def require_actionable
@@ -298,24 +277,6 @@ module ClaudeInbox
       end
     end
 
-    # Clicking a row selects it and attaches, same as landing on it with
-    # j/k and pressing Enter — activate already knows how to expand a fold
-    # or refuse a terminal/remote row, so this doesn't repeat that.
-    def click_row(row, col)
-      return if @list_width && col > @list_width
-      item = row_item_at(row)
-      return unless item
-      select(item)
-      activate
-    end
-
-    # The wrapped detail line under a two-line row ("↳ ~/code/x") carries
-    # no item of its own; a click there resolves to the row above it.
-    def row_item_at(row)
-      idx = row - 1
-      @row_items[idx] || (@row_items[idx - 1] if idx > 0 && @row_items[idx - 1]&.row?)
-    end
-
     def perform(action)
       case action
       when :quit then @quit = true
@@ -335,7 +296,7 @@ module ClaudeInbox
       when :collapse then collapse
       when :fold_open then set_expanded(true)
       when :fold_close then set_expanded(false)
-      when :fold_toggle then set_expanded(!@expanded[current_fold_section])
+      when :fold_toggle then toggle_expanded
       when :snooze then open_snooze_menu
       when :wake then wake_selected
       when :toggle_pin then toggle_pin_selected
@@ -356,46 +317,16 @@ module ClaudeInbox
       end
     end
 
-    def page = [Renderer.body_height(@terminal.size[1]), 1].max
-
-    def move(delta)
-      stops = filtered.selections(@expanded)
-      return if stops.empty?
-      idx = stops.index(@selected) || 0
-      select(stops[(idx + delta).clamp(0, stops.size - 1)])
-    end
-
-    # Tab / Shift-Tab: first selectable row of the next / previous section.
-    def jump_section(dir)
-      sections = filtered
-      heads = sections.heads(@expanded)
-      return if heads.empty?
-      current = sections.section_of(@selected)
-      idx = heads.index { |name, _| name == current } || -1
-      select(heads[(idx + dir) % heads.size].last)
-    end
-
-    # The foldable section the cursor is currently on or inside, if any.
-    def current_fold_section
-      name = filtered.section_of(@selected)
-      name if Store::FOLDABLE_SECTIONS.include?(name)
-    end
-
-    def set_expanded(value)
-      name = current_fold_section
-      @expanded[name] = value if name
-    end
-
     # vim-ish "h": close whatever is open, innermost first.
     def collapse
       if @peek.open? then @peek.close
-      elsif (name = current_fold_section) && @expanded[name] then @expanded[name] = false
+      else set_expanded(false)
       end
       @terminal.invalidate
     end
 
     def activate
-      return @expanded[@selected.key] = true if @selected&.fold?
+      return set_expanded(true) if @selected&.fold?
       return @modal = Dialog::Confirm.new(:adopt, @selected.key) if selected_session&.remote?
       attach(@selected.key) if require_actionable
     end
