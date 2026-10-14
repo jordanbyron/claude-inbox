@@ -29,6 +29,26 @@ if ARGV.first == "install"
   exit
 end
 
+if ARGV.first == "update"
+  require "claude_inbox/updater"
+  updater = ClaudeInbox::Updater.new
+  begin
+    update = updater.check(force: true)
+  rescue ClaudeInbox::Updater::Error => e
+    abort "claude-inbox: #{e.message}"
+  end
+  unless update
+    puts((updater.kind == :gem) ? "claude-inbox #{ClaudeInbox::VERSION} is the latest release." : "main is up to date.")
+    exit
+  end
+  puts((update.kind == :gem) ? "Installing claude-inbox #{update.latest} over #{update.current}..." :
+    "main is #{update.behind} behind, fast-forwarding to #{update.latest}...")
+  applied = updater.apply
+  abort "claude-inbox: #{applied.output.strip}" unless applied.success?
+  puts((update.kind == :gem) ? "Installed claude-inbox #{update.latest}." : "main is at #{update.latest}.")
+  exit
+end
+
 require "claude_inbox/app"
 require "claude_inbox/config"
 require "claude_inbox/writer_lock"

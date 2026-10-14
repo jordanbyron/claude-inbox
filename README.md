@@ -18,6 +18,8 @@ gem install claude-inbox
 claude-inbox
 ```
 
+`claude-inbox update` installs the latest release.
+
 Put arguments you want on every launch in `~/.config/claude-inbox/config`.
 
 To add the pane to every Claude Code session:
