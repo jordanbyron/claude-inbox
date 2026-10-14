@@ -41,9 +41,9 @@ module ClaudeInbox
     # rather than rewrite a settings file it cannot read.
     def self.install(settings: SETTINGS, link: LINK, dir: DIR, force: false, command: COMMAND)
       self.link(link: link, dir: dir, force: true)
-      json = File.exist?(settings) ? JSON.parse(File.read(settings)) : {}
+      json = read_settings(settings)
       env = json["env"] ||= {}
-      dirs = env["CLAUDE_CODE_PLUGIN_DIRS"].to_s.split(File::PATH_SEPARATOR).map(&:strip).reject(&:empty?)
+      dirs = plugin_dirs(env["CLAUDE_CODE_PLUGIN_DIRS"])
       kept = dirs.reject { |d| force && d != link && plugin?(d) }
       wanted = kept.include?(link) ? kept : [*kept, link]
       options = json.dig("pluginConfigs", NAME, "options") || {}
@@ -66,8 +66,7 @@ module ClaudeInbox
     # worktree's included. A settings file it cannot read counts as yes, since
     # install would refuse to touch it.
     def self.installed?(settings: SETTINGS)
-      json = File.exist?(settings) ? JSON.parse(File.read(settings)) : {}
-      json.dig("env", "CLAUDE_CODE_PLUGIN_DIRS").to_s.split(File::PATH_SEPARATOR).any? { |d| plugin?(d.strip) }
+      plugin_dirs(read_settings(settings).dig("env", "CLAUDE_CODE_PLUGIN_DIRS")).any? { |d| plugin?(d) }
     rescue JSON::ParserError, Errno::EACCES
       true
     end
@@ -101,6 +100,10 @@ module ClaudeInbox
     rescue Errno::ENOENT, Errno::ENOTDIR, Errno::EACCES, JSON::ParserError
       false
     end
-    private_class_method :plugin?
+
+    def self.read_settings(path) = File.exist?(path) ? JSON.parse(File.read(path)) : {}
+
+    def self.plugin_dirs(value) = value.to_s.split(File::PATH_SEPARATOR).map(&:strip).reject(&:empty?)
+    private_class_method :plugin?, :read_settings, :plugin_dirs
   end
 end
