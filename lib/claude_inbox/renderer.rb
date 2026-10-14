@@ -242,7 +242,7 @@ module ClaudeInbox
         return [empty_state(width), []]
       end
       selected = view.selected
-      sections.each_section do |name, rows|
+      sections.each_pair do |name, rows|
         next if rows.empty?
         lines << "" << section_title(name, rows.size, width)
         items << nil << nil
