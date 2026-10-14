@@ -30,6 +30,7 @@ require_relative "app/triaging"
 require_relative "app/navigating"
 require_relative "app/attaching"
 require_relative "app/spawning"
+require_relative "app/browsing"
 
 module ClaudeInbox
   # Owns the terminal and the key loop. The only class allowed to spawn a
@@ -41,6 +42,7 @@ module ClaudeInbox
     include Navigating
     include Attaching
     include Spawning
+    include Browsing
 
     # The reaper deletes sessions and the listener lets other machines in,
     # so both are off unless `bin/claude-inbox` switches them on.
@@ -296,24 +298,6 @@ module ClaudeInbox
     end
 
     # ----- modals -----------------------------------------------------------
-
-    def open_pr
-      pr = selected_session&.pr
-      return notice("no pull request linked — P sets one") unless pr
-      open_in_browser(pr.url, pr.short)
-    end
-
-    def open_remote
-      url = selected_session&.remote_url
-      return notice("no claude.ai/code page for this session") unless url
-      open_in_browser(url, "claude.ai/code")
-    end
-
-    def open_in_browser(url, what)
-      opener = RUBY_PLATFORM.include?("darwin") ? "open" : "xdg-open"
-      notice("opening #{what}")
-      in_background { Subprocess.capture(opener, url) }
-    end
 
     # The new-session form takes the whole body; a Dialog is a box over it.
     def screen_lines(width, body_h)
