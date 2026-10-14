@@ -107,10 +107,10 @@ module ClaudeInbox
 
       def lines(_width, _caret)
         ["", *SKETCH, "",
-          "  📥 Every session, docked beside the transcript",
-          "  🔀 Switch sessions without leaving the one you're in",
-          "  💤 Snooze, pin and settle with the same keys",
-          "  🚪 /inbox opens it, ctrl+x tab focuses it",
+          "  • Every session, docked beside the transcript",
+          "  • Switch sessions without leaving the one you're in",
+          "  • Snooze, pin and settle with the same keys",
+          "  • /inbox opens it, ctrl+x tab focuses it",
           "",
           "      y  add it to Claude Code      esc  not now",
           "",
