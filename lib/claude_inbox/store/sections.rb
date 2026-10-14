@@ -4,9 +4,9 @@ module ClaudeInbox
   class Store
     # The Rows of one poll, grouped and ordered, and where the cursor may land among them.
     Sections = Struct.new(:pinned, :needs_you, :active, :snoozed, :settled) do
-      def each_section = members.each { |k| yield k, self[k] }
+      def each_section(&) = each_pair(&)
 
-      def all = members.flat_map { |k| self[k] }
+      def all = values.flatten(1)
 
       def row(selection)
         all.find { |r| r.key == selection.key } if selection&.row?
