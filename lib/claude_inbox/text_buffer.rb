@@ -37,8 +37,7 @@ module ClaudeInbox
 
     def initialize(text = "")
       @widths = Hash.new { |h, s| h[s] = Text.width(s) }
-      @g = text.grapheme_clusters
-      @cursor = @g.size
+      replace(text)
     end
 
     def to_s = @g.join
