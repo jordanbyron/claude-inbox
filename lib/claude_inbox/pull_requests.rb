@@ -57,11 +57,10 @@ module ClaudeInbox
   class PullRequests
     REFRESH_AFTER = 60
 
-    CLAUDE_DIR = File.join(Dir.home, ".claude")
+    CACHE_PATH = File.join(Dir.home, ".claude", "gh-pr-status-cache.json")
     RESOLVED_PATH = File.join(Dir.home, ".config", "claude-inbox", "prs.json")
 
-    def initialize(cache_path: File.join(CLAUDE_DIR, "gh-pr-status-cache.json"), resolved_path: RESOLVED_PATH,
-      gh: "gh", clock: -> { Time.now })
+    def initialize(cache_path: CACHE_PATH, resolved_path: RESOLVED_PATH, gh: "gh", clock: -> { Time.now })
       @cache_path = cache_path
       @resolved_path = resolved_path
       @gh = gh
