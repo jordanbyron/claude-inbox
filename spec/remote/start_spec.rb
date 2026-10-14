@@ -40,6 +40,7 @@ RSpec.describe ClaudeInbox::Remote::Start do
       body = phone.get("/api/options").json
       expect(body["models"]).to eq(ClaudeInbox::AgentsClient::MODELS)
       expect(body["efforts"]).to eq(ClaudeInbox::AgentsClient::EFFORTS)
+      expect(body["colors"]).to eq(ClaudeInbox::AgentsClient::COLORS)
       expect(body["permission_modes"]).to eq(%w[default auto plan])
       expect(body["dirs"].map { |d| d["label"] }).to eq(%w[tree app older trusted])
       expect(body["dirs"][1]).to eq({"path" => project, "label" => "app", "defaults" => {"model" => "opus", "effort" => nil, "permission_mode" => "plan", "remote" => nil}})
@@ -74,7 +75,7 @@ RSpec.describe ClaudeInbox::Remote::Start do
       expect(r.status).to eq(201)
       expect(r.json).to eq({"id" => "deadbeef", "name" => "phone", "cwd" => project, "url" => nil})
       expect(client.spawns).to eq([{prompt: "fix it", name: "phone", cwd: project, model: "opus", effort: nil,
-                                    permission_mode: "auto", worktree: false, remote: true}])
+                                    permission_mode: "auto", worktree: false, remote: true, color: nil}])
       expect(drain(queue)).to eq([[:notice, "remote: starting session…"], [:remote_started, "deadbeef", "192.168.1.30"]])
       expect(r.note).to eq("started deadbeef")
     end
@@ -141,20 +142,20 @@ RSpec.describe ClaudeInbox::Remote::Start do
     it "names the mode it let through, so the CLI doesn't work default out again for itself" do
       settings[project] = ClaudeInbox::Settings::Defaults.new(nil, nil, "plan")
       phone.start({prompt: "go", cwd: project})
-      argv = ClaudeInbox::AgentsClient.spawn_args("claude", **client.spawns.last.except(:cwd))
+      argv = ClaudeInbox::AgentsClient.spawn_args("claude", **client.spawns.last.except(:cwd, :color))
       expect(argv.each_cons(2).to_a).to include(["--permission-mode", "plan"])
     end
 
     it "names auto where settings name no mode, so a settings file it doesn't read can't widen it" do
       expect(phone.start({prompt: "go", cwd: project}).status).to eq(201)
-      argv = ClaudeInbox::AgentsClient.spawn_args("claude", **client.spawns.last.except(:cwd))
+      argv = ClaudeInbox::AgentsClient.spawn_args("claude", **client.spawns.last.except(:cwd, :color))
       expect(argv.each_cons(2).to_a).to include(["--permission-mode", "auto"])
     end
 
     it "names default there instead when auto isn't allowed, rather than let the CLI pick auto" do
       options[:allowed_modes] = %w[default plan]
       expect(phone.start({prompt: "go", cwd: project}).status).to eq(201)
-      argv = ClaudeInbox::AgentsClient.spawn_args("claude", **client.spawns.last.except(:cwd))
+      argv = ClaudeInbox::AgentsClient.spawn_args("claude", **client.spawns.last.except(:cwd, :color))
       expect(argv.each_cons(2).to_a).to include(["--permission-mode", "default"])
     end
 

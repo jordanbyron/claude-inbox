@@ -131,6 +131,13 @@ RSpec.describe ClaudeInbox::AgentsClient do
       expect(File.read(File.join(dir, "ran_in")).strip).to eq(File.realpath(dir))
     end
 
+    it "gives the new session its color through the job file, as /color would" do
+      FileUtils.mkdir_p(File.join(dir, "1a2b3c4d"))
+      File.write(File.join(dir, "1a2b3c4d", "state.json"), "{}")
+      described_class.new(bin: bin, jobs_dir: dir).spawn(prompt: "hi", cwd: dir, color: "cyan")
+      expect(ClaudeInbox::JobState.read("1a2b3c4d", jobs_dir: dir).color).to eq("cyan")
+    end
+
     it "says what failed, with everything the CLI printed" do
       expect { client.spawn(prompt: "boom", cwd: dir) }.to raise_error(described_class::Error) { |e|
         expect(e.message).to eq("claude --bg failed: no daemon\nsee log")

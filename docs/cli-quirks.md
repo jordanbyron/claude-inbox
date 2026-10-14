@@ -22,6 +22,13 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   CLI offers eight colors, and its own tmux code says what they mean to a
   terminal: six are ansi names, `orange` and `pink` are 256-color indexes 208
   and 205. Interactive sessions have no job file, so no color and no line.
+  `claude --bg` has no color flag, and `/color` as a prompt refuses
+  anything after the color (`Invalid color "cyan reply with…"`), so it
+  cannot lead a real prompt. The job file exists by the time `claude --bg`
+  returns, and the daemon updates it read-modify-write: a `color` written
+  into it holds through work, stop and respawn (checked on 2.1.296). The
+  session's own prompt bar reads its color from an `agent-color` record in
+  the transcript instead (read from the 2.1.296 bundle), so it stays plain.
 - A `--bg` session with Remote Control on registers a bridge and records it
   in `state.json` as `bridgeSessionId: cse_<id>`; claude.ai/code shows the
   session at `https://claude.ai/code/session_<id>`. On 2.1.282 a plain

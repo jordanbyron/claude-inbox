@@ -15,11 +15,12 @@ module ClaudeInbox
       end
     end
 
-    KEYS = %w[prompt name cwd model effort permission_mode worktree remote].freeze
+    KEYS = %w[prompt name cwd model effort permission_mode worktree remote color].freeze
     CHOICES = {
       model: AgentsClient::MODELS,
       effort: AgentsClient::EFFORTS,
-      permission_mode: AgentsClient::PERMISSION_MODES
+      permission_mode: AgentsClient::PERMISSION_MODES,
+      color: AgentsClient::COLORS
     }.freeze
     FLAGS = {true => true, false => false, "yes" => true, "no" => false}.freeze
     MAX_PROMPT = 100_000
@@ -42,7 +43,8 @@ module ClaudeInbox
         effort: choice_param(:effort, params["effort"]),
         permission_mode: choice_param(:permission_mode, params["permission_mode"]),
         worktree: flag_param(:worktree, params["worktree"]) || false,
-        remote: flag_param(:remote, params["remote"])
+        remote: flag_param(:remote, params["remote"]),
+        color: choice_param(:color, params["color"])
       }
     end
 

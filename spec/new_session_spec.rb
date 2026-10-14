@@ -57,6 +57,15 @@ RSpec.describe ClaudeInbox::NewSessionForm do
     expect(v[:cwd]).to eq(Dir.pwd)
   end
 
+  it "picks a color from the ones /color offers, none by default" do
+    expect(form.values[:color]).to be_nil
+    form.press(:back_tab, "\e[Z")
+    expect(form.focused.key).to eq(:color)
+    form.press("l", "l")
+    expect(form.values[:color]).to eq("red")
+    expect(form.screen(100, 24).find { |r| r.include?("Color") }).to include("none")
+  end
+
   it "moves to the next field on enter instead of starting" do
     type(form, "do it")
     3.times { form.press(:tab, "\t") }
@@ -175,7 +184,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
       type(form, "line#{i}")
       form.press(:return, "\r")
     }
-    rows = form.screen(80, 21)
+    rows = form.screen(80, 22)
     top = rows.index { |r| r.include?("┌") }
     expect(rows[top]).to include("↑ 4 more")
     expect(rows[top + 1]).to include("line4")

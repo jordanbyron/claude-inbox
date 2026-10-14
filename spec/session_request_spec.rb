@@ -16,17 +16,17 @@ RSpec.describe ClaudeInbox::SessionRequest do
     end
 
     it "leaves a setting sent as default unset, the same as one left out" do
-      sent = base.merge("model" => "default", "effort" => "default", "permission_mode" => "default")
+      sent = base.merge("model" => "default", "effort" => "default", "permission_mode" => "default", "color" => "default")
       expect(described_class.from_params(sent)).to eq(described_class.from_params(base))
-      expect(described_class.from_params(base).values_at(:model, :effort, :permission_mode, :remote))
-        .to eq([nil, nil, nil, nil])
+      expect(described_class.from_params(base).values_at(:model, :effort, :permission_mode, :remote, :color))
+        .to eq([nil, nil, nil, nil, nil])
     end
 
     it "takes every setting the form has, by string or symbol key" do
       v = described_class.from_params({:prompt => "go", :name => "flaky", :cwd => "/tmp", :model => "opus",
-        "effort" => "high", "permission_mode" => "plan", "worktree" => true, "remote" => "yes"})
+        "effort" => "high", "permission_mode" => "plan", "worktree" => true, "remote" => "yes", "color" => "pink"})
       expect(v).to eq({prompt: "go", name: "flaky", cwd: "/tmp", model: "opus", effort: "high",
-        permission_mode: "plan", worktree: true, remote: true})
+        permission_mode: "plan", worktree: true, remote: true, color: "pink"})
     end
 
     it "refuses an unknown key rather than dropping it" do
@@ -132,6 +132,8 @@ RSpec.describe ClaudeInbox::SessionRequest do
         .to refuse_as(:model, "model is one of default, fable, opus, sonnet, haiku")
       expect { described_class.from_params(base.merge("effort" => 3)) }.to refuse_as(:effort)
       expect { described_class.from_params(base.merge("permission_mode" => "yolo")) }.to refuse_as(:permission_mode)
+      expect { described_class.from_params(base.merge("color" => "magenta")) }
+        .to refuse_as(:color, "color is one of default, red, blue, green, yellow, purple, orange, pink, cyan")
     end
 
     it "takes worktree and remote as true or false, yes or no" do

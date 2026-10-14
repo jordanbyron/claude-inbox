@@ -3,6 +3,7 @@
 require "pastel"
 require_relative "agents_client"
 require_relative "images"
+require_relative "palette"
 require_relative "session_request"
 require_relative "settings"
 require_relative "slash_commands"
@@ -37,6 +38,7 @@ module ClaudeInbox
     def initialize(cwd:, color:, dirs: [], home: Dir.home, clipboard: Images.method(:from_clipboard))
       @p = Pastel.new(enabled: color)
       @theme = Theme.new(enabled: color)
+      @palette = Palette.new(enabled: color)
       @home = home
       @clipboard = clipboard
       @places = dirs.map { |path| Place.new(path, SessionRequest.label(path, dirs), path.sub(/\A#{Regexp.escape(home)}(?=\/|\z)/, "~")) }
@@ -49,7 +51,8 @@ module ClaudeInbox
         Field.new(:effort, "Effort", :choice, DEFAULT, AgentsClient::EFFORTS),
         Field.new(:permission_mode, "Permissions", :choice, DEFAULT, AgentsClient::PERMISSION_MODES),
         Field.new(:worktree, "Worktree", :choice, "no", %w[no yes]),
-        Field.new(:remote, "Remote Control", :choice, DEFAULT, [DEFAULT, "no", "yes"])
+        Field.new(:remote, "Remote Control", :choice, DEFAULT, [DEFAULT, "no", "yes"]),
+        Field.new(:color, "Color", :choice, DEFAULT, AgentsClient::COLORS)
       ]
       @focus = 0
       @error = nil
@@ -320,6 +323,7 @@ module ClaudeInbox
         f.choices.map { |c|
           text = (c == DEFAULT) ? default_text(f) : c
           if c == f.value then (on ? @theme.pill(" #{text} ", :cyan) : @theme.cyan_bold(" #{text} "))
+          elsif f.key == :color then @palette.paint(" #{text} ", c)
           else @p.dim(" #{text} ")
           end
         }.join(" ")
@@ -327,6 +331,7 @@ module ClaudeInbox
     end
 
     def default_text(f)
+      return "none" if f.key == :color
       resolved = defaults[f.key]
       resolved ? "#{resolved} (settings)" : "auto (cli default)"
     end
