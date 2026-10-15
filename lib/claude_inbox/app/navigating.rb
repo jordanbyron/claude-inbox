@@ -63,9 +63,13 @@ module ClaudeInbox
         name if Store::FOLDABLE_SECTIONS.include?(name)
       end
 
+      # Opening lands on the section's first row and closing on its fold
+      # line, rather than leaving the cursor on a stop that just vanished.
       def set_expanded(value)
         name = current_fold_section
-        @expanded[name] = value if name
+        return if name.nil? || !!@expanded[name] == value
+        @expanded[name] = value
+        select(value ? filtered.heads(@expanded).to_h.fetch(name, @selected) : Store::Selection.fold(name))
       end
 
       def toggle_expanded = set_expanded(!@expanded[current_fold_section])
