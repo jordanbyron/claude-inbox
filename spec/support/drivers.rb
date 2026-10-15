@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "stringio"
+
 # The few verbs every spec may use. Each takes what it drives as an argument,
 # so none depends on a spec defining a particular let.
 module Drivers
@@ -28,6 +30,19 @@ module Drivers
       source.truncate(0)
       source.rewind
     }
+  end
+
+  # An App over the fakes a spec hands it, with the client's sessions in the
+  # store and one frame painted, so the first key lands on a drawn screen.
+  def build_app(client:, store:, pull_requests:, queue:, terminal:, **options)
+    app = ClaudeInbox::App.new(
+      client: client, store: store, pull_requests: pull_requests, queue: queue, terminal: terminal,
+      rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
+      input: StringIO.new, color: false, **options
+    )
+    store.update(ClaudeInbox::Sessions.load(client: client, pull_requests: pull_requests, overrides: {}))
+    app.step
+    app
   end
 
   def press(app, *keys) = keys.each { |k| app.step(k) }
