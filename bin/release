@@ -7,6 +7,7 @@
 
 require "bundler"
 require "fileutils"
+require "net/http"
 require "open3"
 require_relative "../release/next_version"
 
@@ -31,6 +32,14 @@ def rubygems_otp_env
   status.success? ? { "GEM_HOST_OTP_CODE" => out.strip } : {}
 rescue Errno::ENOENT
   {}
+end
+
+# Unreachable counts as unpublished, which undoes the release as before.
+def published?(version)
+  uri = URI("https://rubygems.org/api/v2/rubygems/claude-inbox/versions/#{version}.json")
+  Net::HTTP.get_response(uri).is_a?(Net::HTTPSuccess)
+rescue StandardError
+  false
 end
 
 step "git", "fetch", "--quiet", "--tags", "origin"
@@ -82,14 +91,24 @@ step "git", "commit", "--quiet", "--all", "--message", "chore: release #{tag}" i
 step "git", "tag", "--annotate", tag, "--message", tag
 
 gem_file = "claude-inbox-#{version}.gem"
-unless system("gem", "build", "claude-inbox.gemspec") && system(rubygems_otp_env, "gem", "push", gem_file)
-  # Undo before aborting, so main never carries a version rubygems does not.
-  system "git", "tag", "--delete", tag
-  system "git", "reset", "--quiet", "--hard", "HEAD~1" if committed
-  FileUtils.rm_f gem_file
-  abort "#{tag} was not published; the release commit and tag are undone"
+pushed = begin
+  system("gem", "build", "claude-inbox.gemspec") && system(rubygems_otp_env, "gem", "push", gem_file)
+rescue Interrupt
+  false
 end
 FileUtils.rm_f gem_file
+# Undo before aborting, so main never carries a version rubygems does not.
+# A push that hung or failed may still have landed, and rubygems never takes
+# a version twice, so a published version keeps its commit and tag.
+unless pushed || published?(version)
+  system "git", "tag", "--delete", tag
+  system "git", "reset", "--quiet", "--hard", "HEAD~1" if committed
+  abort "#{tag} was not published; the release commit and tag are undone"
+end
 
-step "git", "push", "--quiet", "origin", "main", "--follow-tags"
-puts capture("gh", "release", "create", tag, "--generate-notes", "--verify-tag")
+finish = ["git push origin main --follow-tags", "gh release create #{tag} --generate-notes --verify-tag"]
+unless system("git", "push", "--quiet", "origin", "main", "--follow-tags")
+  abort "#{tag} is on rubygems but not on GitHub; finish with:\n  #{finish.join("\n  ")}"
+end
+system("gh", "release", "create", tag, "--generate-notes", "--verify-tag") ||
+  abort("#{tag} is pushed but has no GitHub release; finish with:\n  #{finish.last}")
