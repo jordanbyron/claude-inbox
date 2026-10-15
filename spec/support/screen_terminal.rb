@@ -16,6 +16,4 @@ class ScreenTerminal
   def release = yield
 
   def pause = @pauses += 1
-
-  def invalidate = nil
 end

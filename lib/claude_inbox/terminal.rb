@@ -98,9 +98,6 @@ module ClaudeInbox
 
     def paint(lines) = @painter.paint(lines)
 
-    # Repaint every row on the next frame.
-    def invalidate = @painter.invalidate
-
     private
 
     def measure
