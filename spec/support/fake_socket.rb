@@ -10,7 +10,7 @@ class FakeSocket
     @written = +"".b
   end
 
-  def read_nonblock(size, exception: true) = @input.read_nonblock(size, exception: exception)
+  def read_nonblock(size, exception:) = @input.read_nonblock(size, exception: exception)
 
   def write(data) = @written << data.b
 end
