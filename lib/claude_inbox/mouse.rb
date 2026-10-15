@@ -3,20 +3,20 @@
 module ClaudeInbox
   # Parses SGR mouse reports ("\e[<Cb;Cx;Cy(M|m)", emitted once App turns on
   # \e[?1000h\e[?1006h) into clicks and wheel ticks. Pure: no terminal, no
-  # IO. Row/col are the terminal's own 1-based coordinates, so callers can
-  # index straight into what they just painted.
+  # IO. Row is the terminal's own 1-based row, so callers can index straight
+  # into what they just painted.
   module Mouse
     SEQUENCE = /\e\[<(\d+);(\d+);(\d+)([Mm])/
 
-    Event = Struct.new(:kind, :row, :col)
+    Event = Struct.new(:kind, :row)
 
     # A raw keypress can glue several reports together the same way a fast
     # "esc gg" glues onto one read (see Input#split_keys), so this scans
     # rather than matching once.
     def self.events(raw)
-      raw.scan(SEQUENCE).filter_map do |cb, col, row, type|
+      raw.scan(SEQUENCE).filter_map do |cb, _col, row, type|
         kind = kind_for(cb.to_i, type)
-        Event.new(kind, row.to_i, col.to_i) if kind
+        Event.new(kind, row.to_i) if kind
       end
     end
 
