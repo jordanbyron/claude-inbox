@@ -4,8 +4,6 @@ module ClaudeInbox
   class Store
     # The Rows of one poll, grouped and ordered, and where the cursor may land among them.
     Sections = Struct.new(:pinned, :needs_you, :active, :snoozed, :settled) do
-      def each_section(&) = each_pair(&)
-
       def all = values.flatten(1)
 
       def row(selection)
@@ -20,7 +18,7 @@ module ClaudeInbox
       def section_of(selection)
         return nil if selection.nil?
         return selection.key if selection.fold?
-        each_section { |name, rows| return name if rows.any? { |r| r.key == selection.key } }
+        each_pair { |name, rows| return name if rows.any? { |r| r.key == selection.key } }
         nil
       end
 
@@ -35,8 +33,7 @@ module ClaudeInbox
 
       # An empty fold is left out, since there is nothing under it to open.
       def stops(expanded)
-        members.filter_map do |name|
-          rows = self[name]
+        each_pair.filter_map do |name, rows|
           if !Store.folded?(name, expanded) then [name, rows.select(&:selectable?).map { |r| Selection.row(r.key) }]
           elsif rows.any? then [name, [Selection.fold(name)]]
           end
