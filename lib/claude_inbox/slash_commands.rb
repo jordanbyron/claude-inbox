@@ -24,13 +24,12 @@ module ClaudeInbox
     # The project wins over the home directory when both define the same
     # name, as it does in the CLI.
     def list(cwd:, home:)
-      found = {}
-      add = ->(cmd) { found[cmd.name] ||= cmd }
-      from_dir(File.join(cwd, ".claude")).each(&add)
-      from_dir(File.join(home, ".claude")).each(&add)
-      plugins(home).each(&add)
-      synced(home).each(&add)
-      found.values.sort_by(&:name)
+      [
+        *from_dir(File.join(cwd, ".claude")),
+        *from_dir(File.join(home, ".claude")),
+        *plugins(home),
+        *synced(home)
+      ].uniq(&:name).sort_by(&:name)
     end
 
     def match(commands, query)
