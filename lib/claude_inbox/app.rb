@@ -123,8 +123,6 @@ module ClaudeInbox
       trap("WINCH") { @resize = true } if Signal.list.key?("WINCH")
     end
 
-    # ----- threads ----------------------------------------------------------
-
     # Runs a block off the main thread; a failure lands in the status line
     # rather than killing the thread silently.
     def in_background
@@ -154,8 +152,6 @@ module ClaudeInbox
       end
     end
 
-    # ----- main loop --------------------------------------------------------
-
     def main_loop
       step(@input.read) until @quit
     end
@@ -180,50 +176,6 @@ module ClaudeInbox
       @input.typed(text).each { |name, c| handle_key(name, c) } if typing
     end
 
-    def render
-      t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      now = Time.now
-      all = @store.sections(now)
-      @snapshot.write(all, now)
-      sections = filtered(all)
-      width, height = @terminal.size
-      body_h = Renderer.body_height(height)
-      ensure_selection(sections)
-      @tick += 1
-      view = Renderer::View.new(
-        width: width, height: height, now: now, selected: @selected&.key, top: @top, expanded: @expanded,
-        peek: @peek.view(sections.row(@selected), body_h), modal: modal_lines(width), screen: screen_lines(width, body_h),
-        status: status_text(now), usage: @rate_limits.windows(now), filter: filter, filter_editing: filter_editing?,
-        tick: @tick / 2, loading: loading_for, listening: @listener.snapshot
-      )
-      frame = @renderer.frame(sections, view)
-      placed(frame)
-      @terminal.paint(frame.lines)
-      dt = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
-      Debug.log("render #{(dt * 1000).round}ms") if dt > 0.05
-    end
-
-    # Seconds spent waiting for the first poll; nil once one has landed, or
-    # failed — a failure has its own line in the header and the empty state
-    # already says how to retry.
-    def loading_for
-      return nil if @last_poll || @error || !@booted_at
-      Process.clock_gettime(Process::CLOCK_MONOTONIC) - @booted_at
-    end
-
-    def status_text(now)
-      return @notice[0] if @notice && now < @notice[1]
-      return "⚠ #{@error}" if @error
-      return "polling…" unless @last_poll
-      update_notice
-    end
-
-    def notice(msg)
-      @notice = [msg, Time.now + 4]
-    end
-
-    # ----- keys -------------------------------------------------------------
-
     def handle_key(name, key)
       return handle_modal_key(name, key) if @modal
       return handle_line_key(name, key) if filter_editing?
@@ -241,6 +193,26 @@ module ClaudeInbox
       when :click then click_row(event.row, event.col)
       when :scroll_up then perform(:up)
       when :scroll_down then perform(:down)
+      end
+    end
+
+    def handle_modal_key(name, key)
+      return handle_form_key(name, key) if @modal.is_a?(NewSessionForm)
+      case @modal.press(name, key)
+      when :cancel then @modal = nil
+      when :snooze then snooze_chosen
+      when :confirm
+        kind, id = @modal.kind, @modal.id
+        @modal = nil
+        case kind
+        when :stop then stop_session(id)
+        when :delete then delete_session(id)
+        when :adopt then adopt_session(id)
+        when :install then install_pane
+        end
+      when :save then save_prompt
+      when :copy then @listener.copy_pairing_url
+      when :rotate then @listener.rotate
       end
     end
 
@@ -297,7 +269,35 @@ module ClaudeInbox
       @terminal.invalidate
     end
 
-    # ----- modals -----------------------------------------------------------
+    def install_pane
+      @pane_offer.install
+      notice("added the pane — new Claude Code sessions load it; /inbox opens it")
+    rescue JSON::ParserError
+      notice("~/.claude/settings.json is not valid JSON, so it was left alone")
+    end
+
+    def render
+      t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      now = Time.now
+      all = @store.sections(now)
+      @snapshot.write(all, now)
+      sections = filtered(all)
+      width, height = @terminal.size
+      body_h = Renderer.body_height(height)
+      ensure_selection(sections)
+      @tick += 1
+      view = Renderer::View.new(
+        width: width, height: height, now: now, selected: @selected&.key, top: @top, expanded: @expanded,
+        peek: @peek.view(sections.row(@selected), body_h), modal: modal_lines(width), screen: screen_lines(width, body_h),
+        status: status_text(now), usage: @rate_limits.windows(now), filter: filter, filter_editing: filter_editing?,
+        tick: @tick / 2, loading: loading_for, listening: @listener.snapshot
+      )
+      frame = @renderer.frame(sections, view)
+      placed(frame)
+      @terminal.paint(frame.lines)
+      dt = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+      Debug.log("render #{(dt * 1000).round}ms") if dt > 0.05
+    end
 
     # The new-session form takes the whole body; a Dialog is a box over it.
     def screen_lines(width, body_h)
@@ -309,31 +309,23 @@ module ClaudeInbox
       @modal.frame(width, @renderer.caret) if @modal.is_a?(Dialog)
     end
 
-    def handle_modal_key(name, key)
-      return handle_form_key(name, key) if @modal.is_a?(NewSessionForm)
-      case @modal.press(name, key)
-      when :cancel then @modal = nil
-      when :snooze then snooze_chosen
-      when :confirm
-        kind, id = @modal.kind, @modal.id
-        @modal = nil
-        case kind
-        when :stop then stop_session(id)
-        when :delete then delete_session(id)
-        when :adopt then adopt_session(id)
-        when :install then install_pane
-        end
-      when :save then save_prompt
-      when :copy then @listener.copy_pairing_url
-      when :rotate then @listener.rotate
-      end
+    def status_text(now)
+      return @notice[0] if @notice && now < @notice[1]
+      return "⚠ #{@error}" if @error
+      return "polling…" unless @last_poll
+      update_notice
     end
 
-    def install_pane
-      @pane_offer.install
-      notice("added the pane — new Claude Code sessions load it; /inbox opens it")
-    rescue JSON::ParserError
-      notice("~/.claude/settings.json is not valid JSON, so it was left alone")
+    # Seconds spent waiting for the first poll; nil once one has landed, or
+    # failed — a failure has its own line in the header and the empty state
+    # already says how to retry.
+    def loading_for
+      return nil if @last_poll || @error || !@booted_at
+      Process.clock_gettime(Process::CLOCK_MONOTONIC) - @booted_at
+    end
+
+    def notice(msg)
+      @notice = [msg, Time.now + 4]
     end
   end
 end
