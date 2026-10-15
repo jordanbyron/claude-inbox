@@ -16,18 +16,7 @@ RSpec.describe ClaudeInbox::App do
   let(:queue) { Queue.new }
   let(:trusted) { [] }
 
-  let(:app) do
-    described_class.new(
-      client: client, store: store, pull_requests: pull_requests,
-      rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
-      terminal: terminal, input: StringIO.new, color: false, queue: queue, trust: -> { trusted }
-    )
-  end
-
-  before do
-    store.update(ClaudeInbox::Sessions.load(client: client, pull_requests: pull_requests, overrides: {}))
-    app.step
-  end
+  let(:app) { build_app(client:, store:, pull_requests:, queue:, terminal:, trust: -> { trusted }) }
 
   after { client.release }
 
@@ -192,12 +181,7 @@ RSpec.describe ClaudeInbox::App do
     let(:tmp) { Dir.mktmpdir }
     let(:settings) { File.join(tmp, "settings.json") }
     let(:offer) { ClaudeInbox::Mod::Offer.new(marker: File.join(tmp, "pane-offered"), settings: settings, link: File.join(tmp, "mod")) }
-    let(:app) do
-      described_class.new(
-        client: client, store: store, pull_requests: pull_requests, terminal: terminal, input: StringIO.new,
-        color: false, queue: queue, trust: -> { trusted }, pane_offer: offer
-      )
-    end
+    let(:app) { build_app(client:, store:, pull_requests:, queue:, terminal:, trust: -> { trusted }, pane_offer: offer) }
 
     after { FileUtils.rm_rf(tmp) }
 
@@ -323,16 +307,9 @@ RSpec.describe ClaudeInbox::App do
       end
     end
     let(:app) do
-      described_class.new(
-        client: client, store: store, pull_requests: pull_requests,
-        rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
-        terminal: terminal, input: StringIO.new, color: false, queue: queue,
-        listen: {
-          port: 0,
-          pairing: pairing,
-          lock_path: File.join(tmp, "listen.lock"),
-          images_dir: File.join(tmp, "images")
-        }
+      build_app(
+        client:, store:, pull_requests:, queue:, terminal:,
+        listen: {port: 0, pairing: pairing, lock_path: File.join(tmp, "listen.lock"), images_dir: File.join(tmp, "images")}
       )
     end
     let(:listener) { app.instance_variable_get(:@listener) }
@@ -437,10 +414,8 @@ RSpec.describe ClaudeInbox::App do
     end
     let(:snapshot_path) { File.join(tmp, "snapshot.json") }
     let(:app) do
-      described_class.new(
-        client: client, store: store, pull_requests: pull_requests,
-        rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
-        terminal: terminal, input: StringIO.new, out: out, color: false, queue: queue,
+      build_app(
+        client:, store:, pull_requests:, queue:, terminal:, out: out,
         snapshot: ClaudeInbox::Snapshot.new(path: snapshot_path), updater: updater, argv: ["--listen-lan"]
       )
     end
