@@ -38,6 +38,15 @@ end
 
 def yes?(question) = ask("#{question} [y/N]").downcase.start_with?("y")
 
+# Reads the RubyGems OTP from 1Password (item RUBYGEMS_OP_ITEM, default
+# "RubyGems"). Without op, or if it fails, gem push prompts as before.
+def rubygems_otp_env
+  out, status = Open3.capture2("op", "item", "get", ENV.fetch("RUBYGEMS_OP_ITEM", "RubyGems"), "--otp")
+  status.success? ? { "GEM_HOST_OTP_CODE" => out.strip } : {}
+rescue Errno::ENOENT
+  {}
+end
+
 step "git", "fetch", "--quiet", "--tags", "origin"
 
 unless DRY_RUN || NOTES_TAG
@@ -180,7 +189,7 @@ step "git", "commit", "--quiet", "--all", "--message", "chore: release #{tag}" i
 step "git", "tag", "--annotate", tag, "--message", tag
 
 gem_file = "claude-inbox-#{version}.gem"
-unless system("gem", "build", "claude-inbox.gemspec") && system("gem", "push", gem_file)
+unless system("gem", "build", "claude-inbox.gemspec") && system(rubygems_otp_env, "gem", "push", gem_file)
   # Undo before aborting, so main never carries a version rubygems does not.
   system "git", "tag", "--delete", tag
   system "git", "reset", "--quiet", "--hard", "HEAD~1" if committed
