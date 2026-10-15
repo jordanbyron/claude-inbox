@@ -19,14 +19,6 @@ RSpec.describe ClaudeInbox::Store::Sections do
     ClaudeInbox::Store.sectionize(sessions, entries, now)
   end
 
-  it "finds a row by its selection, or nothing" do
-    expect(sec.row(selection.row("a")).key).to eq("a")
-    expect(sec.row(selection.row("uuid")).session.session_id).to eq("uuid")
-    expect(sec.row(selection.row("nope"))).to be_nil
-    expect(sec.row(selection.fold(:settled))).to be_nil
-    expect(sec.row(nil)).to be_nil
-  end
-
   it "lists where the cursor can land, a fold standing in for its rows" do
     expect(sec.selections({})).to eq([selection.row("b"), selection.row("a"), selection.row("uuid"), selection.row("c"), selection.fold(:settled)])
     expect(sec.selections({settled: true})).to eq(%w[b a uuid c z].map { |k| selection.row(k) })

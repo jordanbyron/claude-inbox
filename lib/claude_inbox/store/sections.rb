@@ -6,10 +6,6 @@ module ClaudeInbox
     Sections = Struct.new(:pinned, :needs_you, :active, :snoozed, :settled) do
       def all = values.flatten(1)
 
-      def row(selection)
-        all.find { |r| r.key == selection.key } if selection&.row?
-      end
-
       def matching(query)
         return self if query.nil? || query.empty?
         self.class.new(**to_h.transform_values { |rows| rows.select { |r| r.matches?(query) } })
