@@ -76,11 +76,34 @@ RSpec.describe ClaudeInbox::App do
     expect(app).not_to paint("app store release strategy")
     press(app, "z", "o")
     expect(app).to paint("app store release strategy")
-    press(app, "\t", "\t")
-    expect(app).to paint("app store release strategy").on_selected_row
     press(app, "z", "c")
     expect(app).not_to paint("app store release strategy")
-    press(app, "\t", "\t", "z", "a")
+    press(app, "z", "a")
     expect(app).to paint("app store release strategy")
+  end
+
+  it "lands on the first row of a section it opens, from Enter or zo" do
+    store.settle("b03695b1")
+    press(app, "\t", "\t", "\r")
+    expect(app).to paint("app store release strategy").on_selected_row
+    press(app, "z", "c", "z", "o")
+    expect(app).to paint("app store release strategy").on_selected_row
+  end
+
+  it "lands on the fold line of a section it closes, from zc, za or h" do
+    store.settle("b03695b1")
+    press(app, "\t", "\t", "z", "o", "z", "c")
+    expect(app).to paint("… 1 settled").on_selected_row
+    press(app, "z", "o", "z", "a")
+    expect(app).to paint("… 1 settled").on_selected_row
+    press(app, "z", "o", "h")
+    expect(app).to paint("… 1 settled").on_selected_row
+  end
+
+  it "leaves the cursor where it is on zo inside a section already open" do
+    store.settle("b03695b1")
+    store.settle("fbf5253a")
+    press(app, "\e[Z", "z", "o", "j", "z", "o")
+    expect(app).to paint("github milestone review").on_selected_row
   end
 end
