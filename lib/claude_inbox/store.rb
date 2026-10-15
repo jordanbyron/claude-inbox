@@ -116,7 +116,7 @@ module ClaudeInbox
     def pr_for(id) = @mutex.synchronize { @entries[id] && Entry.new(@entries[id]).pr }
 
     def pr_overrides
-      @mutex.synchronize { @entries.transform_values { |e| Entry.new(e).pr }.select { |_, url| url } }
+      @mutex.synchronize { @entries.transform_values { |e| Entry.new(e).pr }.compact }
     end
 
     # A copy, not the live entry: the reaper decides a deletion on this row
