@@ -162,7 +162,7 @@ module ClaudeInbox
         yield Entry.new(@entries[id] ||= Entry.blank(@clock.call).to_h)
         save
       end
-      @relay&.request(action, id, **detail) if !@writable && action
+      @relay&.request(action, id, **detail) unless @writable
     end
 
     def load
