@@ -33,7 +33,9 @@ module ClaudeInbox
 
       def settle_selected
         return unless require_storable
-        @store.settle(@selected.key)
+        key = @selected.key
+        select_neighbour
+        @store.settle(key)
         notice("settled — u brings it back")
       end
 

@@ -12,6 +12,20 @@ RSpec.describe ClaudeInbox::App do
 
   after { client.release }
 
+  describe "settling" do
+    it "leaves the cursor on the row below the one settled" do
+      press(app, "j", "j", "j")
+      expect(app).to paint("trailforks skill handoff").on_selected_row
+      press(app, "x")
+      expect(app).to paint("sensor token resilience test").on_selected_row
+    end
+
+    it "leaves the cursor on the row above when the last one is settled" do
+      press(app, "G", "x")
+      expect(app).to paint("github milestone review").on_selected_row
+    end
+  end
+
   describe "snooze by typing" do
     it "opens a prompt on 5 and snoozes until the time typed" do
       press(app, "s", "5")
