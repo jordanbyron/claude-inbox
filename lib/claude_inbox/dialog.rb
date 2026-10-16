@@ -33,7 +33,7 @@ module ClaudeInbox
         ["2", "1 hour", :h1],
         ["3", "tomorrow 9am", :tomorrow_9am],
         ["4", "until I wake it", :until_woken],
-        ["5", "a duration or time I type", :custom]
+        ["5", "custom", :custom]
       ].freeze
 
       attr_reader :choice

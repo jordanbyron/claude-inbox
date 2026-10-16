@@ -80,7 +80,7 @@ Vim bindings. Arrows and the mouse work too.
 | `n` | new session |
 | `N` | pair a phone |
 | `t` | pin / unpin |
-| `s` | snooze: `1` 15m · `2` 1h · `3` tomorrow 9am · `4` until woken · `5` type a duration or time |
+| `s` | snooze: `1` 15m · `2` 1h · `3` tomorrow 9am · `4` until woken · `5` custom |
 | `u` | wake a snoozed session, or bring back a settled one |
 | `x` | settle by hand |
 | `a` | set a local alias |
