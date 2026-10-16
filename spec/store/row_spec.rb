@@ -139,9 +139,9 @@ RSpec.describe ClaudeInbox::Store::Row do
       expect(described_class.new(session(id: "a", state: "done", prs: open.call("FAILING")), settled).section(now)).to eq(:settled)
     end
 
-    it "goes by the PR the badge shows, and never by one with no entry yet" do
+    it "goes by the PR the badge shows, the troubled one, and never by one with no entry yet" do
       prs = [ClaudeInbox::PullRequest.new(number: 1, state: "OPEN", health: "CLEAN"), *open.call("FAILING")]
-      expect(described_class.new(session(id: "a", state: "done", prs: prs), entry).section(now)).to eq(:active)
+      expect(described_class.new(session(id: "a", state: "done", prs: prs), entry).section(now)).to eq(:needs_you)
       expect(described_class.new(session(id: "a", state: "done", prs: open.call("FAILING")), nil).section(now)).to eq(:needs_you)
     end
   end

@@ -378,6 +378,16 @@ RSpec.describe "renderer session colors" do
     expect(badge.call(nil)).to include("\e[2m#7\e[0m")
   end
 
+  it "counts the PRs past the headline after its badge, settled or not" do
+    prs = [7, 8, 9].map { |n| ClaudeInbox::PullRequest.new(number: n, state: "OPEN") }
+    s = session(id: "z", name: "shipit", state: "done", prs: prs)
+    expect(line_of.call(s, "shipit")).to include("#7 open\e[0m\e[2m · +2\e[0m")
+    entries = ClaudeInbox::Store.merge_entries({"z" => {"settled_at" => now.to_i}}, [s], now)
+    line = renderer.frame(ClaudeInbox::Store.sectionize([s], entries, now), view.with(expanded: {settled: true}))
+      .lines.find { |l| l.include?("shipit") }
+    expect(line).to include("\e[2m#7 open\e[0m\e[2m · +2\e[0m")
+  end
+
   it "still pads a colored row to exactly the frame width" do
     s = session(id: "z", name: "tinted", job_state: ClaudeInbox::JobState.new("color" => "pink"))
     sec = ClaudeInbox::Store.sectionize([s], {}, now)

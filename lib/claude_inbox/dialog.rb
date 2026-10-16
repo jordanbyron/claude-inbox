@@ -53,6 +53,38 @@ module ClaudeInbox
       end
     end
 
+    # `o` open and `y` copy on a session with several PRs: the headline
+    # first, and the same key again takes it. The PR is read from `choice`.
+    class PrPicker < Dialog
+      KEYS = {open: "o", copy: "y"}.freeze
+      VERBS = {open: "open", copy: "copy"}.freeze
+
+      attr_reader :choice
+
+      def initialize(kind, session)
+        super(kind, session.key)
+        @prs = [session.pr, *session.prs.reject { |pr| pr.equal?(session.pr) }].first(9)
+      end
+
+      def title = " #{VERBS.fetch(kind).capitalize} pull request "
+
+      def lines(_width, _caret)
+        @prs.each_with_index.map { |pr, i| "  #{i + 1}  #{label(pr)}" } +
+          ["", "  #{KEYS.fetch(kind)}  #{VERBS.fetch(kind)} #{@prs.first.short} · esc cancel"]
+      end
+
+      def press(name, key)
+        return :cancel if name == :escape || key == "q"
+        @choice = @prs.first if key == KEYS.fetch(kind) || name == :return || name == :enter
+        @choice = @prs[key.to_i - 1] if key.to_s.match?(/\A[1-9]\z/)
+        @choice && :pick
+      end
+
+      private
+
+      def label(pr) = ["#{pr.short} #{pr.state&.downcase}".strip, pr.trouble].compact.join(" · ")
+    end
+
     # `X` stop, `Ctrl-x` delete and Enter on a remote row all ask first and
     # all take `y`, but the words differ because the outcomes do: read the
     # box before answering.

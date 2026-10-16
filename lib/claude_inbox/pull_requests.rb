@@ -6,6 +6,10 @@ require_relative "records"
 require_relative "subprocess"
 
 module ClaudeInbox
+  # What is wrong with an open PR, in the words its badge and the picker
+  # use. CLEAN and unknown say nothing.
+  PR_TROUBLE = {"FAILING" => "✗ checks", "CHANGES_REQUESTED" => "changes requested", "CONFLICTING" => "conflicts"}.freeze
+
   # A pull request tied to a session. `state` uses GitHub's vocabulary plus
   # DRAFT, the same as Claude Code's own cache: OPEN, DRAFT, MERGED, CLOSED,
   # or nil when nothing has told us yet. `resolved_at` is when it was merged
@@ -15,6 +19,8 @@ module ClaudeInbox
   # Code's cache knows nothing of it, and a resolved PR has none.
   PullRequest = Struct.new(:number, :url, :state, :resolved_at, :health) do
     def short = number ? "##{number}" : url.to_s.sub(%r{\Ahttps?://(www\.)?}, "")
+
+    def trouble = PR_TROUBLE[health]
 
     # Failing checks or requested changes want you back; a conflict only
     # waits on whoever rebases.

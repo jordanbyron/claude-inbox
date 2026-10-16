@@ -27,6 +27,27 @@ RSpec.describe ClaudeInbox::Session do
     expect(described_class.new(id: "abc12345", prs: nil).pr).to be_nil
   end
 
+  describe "pr" do
+    let(:pr) { ->(number, state, **rest) { ClaudeInbox::PullRequest.new(number: number, state: state, **rest) } }
+    let(:old) { pr.call(1, "MERGED", resolved_at: session.created_at.to_i - 60) }
+
+    it "is the troubled one, then an open one, then the first" do
+      merged = pr.call(2, "MERGED", resolved_at: session.created_at.to_i + 60)
+      open = pr.call(3, "OPEN", health: "CLEAN")
+      conflicting = pr.call(4, "OPEN", health: "CONFLICTING")
+      failing = pr.call(5, "OPEN", health: "FAILING")
+      expect(session(prs: [merged, open, conflicting, failing]).pr).to eq(failing)
+      expect(session(prs: [merged, open, conflicting]).pr).to eq(conflicting)
+      expect(session(prs: [merged, open]).pr).to eq(open)
+      expect(session(prs: [merged, pr.call(6, "CLOSED")]).pr).to eq(merged)
+    end
+
+    it "passes over a PR resolved before the session began, unless every PR is" do
+      expect(session(prs: [old, pr.call(2, "MERGED", resolved_at: session.created_at.to_i)]).pr.number).to eq(2)
+      expect(session(prs: [old, pr.call(2, "CLOSED", resolved_at: 0)]).pr.number).to eq(1)
+    end
+  end
+
   # The poller publishes a list and then keeps working on it, so a step that
   # learns something new must not reach into what is already on screen.
   it "answers with a copy from with, leaving the original as it was" do

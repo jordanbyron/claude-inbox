@@ -27,6 +27,40 @@ RSpec.describe ClaudeInbox::Dialog do
     end
   end
 
+  describe "pr picker" do
+    let(:prs) do
+      [ClaudeInbox::PullRequest.new(number: 189, state: "MERGED"),
+        ClaudeInbox::PullRequest.new(number: 190, state: "OPEN", health: "FAILING"),
+        ClaudeInbox::PullRequest.new(number: 191)]
+    end
+    let(:dialog) { described_class::PrPicker.new(:open, session(prs: prs)) }
+
+    it "lists the headline first, then the rest in order" do
+      expect(dialog.frame(60).join("\n")).to include(" Open pull request ")
+      expect(dialog.lines(40, nil)).to eq(["  1  #190 open · ✗ checks", "  2  #189 merged", "  3  #191",
+        "", "  o  open #190 · esc cancel"])
+      copy = described_class::PrPicker.new(:copy, session(prs: prs))
+      expect(copy.lines(40, nil).last).to eq("  y  copy #190 · esc cancel")
+    end
+
+    it "picks the headline on its own key or enter" do
+      expect(dialog.press("o", "o")).to eq(:pick)
+      expect(dialog.choice.number).to eq(190)
+      copy = described_class::PrPicker.new(:copy, session(prs: prs))
+      expect(copy.press("o", "o")).to be_nil
+      expect(copy.press("y", "y")).to eq(:pick)
+      expect(described_class::PrPicker.new(:copy, session(prs: prs)).press(:enter, "\r")).to eq(:pick)
+    end
+
+    it "picks the nth on a digit, ignores one past the end, and goes on esc or q" do
+      expect(dialog.press("4", "4")).to be_nil
+      expect(dialog.press("3", "3")).to eq(:pick)
+      expect(dialog.choice.number).to eq(191)
+      expect(dialog.press(:escape, "\e")).to eq(:cancel)
+      expect(dialog.press("q", "q")).to eq(:cancel)
+    end
+  end
+
   describe "confirm" do
     it "asks before pulling a remote session into the daemon" do
       adopt = described_class::Confirm.new(:adopt, "u1")

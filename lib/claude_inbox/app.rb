@@ -198,6 +198,7 @@ module ClaudeInbox
       case @modal.press(name, key)
       when :cancel then @modal = nil
       when :snooze then snooze_chosen
+      when :pick then pr_picked
       when :confirm
         kind, id = @modal.kind, @modal.id
         @modal = nil
