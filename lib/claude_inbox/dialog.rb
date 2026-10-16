@@ -21,10 +21,13 @@ module ClaudeInbox
     end
 
     def frame(width, caret = nil)
-      box = [width - 4, self.class::WIDTH].min
+      box = [width - 4, fit].min
       TTY::Box.frame(lines(box - 4, caret).join("\n"), title: {top_left: title}, padding: [0, 1], width: box)
         .split("\n")
     end
+
+    # How wide the box wants to be; the frame caps it at the terminal.
+    def fit = self.class::WIDTH
 
     # `s` snooze: one key per choice, and the choice is read from `choice`.
     class Snooze < Dialog
@@ -56,7 +59,7 @@ module ClaudeInbox
     # `o` open and `y` copy on a session with several PRs: the headline
     # first, and the same key again takes it. The PR is read from `choice`.
     class PrPicker < Dialog
-      WIDTH = 64
+      MARGIN = 6
       KEYS = {open: "o", copy: "y"}.freeze
       VERBS = {open: "open", copy: "copy"}.freeze
 
@@ -68,6 +71,10 @@ module ClaudeInbox
       end
 
       def title = " #{VERBS.fetch(kind).capitalize} pull request "
+
+      # Titles vary, so the box grows to the longest line plus some air,
+      # and never shrinks below a plain dialog.
+      def fit = [WIDTH, lines(Float::INFINITY, nil).map { |l| Text.width(l) }.max + MARGIN].max
 
       def lines(width, _caret)
         (@prs.each_with_index.map { |pr, i| "  #{i + 1}  #{label(pr)}" } +

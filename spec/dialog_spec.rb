@@ -55,6 +55,14 @@ RSpec.describe ClaudeInbox::Dialog do
       expect(described_class::PrPicker.new(:open, session(prs: same)).lines(60, nil)[1]).to eq("  2  #7")
     end
 
+    it "widens the box to its longest line, within the terminal" do
+      widths = ->(frame) { frame.map { |l| ClaudeInbox::Text.width(l) }.uniq }
+      expect(widths.call(dialog.frame(100))).to eq([63])
+      expect(widths.call(dialog.frame(40))).to eq([36])
+      short = described_class::PrPicker.new(:open, session(prs: prs.first(1) + prs.last(1)))
+      expect(widths.call(short.frame(100))).to eq([described_class::WIDTH])
+    end
+
     it "picks the headline on its own key or enter" do
       expect(dialog.press("o", "o")).to eq(:pick)
       expect(dialog.choice.number).to eq(190)
