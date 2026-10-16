@@ -20,8 +20,10 @@ module ClaudeInbox
         (hash ? new(hash) : first_seen(session, now)).observe(session, now)
       end
 
+      # An Integer choice is the wake time itself, as typed after `5`.
       def self.snooze_until(choice, now)
         case choice
+        when Integer then choice
         when :m15 then now.to_i + 15 * 60
         when :h1 then now.to_i + 3600
         when :tomorrow_9am
