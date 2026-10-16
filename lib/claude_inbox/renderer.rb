@@ -293,7 +293,7 @@ module ClaudeInbox
 
     def fold_toggle_line(name, count, selected, width)
       sel = selected == name
-      marker = sel ? @theme.cyan_bold("▶") : " "
+      marker = sel ? @theme.yellow_bold("▶") : " "
       text = @p.dim("… #{count} #{SECTION_TITLES[name].downcase}") + (sel ? @p.dim("   ⏎ or zo to expand") : "")
       Text.pad(" #{marker} " + text, width)
     end
@@ -332,7 +332,7 @@ module ClaudeInbox
     # it cannot pass for a second caret; bold alone did not read as unread
     # once most of Active was unread.
     def marker_for(sel, unread)
-      if sel then @theme.cyan_bold("▶")
+      if sel then @theme.yellow_bold("▶")
       elsif unread then @theme.blue("●")
       else " "
       end

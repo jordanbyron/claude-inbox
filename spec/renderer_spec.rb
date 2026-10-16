@@ -48,7 +48,7 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(f.lines).to eq(expected)
   end
 
-  it "dots and bolds a finished row until attached to, then dims it in its color, and leaves a blocked one dotted and bold" do
+  it "dots and bolds a finished row until attached to, then dims it in its color, leaves a blocked one dotted and bold, and gives the selected one the yellow caret" do
     done = session(id: "aaa11111", name: "fresh", state: "done")
     seen = session(id: "bbb22222", name: "seen", state: "done", job_state: ClaudeInbox::JobState.new("color" => "orange"))
     blocked = session(id: "ccc33333", name: "stuck", state: "blocked")
@@ -64,6 +64,8 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(colored.find { |l| l.include?("seen") }).to include("\e[38;5;208m\e[2mseen\e[0m\e[39m")
     expect(colored.find { |l| l.include?("stuck") }).to include("\e[1mstuck")
     expect(colored.find { |l| l.include?("stuck") }).to include("\e[38;5;203;1m●")
+    selected = described_class.new(color: true, home: "/Users/byron").frame(sec, view.with(width: 60, height: 12, selected: "aaa11111")).lines
+    expect(selected.find { |l| l.include?("fresh") }).to include("\e[38;5;179;1m▶\e[0m").and(exclude("\e[38;5;75m●"))
   end
 
   it "selects interactive rows by session uuid, with no PR-less session settling on its own" do

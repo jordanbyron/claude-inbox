@@ -303,7 +303,7 @@ module ClaudeInbox
 
     def field_label(f)
       on = f.equal?(focused)
-      (on ? @theme.cyan_bold("▶ ") : "  ") + (on ? @p.bold(Text.pad(f.label, 14)) : @p.dim(Text.pad(f.label, 14)))
+      (on ? @theme.yellow_bold("▶ ") : "  ") + (on ? @p.bold(Text.pad(f.label, 14)) : @p.dim(Text.pad(f.label, 14)))
     end
 
     # The cell the cursor sits on, drawn as a block by inverting it: a bar
