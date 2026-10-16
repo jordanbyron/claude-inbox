@@ -55,6 +55,17 @@ module ClaudeInbox
         entry&.acknowledged_at && entry.state_since.to_i <= entry.acknowledged_at.to_i
       end
 
+      # Finished or needing you since you last attached. Only a session you
+      # can attach to counts, since nothing else ever clears the mark.
+      def unread?
+        return false unless session.actionable?
+        return false unless session.finished? || session.needs_you?
+        entry&.last_visited_at.nil? || entry.state_since.to_i > entry.last_visited_at.to_i
+      end
+
+      # A finished session you have attached to since: nothing left to look at.
+      def read? = session.actionable? && session.finished? && !unread?
+
       # `u` overrides hand-settle and the PR rule alike, and holds until the
       # state actually changes rather than just for the next poll.
       def revived?

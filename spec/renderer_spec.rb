@@ -33,19 +33,35 @@ RSpec.describe ClaudeInbox::Renderer do
  ▎ ACTIVE ────────────────────────────────────────────────────────── 6
    ⠋ claude-inbox-38         working · your terminal · 0s  claude-inbox 
        ↳ ~/code/claude-inbox
-   ✓ comma3x led flashing screen unresponsive  done · idle · 0s  comma3 
+ • ✓ comma3x led flashing screen unresponsive  done · idle · 0s  comma3 
        ↳ ~/code/comma3
-   ✓ trailforks skill handoff                    done · 9d  parks_genie 
+ • ✓ trailforks skill handoff                    done · 9d  parks_genie 
        ↳ ~/code/parks_genie
-   ✓ sensor token resilience test               done · 10d  parks_genie 
+ • ✓ sensor token resilience test               done · 10d  parks_genie 
        ↳ ~/code/parks_genie
-   ✓ github milestone review                    done · 17d  parks_genie 
+ • ✓ github milestone review                    done · 17d  parks_genie 
        ↳ ~/code/parks_genie
-   ✓ app store release strategy                 done · 18d  parks_genie 
+ • ✓ app store release strategy                 done · 18d  parks_genie 
        ↳ ~/code/parks_genie
  j/k move  ⏎ attach  n new  t pin  s snooze  u wake  a alias  o PR  x s…
     TXT
     expect(f.lines).to eq(expected)
+  end
+
+  it "marks a finished row unread until attached to, then dims it, and leaves a blocked one bright" do
+    done = session(id: "aaa11111", name: "fresh", state: "done")
+    seen = session(id: "bbb22222", name: "seen", state: "done")
+    blocked = session(id: "ccc33333", name: "stuck", state: "blocked")
+    entries = ClaudeInbox::Store.merge_entries({"bbb22222" => {"last_state" => "done", "state_since" => now.to_i - 60, "last_visited_at" => now.to_i - 30}}, [done, seen, blocked], now)
+    sec = ClaudeInbox::Store.sectionize([done, seen, blocked], entries, now)
+    plain = renderer.frame(sec, view.with(width: 60, height: 12)).lines.join("\n")
+    expect(plain).to match(/^ • ✓ fresh /)
+    expect(plain).to match(/^   ✓ seen /)
+    expect(plain).to match(/^ • ● stuck /)
+    colored = described_class.new(color: true, home: "/Users/byron").frame(sec, view.with(width: 60, height: 12)).lines
+    expect(colored.find { |l| l.include?("seen") }).to include("\e[2mseen")
+    expect(colored.find { |l| l.include?("fresh") }).not_to include("\e[2mfresh")
+    expect(colored.find { |l| l.include?("stuck") }).to include("\e[38;5;203;1m●")
   end
 
   it "selects interactive rows by session uuid, with no PR-less session settling on its own" do

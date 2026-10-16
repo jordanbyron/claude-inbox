@@ -13,6 +13,7 @@ const ROWS = [
   { section: 'needs_you', id: 'a1', label: 'needs an answer', state: 'blocked', actionable: true, line: 'confirm: drop it?' },
   { section: 'active', id: 'b2', label: 'still going', state: 'working', actionable: true, line: 'running bin/ci', pr: { short: '#7', state: 'open', url: 'https://github.com/o/r/pull/7' } },
   { section: 'active', id: 'uuid-term', label: 'a terminal', state: 'working', actionable: false },
+  { section: 'active', id: 'd4', label: 'finished unseen', state: 'done', actionable: true, isUnread: true },
   { section: 'settled', id: 'c3', label: 'put away', state: 'done', actionable: true },
 ]
 
@@ -97,9 +98,10 @@ test("rows sit under the gem's sections, Settled folded until za opens it", asyn
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
     expect(await ui.find({ type: 'Text', text: /Needs you · 1/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /Active · 2/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Active · 3/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /Settled · 1/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /confirm: drop it\?/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '• ' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /#7 open/ })).toBeDefined()
     expect(await ui.find({ text: /1 folded/ })).toBeDefined()
     expect(await ui.find({ text: /put away/ })).toBeUndefined()

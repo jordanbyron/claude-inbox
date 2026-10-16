@@ -300,8 +300,10 @@ module ClaudeInbox
 
     def row_lines(row, section, selected, width, now, tick)
       s = row.session
+      live = %i[pinned needs_you active].include?(section)
       sel = row.selectable? && selected == row.key
-      marker = sel ? @theme.cyan_bold("▶") : " "
+      quiet = section == :settled || (live && row.read?)
+      marker = marker_for(sel, live && row.unread?)
       glyph = glyph_for(s, section, tick)
       meta = meta_for(row, section, now)
 
@@ -311,14 +313,14 @@ module ClaudeInbox
       # so the row can never exceed `width` and fall into Text.pad's blind
       # tail-chop (which used to land mid-project-name with no ellipsis).
       project_text = Text.truncate(s.project, [width - chrome, 0].max)
-      project = (section == :settled) ? @p.dim(project_text) : @theme.cyan(project_text)
+      project = quiet ? @p.dim(project_text) : @theme.cyan(project_text)
 
       label_w = [width - chrome - Text.width(project_text), 0].max
       label = Text.truncate(row.label, label_w)
-      label = style_label(label, row, section, sel)
+      label = style_label(label, row, quiet, sel)
       first = " #{marker} #{glyph} " + Text.pad(label, label_w) + "  " + meta + "  " + project + " "
 
-      return [Text.pad(first, width)] unless %i[pinned needs_you active].include?(section)
+      return [Text.pad(first, width)] unless live
 
       # The session's own line when it has one; the path is what is left to
       # say about a terminal, which has no job file.
@@ -326,12 +328,20 @@ module ClaudeInbox
       [Text.pad(first, width), Text.pad(detail, width)]
     end
 
+    # The caret takes the column: a selected row is one you are looking at.
+    def marker_for(sel, unread)
+      if sel then @theme.cyan_bold("▶")
+      elsif unread then @theme.cyan_bold("•")
+      else " "
+      end
+    end
+
     # The label is the one part of a row you own: `/color` tints it, and
     # nothing else on the line. Glyph, badge and PR keep the state's colors,
     # so no color you pick can make a blocked session stop looking blocked.
-    # Settled stays dim — the section is meant to be quiet.
-    def style_label(label, row, section, sel)
-      return @p.dim(label) if section == :settled
+    # A quiet row (settled, or finished and read) stays dim.
+    def style_label(label, row, quiet, sel)
+      return @p.dim(label) if quiet
       styled =
         if row.alias_name then sel ? @p.bold.italic(label) : @p.italic(label)
         elsif sel then @p.bold(label)

@@ -14,6 +14,17 @@ RSpec.describe ClaudeInbox::App do
 
   after { client.release }
 
+  describe "attaching" do
+    it "records the visit, so the row no longer reads as unread" do
+      app
+      expect(store.sections.needs_you.map(&:unread?)).to eq([true])
+      press(app, "\r")
+      expect(client.attached).to eq(%w[f23c8673])
+      expect(store.entry("f23c8673")["last_visited_at"]).to eq(store.entry("f23c8673")["acknowledged_at"])
+      expect(store.sections.active.find { |row| row.key == "f23c8673" }).not_to be_unread
+    end
+  end
+
   describe "adopting a remote session" do
     let(:client) { RecordingClient.new(origins: {57405 => :remote}) }
 
