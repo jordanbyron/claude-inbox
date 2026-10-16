@@ -13,21 +13,13 @@ module ClaudeInbox
       define_method(:"#{hue}_bold") { |text| color(text, hue, bold: true) }
     end
 
-    def initialize(enabled:)
-      @enabled = enabled
-    end
-
     # A filled pill: editor-background text on the hue, for a selected row
     # or choice — the inverse of `color`, which puts the hue on the text.
-    def pill(text, hue)
-      return text unless @enabled
-      "\e[38;5;#{BG};48;5;#{HUES.fetch(hue)}m#{text}\e[0m"
-    end
+    def pill(text, hue) = "\e[38;5;#{BG};48;5;#{HUES.fetch(hue)}m#{text}\e[0m"
 
     private
 
     def color(text, hue, bold: false)
-      return text unless @enabled
       codes = ["38;5;#{HUES.fetch(hue)}"]
       codes << "1" if bold
       "\e[#{codes.join(";")}m#{text}\e[0m"
