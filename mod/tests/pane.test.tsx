@@ -256,6 +256,28 @@ test('o and w hand the keys back to the prompt before they open the browser', as
   await ui.unmount()
 })
 
+test("y copies the row's pull request, else its claude.ai/code page, else its id", async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  const remote = { section: 'active', id: 'e5', label: 'on the web', state: 'working', actionable: true, remote: 'https://claude.ai/code/session_e5' }
+  on('state.get', ($, e, next) =>
+    e.key === 'rows' ? seeded([ROWS[0], ROWS[1], remote]) : e.key === 'writtenAt' ? seeded(1_700_000_000) : next(e),
+  )
+  const copied: string[] = []
+  on('ui.copy', ($, e) => {
+    copied.push(e.text)
+    return { value: { isCopied: true } }
+  })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  await ui.press({ key: 'y' })
+  await ui.press({ key: 'j' })
+  await ui.press({ key: 'y' })
+  await ui.press({ key: 'j' })
+  await ui.press({ key: 'y' })
+  expect(copied).toEqual(['a1', 'https://github.com/o/r/pull/7', 'https://claude.ai/code/session_e5'])
+  await ui.unmount()
+})
+
 test('a click on a row puts the cursor on it before it asks for the switch', async ($, on) => {
   mock.env(on, { HOME: '/Users/me' })
   mock.clock(on, { now: 1_700_000_000_000 })

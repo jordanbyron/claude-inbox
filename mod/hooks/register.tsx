@@ -412,11 +412,10 @@ export const register: Register = (on, options) => {
                 key('u', onRow('wake', 'woke')),
                 key('t', onRow('pin', 'pinned')),
                 key('s', () => void startChord($, 's')),
-                key('c', () => {
-                  if (!row?.id) return
-                  void $.ui.copy({ text: `claude attach ${row.id}`, surface: e.surface }).then(copied =>
-                    $.ui.toast(copied.isCopied ? `copied: claude attach ${row.id}` : 'no clipboard here'),
-                  )
+                key('y', () => {
+                  if (!row) return $.ui.toast('nothing to copy')
+                  const text = row.pr?.url ?? row.remote ?? row.id ?? row.label
+                  void $.ui.copy({ text, surface: e.surface }).then(copied => $.ui.toast(copied.isCopied ? `copied ${text}` : 'no clipboard here'))
                 }),
                 key('o', () => (row?.pr ? void openInBrowser($, row.pr.url) : $.ui.toast('no pull request linked'))),
                 key('w', () => (row?.remote ? void openInBrowser($, row.remote) : $.ui.toast('no claude.ai/code page for this session'))),
