@@ -35,10 +35,10 @@ module ClaudeInbox
     # editable field spends these on its own text instead.
     CYCLE = {:left => -1, :right => 1, "h" => -1, "l" => 1, " " => 1}.freeze
 
-    def initialize(cwd:, color:, dirs: [], home: Dir.home, clipboard: Images.method(:from_clipboard))
-      @p = Pastel.new(enabled: color)
-      @theme = Theme.new(enabled: color)
-      @palette = Palette.new(enabled: color)
+    def initialize(cwd:, dirs: [], home: Dir.home, clipboard: Images.method(:from_clipboard))
+      @p = Pastel.new(enabled: true)
+      @theme = Theme.new
+      @palette = Palette.new
       @home = home
       @clipboard = clipboard
       @places = dirs.map { |path| Place.new(path, SessionRequest.label(path, dirs), path.sub(/\A#{Regexp.escape(home)}(?=\/|\z)/, "~")) }

@@ -11,7 +11,10 @@ module ClaudeInbox
   # `width` columns wide) plus a parallel Array of selectable items.
   # Pure: no terminal, no IO, no clock beyond the `now` it is handed.
   class Renderer
-    Frame = Struct.new(:lines, :items, :top)
+    Frame = Struct.new(:lines, :items, :top) do
+      # The same frame for a terminal drawn without color.
+      def plain = self.class.new(lines.map { |l| Text.strip_ansi(l) }, items, top)
+    end
 
     CHROME_ROWS = 2 # header + footer
 
@@ -67,10 +70,10 @@ module ClaudeInbox
       ["za", "fold"], ["/", "filter"], ["q", "quit"]
     ].freeze
 
-    def initialize(color:, home: Dir.home)
-      @p = Pastel.new(enabled: color)
-      @theme = Theme.new(enabled: color)
-      @palette = Palette.new(enabled: color)
+    def initialize(home: Dir.home)
+      @p = Pastel.new(enabled: true)
+      @theme = Theme.new
+      @palette = Palette.new
       @home = home
     end
 

@@ -9,7 +9,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
   let(:home) { Dir.mktmpdir }
   after { FileUtils.rm_rf(home) }
 
-  let(:form) { described_class.new(cwd: Dir.pwd, color: false, home: home) }
+  let(:form) { described_class.new(cwd: Dir.pwd, home: home) }
 
   it "starts on the prompt and types into it, spaces included" do
     expect(form.focused.key).to eq(:prompt)
@@ -78,7 +78,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
   it "starts and attaches on ^O, starts and stays put on ^S" do
     type(form, "do it")
     expect(form.press(:ctrl_o, "\x0f")).to eq(:start_and_attach)
-    other = described_class.new(cwd: Dir.pwd, color: false, home: home)
+    other = described_class.new(cwd: Dir.pwd, home: home)
     type(other, "do it")
     expect(other.press(:ctrl_s, "\x13")).to eq(:start)
   end
@@ -103,7 +103,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
   describe "images" do
     let(:clip) { ClaudeInbox::Images::Clipboard.new(nil, nil) }
     let(:form) do
-      described_class.new(cwd: Dir.pwd, color: false, clipboard: -> { clip }, home: home)
+      described_class.new(cwd: Dir.pwd, clipboard: -> { clip }, home: home)
     end
 
     it "attaches the clipboard's image on an empty paste, as a token in the prompt" do
@@ -196,7 +196,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
     Dir.mktmpdir do |home|
       FileUtils.mkdir_p("#{home}/.claude")
       File.write("#{home}/.claude/settings.json", {model: "opus", effortLevel: "high"}.to_json)
-      f = described_class.new(cwd: Dir.pwd, color: false, home: home)
+      f = described_class.new(cwd: Dir.pwd, home: home)
       rows = f.screen(100, 24)
       expect(rows.find { |r| r.include?("Model") }).to include("opus (settings)")
       expect(rows.find { |r| r.include?("Effort") }).to include("high (settings)")
@@ -212,7 +212,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
         FileUtils.mkdir_p("#{proj}/.claude")
         File.write("#{home}/.claude/settings.json", {model: "opus"}.to_json)
         File.write("#{proj}/.claude/settings.local.json", {permissions: {defaultMode: "plan"}}.to_json)
-        f = described_class.new(cwd: proj, color: false, home: home)
+        f = described_class.new(cwd: proj, home: home)
         rows = f.screen(100, 24)
         expect(rows.find { |r| r.include?("Model") }).to include("opus (settings)")
         expect(rows.find { |r| r.include?("Permissions") }).to include("plan (settings)")
@@ -224,7 +224,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
     Dir.mktmpdir do |home|
       FileUtils.mkdir_p("#{home}/.claude")
       File.write("#{home}/.claude/settings.json", {remoteControlAtStartup: true}.to_json)
-      f = described_class.new(cwd: Dir.pwd, color: false, home: home)
+      f = described_class.new(cwd: Dir.pwd, home: home)
       expect(f.screen(100, 24).find { |r| r.include?("Remote Control") }).to include("yes (settings)")
       expect(f.values[:remote]).to be(true)
       7.times { f.press(:tab, "\t") }
@@ -235,7 +235,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
 
   it "leaves Remote Control off when nothing turns it on" do
     Dir.mktmpdir do |home|
-      f = described_class.new(cwd: Dir.pwd, color: false, home: home)
+      f = described_class.new(cwd: Dir.pwd, home: home)
       expect(f.values[:remote]).to be(false)
       7.times { f.press(:tab, "\t") }
       f.press("h", "h")
@@ -257,10 +257,10 @@ RSpec.describe ClaudeInbox::NewSessionForm do
       type(form, "#{root}/a")
       form.press(:tab, "\t")
       expect(form.focused.value.to_s).to eq("#{root}/ap")
-      expect(form.footer).to include("apple  apricot")
+      expect(ClaudeInbox::Text.strip_ansi(form.footer)).to include("apple  apricot")
       form.press(:tab, "\t")
       expect(form.focused.key).to eq(:cwd)
-      expect(form.footer).to include("apple  apricot")
+      expect(ClaudeInbox::Text.strip_ansi(form.footer)).to include("apple  apricot")
       type(form, "pl")
       form.press(:tab, "\t")
       expect(form.focused.value.to_s).to eq("#{root}/apple/")
@@ -284,7 +284,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
   end
 
   it "draws the cursor on the cell it sits on" do
-    f = described_class.new(cwd: Dir.pwd, color: true, home: home)
+    f = described_class.new(cwd: Dir.pwd, home: home)
     "ab".each_char { |c| f.press(c, c) }
     f.press(:left, "\e[D")
     expect(f.screen(80, 24).join("\n")).to include("a\e[7mb\e[0m")
@@ -307,12 +307,12 @@ RSpec.describe ClaudeInbox::NewSessionForm do
 
   describe "recent directories" do
     let(:dirs) { %w[code/inbox code/site work/site].map { |d| File.join(home, d).tap { |p| FileUtils.mkdir_p(p) } } }
-    let(:form) { described_class.new(cwd: Dir.pwd, color: false, home: home, dirs: dirs) }
+    let(:form) { described_class.new(cwd: Dir.pwd, home: home, dirs: dirs) }
 
     it "stays shut until the field is edited, so tabbing through keeps the directory" do
       2.times { form.press(:tab, "\t") }
       expect(form.menu).to be_nil
-      expect(form.footer).to include("^U recent")
+      expect(ClaudeInbox::Text.strip_ansi(form.footer)).to include("^U recent")
       form.press(:tab, "\t")
       expect(form.focused.key).to eq(:model)
       expect(form.values[:cwd]).to eq(Dir.pwd)
@@ -361,7 +361,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
     let(:proj) { Dir.mktmpdir }
     after { FileUtils.rm_rf(proj) }
 
-    let(:form) { described_class.new(cwd: proj, color: false, home: home) }
+    let(:form) { described_class.new(cwd: proj, home: home) }
 
     before do
       %w[unslop unsplit babysit].each do |n|
@@ -452,7 +452,7 @@ RSpec.describe ClaudeInbox::NewSessionForm do
           FileUtils.mkdir_p("#{home}/.claude/skills/cmd-#{n}")
           File.write("#{home}/.claude/skills/cmd-#{n}/SKILL.md", "---\ndescription: #{n}\n---\n")
         end
-        f = described_class.new(cwd: home, color: false, home: home)
+        f = described_class.new(cwd: home, home: home)
         type(f, "/")
         rows = f.screen(80, 24)
         expect(rows.count { |r| r.include?("/cmd-") }).to eq(6)

@@ -18,6 +18,34 @@ RSpec.describe ClaudeInbox::App do
 
   after { client.release }
 
+  it "draws in color, and without any under --no-color" do
+    painted = []
+    allow(terminal).to receive(:paint).and_wrap_original { |paint, lines| painted << lines.join and paint.call(lines) }
+    build_app(client:, store:, pull_requests:, queue:, terminal:, color: true)
+    build_app(client:, store:, pull_requests:, queue:, terminal:, color: false)
+    expect(painted.first).to include("\e[")
+    expect(painted.last).not_to include("\e[")
+  end
+
+  it "reads the same in color as without, on every screen and in every modal" do
+    allow(Time).to receive(:now).and_return(Time.at(1_789_604_500))
+    prs = [ClaudeInbox::PullRequest.new(number: 190, url: "https://github.com/o/r/pull/190", state: "OPEN", health: "FAILING",
+      title: "Install the pane from the CLI so a first run never has to ask for it twice or more"),
+      ClaudeInbox::PullRequest.new(number: 191, url: "https://github.com/o/r/pull/191", state: "MERGED")]
+    apps = [true, false].map do |color|
+      own = ClaudeInbox::Store.new(path: nil)
+      app = build_app(client:, store: own, pull_requests:, queue: Queue.new, terminal: ScreenTerminal.new, color:,
+        clipboard: ->(_) { true })
+      own.update(own.sessions.map { |s| (s.id == "f23c8673") ? s.with(prs: prs) : s })
+      app
+    end
+    ["o", "\e", "y", "\e", "s", "\e", "a", "\e", "X", "\e", "n", "\e", "N", "\e", "/", "x", "\e", "G", "za"].each do |key|
+      colored, plain = apps.map { |app| press(app, key) && screen(app) }
+      expect(colored).to eq(plain), "after #{key.inspect}"
+      expect(plain.join).to include("Open pull request") if key == "o"
+    end
+  end
+
   it "hands a paste to the new-session form whole, and types it into the filter" do
     press(app, "/", "\e[200~thi\e[201~")
     expect(app).to paint("/thi").in_footer

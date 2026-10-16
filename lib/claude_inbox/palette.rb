@@ -22,12 +22,7 @@ module ClaudeInbox
 
     RESET = "\e[39m"
 
-    def initialize(enabled:)
-      @enabled = enabled
-    end
-
     def paint(text, name)
-      return text unless @enabled
       seq = SEQUENCES[name]
       seq ? seq + text + RESET : text
     end

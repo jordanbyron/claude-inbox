@@ -9,7 +9,7 @@ module ClaudeInbox
       def open_new_session
         cwd = selected_session&.cwd || Dir.pwd
         dirs = SessionRequest.directories(@store.sessions, @trust.call)
-        @modal = NewSessionForm.new(cwd: SessionRequest.strip_worktree(cwd), color: @color, dirs: dirs)
+        @modal = NewSessionForm.new(cwd: SessionRequest.strip_worktree(cwd), dirs: dirs)
       end
 
       # `:start`/`:start_and_attach` leave the form as `@modal`, now busy: it
