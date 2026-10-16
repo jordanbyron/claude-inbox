@@ -60,9 +60,9 @@ It opens when a session starts. To stop that, set
 Under each row is what the session is waiting on, what it produced, or its
 status line. A row with a pull request shows it as `#885 open`, `#885 merged`
 and so on. A steady `◌` with `idle · 1 shell` means the agent stopped and is
-waiting on a shell or sub-agent it started. A session that finished or got
-blocked since you last attached to it is bold; a finished one you have
-attached to since is dimmed.
+waiting on a shell or sub-agent it started. A blue `●` marks a session that
+finished or got blocked since you last attached to it; a finished one you
+have attached to since is dimmed.
 
 ## Keys
 

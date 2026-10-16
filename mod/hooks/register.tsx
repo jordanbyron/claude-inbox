@@ -465,7 +465,7 @@ export const register: Register = (on, options) => {
               return (
                 <Box key={viewKey(item)} flexDirection="column">
                   <Box>
-                    <Text color={isHere ? 'yellow' : undefined}>{isHere ? '› ' : '  '}</Text>
+                    <Text color={isHere ? 'yellow' : 'blue'}>{isHere ? '› ' : one.isUnread && !isQuiet ? '● ' : '  '}</Text>
                     <Text color={COLOR[one.state]} dimColor={isQuiet || one.state === 'done'}>
                       {GLYPH[one.state] ?? '·'}{' '}
                     </Text>

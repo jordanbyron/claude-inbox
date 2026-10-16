@@ -303,7 +303,7 @@ module ClaudeInbox
       live = %i[pinned needs_you active].include?(section)
       sel = row.selectable? && selected == row.key
       quiet = section == :settled || (live && row.read?)
-      marker = sel ? @theme.cyan_bold("▶") : " "
+      marker = marker_for(sel, live && row.unread?)
       glyph = glyph_for(s, section, tick)
       meta = meta_for(row, section, now)
 
@@ -326,6 +326,16 @@ module ClaudeInbox
       # say about a terminal, which has no job file.
       detail = @p.dim("       ↳ " + Text.truncate(s.summary || short_path(s.cwd), [width - 10, 0].max))
       [Text.pad(first, width), Text.pad(detail, width)]
+    end
+
+    # The caret takes the column. An unread row's dot is blue and filled so
+    # it cannot pass for a second caret; bold alone did not read as unread
+    # once most of Active was unread.
+    def marker_for(sel, unread)
+      if sel then @theme.cyan_bold("▶")
+      elsif unread then @theme.blue("●")
+      else " "
+      end
     end
 
     # The label is the one part of a row you own: `/color` tints it, and
