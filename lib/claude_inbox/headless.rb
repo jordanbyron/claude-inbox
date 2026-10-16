@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "actions"
+require_relative "notifier"
 require_relative "poller"
 require_relative "pull_requests"
 require_relative "reaper"
@@ -15,13 +16,13 @@ module ClaudeInbox
   # exits at once while an inbox holds the writer lock.
   class Headless
     def initialize(client:, store:, pull_requests: PullRequests.new, actions: Actions.new, snapshot: Snapshot.new,
-      lock: WriterLock.new, updater: nil)
+      lock: WriterLock.new, updater: nil, notifier: Notifier.disabled)
       @lock = lock
       @snapshot = snapshot
       @updater = updater
       @queue = Queue.new
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests, reaper: Reaper.disabled,
-        queue: @queue, snapshot: snapshot, actions: actions)
+        queue: @queue, snapshot: snapshot, actions: actions, notifier: notifier)
     end
 
     # False when the lock is held, by an inbox or another headless process.

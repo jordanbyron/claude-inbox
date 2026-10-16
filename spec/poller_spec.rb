@@ -118,6 +118,22 @@ RSpec.describe ClaudeInbox::Poller do
     end
   end
 
+  describe "the notifier" do
+    it "gets the sections from before and after each hand-over, and its notice reaches the queue" do
+      notifier = instance_double(ClaudeInbox::Notifier)
+      handed = []
+      allow(notifier).to receive(:deliver) do |before, after, &notice|
+        handed << [before.all.map(&:key), after.all.map(&:key)]
+        notice.call("terminal-notifier not found")
+      end
+      described_class.new(**poller_args, notifier: notifier).once
+      expect(handed.size).to eq(1)
+      expect(handed[0][0]).to be_empty
+      expect(handed[0][1]).to include("f23c8673")
+      expect(drain(queue)).to include([:notice, "terminal-notifier not found"])
+    end
+  end
+
   # The poller puts each poll in the store, so the race is settled there: `rm`
   # has returned and `forget` run, but `claude agents` still lists the id on
   # the poll that follows.
