@@ -303,7 +303,7 @@ module ClaudeInbox
       live = %i[pinned needs_you active].include?(section)
       sel = row.selectable? && selected == row.key
       quiet = section == :settled || (live && row.read?)
-      marker = marker_for(sel, live && row.unread?)
+      marker = sel ? @theme.cyan_bold("▶") : " "
       glyph = glyph_for(s, section, tick)
       meta = meta_for(row, section, now)
 
@@ -317,7 +317,7 @@ module ClaudeInbox
 
       label_w = [width - chrome - Text.width(project_text), 0].max
       label = Text.truncate(row.label, label_w)
-      label = style_label(label, row, quiet, sel)
+      label = style_label(label, row, quiet, sel || (live && row.unread?))
       first = " #{marker} #{glyph} " + Text.pad(label, label_w) + "  " + meta + "  " + project + " "
 
       return [Text.pad(first, width)] unless live
@@ -328,23 +328,16 @@ module ClaudeInbox
       [Text.pad(first, width), Text.pad(detail, width)]
     end
 
-    # The caret takes the column: a selected row is one you are looking at.
-    def marker_for(sel, unread)
-      if sel then @theme.cyan_bold("▶")
-      elsif unread then @theme.cyan_bold("•")
-      else " "
-      end
-    end
-
     # The label is the one part of a row you own: `/color` tints it, and
     # nothing else on the line. Glyph, badge and PR keep the state's colors,
     # so no color you pick can make a blocked session stop looking blocked.
-    # A quiet row (settled, or finished and read) stays dim.
-    def style_label(label, row, quiet, sel)
+    # A quiet row (settled, or finished and read) stays dim. Bold marks an
+    # unread row, as a mail client does, and the selected one under its caret.
+    def style_label(label, row, quiet, bold)
       return @p.dim(label) if quiet
       styled =
-        if row.alias_name then sel ? @p.bold.italic(label) : @p.italic(label)
-        elsif sel then @p.bold(label)
+        if row.alias_name then bold ? @p.bold.italic(label) : @p.italic(label)
+        elsif bold then @p.bold(label)
         else label
         end
       @palette.paint(styled, row.session.color)

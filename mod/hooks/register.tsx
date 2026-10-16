@@ -460,11 +460,12 @@ export const register: Register = (on, options) => {
               const isQuiet = isFold(one.section)
               // A finished row you have attached to since dims, as the gem's Active section draws it.
               const isRead = !isQuiet && one.actionable && (one.state === 'done' || one.state === 'stopped') && !one.isUnread
+              const text = one.wakeAt !== undefined ? `${one.label} · ${wakeLabel(one.wakeAt)}` : one.label
               const tint = one.color ? TINT[one.color] : undefined
               return (
                 <Box key={viewKey(item)} flexDirection="column">
                   <Box>
-                    <Text color={isHere ? 'yellow' : 'cyan'}>{isHere ? '› ' : one.isUnread && !isQuiet ? '• ' : '  '}</Text>
+                    <Text color={isHere ? 'yellow' : undefined}>{isHere ? '› ' : '  '}</Text>
                     <Text color={COLOR[one.state]} dimColor={isQuiet || one.state === 'done'}>
                       {GLYPH[one.state] ?? '·'}{' '}
                     </Text>
@@ -475,10 +476,13 @@ export const register: Register = (on, options) => {
                         key={itemKey(item)}
                         plain
                         dimColor={(isQuiet || isRead) && !isHere}
-                        label={one.wakeAt !== undefined ? `${one.label} · ${wakeLabel(one.wakeAt)}` : one.label}
+                        label={text}
                         onPress={enter(item)}
                         autoFocus={isHere || undefined}
-                      />
+                      >
+                        {/* An unread row is bold, as a mail client marks one; a Button has no weight of its own. */}
+                        {one.isUnread && !isQuiet ? <Text bold>{text}</Text> : text}
+                      </Button>
                     </Box>
                     {/* The label gives up its cells to the PR chip, which would otherwise wrap under it. */}
                     {one.pr ? (
