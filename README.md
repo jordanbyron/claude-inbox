@@ -40,7 +40,7 @@ a fullscreen terminal.
 
 `/inbox` opens it, `ctrl+x tab` focuses it and `esc` leaves. The keys are the
 ones below, with `ge` for `G`, `n` `p` for `Tab` `Shift+Tab`, and no `a`,
-`P`, `X`, `Ctrl-x`, `/`, `R`, `U` or `y`, and `s` has no `5`. `Enter`, or a click on a row, switches to the
+`P`, `X`, `Ctrl-x`, `/`, `R` or `U`, and `s` has no `5`. `Enter`, or a click on a row, switches to the
 session when you attached through `claude-inbox`.
 
 It opens when a session starts. To stop that, set
