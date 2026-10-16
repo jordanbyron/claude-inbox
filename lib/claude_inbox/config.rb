@@ -8,7 +8,7 @@ module ClaudeInbox
   module Config
     PATH = File.join(Dir.home, ".config", "claude-inbox", "config")
 
-    def self.argv(typed, path: PATH)
+    def self.argv(typed, path:)
       args(path) + typed
     end
 
