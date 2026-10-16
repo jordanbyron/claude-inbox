@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "pathname"
 require_relative "agents_client"
 
 module ClaudeInbox
@@ -75,6 +76,20 @@ module ClaudeInbox
       end
       rest = paths.reject.with_index(1) { |_, n| used.include?(n) }.map { |path| AgentsClient.mention(path) }
       [text, rest.join("\n")].reject(&:empty?).join("\n\n")
+    end
+
+    # `claude --bg --worktree` outside a git repository dies before init
+    # (docs/cli-quirks.md). A folder above several repos is a fair place to
+    # start from, so there the session starts without a worktree and the
+    # note says so.
+    def self.without_stray_worktree(values)
+      return [values, nil] unless values[:worktree] && !inside_repo?(values[:cwd])
+      [values.merge(worktree: false), "not in a git repo, so no worktree"]
+    end
+
+    # A worktree or a submodule has a `.git` file rather than a folder.
+    def self.inside_repo?(dir)
+      Pathname(File.expand_path(dir)).ascend.any? { |d| (d + ".git").exist? }
     end
 
     # A session's cwd may sit inside a worktree another agent is using;

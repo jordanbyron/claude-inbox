@@ -28,11 +28,11 @@ module ClaudeInbox
       # it we stay in the inbox and poll, so the new row shows up right away
       # rather than at the next tick.
       def start_session(form, attach:)
-        v = form.values
+        v, note = SessionRequest.without_stray_worktree(form.values)
         notice("starting session…")
         in_background do
           id = @client.spawn(**v)
-          @queue << [:notice, "started #{id}"]
+          @queue << [:notice, ["started #{id}", note].compact.join(" — ")]
           @queue << [:form_started, form]
           @queue << [:select, id]
           attach ? @queue << [:attach, id] : @poller.soon
@@ -53,8 +53,8 @@ module ClaudeInbox
 
       # Someone at the desk may be mid-thought, so a start from another
       # device never moves the cursor, attaches or closes what is open.
-      def remote_started(id, via)
-        notice("started #{id} from #{via}")
+      def remote_started(id, via, note = nil)
+        notice(["started #{id} from #{via}", note].compact.join(" — "))
         @poller.soon
       end
     end

@@ -80,6 +80,13 @@ RSpec.describe ClaudeInbox::Remote::Start do
       expect(r.note).to eq("started deadbeef")
     end
 
+    it "starts without the worktree it was asked for outside a git repo, and says so" do
+      r = phone.start({prompt: "fix it", cwd: project, worktree: true})
+      expect(r.json["note"]).to eq("not in a git repo, so no worktree")
+      expect(client.spawns.last[:worktree]).to be(false)
+      expect(drain(queue).last).to eq([:remote_started, "deadbeef", "192.168.1.30", "not in a git repo, so no worktree"])
+    end
+
     it "hands back the claude.ai/code page once the session has registered its bridge" do
       FileUtils.mkdir_p(File.join(tmp, "jobs", "deadbeef"))
       File.write(File.join(tmp, "jobs", "deadbeef", "state.json"), JSON.generate(bridgeSessionId: "cse_01AbC"))

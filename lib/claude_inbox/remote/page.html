@@ -140,6 +140,7 @@ code { font: 15px ui-monospace, SFMono-Regular, Menlo, monospace; }
 <section id="done" class="card" hidden>
   <p>Started <code id="done-id"></code></p>
   <p class="muted" id="done-where"></p>
+  <p class="muted" id="done-note" hidden></p>
   <p class="muted" id="done-later">claude.ai/code lists it once it has registered, in a moment.</p>
   <div class="actions">
     <a class="button" id="done-url" target="_blank" rel="noopener">Open in Claude</a>
@@ -421,6 +422,8 @@ function started(session, remote) {
   $("name").value = "";
   $("done-id").textContent = session.id;
   $("done-where").textContent = [session.name, session.cwd].filter(Boolean).join(" · ");
+  $("done-note").textContent = session.note || "";
+  $("done-note").hidden = !session.note;
   const link = $("done-url");
   link.hidden = !/^https:\/\//.test(session.url || "");
   if (!link.hidden) link.href = session.url;

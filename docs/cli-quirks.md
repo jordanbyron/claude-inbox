@@ -106,6 +106,11 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   the attach client and needs no trick.
 - `claude rm` refuses a worktree holding unpushed commits and offers a
   `--discard-unpushed` token to override it. Nothing here passes that token.
+- `claude --bg --worktree` outside a git repository still prints an id and
+  exits 0; the session then fails `exit 1 before init` with `… is not a git
+  repository. Configure a WorktreeCreate hook to use --worktree with other
+  VCS systems.` in the job file's `detail` (checked on 2.1.301). The inbox
+  starts such a session without the flag and says so.
 - A prompt beginning with a slash command is expanded, `$ARGUMENTS` and all,
   in `-p` and `--bg` alike (checked on 2.1.274 with a project command).
   Installed plugins are listed in `~/.claude/plugins/installed_plugins.json`,

@@ -211,6 +211,31 @@ RSpec.describe ClaudeInbox::SessionRequest do
     end
   end
 
+  describe "without_stray_worktree" do
+    it "drops a worktree asked for outside a git repo, with a note saying so" do
+      Dir.mktmpdir do |tmp|
+        repo = File.join(tmp, "code", "app").tap { |dir| FileUtils.mkdir_p(File.join(dir, ".git")) }
+        parent = File.dirname(repo)
+        expect(described_class.without_stray_worktree({cwd: parent, worktree: true}))
+          .to eq([{cwd: parent, worktree: false}, "not in a git repo, so no worktree"])
+        expect(described_class.without_stray_worktree({cwd: repo, worktree: true})).to eq([{cwd: repo, worktree: true}, nil])
+        expect(described_class.without_stray_worktree({cwd: parent, worktree: false})).to eq([{cwd: parent, worktree: false}, nil])
+      end
+    end
+
+    it "finds a repo from any folder inside it, a worktree's .git file included" do
+      Dir.mktmpdir do |tmp|
+        FileUtils.mkdir_p(File.join(tmp, "app", ".git"))
+        FileUtils.mkdir_p(File.join(tmp, "app", "lib"))
+        FileUtils.mkdir_p(File.join(tmp, "tree"))
+        File.write(File.join(tmp, "tree", ".git"), "gitdir: elsewhere")
+        expect(described_class.inside_repo?(File.join(tmp, "app", "lib"))).to be(true)
+        expect(described_class.inside_repo?(File.join(tmp, "tree"))).to be(true)
+        expect(described_class.inside_repo?(tmp)).to be(false)
+      end
+    end
+  end
+
   describe "strip_worktree" do
     it "moves a directory inside an agent's worktree back to the repo it was cut from" do
       strip = described_class.method(:strip_worktree)
