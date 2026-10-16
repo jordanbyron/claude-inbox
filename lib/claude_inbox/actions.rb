@@ -74,6 +74,13 @@ module ClaudeInbox
       at.positive? && Time.at(at) >= @clock.call - GRACE
     end
 
+    # A preset by name, or the wake time a typed snooze became, which the
+    # relay sends as the epoch's digits.
+    def snooze_choice(choice)
+      return choice.to_sym if SNOOZES.include?(choice)
+      choice.to_i if choice.is_a?(String) && choice.match?(/\A\d+\z/)
+    end
+
     def apply(store, request, keys)
       id = request["id"]
       return false unless keys.include?(id)
@@ -83,8 +90,9 @@ module ClaudeInbox
       when "pin" then store.toggle_pin(id)
       when "acknowledge" then store.acknowledge(id)
       when "snooze"
-        return false unless SNOOZES.include?(request["choice"])
-        store.snooze(id, request["choice"].to_sym)
+        choice = snooze_choice(request["choice"])
+        return false unless choice
+        store.snooze(id, choice)
       else
         return false
       end

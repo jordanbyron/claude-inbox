@@ -9,6 +9,11 @@ RSpec.describe ClaudeInbox::Dialog do
       expect(dialog.choice).to eq(:tomorrow_9am)
     end
 
+    it "answers 5 with a choice to type, for App to open the prompt" do
+      expect(dialog.press("5", "5")).to eq(:snooze)
+      expect(dialog.choice).to eq(:custom)
+    end
+
     it "stays up on a key that is not a choice, and goes on esc or q" do
       expect(dialog.press("x", "x")).to be_nil
       expect(dialog.press(:escape, "\e")).to eq(:cancel)
@@ -89,6 +94,8 @@ RSpec.describe ClaudeInbox::Dialog do
       expect(dialog.frame(60, caret).join("\n")).to include "> auth[ ]"
       pr = described_class::Prompt.new(:pr, "abc12345", "")
       expect(pr.frame(60).join("\n")).to include "Pull request URL (empty clears):"
+      snooze = described_class::Prompt.new(:snooze, "abc12345", "")
+      expect(snooze.frame(60).join("\n")).to include "Wake at (2h, 5pm, fri, tonight):"
     end
 
     it "leaves the string it was given alone" do

@@ -40,7 +40,7 @@ a fullscreen terminal.
 
 `/inbox` opens it, `ctrl+x tab` focuses it and `esc` leaves. The keys are the
 ones below, with `ge` for `G`, `n` `p` for `Tab` `Shift+Tab`, and no `a`,
-`P`, `X`, `Ctrl-x`, `/`, `R`, `U` or `y`. `Enter`, or a click on a row, switches to the
+`P`, `X`, `Ctrl-x`, `/`, `R`, `U` or `y`, and `s` has no `5`. `Enter`, or a click on a row, switches to the
 session when you attached through `claude-inbox`.
 
 It opens when a session starts. To stop that, set
@@ -80,7 +80,7 @@ Vim bindings. Arrows and the mouse work too.
 | `n` | new session |
 | `N` | pair a phone |
 | `t` | pin / unpin |
-| `s` | snooze: `1` 15m · `2` 1h · `3` tomorrow 9am · `4` until woken |
+| `s` | snooze: `1` 15m · `2` 1h · `3` tomorrow 9am · `4` until woken · `5` type a duration or time |
 | `u` | wake a snoozed session, or bring back a settled one |
 | `x` | settle by hand |
 | `a` | set a local alias |

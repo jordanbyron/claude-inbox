@@ -32,7 +32,8 @@ module ClaudeInbox
         ["1", "15 minutes", :m15],
         ["2", "1 hour", :h1],
         ["3", "tomorrow 9am", :tomorrow_9am],
-        ["4", "until I wake it", :until_woken]
+        ["4", "until I wake it", :until_woken],
+        ["5", "a duration or time I type", :custom]
       ].freeze
 
       attr_reader :choice
@@ -118,11 +119,12 @@ module ClaudeInbox
       end
     end
 
-    # `a` alias and `P` pull request: one line of text, read from `value`
-    # once :save comes back. Empty means clear.
+    # `a` alias, `P` pull request and `s` `5` snooze: one line of text, read
+    # from `value` once :save comes back. Empty means clear.
     class Prompt < Dialog
-      TITLES = {alias: " Alias ", pr: " Pull request "}.freeze
-      QUESTIONS = {alias: "  New alias:", pr: "  Pull request URL (empty clears):"}.freeze
+      TITLES = {alias: " Alias ", pr: " Pull request ", snooze: " Snooze "}.freeze
+      QUESTIONS = {alias: "  New alias:", pr: "  Pull request URL (empty clears):",
+                   snooze: "  Wake at (2h, 5pm, fri, tonight):"}.freeze
 
       def initialize(kind, id, value)
         super(kind, id)

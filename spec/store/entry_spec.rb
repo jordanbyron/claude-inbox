@@ -209,6 +209,7 @@ RSpec.describe ClaudeInbox::Store::Entry do
     it("tomorrow 9am") { expect(described_class.snooze_until(:tomorrow_9am, evening)).to eq(Time.new(2026, 9, 17, 9).to_i) }
     it("today 9am when it is still early") { expect(described_class.snooze_until(:tomorrow_9am, Time.new(2026, 9, 16, 3))).to eq(Time.new(2026, 9, 16, 9).to_i) }
     it("until woken") { expect(described_class.snooze_until(:until_woken, evening)).to eq(ClaudeInbox::Store::UNTIL_WOKEN) }
+    it("a typed wake time, as is") { expect(described_class.snooze_until(evening.to_i + 7200, evening)).to eq(evening.to_i + 7200) }
     it("rejects anything else") { expect { described_class.snooze_until(:never, evening) }.to raise_error(ArgumentError) }
   end
 end

@@ -29,6 +29,15 @@ RSpec.describe ClaudeInbox::Actions do
     end
   end
 
+  it "takes the wake time a typed snooze relays, as the digits the relay sends" do
+    Dir.mktmpdir do |dir|
+      actions = described_class.new(dir: dir, clock: -> { now })
+      actions.request("snooze", "b", choice: (now.to_i + 7200).to_s)
+      expect(actions.drain(store)).to eq(1)
+      expect(store.entry("b")["wake_at"]).to eq(now.to_i + 7200)
+    end
+  end
+
   it "drops a verb it lacks or a bad snooze with the file" do
     Dir.mktmpdir do |dir|
       write.call(dir, "1.json", {"action" => "delete", "id" => "a"})
