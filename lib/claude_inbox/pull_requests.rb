@@ -20,6 +20,10 @@ module ClaudeInbox
   PullRequest = Struct.new(:number, :url, :state, :resolved_at, :health) do
     def short = number ? "##{number}" : url.to_s.sub(%r{\Ahttps?://(www\.)?}, "")
 
+    def repo = url.to_s[%r{\Ahttps://github\.com/([^/\s]+/[^/\s]+)/pull/\d+}, 1]
+
+    def qualified = (number && repo) ? "#{repo}##{number}" : short
+
     def trouble = PR_TROUBLE[health]
 
     # Failing checks or requested changes want you back; a conflict only

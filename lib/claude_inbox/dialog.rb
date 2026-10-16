@@ -56,6 +56,7 @@ module ClaudeInbox
     # `o` open and `y` copy on a session with several PRs: the headline
     # first, and the same key again takes it. The PR is read from `choice`.
     class PrPicker < Dialog
+      WIDTH = 64
       KEYS = {open: "o", copy: "y"}.freeze
       VERBS = {open: "open", copy: "copy"}.freeze
 
@@ -68,9 +69,10 @@ module ClaudeInbox
 
       def title = " #{VERBS.fetch(kind).capitalize} pull request "
 
-      def lines(_width, _caret)
-        @prs.each_with_index.map { |pr, i| "  #{i + 1}  #{label(pr)}" } +
-          ["", "  #{KEYS.fetch(kind)}  #{VERBS.fetch(kind)} #{@prs.first.short} · esc cancel"]
+      def lines(width, _caret)
+        (@prs.each_with_index.map { |pr, i| "  #{i + 1}  #{label(pr)}" } +
+          ["", "  #{KEYS.fetch(kind)}  #{VERBS.fetch(kind)} #{@prs.first.short} · esc cancel"])
+          .map { |line| Text.truncate(line, width) }
       end
 
       def press(name, key)
@@ -82,7 +84,11 @@ module ClaudeInbox
 
       private
 
-      def label(pr) = ["#{pr.short} #{pr.state&.downcase}".strip, pr.trouble].compact.join(" · ")
+      # A bare #190 is ambiguous only once the list spans repos.
+      def label(pr)
+        name = (@prs.map(&:repo).uniq.size > 1) ? pr.qualified : pr.short
+        ["#{name} #{pr.state&.downcase}".strip, pr.trouble].compact.join(" · ")
+      end
     end
 
     # `X` stop, `Ctrl-x` delete and Enter on a remote row all ask first and

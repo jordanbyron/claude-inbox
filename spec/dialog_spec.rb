@@ -43,6 +43,18 @@ RSpec.describe ClaudeInbox::Dialog do
       expect(copy.lines(40, nil).last).to eq("  y  copy #190 · esc cancel")
     end
 
+    it "names the repo of each PR once they span repos, and cuts lines to the box" do
+      across = [ClaudeInbox::PullRequest.new(number: 1020, url: "https://github.com/jordanbyron/parks_genie/pull/1020",
+        state: "OPEN", health: "CHANGES_REQUESTED"),
+        ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7")]
+      picker = described_class::PrPicker.new(:open, session(prs: across))
+      expect(picker.lines(60, nil).first(2)).to eq(["  1  jordanbyron/parks_genie#1020 open · changes requested", "  2  o/r#7"])
+      expect(picker.lines(60, nil).last).to eq("  o  open #1020 · esc cancel")
+      expect(picker.lines(20, nil).map { |l| ClaudeInbox::Text.width(l) }.max).to eq(20)
+      same = [across.first, ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/jordanbyron/parks_genie/pull/7")]
+      expect(described_class::PrPicker.new(:open, session(prs: same)).lines(60, nil)[1]).to eq("  2  #7")
+    end
+
     it "picks the headline on its own key or enter" do
       expect(dialog.press("o", "o")).to eq(:pick)
       expect(dialog.choice.number).to eq(190)

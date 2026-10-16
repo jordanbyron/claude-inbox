@@ -49,6 +49,15 @@ RSpec.describe ClaudeInbox::PullRequests do
     expect(health.call(other, run.call("SUCCESS", "2026-10-16T13:40:00Z"))).to eq("FAILING")
   end
 
+  it "names its repo from a github pull url, and qualifies its number with it" do
+    pr = ClaudeInbox::PullRequest.new(number: 1020, url: "https://github.com/jordanbyron/parks_genie/pull/1020")
+    expect(pr.repo).to eq("jordanbyron/parks_genie")
+    expect(pr.qualified).to eq("jordanbyron/parks_genie#1020")
+    elsewhere = ClaudeInbox::PullRequest.new(number: 4, url: "https://gitlab.com/o/r/-/merge_requests/4")
+    expect(elsewhere.repo).to be_nil
+    expect(elsewhere.qualified).to eq("#4")
+  end
+
   it "wants you back for failing checks and requested changes, not for a conflict" do
     expect(ClaudeInbox::PullRequest.new(state: "OPEN", health: "FAILING")).to be_needs_you
     expect(ClaudeInbox::PullRequest.new(state: "OPEN", health: "CHANGES_REQUESTED")).to be_needs_you
