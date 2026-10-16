@@ -179,7 +179,7 @@ module ClaudeInbox
     # merely flagged: attach lands on the session that asked for it, so there
     # is nothing useful to show or act on directly.
     def classify_origins(sessions)
-      pids = sessions.select { |s| s.interactive? && s.pid }.map(&:pid)
+      pids = sessions.filter_map { |s| s.pid if s.interactive? }
       return sessions if pids.empty?
       rows = ps_rows(pids)
       assign_origins(sessions, origins_from(rows), self.class.bridge_ids(rows))
