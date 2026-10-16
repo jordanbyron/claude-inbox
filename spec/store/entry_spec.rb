@@ -140,6 +140,36 @@ RSpec.describe ClaudeInbox::Store::Entry do
       expect(changed.last_visited_at).to eq(now.to_i)
     end
 
+    it "records trouble on the PR as a state change, and forgets it once the PR is clean" do
+      pr = ->(health) { [ClaudeInbox::PullRequest.new(number: 7, state: "OPEN", health: health)] }
+      h = {"last_state" => "done", "state_since" => now.to_i - 600, "acknowledged_at" => now.to_i - 300}
+      e = described_class.new(h).observe(session(id: "a", state: "done", prs: pr.call("CLEAN")), now)
+      expect(e.to_h).not_to include "pr_health"
+      expect(e.state_since).to eq(now.to_i - 600)
+      expect(e.acknowledged_at).to eq(now.to_i - 300)
+
+      e.observe(session(id: "a", state: "done", prs: pr.call("FAILING")), now + 10)
+      expect(e.pr_health).to eq("FAILING")
+      expect(e.state_since).to eq(now.to_i + 10)
+      expect(e.to_h).not_to include "acknowledged_at"
+
+      e.observe(session(id: "a", state: "done", prs: pr.call("FAILING")), now + 20)
+      expect(e.state_since).to eq(now.to_i + 10)
+
+      e.observe(session(id: "a", state: "done", prs: pr.call("CLEAN")), now + 30)
+      expect(e.to_h).not_to include "pr_health"
+      expect(e.state_since).to eq(now.to_i + 30)
+    end
+
+    it "leaves the PR's record alone while gh has not described it" do
+      h = {"last_state" => "done", "state_since" => now.to_i - 600, "pr_health" => "FAILING", "acknowledged_at" => now.to_i - 300}
+      e = described_class.new(h).observe(session(id: "a", state: "done", prs: [ClaudeInbox::PullRequest.new(number: 7)]), now)
+      expect(e.pr_health).to eq("FAILING")
+      expect(e.state_since).to eq(now.to_i - 600)
+      expect(e.acknowledged_at).to eq(now.to_i - 300)
+      expect(described_class.new({}).observe(session(id: "a"), now).to_h).not_to include "pr_health"
+    end
+
     it "returns itself, over the same hash" do
       h = {"last_state" => "working"}
       e = described_class.new(h)

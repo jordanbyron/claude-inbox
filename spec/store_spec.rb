@@ -484,6 +484,20 @@ RSpec.describe ClaudeInbox::Store do
         expect(store.sections.active.map(&:key)).to eq(%w[a])
       end
     end
+
+    it "holds an acknowledged PR failure in Active until the PR's health changes again" do
+      done = ->(health) { session(id: "a", state: "done", prs: [ClaudeInbox::PullRequest.new(number: 7, state: "OPEN", health: health)]) }
+      entries = described_class.merge_entries({}, [done.call(nil)], now)
+      entries = described_class.merge_entries(entries, [done.call("FAILING")], now + 10)
+      expect(described_class.sectionize([done.call("FAILING")], entries, now + 10).needs_you.map(&:key)).to eq(%w[a])
+      entries["a"]["acknowledged_at"] = now.to_i + 20
+      entries = described_class.merge_entries(entries, [done.call("FAILING")], now + 30)
+      expect(described_class.sectionize([done.call("FAILING")], entries, now + 30).active.map(&:key)).to eq(%w[a])
+      entries = described_class.merge_entries(entries, [done.call("CLEAN")], now + 40)
+      entries = described_class.merge_entries(entries, [done.call("CHANGES_REQUESTED")], now + 50)
+      expect(entries["a"]).not_to include("acknowledged_at")
+      expect(described_class.sectionize([done.call("CHANGES_REQUESTED")], entries, now + 50).needs_you.map(&:key)).to eq(%w[a])
+    end
   end
 
   describe ".merge_entries" do

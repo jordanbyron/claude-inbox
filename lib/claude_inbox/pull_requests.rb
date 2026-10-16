@@ -9,9 +9,16 @@ module ClaudeInbox
   # A pull request tied to a session. `state` uses GitHub's vocabulary plus
   # DRAFT, the same as Claude Code's own cache: OPEN, DRAFT, MERGED, CLOSED,
   # or nil when nothing has told us yet. `resolved_at` is when it was merged
-  # or closed, in epoch seconds, once gh has said.
-  PullRequest = Struct.new(:number, :url, :state, :resolved_at) do
+  # or closed, in epoch seconds, once gh has said. `health` is what gh last
+  # said is wrong with an open PR: FAILING (a check), CHANGES_REQUESTED or
+  # CONFLICTING; CLEAN when nothing is, nil when nothing has said. Claude
+  # Code's cache knows nothing of it, and a resolved PR has none.
+  PullRequest = Struct.new(:number, :url, :state, :resolved_at, :health) do
     def short = number ? "##{number}" : url.to_s.sub(%r{\Ahttps?://(www\.)?}, "")
+
+    # Failing checks or requested changes want you back; a conflict only
+    # waits on whoever rebases.
+    def needs_you? = %w[FAILING CHANGES_REQUESTED].include?(health)
 
     def merged? = state == "MERGED"
 
@@ -56,6 +63,7 @@ module ClaudeInbox
   # open PR, and the poller calls it after the list has already gone up.
   class PullRequests
     REFRESH_AFTER = 60
+    FAILED_CHECKS = %w[FAILURE ERROR TIMED_OUT CANCELLED ACTION_REQUIRED STARTUP_FAILURE].freeze
 
     CACHE_PATH = File.join(Dir.home, ".claude", "gh-pr-status-cache.json")
     RESOLVED_PATH = File.join(Dir.home, ".config", "claude-inbox", "prs.json")
@@ -114,9 +122,21 @@ module ClaudeInbox
       h = JSON.parse(json)
       state = (h["state"] == "OPEN" && h["isDraft"]) ? "DRAFT" : h["state"]
       resolved_at = h["closedAt"] && Time.iso8601(h["closedAt"]).to_i
-      PullRequest.new(number: h["number"], url: h["url"] || url, state: state, resolved_at: resolved_at)
+      PullRequest.new(number: h["number"], url: h["url"] || url, state: state, resolved_at: resolved_at,
+        health: (health(h) if h["state"] == "OPEN"))
     rescue JSON::ParserError, ArgumentError
       nil
+    end
+
+    # A check run reports a `conclusion`, a commit status a `state`; the
+    # rollup mixes both.
+    def self.health(h)
+      checks = h["statusCheckRollup"] || []
+      if checks.any? { |c| FAILED_CHECKS.include?(c["conclusion"] || c["state"]) } then "FAILING"
+      elsif h["reviewDecision"] == "CHANGES_REQUESTED" then "CHANGES_REQUESTED"
+      elsif h["mergeable"] == "CONFLICTING" then "CONFLICTING"
+      else "CLEAN"
+      end
     end
 
     # Only an https://github.com/<owner>/<repo>/pull/<n> link makes sense here.
@@ -159,7 +179,8 @@ module ClaudeInbox
     end
 
     def fetch(url)
-      r = Subprocess.capture(@gh, "pr", "view", url, "--json", "number,state,isDraft,url,closedAt")
+      r = Subprocess.capture(@gh, "pr", "view", url, "--json",
+        "number,state,isDraft,url,closedAt,statusCheckRollup,reviewDecision,mergeable")
       r.success? ? self.class.parse(url, r.out) : nil
     rescue SystemCallError
       nil

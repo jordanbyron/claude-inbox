@@ -72,6 +72,16 @@ module ClaudeInbox
         entry&.revived_at && entry.state_since.to_i <= entry.revived_at.to_i
       end
 
+      # Failing checks or requested changes on the PR want you back the way
+      # a blocked session does, once the agent has stopped working on it.
+      # Only an open PR gh has described has a health, so the unknown and
+      # the long-resolved PRs `settled?` guards against never count here.
+      # Entry#observe treats a change of health as a state change, so
+      # attaching answers it until the health changes again.
+      def pr_needs_you?
+        session.effective_state != "working" && session.pr&.needs_you? == true
+      end
+
       # Resolved PRs settle a `blocked` row too: asking "anything need
       # changing?" leaves it blocked, and merging answers it. `failed` stays
       # in view even if its PR landed; a PR nobody knows the state of yet
@@ -105,7 +115,7 @@ module ClaudeInbox
         elsif pinned? then :pinned
         elsif snoozed?(now) then :snoozed
         elsif !revived? && settled? then :settled # a resolved PR outranks Needs You
-        elsif session.needs_you? then acknowledged? ? :active : :needs_you
+        elsif session.needs_you? || pr_needs_you? then acknowledged? ? :active : :needs_you
         else :active
         end
       end

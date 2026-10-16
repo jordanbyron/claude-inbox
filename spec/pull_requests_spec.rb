@@ -13,6 +13,63 @@ RSpec.describe ClaudeInbox::PullRequests do
     expect(pr.state).to eq("DRAFT")
     expect(pr.short).to eq("#885")
     expect(pr).not_to be_resolved
+    expect(pr.health).to be_nil
+  end
+
+  it "reads what is wrong with an open PR, and nothing of a resolved one" do
+    view = ->(**fields) {
+      described_class.parse("u", JSON.generate({"number" => 9, "state" => "OPEN", "isDraft" => false,
+                                                "statusCheckRollup" => [{"__typename" => "CheckRun", "status" => "COMPLETED", "conclusion" => "SUCCESS"}],
+                                                "reviewDecision" => "", "mergeable" => "MERGEABLE"}.merge(fields)))
+    }
+    expect(view.call.health).to eq("CLEAN")
+    failing = [{"__typename" => "StatusContext", "state" => "FAILURE"}, {"__typename" => "CheckRun", "conclusion" => "SUCCESS"}]
+    expect(view.call("statusCheckRollup" => failing).health).to eq("FAILING")
+    expect(view.call("statusCheckRollup" => [{"__typename" => "CheckRun", "status" => "IN_PROGRESS", "conclusion" => nil}]).health).to eq("CLEAN")
+    expect(view.call("reviewDecision" => "CHANGES_REQUESTED").health).to eq("CHANGES_REQUESTED")
+    expect(view.call("reviewDecision" => "CHANGES_REQUESTED", "statusCheckRollup" => failing).health).to eq("FAILING")
+    expect(view.call("mergeable" => "CONFLICTING").health).to eq("CONFLICTING")
+    expect(view.call("mergeable" => "UNKNOWN").health).to eq("CLEAN")
+    expect(view.call("isDraft" => true, "mergeable" => "CONFLICTING").health).to eq("CONFLICTING")
+    expect(view.call("state" => "MERGED", "closedAt" => "2026-09-28T14:00:00Z", "mergeable" => "CONFLICTING").health).to be_nil
+    expect(described_class.parse("u", '{"state":"OPEN","isDraft":false}').health).to eq("CLEAN")
+  end
+
+  it "wants you back for failing checks and requested changes, not for a conflict" do
+    expect(ClaudeInbox::PullRequest.new(state: "OPEN", health: "FAILING")).to be_needs_you
+    expect(ClaudeInbox::PullRequest.new(state: "OPEN", health: "CHANGES_REQUESTED")).to be_needs_you
+    expect(ClaudeInbox::PullRequest.new(state: "OPEN", health: "CONFLICTING")).not_to be_needs_you
+    expect(ClaudeInbox::PullRequest.new(state: "OPEN", health: "CLEAN")).not_to be_needs_you
+    expect(ClaudeInbox::PullRequest.new(state: "OPEN")).not_to be_needs_you
+  end
+
+  it "asks gh for the state and the health in the one call" do
+    client = described_class.new(cache_path: nil, resolved_path: nil, gh: "gh", clock: -> { now })
+    out = '{"number":1,"state":"OPEN","isDraft":false,"statusCheckRollup":[{"conclusion":"FAILURE"}]}'
+    ok = instance_double(Process::Status, success?: true)
+    expect(ClaudeInbox::Subprocess).to receive(:capture)
+      .with("gh", "pr", "view", "https://github.com/o/r/pull/1", "--json",
+        "number,state,isDraft,url,closedAt,statusCheckRollup,reviewDecision,mergeable")
+      .once.and_return(ClaudeInbox::Subprocess::Result.new(out, "", ok))
+    pr = client.status("https://github.com/o/r/pull/1")
+    expect(pr.state).to eq("OPEN")
+    expect(pr.health).to eq("FAILING")
+  end
+
+  it "counts a change of health as a change worth publishing" do
+    later = now
+    health = "CLEAN"
+    client = described_class.new(cache_path: nil, resolved_path: nil, gh: "gh", clock: -> { later })
+    allow(client).to receive(:fetch) { |u| ClaudeInbox::PullRequest.new(number: 1, url: u, state: "OPEN", health: health) }
+    before = client.enrich([session(id: "x")], {"x" => "https://github.com/o/r/pull/1"}).first
+    (open,), _ = client.refresh([before])
+    expect(open.prs.first.health).to eq("CLEAN")
+
+    later = now + described_class::REFRESH_AFTER
+    health = "FAILING"
+    (failing,), moved = client.refresh([open])
+    expect(moved).to be(true)
+    expect(failing.prs.first.health).to eq("FAILING")
   end
 
   it "knows the number but not the state of a PR nobody has cached" do

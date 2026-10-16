@@ -104,6 +104,48 @@ RSpec.describe ClaudeInbox::Store::Row do
     end
   end
 
+  describe "pull request rule" do
+    let(:entry) { ClaudeInbox::Store::Entry.new("last_state" => "done", "state_since" => now.to_i - 60) }
+    let(:open) { ->(health) { [ClaudeInbox::PullRequest.new(number: 7, state: "OPEN", health: health)] } }
+
+    it "puts a stopped session in Needs You when its PR has failing checks or changes requested" do
+      failing = described_class.new(session(id: "a", state: "done", prs: open.call("FAILING")), entry)
+      expect(failing).to be_pr_needs_you
+      expect(failing.section(now)).to eq(:needs_you)
+      changes = described_class.new(session(id: "a", state: "stopped", prs: open.call("CHANGES_REQUESTED")), entry)
+      expect(changes.section(now)).to eq(:needs_you)
+    end
+
+    it "leaves a conflict, a clean PR and one gh has not described in Active" do
+      ["CONFLICTING", "CLEAN", nil].each do |health|
+        r = described_class.new(session(id: "a", state: "done", prs: open.call(health)), entry)
+        expect(r).not_to be_pr_needs_you
+        expect(r.section(now)).to eq(:active)
+      end
+    end
+
+    it "waits while the agent is still working" do
+      r = described_class.new(session(id: "a", state: "working", prs: open.call("FAILING")), entry)
+      expect(r).not_to be_pr_needs_you
+      expect(r.section(now)).to eq(:active)
+    end
+
+    it "moves to Active once attached to, like a blocked session, and settles on x" do
+      seen = ClaudeInbox::Store::Entry.new("last_state" => "done", "state_since" => now.to_i - 60, "acknowledged_at" => now.to_i - 30)
+      r = described_class.new(session(id: "a", state: "done", prs: open.call("FAILING")), seen)
+      expect(r).to be_pr_needs_you
+      expect(r.section(now)).to eq(:active)
+      settled = ClaudeInbox::Store::Entry.new("last_state" => "done", "state_since" => now.to_i - 60, "settled_at" => now.to_i - 30)
+      expect(described_class.new(session(id: "a", state: "done", prs: open.call("FAILING")), settled).section(now)).to eq(:settled)
+    end
+
+    it "goes by the PR the badge shows, and never by one with no entry yet" do
+      prs = [ClaudeInbox::PullRequest.new(number: 1, state: "OPEN", health: "CLEAN"), *open.call("FAILING")]
+      expect(described_class.new(session(id: "a", state: "done", prs: prs), entry).section(now)).to eq(:active)
+      expect(described_class.new(session(id: "a", state: "done", prs: open.call("FAILING")), nil).section(now)).to eq(:needs_you)
+    end
+  end
+
   describe "reap rule" do
     let(:quiet) { {"last_state" => "done", "state_since" => now.to_i - ClaudeInbox::Store::REAP_AFTER - 1} }
     let(:recent) { {"last_state" => "done", "state_since" => now.to_i - ClaudeInbox::Store::REAP_AFTER + 60} }

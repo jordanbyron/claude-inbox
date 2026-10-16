@@ -50,7 +50,8 @@ It opens when a session starts. To stop that, set
 ## Sections
 
 1. **Pinned.** Rows you pinned with `t`.
-2. **Needs you.** Blocked or failed sessions you haven't attached to yet.
+2. **Needs you.** Blocked or failed sessions, or ones whose pull request has
+   failing checks or changes requested, that you haven't attached to yet.
 3. **Active.** Everything else that's running or not yet settled, including
    interactive terminals.
 4. **Snoozed.** Sorted by wake time. Collapsed.
@@ -59,8 +60,9 @@ It opens when a session starts. To stop that, set
 
 Under each row is what the session is waiting on, what it produced, or its
 status line. A row with a pull request shows it as `#885 open`, `#885 merged`
-and so on. A steady `◌` with `idle · 1 shell` means the agent stopped and is
-waiting on a shell or sub-agent it started. A `●` marks a session you
+and so on, with `✗ checks`, `changes requested` or `conflicts` after it when
+something is wrong. A steady `◌` with `idle · 1 shell` means the agent stopped
+and is waiting on a shell or sub-agent it started. A `●` marks a session you
 haven't attached to since it got blocked, in red, or finished, in blue; one
 you have attached to since is dimmed.
 
@@ -115,8 +117,8 @@ lists them all.
 A snoozed session wakes when its timer runs out, when you press `u`, or when
 it becomes blocked or failed.
 
-Attaching to a needs-you session moves it to Active until its state changes
-again.
+Attaching to a needs-you session moves it to Active until its state, or its
+pull request's health, changes again.
 
 A session settles when you press `x` or when all its pull requests are merged
 or closed. A session without a pull request only settles by hand.
