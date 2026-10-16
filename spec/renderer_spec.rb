@@ -65,7 +65,8 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(colored.find { |l| l.include?("stuck") }).to include("\e[1mstuck")
     expect(colored.find { |l| l.include?("stuck") }).to include("\e[38;5;203;1m●")
     selected = described_class.new(color: true, home: "/Users/byron").frame(sec, view.with(width: 60, height: 12, selected: "aaa11111")).lines
-    expect(selected.find { |l| l.include?("fresh") }).to include("\e[38;5;179;1m▶\e[0m").and(exclude("\e[38;5;75m●"))
+    expect(selected.find { |l| l.include?("fresh") }).to include("\e[38;5;179;1m▶\e[0m")
+    expect(selected.find { |l| l.include?("fresh") }).not_to include("\e[38;5;75m●")
   end
 
   it "selects interactive rows by session uuid, with no PR-less session settling on its own" do
