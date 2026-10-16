@@ -30,15 +30,15 @@ RSpec.describe ClaudeInbox::Dialog do
   describe "pr picker" do
     let(:prs) do
       [ClaudeInbox::PullRequest.new(number: 189, state: "MERGED"),
-        ClaudeInbox::PullRequest.new(number: 190, state: "OPEN", health: "FAILING"),
+        ClaudeInbox::PullRequest.new(number: 190, state: "OPEN", health: "FAILING", title: "Install the pane from the CLI"),
         ClaudeInbox::PullRequest.new(number: 191)]
     end
     let(:dialog) { described_class::PrPicker.new(:open, session(prs: prs)) }
 
     it "lists the headline first, then the rest in order" do
       expect(dialog.frame(60).join("\n")).to include(" Open pull request ")
-      expect(dialog.lines(40, nil)).to eq(["  1  #190 open · ✗ checks", "  2  #189 merged", "  3  #191",
-        "", "  o  open #190 · esc cancel"])
+      expect(dialog.lines(60, nil)).to eq(["  1  #190 open · ✗ checks · Install the pane from the CLI",
+        "  2  #189 merged", "  3  #191", "", "  o  open #190 · esc cancel"])
       copy = described_class::PrPicker.new(:copy, session(prs: prs))
       expect(copy.lines(40, nil).last).to eq("  y  copy #190 · esc cancel")
     end

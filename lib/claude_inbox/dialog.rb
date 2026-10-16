@@ -87,7 +87,7 @@ module ClaudeInbox
       # A bare #190 is ambiguous only once the list spans repos.
       def label(pr)
         name = (@prs.map(&:repo).uniq.size > 1) ? pr.qualified : pr.short
-        ["#{name} #{pr.state&.downcase}".strip, pr.trouble].compact.join(" · ")
+        ["#{name} #{pr.state&.downcase}".strip, pr.trouble, pr.title].compact.join(" · ")
       end
     end
 

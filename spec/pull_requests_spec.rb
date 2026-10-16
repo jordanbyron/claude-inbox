@@ -11,6 +11,7 @@ RSpec.describe ClaudeInbox::PullRequests do
     pr = prs.status("https://github.com/jordanbyron/parks_genie/pull/885")
     expect(pr.number).to eq(885)
     expect(pr.state).to eq("DRAFT")
+    expect(pr.title).to eq("feat(sensors): edge probe")
     expect(pr.short).to eq("#885")
     expect(pr).not_to be_resolved
     expect(pr.health).to be_nil
@@ -72,7 +73,7 @@ RSpec.describe ClaudeInbox::PullRequests do
     ok = instance_double(Process::Status, success?: true)
     expect(ClaudeInbox::Subprocess).to receive(:capture)
       .with("gh", "pr", "view", "https://github.com/o/r/pull/1", "--json",
-        "number,state,isDraft,url,closedAt,statusCheckRollup,reviewDecision,mergeable")
+        "number,state,isDraft,url,closedAt,statusCheckRollup,reviewDecision,mergeable,title")
       .once.and_return(ClaudeInbox::Subprocess::Result.new(out, "", ok))
     pr = client.status("https://github.com/o/r/pull/1")
     expect(pr.state).to eq("OPEN")
@@ -120,6 +121,7 @@ RSpec.describe ClaudeInbox::PullRequests do
   it "parses gh output, calling an open draft DRAFT" do
     pr = described_class.parse("u", '{"number":9,"state":"OPEN","isDraft":true,"title":"t","url":"u"}')
     expect(pr.state).to eq("DRAFT")
+    expect(pr.title).to eq("t")
     expect(described_class.parse("u", '{"state":"OPEN","isDraft":false}').state).to eq("OPEN")
     expect(described_class.parse("u", '{"state":"MERGED","isDraft":false}')).to be_merged
     expect(described_class.parse("u", "garbage")).to be_nil
@@ -222,7 +224,7 @@ RSpec.describe ClaudeInbox::PullRequests do
       asked = 0
       allow(first).to receive(:fetch) do |u|
         asked += 1
-        ClaudeInbox::PullRequest.new(number: 7, url: u, state: "MERGED", resolved_at: now.to_i - 60)
+        ClaudeInbox::PullRequest.new(number: 7, url: u, state: "MERGED", resolved_at: now.to_i - 60, title: "Ship it")
       end
       expect(first.status(url)).to be_merged
       expect(asked).to eq(1)
@@ -233,6 +235,7 @@ RSpec.describe ClaudeInbox::PullRequests do
       pr = second.status(url)
       expect(pr).to be_merged
       expect(pr.resolved_at).to eq(now.to_i - 60)
+      expect(pr.title).to eq("Ship it")
     end
   end
 
