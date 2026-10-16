@@ -74,12 +74,23 @@ module ClaudeInbox
       # When `claude rm` last refused this session, so the Reaper backs off.
       def reap_failed_at = @h["reap_failed_at"]
 
+      # What was last wrong with the PR, while something is.
+      def pr_health = @h["pr_health"]
+
       def stale?(now) = last_seen && now.to_i - last_seen > PRUNE_AFTER
 
       def observe(session, now)
         now_i = now.to_i
         if last_state != session.effective_state
           @h["last_state"] = session.effective_state
+          @h["state_since"] = now_i
+        end
+        # Trouble on the PR is a state change too, so an attach answers it
+        # like a blocked state and it sorts to the top of Needs You. Only the
+        # trouble is kept, and a PR gh has not described leaves it as it was.
+        health = session.pr&.health
+        if health && health != (pr_health || "CLEAN")
+          (health == "CLEAN") ? @h.delete("pr_health") : @h["pr_health"] = health
           @h["state_since"] = now_i
         end
         @h["last_seen"] = now_i

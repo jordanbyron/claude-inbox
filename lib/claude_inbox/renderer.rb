@@ -39,6 +39,12 @@ module ClaudeInbox
     # the table isn't named on the badge at all.
     PR_HUES = {"OPEN" => :green, "DRAFT" => nil, "MERGED" => :purple, "CLOSED" => :red}.freeze
 
+    # What is wrong with an open PR, after its badge. Red for what puts the
+    # row in Needs You; a conflict dims, since it waits on a rebase, not on
+    # you. CLEAN and unknown say nothing.
+    PR_TROUBLE = {"FAILING" => [:red, "✗ checks"], "CHANGES_REQUESTED" => [:red, "changes requested"],
+                  "CONFLICTING" => [nil, "conflicts"]}.freeze
+
     SPINNER = %w[⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏].freeze
 
     # The first poll usually lands inside a second. Past LOADING_QUIET the
@@ -394,13 +400,16 @@ module ClaudeInbox
       pr ? base + @p.dim(" · ") + pr : base
     end
 
-    # "#885 open". Only the first PR is shown.
+    # "#885 open", or "#885 open · ✗ checks" when something is wrong. Only
+    # the first PR is shown.
     def pr_badge(s, section)
       pr = s.pr
       return nil unless pr
       return @p.dim("#{pr.short} #{pr.state&.downcase}".strip) if section == :settled
       return @p.dim(pr.short) unless PR_HUES.key?(pr.state)
-      tint(PR_HUES[pr.state], "#{pr.short} #{pr.state.downcase}")
+      badge = tint(PR_HUES[pr.state], "#{pr.short} #{pr.state.downcase}")
+      hue, trouble = PR_TROUBLE[pr.health]
+      trouble ? badge + @p.dim(" · ") + tint(hue, trouble) : badge
     end
 
     def state_badge(s)

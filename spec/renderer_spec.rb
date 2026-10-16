@@ -350,6 +350,22 @@ RSpec.describe "renderer session colors" do
     expect(line).to include("#{orange}\e[2mtinted\e[0m\e[39m")
   end
 
+  it "says what is wrong with an open PR after its badge, red when it wants you" do
+    badge = ->(state, health) {
+      s = session(id: "z", name: "shipit", state: "done",
+        prs: [ClaudeInbox::PullRequest.new(number: 7, state: state, health: health)])
+      line_of.call(s, "shipit")
+    }
+    open = "\e[38;5;108m#7 open\e[0m"
+    expect(badge.call("OPEN", "FAILING")).to include("#{open}\e[2m · \e[0m\e[38;5;203m✗ checks\e[0m")
+    expect(badge.call("OPEN", "CHANGES_REQUESTED")).to include("#{open}\e[2m · \e[0m\e[38;5;203mchanges requested\e[0m")
+    expect(badge.call("OPEN", "CONFLICTING")).to include("#{open}\e[2m · \e[0m\e[2mconflicts\e[0m")
+    expect(badge.call("DRAFT", "FAILING")).to include("\e[2m#7 draft\e[0m\e[2m · \e[0m\e[38;5;203m✗ checks\e[0m")
+    expect(badge.call("OPEN", "CLEAN")).to match(/#{Regexp.escape(open)}\s/)
+    expect(badge.call("OPEN", nil)).to match(/#{Regexp.escape(open)}\s/)
+    expect(ClaudeInbox::Text.width(badge.call("OPEN", "FAILING"))).to eq(80)
+  end
+
   it "colors a PR badge by its state and dims a draft or an unknown one" do
     badge = ->(state) {
       s = session(id: "z", name: "shipit", prs: [ClaudeInbox::PullRequest.new(number: 7, state: state)])
