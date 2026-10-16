@@ -46,6 +46,7 @@ module ClaudeInbox
       elsif row.session.effective_state == "done" then "finished"
       end
     end
+    private_class_method :alerts, :rows, :alert
 
     def initialize(app: NotifierApp.new, run: Subprocess.method(:capture), enabled: true)
       @app = app
