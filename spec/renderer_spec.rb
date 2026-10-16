@@ -186,7 +186,7 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(renderer.frame(sections, view.with(width: 60, height: 10)).plain.lines.first).to include("● 1  ✻ 1")
   end
 
-  it "shows the listener in the header: its port, red when it couldn't listen, nothing when off" do
+  it "shows the listener in the header: its port, red and saying why when it couldn't listen, nothing when off" do
     snapshot = ->(state, lan: false) {
       ClaudeInbox::Remote::Listener::Snapshot.new(state: state, port: 7433, lan: lan, urls: nil, firewall: nil,
         allowed_modes: [], recent: [], held_by: nil, fixture: false, error: nil)
@@ -196,9 +196,10 @@ RSpec.describe ClaudeInbox::Renderer do
     }
     expect(header.call(snapshot.call(:listening))).to match(/1 needs you  ·  .*  ·  ◉ :7433/)
     expect(header.call(snapshot.call(:listening, lan: true))).to include("◉ lan:7433")
-    expect(header.call(snapshot.call(:in_use))).to include("◉ !")
-    expect(header.call(snapshot.call(:held))).to include("◉ !")
-    expect(header.call(snapshot.call(:failed))).to include("◉ !")
+    expect(header.call(snapshot.call(:in_use))).to include("◉ :7433 in use")
+    expect(header.call(snapshot.call(:held, lan: true))).to include("◉ lan:7433 held by another inbox")
+    expect(header.call(snapshot.call(:held, lan: true), width: 60)).to include("◉ lan:7433 held")
+    expect(header.call(snapshot.call(:failed))).to include("◉ :7433 failed")
     expect(header.call(snapshot.call(:off))).not_to include("◉")
     expect(header.call(nil)).not_to include("◉")
     expect(header.call(snapshot.call(:listening), width: 60)).to include("● 1  ✻ 1  ○ 1  ◉ :7433")
@@ -208,7 +209,7 @@ RSpec.describe ClaudeInbox::Renderer do
       colored.frame(sections, view.with(width: 140, height: 10, listening: snapshot.call(state))).lines.first
     }
     expect(chip.call(:listening)).to include("\e[38;5;#{ClaudeInbox::Theme::HUES[:blue]}m◉ :7433")
-    expect(chip.call(:held)).to include("\e[38;5;#{ClaudeInbox::Theme::HUES[:red]}m◉ !")
+    expect(chip.call(:held)).to include("\e[38;5;#{ClaudeInbox::Theme::HUES[:red]}m◉ :7433 held by another inbox")
   end
 
   it "puts N in the footer only while listening on the LAN" do
