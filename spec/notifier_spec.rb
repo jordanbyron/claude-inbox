@@ -58,6 +58,18 @@ RSpec.describe ClaudeInbox::Notifier do
       expect(described_class.diff(*poll[blocked])).to be_empty
     end
 
+    it "says nothing for a row that only came back from Settled or Snoozed" do
+      poll[done]
+      store.settle("abc12345")
+      before = store.sections
+      store.wake("abc12345") # stands in for gh un-settling a row whose open PR the cache did not know
+      expect(described_class.diff(before, store.sections)).to be_empty
+      store.snooze("abc12345", :m15)
+      before = store.sections
+      clock.advance(16 * 60)
+      expect(described_class.diff(before, store.sections)).to be_empty
+    end
+
     it "speaks for a snoozed row that woke because it became blocked, and for a pinned one" do
       poll[working]
       store.snooze("abc12345", :h1)
