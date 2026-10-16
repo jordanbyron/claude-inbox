@@ -27,7 +27,7 @@ RSpec.describe ClaudeInbox::Renderer do
  ▌ claude-inbox   ● 1 needs you  ·  ✻ 1 working  ·  ○ 1 terminal
 
  ▎ NEEDS YOU ─────────────────────────────────────────────────────── 1
- ▶ ● comma3x not booting                         needs you · 0s  comma3 
+ ▶   comma3x not booting                         needs you · 0s  comma3 
        ↳ ~/code/comma3
 
  ▎ ACTIVE ────────────────────────────────────────────────────────── 6
@@ -48,7 +48,7 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(f.lines).to eq(expected)
   end
 
-  it "dots and bolds a finished row until attached to, then dims it in its color, leaves a blocked one dotted and bold, and gives the selected one the yellow caret" do
+  it "dots a finished row blue and a blocked one red until attached to, then dims the finished one in its color, and gives the selected one the yellow caret" do
     done = session(id: "aaa11111", name: "fresh", state: "done")
     seen = session(id: "bbb22222", name: "seen", state: "done", job_state: ClaudeInbox::JobState.new("color" => "orange"))
     blocked = session(id: "ccc33333", name: "stuck", state: "blocked")
@@ -57,13 +57,16 @@ RSpec.describe ClaudeInbox::Renderer do
     plain = renderer.frame(sec, view.with(width: 60, height: 12)).lines.join("\n")
     expect(plain).to match(/^ ● ✓ fresh /)
     expect(plain).to match(/^   ✓ seen /)
-    expect(plain).to match(/^ ● ● stuck /)
+    expect(plain).to match(/^ ●   stuck /)
     colored = described_class.new(color: true, home: "/Users/byron").frame(sec, view.with(width: 60, height: 12)).lines
     expect(colored.find { |l| l.include?("fresh") }).to include("\e[38;5;75m●\e[0m")
     expect(colored.find { |l| l.include?("fresh") }).to include("\e[1mfresh")
     expect(colored.find { |l| l.include?("seen") }).to include("\e[38;5;208m\e[2mseen\e[0m\e[39m")
     expect(colored.find { |l| l.include?("stuck") }).to include("\e[1mstuck")
     expect(colored.find { |l| l.include?("stuck") }).to include("\e[38;5;203;1m●")
+    acknowledged = ClaudeInbox::Store.merge_entries({"ccc33333" => {"last_state" => "blocked", "state_since" => now.to_i - 60, "acknowledged_at" => now.to_i - 30, "last_visited_at" => now.to_i - 30}}, [blocked], now)
+    seen_blocked = renderer.frame(ClaudeInbox::Store.sectionize([blocked], acknowledged, now), view.with(width: 60, height: 12)).lines.join("\n")
+    expect(seen_blocked).to match(/^     stuck .*needs you/)
     selected = described_class.new(color: true, home: "/Users/byron").frame(sec, view.with(width: 60, height: 12, selected: "aaa11111")).lines
     expect(selected.find { |l| l.include?("fresh") }).to include("\e[38;5;179;1m▶\e[0m")
     expect(selected.find { |l| l.include?("fresh") }).not_to include("\e[38;5;75m●")
@@ -127,7 +130,7 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(sec.active.map(&:key)).to eq(%w[u1])
     text = renderer.frame(sec, view.with(width: 90, height: 12)).lines.join("\n")
     expect(text).to match(/✓ shell\s+done · your terminal/)
-    expect(text).to match(/● shell2\s+needs you: permission prompt · your terminal/)
+    expect(text).to match(/●   shell2\s+needs you: permission prompt · your terminal/)
   end
 
   it "lists settled rows when expanded" do

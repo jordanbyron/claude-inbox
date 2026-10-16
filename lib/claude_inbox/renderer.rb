@@ -303,7 +303,10 @@ module ClaudeInbox
       live = %i[pinned needs_you active].include?(section)
       sel = row.selectable? && selected == row.key
       quiet = section == :settled || (live && row.read?)
-      marker = marker_for(sel, live && row.unread?)
+      unread = live && row.unread?
+      # A terminal cannot be attached to, so it is never read: while it waits on you it keeps its dot.
+      alert = live && s.needs_you? && (unread || !s.actionable?)
+      marker = marker_for(sel, unread, alert)
       glyph = glyph_for(s, section, tick)
       meta = meta_for(row, section, now)
 
@@ -328,11 +331,12 @@ module ClaudeInbox
       [Text.pad(first, width), Text.pad(detail, width)]
     end
 
-    # The caret takes the column. An unread row's dot is blue and filled so
-    # it cannot pass for a second caret; bold alone did not read as unread
-    # once most of Active was unread.
-    def marker_for(sel, unread)
+    # The caret takes the column. Otherwise one filled dot asks for a look:
+    # red while the row needs you, blue when it only finished. Read, it
+    # clears, and the meta still says needs you.
+    def marker_for(sel, unread, alert)
       if sel then @theme.yellow_bold("▶")
+      elsif alert then @theme.red_bold("●")
       elsif unread then @theme.blue("●")
       else " "
       end
@@ -358,7 +362,7 @@ module ClaudeInbox
       return @theme.purple("z") if section == :snoozed
       return @p.dim("◦") if section == :settled
       case s.effective_state
-      when "blocked" then @theme.red_bold("●")
+      when "blocked" then " " # the marker's dot carries it
       when "failed" then @theme.red_bold("✗")
       when "working" then s.waiting_on_work? ? @theme.yellow("◌") : @theme.yellow(SPINNER[tick % SPINNER.size])
       when "done" then @theme.green("✓")
