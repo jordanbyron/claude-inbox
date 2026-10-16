@@ -21,7 +21,7 @@ RSpec.describe ClaudeInbox::Notifier do
       poll[working]
       notifications = described_class.diff(*poll[blocked])
       expect(notifications.map(&:to_h)).to eq([{key: "abc12345", kind: "needs you", label: "thing", line: "Approve rm -rf tmp/?"}])
-      expect(notifications.first.message).to eq("needs you: Approve rm -rf tmp/?")
+      expect(notifications.first.message).to eq("🔴 needs you: Approve rm -rf tmp/?")
     end
 
     it "names a background session that finished, with its closing line" do
@@ -31,7 +31,7 @@ RSpec.describe ClaudeInbox::Notifier do
 
     it "says only the kind when the session has no line" do
       poll[working]
-      expect(described_class.diff(*poll[session(state: "failed")]).map(&:message)).to eq(["needs you"])
+      expect(described_class.diff(*poll[session(state: "failed")]).map(&:message)).to eq(["🔴 needs you"])
     end
 
     it "says nothing for a row that already needed you, or one that was stopped" do
@@ -85,7 +85,7 @@ RSpec.describe ClaudeInbox::Notifier do
       expect(runs).to be_empty
       notifier.deliver(*poll[session(state: "working"), session(id: "def67890", state: "blocked", name: "other")])
       wait_for { runs.size >= 1 }
-      expect(runs).to eq([["terminal-notifier", "-title", "claude-inbox", "-subtitle", "other", "-message", "needs you", "-group", "def67890"]])
+      expect(runs).to eq([["terminal-notifier", "-title", "other", "-message", "🔴 needs you", "-group", "def67890"]])
     end
 
     context "with no terminal-notifier on PATH" do

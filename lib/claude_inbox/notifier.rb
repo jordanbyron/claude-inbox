@@ -7,13 +7,15 @@ module ClaudeInbox
   # background session that finished between one poll and the next, said
   # through terminal-notifier. `diff` decides, `deliver` says it.
   class Notifier
-    TITLE = "claude-inbox"
     MISSING = "terminal-notifier not found"
     # The sections a row is heard from: not snoozed, not settled.
     WATCHED = %i[pinned needs_you active].freeze
 
+    # Marks the one that wants you, so it stands out from a finished one.
+    BADGE = {"needs you" => "🔴 "}.freeze
+
     Notification = Data.define(:key, :kind, :label, :line) do
-      def message = line ? "#{kind}: #{line}" : kind
+      def message = "#{BADGE[kind]}#{line ? "#{kind}: #{line}" : kind}"
     end
 
     def self.disabled = new(enabled: false)
@@ -59,7 +61,7 @@ module ClaudeInbox
       return if notifications.empty? || @given_up
       Thread.new do
         notifications.each do |n|
-          r = @run.call(@bin, "-title", TITLE, "-subtitle", n.label, "-message", n.message, "-group", n.key)
+          r = @run.call(@bin, "-title", n.label, "-message", n.message, "-group", n.key)
           next if r.success?
           @given_up = true
           notice&.call((r.status.exitstatus == 127) ? MISSING : "terminal-notifier: #{r.err.lines.first.to_s.strip}")
