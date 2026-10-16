@@ -38,14 +38,6 @@ module ClaudeInbox
 
     SECTION_HUES = {pinned: :cyan, needs_you: :red, active: :yellow, snoozed: :purple}.freeze
 
-    # GitHub's colors. A draft has no hue, so it dims; a state missing from
-    # the table isn't named on the badge at all.
-    PR_HUES = {"OPEN" => :green, "DRAFT" => nil, "MERGED" => :purple, "CLOSED" => :red}.freeze
-
-    # The hue of PR_TROUBLE after a badge. Red for what puts the row in
-    # Needs You; a conflict dims, since it waits on a rebase, not on you.
-    PR_TROUBLE_HUES = {"FAILING" => :red, "CHANGES_REQUESTED" => :red}.freeze
-
     SPINNER = %w[⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏].freeze
 
     # The first poll usually lands inside a second. Past LOADING_QUIET the
@@ -219,11 +211,7 @@ module ClaudeInbox
       Text.pad(" " + section_color(name, "▎") + section_color(name, @p.bold(title)) + @p.dim("─" * fill) + @p.dim(count_s), width)
     end
 
-    def section_color(name, s) = tint(SECTION_HUES[name], s)
-
-    def tint(hue, s)
-      hue ? @theme.public_send(hue, s) : @p.dim(s)
-    end
+    def section_color(name, s) = @theme.tint(SECTION_HUES[name], s)
 
     # ----- body ---------------------------------------------------------------
 
@@ -402,20 +390,13 @@ module ClaudeInbox
       pr ? base + @p.dim(" · ") + pr : base
     end
 
-    # "#885 open", or "#885 open · ✗ checks" when something is wrong. The
-    # headline PR is shown, with a count of the rest.
+    # The headline PR, with a count of the rest. A settled row dims it.
     def pr_badge(s, section)
       pr = s.pr
       return nil unless pr
+      badge = (section == :settled) ? @p.dim("#{pr.short} #{pr.state&.downcase}".strip) : @theme.pr_badge(pr)
       more = (s.prs.size > 1) ? @p.dim(" · +#{s.prs.size - 1}") : ""
-      pr_state_badge(pr, section) + more
-    end
-
-    def pr_state_badge(pr, section)
-      return @p.dim("#{pr.short} #{pr.state&.downcase}".strip) if section == :settled
-      return @p.dim(pr.short) unless PR_HUES.key?(pr.state)
-      badge = tint(PR_HUES[pr.state], "#{pr.short} #{pr.state.downcase}")
-      pr.trouble ? badge + @p.dim(" · ") + tint(PR_TROUBLE_HUES[pr.health], pr.trouble) : badge
+      badge + more
     end
 
     def state_badge(s)

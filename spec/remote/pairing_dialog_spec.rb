@@ -16,7 +16,7 @@ RSpec.describe ClaudeInbox::Remote::PairingDialog do
     expect(dialog.frame(120).join("\n")).to include "http://127.0.0.1:7433/#AbCd…bcde"
     expect(dialog.frame(120).join("\n")).not_to include token
     expect(dialog.frame(120).join("\n")).to include "phone may use: default, plan"
-    expect(dialog.frame(120).join("\n")).to include "c copy  r new token  esc close"
+    expect(ClaudeInbox::Text.strip_ansi(dialog.frame(120).join("\n"))).to include "c copy  r new token  esc close"
   end
 
   it "says LAN mode is cleartext, and lists each address and the firewall" do
@@ -41,7 +41,7 @@ RSpec.describe ClaudeInbox::Remote::PairingDialog do
   it "says how to turn the listener on while it is off, and then only closes" do
     snapshot[0] = listening.with(state: :off, urls: nil)
     expect(dialog.frame(120).join("\n")).to include "off: start with --listen or --listen-lan"
-    expect(dialog.frame(120).join("\n")).to include "esc close"
+    expect(ClaudeInbox::Text.strip_ansi(dialog.frame(120).join("\n"))).to include "esc close"
     expect(dialog.press("c", "c")).to be_nil
     expect(dialog.press("r", "r")).to be_nil
     expect(dialog.frame(120).join("\n")).not_to include "rotate?"
@@ -78,7 +78,7 @@ RSpec.describe ClaudeInbox::Remote::PairingDialog do
     expect(dialog.frame(120).join("\n")).not_to include "rotate?"
     dialog.press("r", "r")
     expect(dialog.press(:escape, "\e")).to be_nil
-    expect(dialog.frame(120).join("\n")).to include "c copy"
+    expect(ClaudeInbox::Text.strip_ansi(dialog.frame(120).join("\n"))).to include "c copy"
     expect(dialog.press("q", "q")).to eq(:cancel)
   end
 

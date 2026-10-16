@@ -21,7 +21,7 @@ RSpec.describe ClaudeInbox::Dialog do
     end
 
     it "lists every choice in the box" do
-      box = dialog.frame(60).join("\n")
+      box = ClaudeInbox::Text.strip_ansi(dialog.frame(60).join("\n"))
       expect(box).to include "Snooze"
       described_class::Snooze::MENU.each { |k, label, _| expect(box).to include "#{k}  #{label}" }
     end
@@ -34,13 +34,14 @@ RSpec.describe ClaudeInbox::Dialog do
         ClaudeInbox::PullRequest.new(number: 191)]
     end
     let(:dialog) { described_class::PrPicker.new(:open, session(prs: prs)) }
+    let(:plain) { ->(lines) { lines.map { |l| ClaudeInbox::Text.strip_ansi(l) } } }
 
     it "lists the headline first, then the rest in order" do
       expect(dialog.frame(60).join("\n")).to include(" Open pull request ")
-      expect(dialog.lines(60, nil)).to eq(["  1  #190 open · ✗ checks · Install the pane from the CLI",
+      expect(plain.call(dialog.lines(60, nil))).to eq(["  1  #190 open · ✗ checks · Install the pane from the CLI",
         "  2  #189 merged", "  3  #191", "", "  o  open #190 · esc cancel"])
       copy = described_class::PrPicker.new(:copy, session(prs: prs))
-      expect(copy.lines(40, nil).last).to eq("  y  copy #190 · esc cancel")
+      expect(plain.call(copy.lines(40, nil)).last).to eq("  y  copy #190 · esc cancel")
     end
 
     it "names the repo of each PR once they span repos, and cuts lines to the box" do
@@ -48,11 +49,11 @@ RSpec.describe ClaudeInbox::Dialog do
         state: "OPEN", health: "CHANGES_REQUESTED"),
         ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7")]
       picker = described_class::PrPicker.new(:open, session(prs: across))
-      expect(picker.lines(60, nil).first(2)).to eq(["  1  jordanbyron/parks_genie#1020 open · changes requested", "  2  o/r#7"])
-      expect(picker.lines(60, nil).last).to eq("  o  open #1020 · esc cancel")
+      expect(plain.call(picker.lines(60, nil)).first(2)).to eq(["  1  jordanbyron/parks_genie#1020 open · changes requested", "  2  o/r#7"])
+      expect(plain.call(picker.lines(60, nil)).last).to eq("  o  open #1020 · esc cancel")
       expect(picker.lines(20, nil).map { |l| ClaudeInbox::Text.width(l) }.max).to eq(20)
       same = [across.first, ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/jordanbyron/parks_genie/pull/7")]
-      expect(described_class::PrPicker.new(:open, session(prs: same)).lines(60, nil)[1]).to eq("  2  #7")
+      expect(plain.call(described_class::PrPicker.new(:open, session(prs: same)).lines(60, nil))[1]).to eq("  2  #7")
     end
 
     it "widens the box to its longest line, within the terminal" do
@@ -61,6 +62,13 @@ RSpec.describe ClaudeInbox::Dialog do
       expect(widths.call(dialog.frame(40))).to eq([36])
       short = described_class::PrPicker.new(:open, session(prs: prs.first(1) + prs.last(1)))
       expect(widths.call(short.frame(100))).to eq([described_class::WIDTH])
+    end
+
+    it "badges each PR as the list does, keys in the footer's color" do
+      theme = ClaudeInbox::Theme.new
+      lines = dialog.lines(60, nil)
+      expect(lines[0]).to start_with("  #{theme.cyan_bold("1")}  #{theme.pr_badge(prs[1])}")
+      expect(lines[1]).to include(theme.pr_badge(prs[0]))
     end
 
     it "picks the headline on its own key or enter" do

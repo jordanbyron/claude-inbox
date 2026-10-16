@@ -3,6 +3,7 @@
 require "tty-box"
 require_relative "text"
 require_relative "text_buffer"
+require_relative "theme"
 
 module ClaudeInbox
   # A small box over the list that claims every key until it answers. Like
@@ -18,6 +19,7 @@ module ClaudeInbox
     def initialize(kind, id)
       @kind = kind
       @id = id
+      @theme = Theme.new
     end
 
     def frame(width, caret = nil)
@@ -28,6 +30,13 @@ module ClaudeInbox
 
     # How wide the box wants to be; the frame caps it at the terminal.
     def fit = self.class::WIDTH
+
+    private
+
+    def key(name) = @theme.cyan_bold(name)
+
+    # A key and what it does.
+    def hint(name, action) = "#{key(name)}  #{@theme.dim(action)}"
 
     # `s` snooze: one key per choice, and the choice is read from `choice`.
     class Snooze < Dialog
@@ -45,7 +54,7 @@ module ClaudeInbox
 
       def title = " Snooze "
 
-      def lines(_width, _caret) = MENU.map { |k, label, _| "  #{k}  #{label}" } + ["", "  esc  cancel"]
+      def lines(_width, _caret) = MENU.map { |k, label, _| "  #{key(k)}  #{label}" } + ["", "  " + hint("esc", "cancel")]
 
       def press(name, key)
         return :cancel if name == :escape || key == "q"
@@ -77,8 +86,8 @@ module ClaudeInbox
       def fit = [WIDTH, lines(Float::INFINITY, nil).map { |l| Text.width(l) }.max + MARGIN].max
 
       def lines(width, _caret)
-        (@prs.each_with_index.map { |pr, i| "  #{i + 1}  #{label(pr)}" } +
-          ["", "  #{KEYS.fetch(kind)}  #{VERBS.fetch(kind)} #{@prs.first.short} · esc cancel"])
+        (@prs.each_with_index.map { |pr, i| "  #{key((i + 1).to_s)}  #{label(pr)}" } +
+          ["", "  #{hint(KEYS.fetch(kind), "#{VERBS.fetch(kind)} #{@prs.first.short}")} · #{key("esc")} #{@theme.dim("cancel")}"])
           .map { |line| Text.truncate(line, width) }
       end
 
@@ -91,10 +100,11 @@ module ClaudeInbox
 
       private
 
-      # A bare #190 is ambiguous only once the list spans repos.
+      # The list's badge, then the title. A bare #190 is ambiguous only
+      # once the list spans repos.
       def label(pr)
         name = (@prs.map(&:repo).uniq.size > 1) ? pr.qualified : pr.short
-        ["#{name} #{pr.state&.downcase}".strip, pr.trouble, pr.title].compact.join(" · ")
+        pr.title ? @theme.pr_badge(pr, name) + @theme.dim(" · ") + pr.title : @theme.pr_badge(pr, name)
       end
     end
 
@@ -108,13 +118,13 @@ module ClaudeInbox
 
       def lines(_width, _caret)
         case kind
-        when :stop then ["  Stop session #{id}?", "", "  y  stop it", "  esc  cancel"]
+        when :stop then ["  Stop session #{id}?", "", "  " + hint("y", "stop it"), "  " + hint("esc", "cancel")]
         when :delete
           ["  Delete session #{id}?", "  Its worktree and conversation", "  go with it.",
-            "", "  y  delete it", "  esc  keep it"]
+            "", "  " + hint("y", "delete it"), "  " + hint("esc", "keep it")]
         when :adopt
           ["  Pull this session into the daemon?", "  Its phone session ends and a",
-            "  new one takes its place.", "", "  y  adopt it", "  esc  cancel"]
+            "  new one takes its place.", "", "  " + hint("y", "adopt it"), "  " + hint("esc", "cancel")]
         end
       end
 
@@ -160,7 +170,7 @@ module ClaudeInbox
           "",
           "  You can install this later with claude-inbox install",
           "",
-          "      y  add it to Claude Code      esc  not now"]
+          "      #{hint("y", "add it to Claude Code")}      #{hint("esc", "not now")}"]
       end
     end
 
@@ -181,7 +191,8 @@ module ClaudeInbox
       def title = TITLES.fetch(kind)
 
       def lines(width, caret)
-        [QUESTIONS.fetch(kind), "", "  > " + @buffer.row(width - 4, cursor: caret), "", "  ⏎ save · esc cancel"]
+        [QUESTIONS.fetch(kind), "", "  > " + @buffer.row(width - 4, cursor: caret), "",
+          "  #{key("⏎")} #{@theme.dim("save")} · #{key("esc")} #{@theme.dim("cancel")}"]
       end
 
       def press(name, key)
