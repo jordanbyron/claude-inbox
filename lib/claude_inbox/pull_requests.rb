@@ -6,15 +6,26 @@ require_relative "records"
 require_relative "subprocess"
 
 module ClaudeInbox
+  # What is wrong with an open PR, in the words its badge and the picker
+  # use. CLEAN and unknown say nothing.
+  PR_TROUBLE = {"FAILING" => "✗ checks", "CHANGES_REQUESTED" => "changes requested", "CONFLICTING" => "conflicts"}.freeze
+
   # A pull request tied to a session. `state` uses GitHub's vocabulary plus
   # DRAFT, the same as Claude Code's own cache: OPEN, DRAFT, MERGED, CLOSED,
   # or nil when nothing has told us yet. `resolved_at` is when it was merged
   # or closed, in epoch seconds, once gh has said. `health` is what gh last
   # said is wrong with an open PR: FAILING (a check), CHANGES_REQUESTED or
   # CONFLICTING; CLEAN when nothing is, nil when nothing has said. Claude
-  # Code's cache knows nothing of it, and a resolved PR has none.
-  PullRequest = Struct.new(:number, :url, :state, :resolved_at, :health) do
+  # Code's cache knows nothing of it, and a resolved PR has none. `title`
+  # is whatever gh or the cache last called it, nil until one has.
+  PullRequest = Struct.new(:number, :url, :state, :resolved_at, :health, :title) do
     def short = number ? "##{number}" : url.to_s.sub(%r{\Ahttps?://(www\.)?}, "")
+
+    def repo = url.to_s[%r{\Ahttps://github\.com/([^/\s]+/[^/\s]+)/pull/\d+}, 1]
+
+    def qualified = (number && repo) ? "#{repo}##{number}" : short
+
+    def trouble = PR_TROUBLE[health]
 
     # Failing checks or requested changes want you back; a conflict only
     # waits on whoever rebases.
@@ -123,7 +134,7 @@ module ClaudeInbox
       state = (h["state"] == "OPEN" && h["isDraft"]) ? "DRAFT" : h["state"]
       resolved_at = h["closedAt"] && Time.iso8601(h["closedAt"]).to_i
       PullRequest.new(number: h["number"], url: h["url"] || url, state: state, resolved_at: resolved_at,
-        health: (health(h) if h["state"] == "OPEN"))
+        health: (health(h) if h["state"] == "OPEN"), title: h["title"])
     rescue JSON::ParserError, ArgumentError
       nil
     end
@@ -163,7 +174,7 @@ module ClaudeInbox
       number = url[%r{/pull/(\d+)}, 1]&.to_i
       cached = resolved[url] || claude_cache[url]
       PullRequest.new(number: cached&.dig("number") || number, url: url, state: cached&.dig("state"),
-        resolved_at: cached&.dig("resolved_at"))
+        resolved_at: cached&.dig("resolved_at"), title: cached&.dig("title"))
     end
 
     # Same shape as Claude Code's cache, so `seed` reads both alike.
@@ -177,14 +188,15 @@ module ClaudeInbox
 
     # Under @mutex.
     def remember(pr)
-      resolved[pr.url] = {"number" => pr.number, "state" => pr.state, "resolved_at" => pr.resolved_at}
+      resolved[pr.url] = {"number" => pr.number, "state" => pr.state, "resolved_at" => pr.resolved_at,
+        "title" => pr.title}
       return unless @resolved_path
       Records.save(@resolved_path, resolved)
     end
 
     def fetch(url)
       r = Subprocess.capture(@gh, "pr", "view", url, "--json",
-        "number,state,isDraft,url,closedAt,statusCheckRollup,reviewDecision,mergeable")
+        "number,state,isDraft,url,closedAt,statusCheckRollup,reviewDecision,mergeable,title")
       r.success? ? self.class.parse(url, r.out) : nil
     rescue SystemCallError
       nil

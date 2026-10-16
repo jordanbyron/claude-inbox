@@ -99,6 +99,19 @@ module ClaudeInbox
 
     def project = cwd ? File.basename(cwd) : ""
 
-    def pr = prs.first
+    # The PR you would act on. One resolved before the session began was
+    # only mentioned (as Row#settled? judges), so it loses to any live one.
+    def pr = prs.each_with_index.min_by { |pr, i| [headline_rank(pr), i] }&.first
+
+    private
+
+    def headline_rank(pr)
+      if !pr.known? || pr.resolved_before?(created_at) then 4
+      elsif pr.needs_you? then 0
+      elsif pr.health == "CONFLICTING" then 1
+      elsif !pr.resolved? then 2
+      else 3
+      end
+    end
   end
 end

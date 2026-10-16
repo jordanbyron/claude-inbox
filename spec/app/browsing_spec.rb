@@ -14,6 +14,50 @@ RSpec.describe ClaudeInbox::App do
 
   after { client.release }
 
+  let(:opened) { [] }
+  let(:stack) do
+    [190, 191, 192].map do |n|
+      ClaudeInbox::PullRequest.new(number: n, url: "https://github.com/o/r/pull/#{n}", state: "OPEN",
+        health: (n == 191) ? "FAILING" : nil)
+    end
+  end
+  let(:link) { ->(prs) { store.update(store.sessions.map { |s| (s.id == "f23c8673") ? s.with(prs: prs) : s }) } }
+
+  describe "o" do
+    before do
+      app
+      allow(ClaudeInbox::Subprocess).to receive(:capture) { |*args| opened << args.last }
+    end
+
+    it "opens a lone pull request straight away" do
+      link.call(stack.first(1))
+      press(app, "o")
+      expect(screen(app).first).to include("opening #190")
+      expect(wait_for { opened.any? }).to be(true)
+      expect(opened).to eq(["https://github.com/o/r/pull/190"])
+    end
+
+    it "asks which of several, and o again opens the headline" do
+      link.call(stack)
+      press(app, "o")
+      expect(screen(app).join("\n")).to include("1  #191 open · ✗ checks")
+      press(app, "o")
+      expect(wait_for { opened.any? }).to be(true)
+      expect(opened).to eq(["https://github.com/o/r/pull/191"])
+      expect(screen(app).join("\n")).not_to include("Open pull request")
+    end
+
+    it "opens the nth on a digit, or nothing on esc" do
+      link.call(stack)
+      press(app, "o", "3")
+      expect(wait_for { opened.any? }).to be(true)
+      expect(opened).to eq(["https://github.com/o/r/pull/192"])
+      press(app, "o", "\e")
+      expect(screen(app).join("\n")).not_to include("Open pull request")
+      expect(opened.size).to eq(1)
+    end
+  end
+
   describe "y" do
     # Built first, so an example's own store update is not the one build_app overwrites.
     before { app }
@@ -42,6 +86,15 @@ RSpec.describe ClaudeInbox::App do
       press(app, "y")
       expect(wait_for { screen(app).first.include?("copied f23c8673") }).to be(true)
       expect(copied).to eq(["f23c8673"])
+    end
+
+    it "asks which of several, and y again copies the headline" do
+      link.call(stack)
+      press(app, "y")
+      expect(screen(app).join("\n")).to include("Copy pull request")
+      press(app, "y")
+      expect(wait_for { screen(app).first.include?("copied #191") }).to be(true)
+      expect(copied).to eq(["https://github.com/o/r/pull/191"])
     end
 
     context "without a clipboard tool" do

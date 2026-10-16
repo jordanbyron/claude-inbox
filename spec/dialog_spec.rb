@@ -27,6 +27,52 @@ RSpec.describe ClaudeInbox::Dialog do
     end
   end
 
+  describe "pr picker" do
+    let(:prs) do
+      [ClaudeInbox::PullRequest.new(number: 189, state: "MERGED"),
+        ClaudeInbox::PullRequest.new(number: 190, state: "OPEN", health: "FAILING", title: "Install the pane from the CLI"),
+        ClaudeInbox::PullRequest.new(number: 191)]
+    end
+    let(:dialog) { described_class::PrPicker.new(:open, session(prs: prs)) }
+
+    it "lists the headline first, then the rest in order" do
+      expect(dialog.frame(60).join("\n")).to include(" Open pull request ")
+      expect(dialog.lines(60, nil)).to eq(["  1  #190 open · ✗ checks · Install the pane from the CLI",
+        "  2  #189 merged", "  3  #191", "", "  o  open #190 · esc cancel"])
+      copy = described_class::PrPicker.new(:copy, session(prs: prs))
+      expect(copy.lines(40, nil).last).to eq("  y  copy #190 · esc cancel")
+    end
+
+    it "names the repo of each PR once they span repos, and cuts lines to the box" do
+      across = [ClaudeInbox::PullRequest.new(number: 1020, url: "https://github.com/jordanbyron/parks_genie/pull/1020",
+        state: "OPEN", health: "CHANGES_REQUESTED"),
+        ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7")]
+      picker = described_class::PrPicker.new(:open, session(prs: across))
+      expect(picker.lines(60, nil).first(2)).to eq(["  1  jordanbyron/parks_genie#1020 open · changes requested", "  2  o/r#7"])
+      expect(picker.lines(60, nil).last).to eq("  o  open #1020 · esc cancel")
+      expect(picker.lines(20, nil).map { |l| ClaudeInbox::Text.width(l) }.max).to eq(20)
+      same = [across.first, ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/jordanbyron/parks_genie/pull/7")]
+      expect(described_class::PrPicker.new(:open, session(prs: same)).lines(60, nil)[1]).to eq("  2  #7")
+    end
+
+    it "picks the headline on its own key or enter" do
+      expect(dialog.press("o", "o")).to eq(:pick)
+      expect(dialog.choice.number).to eq(190)
+      copy = described_class::PrPicker.new(:copy, session(prs: prs))
+      expect(copy.press("o", "o")).to be_nil
+      expect(copy.press("y", "y")).to eq(:pick)
+      expect(described_class::PrPicker.new(:copy, session(prs: prs)).press(:enter, "\r")).to eq(:pick)
+    end
+
+    it "picks the nth on a digit, ignores one past the end, and goes on esc or q" do
+      expect(dialog.press("4", "4")).to be_nil
+      expect(dialog.press("3", "3")).to eq(:pick)
+      expect(dialog.choice.number).to eq(191)
+      expect(dialog.press(:escape, "\e")).to eq(:cancel)
+      expect(dialog.press("q", "q")).to eq(:cancel)
+    end
+  end
+
   describe "confirm" do
     it "asks before pulling a remote session into the daemon" do
       adopt = described_class::Confirm.new(:adopt, "u1")
