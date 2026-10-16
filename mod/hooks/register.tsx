@@ -35,6 +35,7 @@ export type SnapshotRow = {
   state?: string
   actionable?: boolean
   waiting?: boolean
+  unread?: boolean
   line?: string
   wake_at?: number | 'until_woken'
   remote?: string
@@ -138,6 +139,7 @@ export function rowOf(section: Section, one: SnapshotRow): InboxRow {
     state: one.state ?? 'unknown',
     actionable: one.actionable === true,
     isWaiting: one.waiting === true,
+    isUnread: one.unread === true,
     line: one.line,
     wakeAt: one.wake_at,
     remote: one.remote,
@@ -456,11 +458,13 @@ export const register: Register = (on, options) => {
               }
               const one = item.row
               const isQuiet = isFold(one.section)
+              // A finished row you have attached to since dims, as the gem's Active section draws it.
+              const isRead = !isQuiet && one.actionable && (one.state === 'done' || one.state === 'stopped') && !one.isUnread
               const tint = one.color ? TINT[one.color] : undefined
               return (
                 <Box key={viewKey(item)} flexDirection="column">
                   <Box>
-                    <Text color={isHere ? 'yellow' : undefined}>{isHere ? '› ' : '  '}</Text>
+                    <Text color={isHere ? 'yellow' : 'cyan'}>{isHere ? '› ' : one.isUnread && !isQuiet ? '• ' : '  '}</Text>
                     <Text color={COLOR[one.state]} dimColor={isQuiet || one.state === 'done'}>
                       {GLYPH[one.state] ?? '·'}{' '}
                     </Text>
@@ -470,7 +474,7 @@ export const register: Register = (on, options) => {
                       <Button
                         key={itemKey(item)}
                         plain
-                        dimColor={isQuiet && !isHere}
+                        dimColor={(isQuiet || isRead) && !isHere}
                         label={one.wakeAt !== undefined ? `${one.label} · ${wakeLabel(one.wakeAt)}` : one.label}
                         onPress={enter(item)}
                         autoFocus={isHere || undefined}

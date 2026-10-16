@@ -14,7 +14,8 @@ export const SNAPSHOT = `{
         "session": "u-a1",
         "label": "needs an answer",
         "state": "blocked",
-        "actionable": true
+        "actionable": true,
+        "unread": true
       }
     ],
     "active": [
@@ -38,7 +39,8 @@ export const SNAPSHOT = `{
         "session": "u-c3",
         "label": "put away",
         "state": "done",
-        "actionable": true
+        "actionable": true,
+        "unread": true
       }
     ]
   }

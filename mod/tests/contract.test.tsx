@@ -19,4 +19,5 @@ test("the rows the pane reads are the ones the gem's Snapshot writes", () => {
   ])
   expect(rows[1]?.pr).toEqual({ short: '#7', state: 'open', url: 'https://github.com/o/r/pull/7' })
   expect(rows[0]?.isWaiting).toBe(false)
+  expect(rows.map(row => row.isUnread)).toEqual([true, false, true])
 })

@@ -75,6 +75,34 @@ RSpec.describe ClaudeInbox::Store::Row do
     expect(r.reap_failed_at).to eq(7)
   end
 
+  describe "unread rule" do
+    let(:finished) { {"last_state" => "done", "state_since" => now.to_i - 60} }
+
+    it "marks a finished or blocked session nobody has attached to since it got there" do
+      expect(described_class.new(session(id: "a", state: "done"), ClaudeInbox::Store::Entry.new(finished))).to be_unread
+      expect(described_class.new(session(id: "a", state: "stopped"), ClaudeInbox::Store::Entry.new(finished))).to be_unread
+      expect(described_class.new(session(id: "a", state: "blocked"), ClaudeInbox::Store::Entry.new(finished))).to be_unread
+      expect(described_class.new(session(id: "a", state: "done"), nil)).to be_unread
+    end
+
+    it "reads as seen once attached to after the state changed, and unread again when it changes after" do
+      seen = ClaudeInbox::Store::Entry.new(finished.merge("last_visited_at" => now.to_i - 30))
+      expect(described_class.new(session(id: "a", state: "done"), seen)).not_to be_unread
+      expect(described_class.new(session(id: "a", state: "done"), seen)).to be_read
+      earlier = ClaudeInbox::Store::Entry.new(finished.merge("last_visited_at" => now.to_i - 90))
+      expect(described_class.new(session(id: "a", state: "done"), earlier)).to be_unread
+      expect(described_class.new(session(id: "a", state: "done"), earlier)).not_to be_read
+    end
+
+    it "leaves a working session, and one there is no way to attach to, alone" do
+      expect(described_class.new(session(id: "a", state: "working"), nil)).not_to be_unread
+      expect(described_class.new(session(id: "a", state: "working"), nil)).not_to be_read
+      shell = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9")
+      expect(described_class.new(shell, ClaudeInbox::Store::Entry.new(finished))).not_to be_unread
+      expect(described_class.new(shell, ClaudeInbox::Store::Entry.new(finished))).not_to be_read
+    end
+  end
+
   describe "reap rule" do
     let(:quiet) { {"last_state" => "done", "state_since" => now.to_i - ClaudeInbox::Store::REAP_AFTER - 1} }
     let(:recent) { {"last_state" => "done", "state_since" => now.to_i - ClaudeInbox::Store::REAP_AFTER + 60} }

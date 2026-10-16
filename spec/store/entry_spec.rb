@@ -7,7 +7,7 @@ RSpec.describe ClaudeInbox::Store::Entry do
     it "names every key state.json holds" do
       h = {"alias" => "x", "pr" => "u", "wake_at" => 1, "snoozed_at" => 2, "last_state" => "done", "state_since" => 3,
            "last_seen" => 4, "pinned" => true, "pinned_at" => 5, "settled_at" => 6, "acknowledged_at" => 7,
-           "revived_at" => 8, "reap_failed_at" => 9, "reap_error" => "no"}
+           "revived_at" => 8, "reap_failed_at" => 9, "last_visited_at" => 10, "reap_error" => "no"}
       e = described_class.new(h)
       expect(e.alias_name).to eq("x")
       expect(e.pr).to eq("u")
@@ -22,6 +22,7 @@ RSpec.describe ClaudeInbox::Store::Entry do
       expect(e.acknowledged_at).to eq(7)
       expect(e.revived_at).to eq(8)
       expect(e.reap_failed_at).to eq(9)
+      expect(e.last_visited_at).to eq(10)
       expect(e.to_h).to equal(h)
     end
 
@@ -122,9 +123,10 @@ RSpec.describe ClaudeInbox::Store::Entry do
       expect(described_class.new(h.dup).observe(session(id: "a", state: "blocked"), now + 30).to_h).not_to include "settled_at"
     end
 
-    it "lifts an acknowledge and a revive once the state changes" do
+    it "lifts an acknowledge and a revive once the state changes, and keeps the visit" do
       h = {
         "acknowledged_at" => now.to_i,
+        "last_visited_at" => now.to_i,
         "revived_at" => now.to_i,
         "last_state" => "blocked",
         "state_since" => now.to_i - 60
@@ -135,6 +137,7 @@ RSpec.describe ClaudeInbox::Store::Entry do
       changed = described_class.new(h.dup).observe(session(id: "a", state: "working"), now + 30)
       expect(changed.to_h).not_to include "acknowledged_at"
       expect(changed.to_h).not_to include "revived_at"
+      expect(changed.last_visited_at).to eq(now.to_i)
     end
 
     it "returns itself, over the same hash" do
@@ -170,9 +173,9 @@ RSpec.describe ClaudeInbox::Store::Entry do
       expect(entry.to_h).to eq({"settled_at" => now.to_i + 1})
     end
 
-    it "acknowledge stamps acknowledged_at" do
+    it "acknowledge stamps acknowledged_at and the visit" do
       entry.acknowledge(now)
-      expect(entry.to_h).to eq({"acknowledged_at" => now.to_i})
+      expect(entry.to_h).to eq({"acknowledged_at" => now.to_i, "last_visited_at" => now.to_i})
     end
 
     it "toggle_pin pins with a time, then unpins clean" do

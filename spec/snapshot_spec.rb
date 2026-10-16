@@ -6,7 +6,7 @@ RSpec.describe ClaudeInbox::Snapshot do
   let(:now) { Time.at(1_789_600_000) }
   let(:merged) { ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: "MERGED", resolved_at: now.to_i - 60) }
   let(:sections) do
-    entries = {"b" => {"last_state" => "done", "state_since" => now.to_i - 90, "alias" => "renamed", "wake_at" => "until_woken"}}
+    entries = {"b" => {"last_state" => "done", "state_since" => now.to_i - 90, "last_visited_at" => now.to_i - 30, "alias" => "renamed", "wake_at" => "until_woken"}}
     pink = ClaudeInbox::JobState.new("color" => "pink")
     ClaudeInbox::Store.sectionize([session(id: "a", state: "blocked", session_id: "u-a", job_state: pink), session(id: "b", state: "done", prs: [merged])], entries, now)
   end
@@ -18,9 +18,10 @@ RSpec.describe ClaudeInbox::Snapshot do
       data = JSON.parse(File.read(path))
       expect(data["written_at"]).to eq(now.to_i)
       expect(data["sections"].keys).to eq(%w[pinned needs_you active snoozed settled])
-      expect(data["sections"]["needs_you"].map { |r| r.slice("id", "session", "color") }).to eq([{"id" => "a", "session" => "u-a", "color" => "pink"}])
+      expect(data["sections"]["needs_you"].map { |r| r.slice("id", "session", "color", "unread") }).to eq([{"id" => "a", "session" => "u-a", "color" => "pink", "unread" => true}])
       row = data["sections"]["snoozed"].first
       expect(row).not_to have_key("color")
+      expect(row).not_to have_key("unread")
       expect(row.slice("id", "label", "state", "actionable", "wake_at")).to eq(
         "id" => "b", "label" => "renamed", "state" => "done", "actionable" => true, "wake_at" => "until_woken"
       )

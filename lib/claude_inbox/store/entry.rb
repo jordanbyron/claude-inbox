@@ -64,6 +64,9 @@ module ClaudeInbox
 
       def acknowledged_at = @h["acknowledged_at"]
 
+      # When you last attached. Never cleared, unlike `acknowledged_at`.
+      def last_visited_at = @h["last_visited_at"]
+
       def revived_at = @h["revived_at"]
 
       # When `claude rm` last refused this session, so the Reaper backs off.
@@ -109,8 +112,12 @@ module ClaudeInbox
         @h.delete("revived_at")
       end
 
+      # One attach, two clocks: `acknowledged_at` lapses with the state and
+      # moves the row between sections; `last_visited_at` keeps, so a row
+      # that finishes after you looked reads as unread until you look again.
       def acknowledge(now)
         @h["acknowledged_at"] = now.to_i
+        @h["last_visited_at"] = now.to_i
       end
 
       def toggle_pin(now)
