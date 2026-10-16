@@ -7,6 +7,8 @@ module ClaudeInbox
   # session names carry emoji and glyphs that break byte/char slicing.
   module Text
     ANSI = /\e\[[0-9;?]*[A-Za-z]/
+    # A grapheme, or an escape that takes no column.
+    GLYPH = /#{ANSI}|\X/
     ELLIPSIS = "…"
 
     module_function
@@ -21,25 +23,26 @@ module ClaudeInbox
 
     def width(s) = Unicode::DisplayWidth.of(strip_ansi(s))
 
-    # Truncate plain (uncolored) text to `w` columns, appending an ellipsis
-    # when anything was cut. Handles wide glyphs by stepping grapheme by grapheme.
+    # Truncate to `w` columns, appending an ellipsis when anything was cut.
+    # Handles wide glyphs by stepping grapheme by grapheme.
     def truncate(s, w)
       return "" if w <= 0
       return s if width(s) <= w
       take(s, w - width(ELLIPSIS)) << ELLIPSIS
     end
 
-    # First `n` columns of plain text, no ellipsis.
+    # First `n` columns, no ellipsis. Colors survive the cut, and a reset
+    # closes whichever one the cut left open.
     def take(s, n)
       out = +""
       used = 0
-      s.each_grapheme_cluster do |g|
-        gw = Unicode::DisplayWidth.of(g)
+      s.scan(GLYPH) do |g|
+        gw = g.start_with?("\e") ? 0 : Unicode::DisplayWidth.of(g)
         break if used + gw > n
         out << g
         used += gw
       end
-      out
+      (out.include?("\e") && !out.end_with?("\e[0m")) ? out << "\e[0m" : out
     end
 
     # Plain text with its first `n` columns removed.
@@ -56,14 +59,10 @@ module ClaudeInbox
       out
     end
 
-    # Right-pad (ANSI-aware) to exactly `w` columns. Truncates if too long.
+    # Right-pad to exactly `w` columns. Truncates if too long.
     def pad(s, w)
-      cur = width(s)
-      if cur > w
-        s = truncate(strip_ansi(s), w)
-        cur = width(s)
-      end
-      s + (" " * [w - cur, 0].max)
+      s = truncate(s, w)
+      s + (" " * [w - width(s), 0].max)
     end
 
     # Greedy word wrap on display width. Words wider than `w` are split.

@@ -24,6 +24,13 @@ RSpec.describe ClaudeInbox::Text do
     expect(described_class.pad(s, 5)).to eq(s + "  ")
   end
 
+  it "cuts colored text without losing its colors, closing the one it cuts" do
+    s = "\e[31mred\e[0m \e[32mgreen\e[0m"
+    expect(described_class.truncate(s, 7)).to eq("\e[31mred\e[0m \e[32mgr\e[0m…")
+    expect(described_class.pad(s, 4)).to eq("\e[31mred\e[0m…")
+    expect(described_class.take("plain", 3)).to eq("pla")
+  end
+
   it "wraps on display width" do
     expect(described_class.wrap("the quick brown fox", 9)).to eq(["the quick", "brown fox"])
     expect(described_class.wrap("abcdefghij", 4)).to eq(%w[abcd efgh ij])
