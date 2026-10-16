@@ -22,7 +22,10 @@ module ClaudeInbox
     def self.disabled = new(enabled: false)
 
     # The notifications `after` earns over `before`, two Sections of the same
-    # moment: one per row whose alert changed, with the row's own line.
+    # moment: one per row whose alert changed, with the row's own line. A row
+    # that only changed section has nothing new to say: the first gh refresh
+    # un-settles one whose open PR the cache did not know, and a snoozed
+    # row's timer runs out.
     def self.diff(before, after)
       was = alerts(before)
       rows(after).filter_map do |row|
@@ -31,8 +34,8 @@ module ClaudeInbox
       end
     end
 
-    # key => "needs you", "finished" or nil, over the rows worth hearing from.
-    def self.alerts(sections) = rows(sections).to_h { |row| [row.key, alert(row)] }
+    # key => "needs you", "finished" or nil, over every row, snoozed and settled too.
+    def self.alerts(sections) = sections.all.to_h { |row| [row.key, alert(row)] }
 
     def self.rows(sections) = WATCHED.flat_map { |name| sections[name] }
 
