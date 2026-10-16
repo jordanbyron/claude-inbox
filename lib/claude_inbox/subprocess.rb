@@ -20,14 +20,18 @@ module ClaudeInbox
     # argv as exec and Process.spawn take it, with CHILD_ENV in place of ours.
     def command(*argv) = CHILD_ENV ? [CHILD_ENV, *argv, {unsetenv_others: true}] : argv
 
-    def capture(*argv, chdir: nil)
+    # `input` is written before any output is read, so it is for the few
+    # bytes a clipboard takes, not a stream.
+    def capture(*argv, chdir: nil, input: nil)
+      in_r, in_w = IO.pipe if input
       out_r, out_w = IO.pipe
       err_r, err_w = IO.pipe
       pid = fork do
         Process.setsid
-        $stdin.reopen(File::NULL)
+        $stdin.reopen(input ? in_r : File::NULL)
         $stdout.reopen(out_w)
         $stderr.reopen(err_w)
+        in_w&.close
         out_r.close
         err_r.close
         Dir.chdir(chdir) if chdir
@@ -38,6 +42,7 @@ module ClaudeInbox
       end
       out_w.close
       err_w.close
+      feed(in_r, in_w, input) if input
       out = +""
       err = +""
       readers = [out_r, err_r]
@@ -57,6 +62,16 @@ module ClaudeInbox
       end
       _, status = Process.wait2(pid)
       Result.new(out, err, status)
+    end
+
+    # A child that exits without reading closes the pipe under us.
+    def feed(reader, writer, input)
+      reader.close
+      writer.write(input)
+    rescue Errno::EPIPE
+      nil
+    ensure
+      writer.close
     end
   end
 end

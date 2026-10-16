@@ -8,6 +8,14 @@ RSpec.describe ClaudeInbox::Subprocess do
     expect(r.status.exitstatus).to eq(3)
   end
 
+  it "feeds input to the child's stdin" do
+    expect(described_class.capture("cat", input: "hi").out).to eq("hi")
+  end
+
+  it "survives a child that exits without reading its input" do
+    expect(described_class.capture("true", input: "hi").status.exitstatus).to eq(0)
+  end
+
   it "starts children without our Bundler environment" do
     saved = ENV.to_h.slice("BUNDLE_GEMFILE", "RUBYOPT")
     ENV["BUNDLE_GEMFILE"] = "/sentinel/Gemfile"

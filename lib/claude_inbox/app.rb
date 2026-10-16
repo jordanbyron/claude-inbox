@@ -18,6 +18,7 @@ require_relative "poller"
 require_relative "rate_limits"
 require_relative "session_request"
 require_relative "actions"
+require_relative "clipboard"
 require_relative "snapshot"
 require_relative "switch"
 require_relative "trust"
@@ -48,8 +49,10 @@ module ClaudeInbox
     def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
       rate_limits: RateLimits.new, reaper: Reaper.disabled, snapshot: Snapshot.disabled, switch: Switch.disabled,
       actions: Actions.disabled, notifier: Notifier.disabled, listen: nil, updater: nil, argv: [], out: $stdout, input: $stdin, color: true,
-      trust: Trust.method(:projects), terminal: Terminal.new(out, input), queue: Queue.new, pane_offer: Mod::Offer.disabled)
+      trust: Trust.method(:projects), terminal: Terminal.new(out, input), queue: Queue.new, pane_offer: Mod::Offer.disabled,
+      clipboard: Clipboard.method(:copy))
       @client = client
+      @clipboard = clipboard
       @store = store
       @snapshot = snapshot
       @switch = switch
@@ -234,6 +237,7 @@ module ClaudeInbox
       when :link_pr then open_pr_editor
       when :open_pr then open_pr
       when :open_remote then open_remote
+      when :yank then yank
       when :stop then open_confirm(:stop)
       when :delete then open_confirm(:delete)
       when :refresh then @poller.soon

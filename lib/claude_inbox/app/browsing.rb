@@ -3,7 +3,8 @@
 module ClaudeInbox
   class App
     # o opens the selected session's pull request and w its claude.ai/code
-    # page, through whatever opens URLs on this platform.
+    # page, through whatever opens URLs on this platform; y copies the one
+    # of those the session has, or its id.
     module Browsing
       private
 
@@ -17,6 +18,24 @@ module ClaudeInbox
         url = selected_session&.remote_url
         return notice("no claude.ai/code page for this session") unless url
         open_in_browser(url, "claude.ai/code")
+      end
+
+      def yank
+        session = selected_session
+        return notice("nothing to copy") unless session
+        text, what = yank_target(session)
+        in_background do
+          @queue << [:notice, @clipboard.call(text) ? "copied #{what}" : "no clipboard tool found"]
+        end
+      end
+
+      # A link set by hand wins over the scan, as it does once the poll lands.
+      def yank_target(session)
+        linked = @store.pr_for(session.key)
+        return [linked, "#" + linked[%r{/pull/(\d+)}, 1]] if linked
+        return [session.pr.url, session.pr.short] if session.pr
+        return [session.remote_url, session.remote_url] if session.remote_url
+        [session.key, session.key]
       end
 
       def open_in_browser(url, what)
