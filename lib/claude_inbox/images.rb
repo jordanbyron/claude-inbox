@@ -53,7 +53,10 @@ module ClaudeInbox
     end
 
     # ".png", ".jpg", ".gif" or ".webp" by the magic number, or nil.
-    def self.extension(bytes) = MAGIC.find { |_, magic| magic.match?(bytes.b) }&.first
+    def self.extension(bytes)
+      data = bytes.b
+      MAGIC.find { |_, magic| magic.match?(data) }&.first
+    end
 
     CLIPBOARD_PNG = <<~APPLESCRIPT
       on run argv
