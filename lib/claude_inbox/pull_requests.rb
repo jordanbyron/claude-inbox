@@ -129,9 +129,13 @@ module ClaudeInbox
     end
 
     # A check run reports a `conclusion`, a commit status a `state`; the
-    # rollup mixes both.
+    # rollup mixes both. It also keeps every run of a check on the head
+    # commit, so a run a newer one cancelled or replaced still shows its
+    # verdict there; only the latest run of each check counts.
     def self.health(h)
-      checks = h["statusCheckRollup"] || []
+      checks = (h["statusCheckRollup"] || [])
+        .group_by { |c| [c["workflowName"], c["name"] || c["context"]] }
+        .map { |_, runs| runs.max_by { |c| c["startedAt"].to_s } }
       if checks.any? { |c| FAILED_CHECKS.include?(c["conclusion"] || c["state"]) } then "FAILING"
       elsif h["reviewDecision"] == "CHANGES_REQUESTED" then "CHANGES_REQUESTED"
       elsif h["mergeable"] == "CONFLICTING" then "CONFLICTING"

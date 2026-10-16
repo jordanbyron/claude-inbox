@@ -35,6 +35,20 @@ RSpec.describe ClaudeInbox::PullRequests do
     expect(described_class.parse("u", '{"state":"OPEN","isDraft":false}').health).to eq("CLEAN")
   end
 
+  it "judges a check by its latest run, not the ones a newer run superseded" do
+    run = ->(conclusion, started) {
+      {"__typename" => "CheckRun", "workflowName" => "PR Checks", "name" => "PR Checks",
+       "conclusion" => conclusion, "startedAt" => started}
+    }
+    health = ->(*checks) {
+      described_class.parse("u", JSON.generate("state" => "OPEN", "statusCheckRollup" => checks)).health
+    }
+    expect(health.call(run.call("CANCELLED", "2026-10-16T13:16:02Z"), run.call("SUCCESS", "2026-10-16T13:40:00Z"))).to eq("CLEAN")
+    expect(health.call(run.call("SUCCESS", "2026-10-16T13:16:02Z"), run.call("FAILURE", "2026-10-16T13:40:00Z"))).to eq("FAILING")
+    other = run.call("FAILURE", "2026-10-16T13:00:00Z").merge("workflowName" => "Lint")
+    expect(health.call(other, run.call("SUCCESS", "2026-10-16T13:40:00Z"))).to eq("FAILING")
+  end
+
   it "wants you back for failing checks and requested changes, not for a conflict" do
     expect(ClaudeInbox::PullRequest.new(state: "OPEN", health: "FAILING")).to be_needs_you
     expect(ClaudeInbox::PullRequest.new(state: "OPEN", health: "CHANGES_REQUESTED")).to be_needs_you
