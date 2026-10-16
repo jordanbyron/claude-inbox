@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "notifier"
 require_relative "sessions"
 
 module ClaudeInbox
@@ -7,16 +8,16 @@ module ClaudeInbox
   # seconds and on demand, puts what it finds in the store and the snapshot,
   # and tells App over the shared queue: [:sessions] after each
   # hand-over, [:error, msg] when a poll fails, [:notice, text] when the
-  # reaper took something. Between polls it applies what another front end
-  # asked for. Nothing here touches App's state directly; the queue is the
-  # whole of the interface. One worker runs every poll, so two can never
-  # overlap and publish the list out of order.
+  # reaper took something or terminal-notifier is missing. Between polls it
+  # applies what another front end asked for. Nothing here touches App's
+  # state directly; the queue is the whole of the interface. One worker runs
+  # every poll, so two can never overlap and publish the list out of order.
   class Poller
     INTERVAL = 4
     ACTIONS_INTERVAL = 0.5
 
     def initialize(client:, store:, pull_requests:, reaper:, queue:, snapshot:, actions:,
-      interval: INTERVAL, clock: -> { Time.now })
+      notifier: Notifier.disabled, interval: INTERVAL, clock: -> { Time.now })
       @client = client
       @clock = clock
       @store = store
@@ -25,6 +26,7 @@ module ClaudeInbox
       @queue = queue
       @snapshot = snapshot
       @actions = actions
+      @notifier = notifier
       @interval = interval
       @wake = Queue.new
     end
@@ -77,9 +79,15 @@ module ClaudeInbox
 
     private
 
+    # The notifier compares the sections from just before the hand-over, so
+    # a row you woke or unpinned yourself since the last poll says nothing.
     def publish(sessions)
+      now = @clock.call
+      before = @store.sections(now)
       @store.update(sessions)
-      write_snapshot
+      after = @store.sections(now)
+      @snapshot.write(after, now)
+      @notifier.deliver(before, after) { |msg| @queue << [:notice, msg] }
       @queue << [:sessions]
     end
 

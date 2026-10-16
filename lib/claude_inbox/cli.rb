@@ -6,6 +6,7 @@ require_relative "app"
 require_relative "config"
 require_relative "headless"
 require_relative "mod"
+require_relative "notifier"
 require_relative "updater"
 require_relative "writer_lock"
 
@@ -56,9 +57,10 @@ module ClaudeInbox
     def app_options
       opts = options[:fixture] ? fixture_options : live_options
       opts[:color] = options[:color]
+      opts[:notifier] = notifier
       return opts if options[:fixture] || writer_lock.take(role: "inbox")
       opts.merge(store: Store.new(writable: false, relay: Actions.new), reaper: Reaper.disabled,
-        snapshot: Snapshot.disabled, actions: Actions.disabled, pane_offer: Mod::Offer.disabled)
+        snapshot: Snapshot.disabled, actions: Actions.disabled, pane_offer: Mod::Offer.disabled, notifier: Notifier.disabled)
     end
 
     private
@@ -111,7 +113,7 @@ module ClaudeInbox
 
     def headless
       abort "claude-inbox: --headless takes no --fixture" if options[:fixture]
-      Headless.new(client: AgentsClient.new, store: Store.new, updater: updater).run
+      Headless.new(client: AgentsClient.new, store: Store.new, updater: updater, notifier: notifier).run
     end
 
     # Only what a check within the day already found: a cold launch never waits
@@ -154,6 +156,8 @@ module ClaudeInbox
       @updater ||= Updater.new if options[:update_check] && !options[:fixture]
     end
 
+    def notifier = options[:notify] ? Notifier.new : Notifier.disabled
+
     # Held for the life of this process by this reference.
     def writer_lock = (@lock ||= WriterLock.new)
 
@@ -172,6 +176,7 @@ module ClaudeInbox
         p.on("--headless", "Keep the pane's snapshot fresh without a screen") { opts[:headless] = true }
         p.on("--reap", "Delete background sessions idle 14 days") { opts[:reap] = true }
         p.on("--no-color", "Draw without color") { opts[:color] = false }
+        p.on("--notify", "Send a desktop notification when a session needs you or finishes") { opts[:notify] = true }
         p.on("--auto-update", "Install a release found today before launching") { opts[:auto_update] = true }
         p.on("--no-update-check", "Never look for a newer release") { opts[:update_check] = false }
         # --listen-lan wins over --listen, whichever came last.

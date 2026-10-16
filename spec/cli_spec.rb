@@ -67,6 +67,12 @@ RSpec.describe ClaudeInbox::CLI do
       expect(cli["--no-update-check"].app_options[:updater]).to be_nil
     end
 
+    it "notifies only with --notify" do
+      expect(cli[].app_options[:notifier].instance_variable_get(:@enabled)).to be(false)
+      expect(cli["--notify"].app_options[:notifier].instance_variable_get(:@enabled)).to be(true)
+      expect(cli["--fixture", agents, "--notify"].app_options[:notifier].instance_variable_get(:@enabled)).to be(true)
+    end
+
     it "hands App the typed arguments for a relaunch, not the config's" do
       File.write(config, "--no-color\n")
       expect(cli["--reap"].app_options).to include(argv: ["--reap"], color: false)
@@ -78,6 +84,7 @@ RSpec.describe ClaudeInbox::CLI do
       opts = second.app_options
       expect(opts[:store]).not_to be_writable
       expect(opts[:reaper].instance_variable_get(:@enabled)).to be(false)
+      expect(opts[:notifier].instance_variable_get(:@enabled)).to be(false)
     end
   end
 
