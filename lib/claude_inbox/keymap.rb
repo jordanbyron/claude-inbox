@@ -24,7 +24,7 @@ module ClaudeInbox
       "h" => :fold_close,
       "s" => :snooze, "u" => :wake, "a" => :alias, "x" => :settle, "X" => :stop,
       :ctrl_x => :delete,
-      "o" => :open_pr, "P" => :link_pr, "t" => :toggle_pin, "w" => :open_remote,
+      "o" => :open_pr, "P" => :link_pr, "t" => :toggle_pin, "w" => :open_remote, "y" => :yank,
       "R" => :refresh, "U" => :update, "n" => :new_session, "N" => :remote_pairing,
       :tab => :next_section, :back_tab => :prev_section,
       "/" => :filter, :escape => :escape,
