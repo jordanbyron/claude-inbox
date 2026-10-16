@@ -27,41 +27,51 @@ RSpec.describe ClaudeInbox::Renderer do
  ▌ claude-inbox   ● 1 needs you  ·  ✻ 1 working  ·  ○ 1 terminal
 
  ▎ NEEDS YOU ─────────────────────────────────────────────────────── 1
- ▶ ● comma3x not booting                         needs you · 0s  comma3 
+ ▶ ? comma3x not booting                         needs you · 0s  comma3 
        ↳ ~/code/comma3
 
  ▎ ACTIVE ────────────────────────────────────────────────────────── 6
    ⠋ claude-inbox-38         working · your terminal · 0s  claude-inbox 
        ↳ ~/code/claude-inbox
- • ✓ comma3x led flashing screen unresponsive  done · idle · 0s  comma3 
+ ● ✓ comma3x led flashing screen unresponsive  done · idle · 0s  comma3 
        ↳ ~/code/comma3
- • ✓ trailforks skill handoff                    done · 9d  parks_genie 
+ ● ✓ trailforks skill handoff                    done · 9d  parks_genie 
        ↳ ~/code/parks_genie
- • ✓ sensor token resilience test               done · 10d  parks_genie 
+ ● ✓ sensor token resilience test               done · 10d  parks_genie 
        ↳ ~/code/parks_genie
- • ✓ github milestone review                    done · 17d  parks_genie 
+ ● ✓ github milestone review                    done · 17d  parks_genie 
        ↳ ~/code/parks_genie
- • ✓ app store release strategy                 done · 18d  parks_genie 
+ ● ✓ app store release strategy                 done · 18d  parks_genie 
        ↳ ~/code/parks_genie
  j/k move  ⏎ attach  n new  t pin  s snooze  u wake  a alias  o PR  x s…
     TXT
     expect(f.lines).to eq(expected)
   end
 
-  it "marks a finished row unread until attached to, then dims it, and leaves a blocked one bright" do
+  it "dots a finished row blue and a blocked one red until attached to, then dims the finished one in its color, and gives the selected one the yellow caret" do
     done = session(id: "aaa11111", name: "fresh", state: "done")
-    seen = session(id: "bbb22222", name: "seen", state: "done")
+    seen = session(id: "bbb22222", name: "seen", state: "done", job_state: ClaudeInbox::JobState.new("color" => "orange"))
     blocked = session(id: "ccc33333", name: "stuck", state: "blocked")
     entries = ClaudeInbox::Store.merge_entries({"bbb22222" => {"last_state" => "done", "state_since" => now.to_i - 60, "last_visited_at" => now.to_i - 30}}, [done, seen, blocked], now)
     sec = ClaudeInbox::Store.sectionize([done, seen, blocked], entries, now)
     plain = renderer.frame(sec, view.with(width: 60, height: 12)).lines.join("\n")
-    expect(plain).to match(/^ • ✓ fresh /)
+    expect(plain).to match(/^ ● ✓ fresh /)
     expect(plain).to match(/^   ✓ seen /)
-    expect(plain).to match(/^ • ● stuck /)
+    expect(plain).to match(/^ ● \? stuck /)
     colored = described_class.new(color: true, home: "/Users/byron").frame(sec, view.with(width: 60, height: 12)).lines
-    expect(colored.find { |l| l.include?("seen") }).to include("\e[2mseen")
-    expect(colored.find { |l| l.include?("fresh") }).not_to include("\e[2mfresh")
+    expect(colored.find { |l| l.include?("fresh") }).to include("\e[38;5;75m●\e[0m")
+    expect(colored.find { |l| l.include?("fresh") }).to include("\e[1mfresh")
+    expect(colored.find { |l| l.include?("seen") }).to include("\e[38;5;208m\e[2mseen\e[0m\e[39m")
+    expect(colored.find { |l| l.include?("stuck") }).to include("\e[1mstuck")
     expect(colored.find { |l| l.include?("stuck") }).to include("\e[38;5;203;1m●")
+    acknowledged = ClaudeInbox::Store.merge_entries({"ccc33333" => {"last_state" => "blocked", "state_since" => now.to_i - 60, "acknowledged_at" => now.to_i - 30, "last_visited_at" => now.to_i - 30}}, [blocked], now)
+    seen_blocked = renderer.frame(ClaudeInbox::Store.sectionize([blocked], acknowledged, now), view.with(width: 60, height: 12)).lines.join("\n")
+    expect(seen_blocked).to match(/^   \? stuck .*needs you/)
+    seen_blocked = described_class.new(color: true, home: "/Users/byron").frame(ClaudeInbox::Store.sectionize([blocked], acknowledged, now), view.with(width: 60, height: 12)).lines
+    expect(seen_blocked.find { |l| l.include?("stuck") }).to include("\e[2mstuck").and(include("\e[38;5;203;1m?"))
+    selected = described_class.new(color: true, home: "/Users/byron").frame(sec, view.with(width: 60, height: 12, selected: "aaa11111")).lines
+    expect(selected.find { |l| l.include?("fresh") }).to include("\e[38;5;179;1m▶\e[0m")
+    expect(selected.find { |l| l.include?("fresh") }).not_to include("\e[38;5;75m●")
   end
 
   it "selects interactive rows by session uuid, with no PR-less session settling on its own" do
@@ -122,7 +132,7 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(sec.active.map(&:key)).to eq(%w[u1])
     text = renderer.frame(sec, view.with(width: 90, height: 12)).lines.join("\n")
     expect(text).to match(/✓ shell\s+done · your terminal/)
-    expect(text).to match(/● shell2\s+needs you: permission prompt · your terminal/)
+    expect(text).to match(/● \? shell2\s+needs you: permission prompt · your terminal/)
   end
 
   it "lists settled rows when expanded" do
@@ -329,16 +339,15 @@ RSpec.describe "renderer session colors" do
     line = line_of.call(s, "tinted")
     expect(line).to include("\e[38;5;203;1m●")
     expect(line).to include("\e[38;5;203;1mneeds you")
-    expect(line).to include("\e[32mtinted\e[39m")
+    expect(line).to include("\e[32m\e[1mtinted")
   end
 
-  it "dims a settled row instead of coloring it" do
+  it "dims a settled row inside its color" do
     s = session(id: "z", name: "tinted", state: "done", job_state: ClaudeInbox::JobState.new("color" => "orange"))
     entries = ClaudeInbox::Store.merge_entries({"z" => {"settled_at" => now.to_i}}, [s], now)
     sec = ClaudeInbox::Store.sectionize([s], entries, now)
     line = renderer.frame(sec, view.with(expanded: {settled: true})).lines.find { |l| l.include?("tinted") }
-    expect(line).not_to include(orange)
-    expect(line).to include("\e[2m")
+    expect(line).to include("#{orange}\e[2mtinted\e[0m\e[39m")
   end
 
   it "colors a PR badge by its state and dims a draft or an unknown one" do

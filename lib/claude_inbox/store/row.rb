@@ -63,8 +63,8 @@ module ClaudeInbox
         entry&.last_visited_at.nil? || entry.state_since.to_i > entry.last_visited_at.to_i
       end
 
-      # A finished session you have attached to since: nothing left to look at.
-      def read? = session.actionable? && session.finished? && !unread?
+      # A finished or blocked session you have attached to since: you have seen what it wants.
+      def read? = session.actionable? && (session.finished? || session.needs_you?) && !unread?
 
       # `u` overrides hand-settle and the PR rule alike, and holds until the
       # state actually changes rather than just for the next poll.

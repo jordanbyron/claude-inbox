@@ -89,6 +89,7 @@ RSpec.describe ClaudeInbox::Store::Row do
       seen = ClaudeInbox::Store::Entry.new(finished.merge("last_visited_at" => now.to_i - 30))
       expect(described_class.new(session(id: "a", state: "done"), seen)).not_to be_unread
       expect(described_class.new(session(id: "a", state: "done"), seen)).to be_read
+      expect(described_class.new(session(id: "a", state: "blocked"), seen)).to be_read
       earlier = ClaudeInbox::Store::Entry.new(finished.merge("last_visited_at" => now.to_i - 90))
       expect(described_class.new(session(id: "a", state: "done"), earlier)).to be_unread
       expect(described_class.new(session(id: "a", state: "done"), earlier)).not_to be_read

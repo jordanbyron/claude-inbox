@@ -293,7 +293,7 @@ module ClaudeInbox
 
     def fold_toggle_line(name, count, selected, width)
       sel = selected == name
-      marker = sel ? @theme.cyan_bold("▶") : " "
+      marker = sel ? @theme.yellow_bold("▶") : " "
       text = @p.dim("… #{count} #{SECTION_TITLES[name].downcase}") + (sel ? @p.dim("   ⏎ or zo to expand") : "")
       Text.pad(" #{marker} " + text, width)
     end
@@ -303,7 +303,10 @@ module ClaudeInbox
       live = %i[pinned needs_you active].include?(section)
       sel = row.selectable? && selected == row.key
       quiet = section == :settled || (live && row.read?)
-      marker = marker_for(sel, live && row.unread?)
+      unread = live && row.unread?
+      # A terminal cannot be attached to, so it is never read: while it waits on you it keeps its dot.
+      alert = live && s.needs_you? && (unread || !s.actionable?)
+      marker = marker_for(sel, unread, alert)
       glyph = glyph_for(s, section, tick)
       meta = meta_for(row, section, now)
 
@@ -317,7 +320,7 @@ module ClaudeInbox
 
       label_w = [width - chrome - Text.width(project_text), 0].max
       label = Text.truncate(row.label, label_w)
-      label = style_label(label, row, quiet, sel)
+      label = style_label(label, row, quiet, sel || (live && row.unread?))
       first = " #{marker} #{glyph} " + Text.pad(label, label_w) + "  " + meta + "  " + project + " "
 
       return [Text.pad(first, width)] unless live
@@ -328,10 +331,13 @@ module ClaudeInbox
       [Text.pad(first, width), Text.pad(detail, width)]
     end
 
-    # The caret takes the column: a selected row is one you are looking at.
-    def marker_for(sel, unread)
-      if sel then @theme.cyan_bold("▶")
-      elsif unread then @theme.cyan_bold("•")
+    # The caret takes the column. Otherwise one filled dot asks for a look:
+    # red while the row needs you, blue when it only finished. Read, it
+    # clears, and the meta still says needs you.
+    def marker_for(sel, unread, alert)
+      if sel then @theme.yellow_bold("▶")
+      elsif alert then @theme.red_bold("●")
+      elsif unread then @theme.blue("●")
       else " "
       end
     end
@@ -339,12 +345,14 @@ module ClaudeInbox
     # The label is the one part of a row you own: `/color` tints it, and
     # nothing else on the line. Glyph, badge and PR keep the state's colors,
     # so no color you pick can make a blocked session stop looking blocked.
-    # A quiet row (settled, or finished and read) stays dim.
-    def style_label(label, row, quiet, sel)
-      return @p.dim(label) if quiet
+    # A quiet row (settled, or finished and read) is dim but keeps its tint,
+    # since you scan for a row by its color. Bold marks an unread row, as a
+    # mail client does, and the selected one under its caret.
+    def style_label(label, row, quiet, bold)
       styled =
-        if row.alias_name then sel ? @p.bold.italic(label) : @p.italic(label)
-        elsif sel then @p.bold(label)
+        if quiet then @p.dim(label)
+        elsif row.alias_name then bold ? @p.bold.italic(label) : @p.italic(label)
+        elsif bold then @p.bold(label)
         else label
         end
       @palette.paint(styled, row.session.color)
@@ -354,12 +362,12 @@ module ClaudeInbox
       return @theme.purple("z") if section == :snoozed
       return @p.dim("◦") if section == :settled
       case s.effective_state
-      when "blocked" then @theme.red_bold("●")
+      when "blocked" then @theme.red_bold("?")
       when "failed" then @theme.red_bold("✗")
       when "working" then s.waiting_on_work? ? @theme.yellow("◌") : @theme.yellow(SPINNER[tick % SPINNER.size])
       when "done" then @theme.green("✓")
       when "stopped" then @p.dim("■")
-      else @p.dim("?")
+      else @p.dim("·")
       end
     end
 
