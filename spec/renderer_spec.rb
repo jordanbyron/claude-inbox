@@ -48,9 +48,9 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(f.lines).to eq(expected)
   end
 
-  it "bolds a finished row until attached to, then dims it, and leaves a blocked one bold" do
+  it "bolds a finished row until attached to, then dims it in its color, and leaves a blocked one bold" do
     done = session(id: "aaa11111", name: "fresh", state: "done")
-    seen = session(id: "bbb22222", name: "seen", state: "done")
+    seen = session(id: "bbb22222", name: "seen", state: "done", job_state: ClaudeInbox::JobState.new("color" => "orange"))
     blocked = session(id: "ccc33333", name: "stuck", state: "blocked")
     entries = ClaudeInbox::Store.merge_entries({"bbb22222" => {"last_state" => "done", "state_since" => now.to_i - 60, "last_visited_at" => now.to_i - 30}}, [done, seen, blocked], now)
     sec = ClaudeInbox::Store.sectionize([done, seen, blocked], entries, now)
@@ -60,8 +60,7 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(plain).to match(/^   ● stuck /)
     colored = described_class.new(color: true, home: "/Users/byron").frame(sec, view.with(width: 60, height: 12)).lines
     expect(colored.find { |l| l.include?("fresh") }).to include("\e[1mfresh")
-    expect(colored.find { |l| l.include?("seen") }).to include("\e[2mseen")
-    expect(colored.find { |l| l.include?("seen") }).not_to include("\e[1mseen")
+    expect(colored.find { |l| l.include?("seen") }).to include("\e[38;5;208m\e[2mseen\e[0m\e[39m")
     expect(colored.find { |l| l.include?("stuck") }).to include("\e[1mstuck")
     expect(colored.find { |l| l.include?("stuck") }).to include("\e[38;5;203;1m●")
   end
@@ -334,13 +333,12 @@ RSpec.describe "renderer session colors" do
     expect(line).to include("\e[32m\e[1mtinted")
   end
 
-  it "dims a settled row instead of coloring it" do
+  it "dims a settled row inside its color" do
     s = session(id: "z", name: "tinted", state: "done", job_state: ClaudeInbox::JobState.new("color" => "orange"))
     entries = ClaudeInbox::Store.merge_entries({"z" => {"settled_at" => now.to_i}}, [s], now)
     sec = ClaudeInbox::Store.sectionize([s], entries, now)
     line = renderer.frame(sec, view.with(expanded: {settled: true})).lines.find { |l| l.include?("tinted") }
-    expect(line).not_to include(orange)
-    expect(line).to include("\e[2m")
+    expect(line).to include("#{orange}\e[2mtinted\e[0m\e[39m")
   end
 
   it "colors a PR badge by its state and dims a draft or an unknown one" do

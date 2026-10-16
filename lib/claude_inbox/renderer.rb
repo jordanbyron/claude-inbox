@@ -331,12 +331,13 @@ module ClaudeInbox
     # The label is the one part of a row you own: `/color` tints it, and
     # nothing else on the line. Glyph, badge and PR keep the state's colors,
     # so no color you pick can make a blocked session stop looking blocked.
-    # A quiet row (settled, or finished and read) stays dim. Bold marks an
-    # unread row, as a mail client does, and the selected one under its caret.
+    # A quiet row (settled, or finished and read) is dim but keeps its tint,
+    # since you scan for a row by its color. Bold marks an unread row, as a
+    # mail client does, and the selected one under its caret.
     def style_label(label, row, quiet, bold)
-      return @p.dim(label) if quiet
       styled =
-        if row.alias_name then bold ? @p.bold.italic(label) : @p.italic(label)
+        if quiet then @p.dim(label)
+        elsif row.alias_name then bold ? @p.bold.italic(label) : @p.italic(label)
         elsif bold then @p.bold(label)
         else label
         end
