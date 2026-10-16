@@ -48,7 +48,7 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(f.lines).to eq(expected)
   end
 
-  it "dots a finished row blue and a blocked one red until attached to, then dims the finished one in its color, and gives the selected one the yellow caret" do
+  it "dots a finished row blue and a blocked one red until attached to, then quiets the finished one but keeps its color bright, and gives the selected one the yellow caret" do
     done = session(id: "aaa11111", name: "fresh", state: "done")
     seen = session(id: "bbb22222", name: "seen", state: "done", job_state: ClaudeInbox::JobState.new("color" => "orange"))
     blocked = session(id: "ccc33333", name: "stuck", state: "blocked")
@@ -61,7 +61,7 @@ RSpec.describe ClaudeInbox::Renderer do
     colored = described_class.new(color: true, home: "/Users/byron").frame(sec, view.with(width: 60, height: 12)).lines
     expect(colored.find { |l| l.include?("fresh") }).to include("\e[38;5;75m●\e[0m")
     expect(colored.find { |l| l.include?("fresh") }).to include("\e[1mfresh")
-    expect(colored.find { |l| l.include?("seen") }).to include("\e[38;5;208m\e[2mseen\e[0m\e[39m")
+    expect(colored.find { |l| l.include?("seen") }).to include("\e[38;5;208mseen\e[39m")
     expect(colored.find { |l| l.include?("stuck") }).to include("\e[1mstuck")
     expect(colored.find { |l| l.include?("stuck") }).to include("\e[38;5;203;1m●")
     acknowledged = ClaudeInbox::Store.merge_entries({"ccc33333" => {"last_state" => "blocked", "state_since" => now.to_i - 60, "acknowledged_at" => now.to_i - 30, "last_visited_at" => now.to_i - 30}}, [blocked], now)
@@ -342,12 +342,12 @@ RSpec.describe "renderer session colors" do
     expect(line).to include("\e[32m\e[1mtinted")
   end
 
-  it "dims a settled row inside its color" do
+  it "keeps a settled row's color at full strength, since a faint tint is unreadable" do
     s = session(id: "z", name: "tinted", state: "done", job_state: ClaudeInbox::JobState.new("color" => "orange"))
     entries = ClaudeInbox::Store.merge_entries({"z" => {"settled_at" => now.to_i}}, [s], now)
     sec = ClaudeInbox::Store.sectionize([s], entries, now)
     line = renderer.frame(sec, view.with(expanded: {settled: true})).lines.find { |l| l.include?("tinted") }
-    expect(line).to include("#{orange}\e[2mtinted\e[0m\e[39m")
+    expect(line).to include("#{orange}tinted\e[39m")
   end
 
   it "says what is wrong with an open PR after its badge, red when it wants you" do

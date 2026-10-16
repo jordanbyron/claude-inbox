@@ -64,7 +64,7 @@ and so on, with `✗ checks`, `changes requested` or `conflicts` after it when
 something is wrong. A steady `◌` with `idle · 1 shell` means the agent stopped
 and is waiting on a shell or sub-agent it started. A `●` marks a session you
 haven't attached to since it got blocked, in red, or finished, in blue; one
-you have attached to since is dimmed.
+you have attached to since is dimmed, unless `/color` tints it.
 
 ## Keys
 
