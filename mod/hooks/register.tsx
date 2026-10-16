@@ -458,7 +458,8 @@ export const register: Register = (on, options) => {
               }
               const one = item.row
               const isQuiet = isFold(one.section)
-              // A finished or blocked row you have attached to since dims, as the gem's Active section draws it.
+              // A finished or blocked row you have attached to since dims, as the gem's Active section draws it,
+              // unless it is tinted: faint ink on a /color background is unreadable.
               const isRead = !isQuiet && one.actionable && ['done', 'stopped', 'blocked', 'failed'].includes(one.state) && !one.isUnread
               // One dot asks for a look: red while the row needs you, blue when it only finished. A terminal
               // cannot be attached to, so it is never read and keeps its dot while it waits.
@@ -480,7 +481,7 @@ export const register: Register = (on, options) => {
                       <Button
                         key={itemKey(item)}
                         plain
-                        dimColor={(isQuiet || isRead) && !isHere}
+                        dimColor={(isQuiet || isRead) && !isHere && tint === undefined}
                         label={text}
                         onPress={enter(item)}
                         autoFocus={isHere || undefined}
