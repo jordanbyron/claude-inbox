@@ -61,8 +61,8 @@ Under each row is what the session is waiting on, what it produced, or its
 status line. A row with a pull request shows it as `#885 open`, `#885 merged`
 and so on. A steady `◌` with `idle · 1 shell` means the agent stopped and is
 waiting on a shell or sub-agent it started. A `●` marks a session you
-haven't attached to since it got blocked, in red, or finished, in blue; a
-finished one you have attached to since is dimmed.
+haven't attached to since it got blocked, in red, or finished, in blue; one
+you have attached to since is dimmed.
 
 ## Keys
 

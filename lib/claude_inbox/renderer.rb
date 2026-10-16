@@ -362,12 +362,12 @@ module ClaudeInbox
       return @theme.purple("z") if section == :snoozed
       return @p.dim("◦") if section == :settled
       case s.effective_state
-      when "blocked" then " " # the marker's dot carries it
+      when "blocked" then @theme.red_bold("?")
       when "failed" then @theme.red_bold("✗")
       when "working" then s.waiting_on_work? ? @theme.yellow("◌") : @theme.yellow(SPINNER[tick % SPINNER.size])
       when "done" then @theme.green("✓")
       when "stopped" then @p.dim("■")
-      else @p.dim("?")
+      else @p.dim("·")
       end
     end
 

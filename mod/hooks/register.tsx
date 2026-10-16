@@ -52,7 +52,7 @@ type Action = { action: 'settle' | 'wake' | 'pin'; id: string } | { action: 'sno
 
 const ORDER: Section[] = ['pinned', 'needs_you', 'active', 'snoozed', 'settled']
 const TITLE: Record<Section, string> = { pinned: 'Pinned', needs_you: 'Needs you', active: 'Active', snoozed: 'Snoozed', settled: 'Settled' }
-const GLYPH: Record<string, string> = { blocked: ' ', failed: '✗', working: '◐', idle: '◌', done: '✓', stopped: '✓' }
+const GLYPH: Record<string, string> = { blocked: '?', failed: '✗', working: '◐', idle: '◌', done: '✓', stopped: '✓' }
 const COLOR: Record<string, string> = { blocked: 'red', failed: 'red', working: 'green', idle: 'cyan' }
 const PR_COLOR: Record<string, string> = { open: 'green', draft: 'yellow', merged: 'magenta', closed: 'red' }
 // `/color`'s names as a label's background. A Button keeps the terminal's own ink, light on a dark
@@ -458,8 +458,8 @@ export const register: Register = (on, options) => {
               }
               const one = item.row
               const isQuiet = isFold(one.section)
-              // A finished row you have attached to since dims, as the gem's Active section draws it.
-              const isRead = !isQuiet && one.actionable && (one.state === 'done' || one.state === 'stopped') && !one.isUnread
+              // A finished or blocked row you have attached to since dims, as the gem's Active section draws it.
+              const isRead = !isQuiet && one.actionable && ['done', 'stopped', 'blocked', 'failed'].includes(one.state) && !one.isUnread
               // One dot asks for a look: red while the row needs you, blue when it only finished. A terminal
               // cannot be attached to, so it is never read and keeps its dot while it waits.
               const needsYou = one.state === 'blocked' || one.state === 'failed'
