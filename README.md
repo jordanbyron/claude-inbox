@@ -153,7 +153,8 @@ Pull requests show up when a session's transcript links to them. Install
 
 `--notify` sends a macOS notification through
 [terminal-notifier](https://github.com/julienXX/terminal-notifier) when a
-session needs you or finishes. `brew install terminal-notifier` first.
+session needs you or finishes. `brew install terminal-notifier` first;
+the first launch asks permission to notify.
 
 ## Usage bars
 

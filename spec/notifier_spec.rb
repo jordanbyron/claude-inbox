@@ -73,7 +73,7 @@ RSpec.describe ClaudeInbox::Notifier do
     let(:status) { instance_double(Process::Status, success?: true, exitstatus: 0) }
     let(:result) { ClaudeInbox::Subprocess::Result.new("", "", status) }
     let(:notifier) {
-      described_class.new(run: ->(*argv) {
+      described_class.new(app: ClaudeInbox::NotifierApp.disabled, run: ->(*argv) {
         runs << argv
         result
       })
@@ -85,7 +85,7 @@ RSpec.describe ClaudeInbox::Notifier do
       expect(runs).to be_empty
       notifier.deliver(*poll[session(state: "working"), session(id: "def67890", state: "blocked", name: "other")])
       wait_for { runs.size >= 1 }
-      expect(runs).to eq([["terminal-notifier", "-title", "other", "-message", "🔴 needs you", "-group", "def67890"]])
+      expect(runs).to eq([[*ClaudeInbox::NotifierApp::FALLBACK, "-title", "other", "-message", "🔴 needs you", "-group", "def67890"]])
     end
 
     context "with no terminal-notifier on PATH" do
@@ -104,7 +104,7 @@ RSpec.describe ClaudeInbox::Notifier do
     end
 
     it "sends nothing when disabled" do
-      disabled = described_class.new(run: ->(*argv) {
+      disabled = described_class.new(app: ClaudeInbox::NotifierApp.disabled, run: ->(*argv) {
         runs << argv
         result
       }, enabled: false)

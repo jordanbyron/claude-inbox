@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require_relative "notifier_app"
 require_relative "subprocess"
 
 module ClaudeInbox
@@ -43,8 +44,8 @@ module ClaudeInbox
       end
     end
 
-    def initialize(bin: "terminal-notifier", run: Subprocess.method(:capture), enabled: true)
-      @bin = bin
+    def initialize(app: NotifierApp.new, run: Subprocess.method(:capture), enabled: true)
+      @app = app
       @run = run
       @enabled = enabled
       @primed = false
@@ -52,22 +53,30 @@ module ClaudeInbox
     end
 
     # Sends what `diff` finds, off the calling thread, and yields the one
-    # notice a binary that will not run earns. The first call only primes:
-    # every row already blocked at startup would otherwise fire at once.
+    # notice a binary that will not run earns. The first call only primes,
+    # and readies the app: every row already blocked at startup would
+    # otherwise fire at once.
     def deliver(before, after, &notice)
       return unless @enabled
-      notifications = @primed ? self.class.diff(before, after) : []
-      @primed = true
+      return prime unless @primed
+      notifications = self.class.diff(before, after)
       return if notifications.empty? || @given_up
       Thread.new do
         notifications.each do |n|
-          r = @run.call(@bin, "-title", n.label, "-message", n.message, "-group", n.key)
+          r = @run.call(*@app.command, "-title", n.label, "-message", n.message, "-group", n.key)
           next if r.success?
           @given_up = true
           notice&.call((r.status.exitstatus == 127) ? MISSING : "terminal-notifier: #{r.err.lines.first.to_s.strip}")
           break
         end
       end
+    end
+
+    private
+
+    def prime
+      @primed = true
+      Thread.new { @app.prepare }
     end
   end
 end
