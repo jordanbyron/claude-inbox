@@ -172,7 +172,7 @@ module ClaudeInbox
         header_chip(remotes, "⇅", "remote", compact) { |s| @theme.blue(s) },
         header_chip(snoozed, "z", "snoozed", compact) { |s| @theme.purple(s) },
         header_chip(settled, "◦", "settled", compact) { |s| @p.dim(s) }
-      ].compact
+      ]
       chips << @p.dim("nothing running") if sections.all.empty?
       [*chips, listening_chip(listening)].compact.join(compact ? "  " : @p.dim("  ·  "))
     end
