@@ -182,7 +182,8 @@ module ClaudeInbox
       pids = sessions.filter_map { |s| s.pid if s.interactive? }
       return sessions if pids.empty?
       rows = ps_rows(pids)
-      assign_origins(sessions, origins_from(rows), self.class.bridge_ids(rows))
+      parents = ps_commands(rows.map { |_, ppid, _| ppid }.uniq)
+      assign_origins(sessions, self.class.origins(rows, parents), self.class.bridge_ids(rows))
     end
 
     # Tags each interactive session with where it is driven from (pid =>
@@ -193,10 +194,6 @@ module ClaudeInbox
       sessions
         .map { |s| s.interactive? ? s.with(origin: origins.fetch(s.pid, :terminal), bridge_id: bridges[s.pid]) : s }
         .reject(&:unattended?)
-    end
-
-    def origins_from(rows)
-      self.class.origins(rows, ps_commands(rows.map { |_, ppid, _| ppid }.uniq))
     end
 
     def ps_rows(pids)
