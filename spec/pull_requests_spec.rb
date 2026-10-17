@@ -112,6 +112,19 @@ RSpec.describe ClaudeInbox::PullRequests do
     expect(b.prs.map(&:number)).to eq([1])
   end
 
+  it "adds the rest of a stack the session opened to the daemon's one link" do
+    Dir.mktmpdir do |dir|
+      transcript = File.join(dir, "t.jsonl")
+      stdout = (1..3).map { |n| "✓ Created PR ##{n} (https://github.com/o/r/pull/#{n}) for b#{n}" }.join("\n")
+      File.write(transcript, JSON.generate("toolUseResult" => {"stdout" => stdout}) + "\n")
+      FileUtils.mkdir_p(File.join(dir, "aaa11111"))
+      File.write(File.join(dir, "aaa11111", "state.json"), JSON.generate("linkScanPath" => transcript,
+        "children" => [{"kind" => "pr", "href" => "https://github.com/o/r/pull/1"}]))
+      sessions = ClaudeInbox::JobState.enrich([session(id: "aaa11111")], jobs_dir: dir)
+      expect(prs.enrich(sessions, {}).first.prs.map(&:number)).to eq([1, 2, 3])
+    end
+  end
+
   it "reads when gh says a PR was merged or closed" do
     json = '{"number":9,"state":"MERGED","isDraft":false,"closedAt":"2026-09-28T14:00:00Z"}'
     expect(described_class.parse("u", json).resolved_at).to eq(Time.utc(2026, 9, 28, 14).to_i)

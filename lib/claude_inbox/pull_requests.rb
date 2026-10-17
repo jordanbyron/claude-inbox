@@ -3,6 +3,7 @@
 require "json"
 require "time"
 require_relative "records"
+require_relative "stack_links"
 require_relative "subprocess"
 
 module ClaudeInbox
@@ -58,6 +59,8 @@ module ClaudeInbox
   # file, which JobState reads onto `job_state`; `claude agents --json` does
   # not expose them.
   # It is a link scan, so a session that merely mentions a PR gets it too.
+  # The daemon keeps one PR per session, so StackLinks adds the rest of a
+  # stack the session opened.
   # Interactive sessions have no job file; for those the store's `pr` override
   # is the only source.
   #
@@ -87,6 +90,7 @@ module ClaudeInbox
       @known = {}      # url => PullRequest
       @checked_at = {} # url => epoch seconds of the last gh call
       @mutex = Mutex.new
+      @stacks = StackLinks.new
     end
 
     # Each session with its `prs` set from what is already known, asking
@@ -96,7 +100,7 @@ module ClaudeInbox
     # override replaces the scanned list.
     def enrich(sessions, overrides)
       sessions.map do |s|
-        urls = overrides[s.key] ? [overrides[s.key]] : (s.job_state&.pr_urls || [])
+        urls = overrides[s.key] ? [overrides[s.key]] : scanned(s.job_state)
         s.with(prs: urls.map { |u| known(u) })
       end
     end
@@ -155,6 +159,11 @@ module ClaudeInbox
     end
 
     private
+
+    def scanned(job_state)
+      return [] unless job_state
+      (job_state.pr_urls + @stacks.urls(job_state.transcript_path)).uniq
+    end
 
     # Best known state for a url without asking gh.
     def known(url)

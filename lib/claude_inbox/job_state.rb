@@ -14,10 +14,11 @@ module ClaudeInbox
   # The file tells them apart: `tempo` is the agent's own pulse, `fan` names
   # each outstanding piece of work, and `detail` is the session's own status
   # line, with `needs` naming what it is waiting on while blocked and
-  # `output.result` what it produced once done. It also carries the PR links the daemon scanned out of the
-  # transcript, which PullRequests reads through here, the color `/color`
-  # set on the session, which `claude agents --json` drops, and `intent`, the
-  # prompt the session was started from, and `createdAt`, when it was.
+  # `output.result` what it produced once done. It also carries the PR links
+  # the daemon scanned out of the transcript and the transcript's path, which
+  # PullRequests reads through here, the color `/color` set on the session,
+  # which `claude agents --json` drops, and `intent`, the prompt the session
+  # was started from, and `createdAt`, when it was.
   #
   # Never cached. A color changes the moment you type `/color`, so every poll
   # asks the file again.
@@ -65,7 +66,7 @@ module ClaudeInbox
       nil
     end
 
-    attr_reader :pr_urls, :color, :intent, :bridge_id, :created_at
+    attr_reader :pr_urls, :transcript_path, :color, :intent, :bridge_id, :created_at
 
     def initialize(hash)
       @detail = hash["detail"]
@@ -75,6 +76,7 @@ module ClaudeInbox
       @kinds = (hash["fan"] || []).filter_map { |f| f["kind"] }
       @tasks = (hash["inFlight"] || {})["tasks"].to_i
       @pr_urls = (hash["children"] || []).filter_map { |c| c["href"] if c["kind"] == "pr" }
+      @transcript_path = hash["linkScanPath"]
       @color = hash["color"]
       @intent = hash["intent"]
       @bridge_id = hash["bridgeSessionId"]

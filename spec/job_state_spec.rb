@@ -13,6 +13,7 @@ RSpec.describe ClaudeInbox::JobState do
         "output" => {"result" => "CI re-run passed"},
         "tempo" => "idle",
         "bridgeSessionId" => "cse_01AB",
+        "linkScanPath" => "/t/aaa.jsonl",
         "createdAt" => "2026-10-14T11:00:23.329Z",
         "respawnFlags" => ["--remote-control", "--model", "opus"],
         "inFlight" => {"tasks" => 1},
@@ -28,6 +29,7 @@ RSpec.describe ClaudeInbox::JobState do
       expect(js.summary("done")).to eq("CI re-run passed")
       expect(js.pr_urls).to eq(["https://github.com/o/r/pull/7"])
       expect(js.bridge_id).to eq("cse_01AB")
+      expect(js.transcript_path).to eq("/t/aaa.jsonl")
       expect(js.created_at).to eq(Time.utc(2026, 10, 14, 11, 0, 23.329r))
       expect(described_class.new("createdAt" => "soon").created_at).to be_nil
       expect(js).to be_remote_control
