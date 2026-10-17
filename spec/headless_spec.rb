@@ -34,7 +34,7 @@ RSpec.describe ClaudeInbox::Headless do
     let(:thread) { Thread.new { headless.run } }
 
     after do
-      thread.kill
+      thread.kill.join
       FileUtils.remove_entry(tmp)
     end
 

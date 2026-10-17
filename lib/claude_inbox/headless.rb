@@ -33,8 +33,11 @@ module ClaudeInbox
     def run
       return false unless @lock.take(role: "headless")
       @poller.start
-      Thread.new { watch_for_updates } if @updater
+      updates = Thread.new { watch_for_updates } if @updater
       loop { @queue.pop }
+    ensure
+      @poller.stop
+      updates&.kill
     end
 
     private
