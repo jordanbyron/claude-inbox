@@ -158,6 +158,8 @@ module ClaudeInbox
       url.to_s.match?(%r{\Ahttps://github\.com/[^/\s]+/[^/\s]+/pull/\d+/?\z})
     end
 
+    private_class_method :health
+
     private
 
     def scanned(job_state)
