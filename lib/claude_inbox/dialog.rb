@@ -58,7 +58,7 @@ module ClaudeInbox
 
       def press(name, key)
         return :cancel if name == :escape || key == "q"
-        entry = MENU.find { |k, _, _| k == key }
+        entry = MENU.assoc(key)
         return nil unless entry
         @choice = entry[2]
         :snooze
