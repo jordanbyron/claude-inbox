@@ -94,6 +94,7 @@ RSpec.describe ClaudeInbox::App do
 
   describe "opening a new session" do
     it "strips a trailing worktree path so the new session lands in the repo it was cut from" do
+      app.step
       store.update(store.sessions + [
         session(
           id: "aaaa1111",
