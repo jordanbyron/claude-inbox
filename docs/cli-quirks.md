@@ -79,6 +79,11 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   `#340` gets resolved against the repo of the session's cwd. A session in
   icc_app reviewing `ontra-common-ruby#340` ends up with `children` holding
   `icc_app/pull/340`, a different PR that was merged years ago.
+- A session links one PR at a time: the transcript's `pr-link` record is
+  last-wins (read from the 2.1.302 bundle). A `gh stack submit` that
+  opens three PRs leaves `children` holding the first and nothing else.
+  gh-stack prints `✓ Created PR #N (url)` for each one, and that stdout
+  is kept in the transcript at the job's `linkScanPath`.
 - `~/.claude/gh-pr-status-cache.json` is keyed by PR url and calls an open
   draft `DRAFT`; `gh pr view` reports `OPEN` plus `isDraft`. The cache only
   covers PRs Claude Code's own sessions opened, so a link scan finds plenty
