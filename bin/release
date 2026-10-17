@@ -8,6 +8,9 @@
 require "bundler"
 require "fileutils"
 require "open3"
+require "shellwords"
+require "tmpdir"
+require_relative "../release/highlights"
 require_relative "../release/next_version"
 require_relative "../release/pull_request"
 
@@ -24,6 +27,13 @@ def capture(*command)
 end
 
 def step(*command) = system(*command) || abort("#{command.join(" ")} failed")
+
+def ask(question)
+  print "#{question} "
+  $stdin.gets.to_s.strip
+end
+
+def yes?(question) = ask("#{question} [y/N]").downcase.start_with?("y")
 
 step "git", "fetch", "--quiet", "--tags", "origin"
 
@@ -70,9 +80,63 @@ pull_requests.each do |pull_request|
   end
 end
 
+features = pull_requests.select(&:feature?)
+
 if DRY_RUN
+  features.each { |pull_request| puts "would offer ##{pull_request.number} #{pull_request.title} as a highlight" }
   puts "would release #{tag}: #{reason}"
   exit
+end
+
+# The notes open with Highlights when the maintainer picks a feature or two:
+# claude drafts a paragraph for each from its pull request, with a screenshot
+# from the description or one the maintainer hands over. A local screenshot
+# goes up as a release asset. Every question is asked before anything ships.
+repo = capture("gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
+assets = {}
+picks = features.select { |pull_request| yes?("Highlight ##{pull_request.number} #{pull_request.title}?") }.to_h do |pull_request|
+  image = pull_request.images.first
+  while image.nil?
+    answer = ask("No screenshot in ##{pull_request.number}. Path or URL to one, blank for none:")
+    break if answer.empty?
+    # A path dragged onto the terminal arrives shell-escaped.
+    path = begin
+      Shellwords.split(answer).join(" ")
+    rescue ArgumentError
+      answer
+    end
+    if answer.start_with?("http")
+      image = answer
+    elsif File.file?(path)
+      # GitHub renames an asset with spaces in it, so name the upload plainly.
+      name = "#{pull_request.number}-#{File.basename(path).gsub(/[^\w.-]+/, "-")}"
+      assets[name] = path
+      image = "https://github.com/#{repo}/releases/download/#{tag}/#{name}"
+    else
+      puts "#{path}: no such file"
+    end
+  end
+  [pull_request, image]
+end
+
+highlights = nil
+unless picks.empty?
+  highlights = File.join(Dir.mktmpdir, "highlights.md")
+  puts "Drafting highlights with claude..."
+  draft, status = Open3.capture2("claude", "-p", "--tools", "", "--no-session-persistence", stdin_data: Release::Highlights.new(tag, picks).prompt)
+  abort "claude -p failed" unless status.success?
+  File.write(highlights, draft)
+  loop do
+    puts "", File.read(highlights), ""
+    case ask("Use these highlights? [y/n/e for edit]").downcase
+    when "y" then break
+    when "n"
+      highlights = nil
+      assets.clear
+      break
+    when "e" then system(ENV.fetch("EDITOR", "vi"), highlights)
+    end
+  end
 end
 
 # The lock records the gem's own version, so it is relocked into the release
@@ -99,4 +163,14 @@ end
 FileUtils.rm_f gem_file
 
 step "git", "push", "--quiet", "origin", "main", "--follow-tags"
-puts capture("gh", "release", "create", tag, "--generate-notes", "--verify-tag")
+# gh puts the notes file above the generated notes, so Highlights opens them.
+create = ["gh", "release", "create", tag, "--generate-notes", "--verify-tag"]
+create += ["--notes-file", highlights] if highlights
+# An asset uploads onto an existing release, so one with assets starts as a draft.
+create << "--draft" unless assets.empty?
+puts capture(*create)
+assets.each do |name, path|
+  FileUtils.cp path, File.join(File.dirname(highlights), name)
+  step "gh", "release", "upload", tag, File.join(File.dirname(highlights), name)
+end
+puts capture("gh", "release", "edit", tag, "--draft=false") unless assets.empty?
