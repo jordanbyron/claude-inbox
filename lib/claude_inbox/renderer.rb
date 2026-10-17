@@ -173,15 +173,19 @@ module ClaudeInbox
         header_chip(settled, "◦", "settled", compact) { |s| @p.dim(s) }
       ]
       chips << @p.dim("nothing running") if sections.all.empty?
-      [*chips, listening_chip(listening)].compact.join(compact ? "  " : @p.dim("  ·  "))
+      [*chips, listening_chip(listening, compact)].compact.join(compact ? "  " : @p.dim("  ·  "))
     end
 
-    # Red when the listener was asked for and isn't up. Nothing when it
-    # wasn't asked for.
-    def listening_chip(listening)
-      case listening&.state
-      when :listening then @theme.blue("◉ #{"lan" if listening.lan}:#{listening.port}")
-      when :in_use, :held, :failed then @theme.red("◉ !")
+    # Red, and saying why, when the listener was asked for and isn't up.
+    # Nothing when it wasn't asked for.
+    def listening_chip(listening, compact)
+      return unless listening
+      address = "#{"lan" if listening.lan}:#{listening.port}"
+      case listening.state
+      when :listening then @theme.blue("◉ #{address}")
+      when :held then @theme.red(compact ? "◉ #{address} held" : "◉ #{address} held by another inbox")
+      when :in_use then @theme.red("◉ #{address} in use")
+      when :failed then @theme.red("◉ #{address} failed")
       end
     end
 
