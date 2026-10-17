@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require_relative "subprocess"
 
 module ClaudeInbox
   # One snapshot writer per machine: the inbox you can see, else a headless
@@ -25,8 +26,8 @@ module ClaudeInbox
       file = File.open(@path, File::RDWR | File::CREAT, 0o600)
       return hold(file, role) if file.flock(File::LOCK_EX | File::LOCK_NB)
       holder_role, holder = file.read.split
-      return refuse(file) unless role == "inbox" && holder_role == "headless"
-      Process.kill("TERM", holder.to_i) if holder.to_i.positive? && holder.to_i != Process.pid
+      return refuse(file) unless role == "inbox" && holder_role == "headless" && headless?(holder.to_i)
+      Process.kill("TERM", holder.to_i)
       EVICT_TRIES.times do
         return hold(file, role) if file.flock(File::LOCK_EX | File::LOCK_NB)
         sleep 0.1
@@ -38,6 +39,14 @@ module ClaudeInbox
     end
 
     private
+
+    # The file can name a pid that no longer holds the lock (#322), which by
+    # now may be some other process; only a headless claude-inbox is ended.
+    def headless?(pid)
+      return false unless pid.positive? && pid != Process.pid
+      command = Subprocess.capture("ps", "-o", "command=", "-p", pid.to_s).out
+      command.include?("claude-inbox") && command.split.include?("--headless")
+    end
 
     # After reading the holder the position sits at the end, and truncate does
     # not move it, so the write is rewound first or it lands after NUL padding.

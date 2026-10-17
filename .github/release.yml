@@ -1,0 +1,22 @@
+# Groups the notes GitHub generates for a release by the labels bin/release
+# sets from each pull request's conventional prefix.
+changelog:
+  exclude:
+    labels:
+      - dependencies
+  categories:
+    - title: New features
+      labels:
+        - enhancement
+    - title: Bug fixes
+      labels:
+        - bug
+    - title: Documentation
+      labels:
+        - documentation
+    - title: Refactoring
+      labels:
+        - refactor
+    - title: Other changes
+      labels:
+        - "*"

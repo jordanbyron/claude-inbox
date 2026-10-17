@@ -3,18 +3,25 @@
 
 # Cuts a release on the maintainer's machine, the way bin/ci signs off PRs:
 # bumps VERSION from the conventional commits since the last tag, pushes the
-# gem and opens a GitHub release. See CONTRIBUTING.md.
+# gem and opens a GitHub release. With --notes vX it rewrites the notes of
+# that release instead. See CONTRIBUTING.md.
 
 require "bundler"
 require "fileutils"
 require "open3"
+require "shellwords"
+require "tmpdir"
+require_relative "../release/highlights"
 require_relative "../release/next_version"
+require_relative "../release/pull_request"
 
 Dir.chdir(File.expand_path("..", __dir__))
 
 VERSION_FILE = "lib/claude_inbox.rb"
 VERSION_LINE = /VERSION = "(.*)"/
 DRY_RUN = ARGV.include?("--dry-run")
+NOTES_TAG = ARGV.include?("--notes") ? ARGV[ARGV.index("--notes") + 1] : nil
+abort "--notes takes the tag whose notes to rewrite" if ARGV.include?("--notes") && NOTES_TAG.to_s.empty?
 
 def capture(*command)
   out, status = Open3.capture2(*command)
@@ -24,9 +31,16 @@ end
 
 def step(*command) = system(*command) || abort("#{command.join(" ")} failed")
 
+def ask(question)
+  print "#{question} "
+  $stdin.gets.to_s.strip
+end
+
+def yes?(question) = ask("#{question} [y/N]").downcase.start_with?("y")
+
 step "git", "fetch", "--quiet", "--tags", "origin"
 
-unless DRY_RUN
+unless DRY_RUN || NOTES_TAG
   branch = capture("git", "branch", "--show-current")
   abort "Release from main, not #{branch}" unless branch == "main"
   abort "Commit or discard your changes first: the working tree is dirty" unless capture("git", "status", "--porcelain").empty?
@@ -34,28 +48,121 @@ unless DRY_RUN
 end
 
 current = File.read(VERSION_FILE)[VERSION_LINE, 1]
-last_tag, = Open3.capture2("git", "describe", "--tags", "--abbrev=0", "--match", "v*", err: File::NULL)
+# The tag before the one being released, or before the one whose notes are rewritten.
+last_tag, = Open3.capture2("git", "describe", "--tags", "--abbrev=0", "--match", "v*", *("#{NOTES_TAG}^" if NOTES_TAG), err: File::NULL)
 last_tag = last_tag.strip
 
-if last_tag.empty?
-  version = current
-  reason = "the first release, VERSION as-is"
+if NOTES_TAG
+  tag = NOTES_TAG
+  abort "#{tag}: no such release" unless system("gh", "release", "view", tag, out: File::NULL, err: File::NULL)
+  messages = capture("git", "log", "#{"#{last_tag}.." unless last_tag.empty?}#{tag}", "--format=%B%x00").split("\0")
+  plan = "rewrite the notes of #{tag}"
 else
-  messages = capture("git", "log", "#{last_tag}..HEAD", "--format=%B%x00").split("\0")
-  next_version = Release::NextVersion.new(current, messages)
-  version = next_version.version
-  reason = "#{next_version.bump} bump over #{last_tag}"
+  if last_tag.empty?
+    version = current
+    messages = []
+    reason = "the first release, VERSION as-is"
+  else
+    messages = capture("git", "log", "#{last_tag}..HEAD", "--format=%B%x00").split("\0")
+    next_version = Release::NextVersion.new(current, messages)
+    version = next_version.version
+    reason = "#{next_version.bump} bump over #{last_tag}"
+  end
+
+  if version.nil?
+    puts "nothing to release since #{last_tag}"
+    exit
+  end
+
+  tag = "v#{version}"
+  plan = "release #{tag}: #{reason}"
 end
 
-if version.nil?
-  puts "nothing to release since #{last_tag}"
+# The release notes group pull requests by label, so give each one merged
+# since the last tag the label its prefix calls for.
+pull_requests = Release::PullRequest.numbers_in(messages).map do |number|
+  Release::PullRequest.parse(capture("gh", "pr", "view", number, "--json", Release::PullRequest::FIELDS))
+end
+pull_requests.each do |pull_request|
+  label = pull_request.missing_label or next
+  if DRY_RUN
+    puts "would label ##{pull_request.number} #{label}"
+  else
+    step "gh", "pr", "edit", pull_request.number.to_s, "--add-label", label
+  end
+end
+
+features = pull_requests.select(&:feature?)
+
+if DRY_RUN
+  features.each { |pull_request| puts "would offer ##{pull_request.number} #{pull_request.title} as a highlight" }
+  puts "would #{plan}"
   exit
 end
 
-tag = "v#{version}"
+# The notes open with Highlights when the maintainer picks a feature or two:
+# claude drafts a paragraph for each from its pull request, with a screenshot
+# from the description or one the maintainer hands over. A local screenshot
+# goes up as a release asset. Every question is asked before anything ships.
+repo = capture("gh", "repo", "view", "--json", "nameWithOwner", "--jq", ".nameWithOwner")
+workdir = Dir.mktmpdir
+assets = []
+picks = features.select { |pull_request| yes?("Highlight ##{pull_request.number} #{pull_request.title}?") }.to_h do |pull_request|
+  image = pull_request.images.first
+  while image.nil?
+    answer = ask("No screenshot in ##{pull_request.number}. Path or URL to one, blank for none:")
+    break if answer.empty?
+    # A path dragged onto the terminal arrives shell-escaped.
+    path = begin
+      Shellwords.split(answer).join(" ")
+    rescue ArgumentError
+      answer
+    end
+    if answer.start_with?("http")
+      image = answer
+    elsif File.file?(path)
+      # GitHub renames an asset with spaces in it, so name the upload plainly.
+      name = "#{pull_request.number}-#{File.basename(path).gsub(/[^\w.-]+/, "-")}"
+      FileUtils.cp path, File.join(workdir, name)
+      assets << File.join(workdir, name)
+      image = "https://github.com/#{repo}/releases/download/#{tag}/#{name}"
+    else
+      puts "#{path}: no such file"
+    end
+  end
+  [pull_request, image]
+end
 
-if DRY_RUN
-  puts "would release #{tag}: #{reason}"
+highlights = nil
+unless picks.empty?
+  highlights = File.join(workdir, "highlights.md")
+  puts "Drafting highlights with claude..."
+  draft, status = Open3.capture2("claude", "-p", "--tools", "", "--no-session-persistence", stdin_data: Release::Highlights.new(tag, picks).prompt)
+  abort "claude -p failed" unless status.success?
+  File.write(highlights, draft)
+  loop do
+    puts "", File.read(highlights), ""
+    case ask("Use these highlights? [y/n/e for edit]").downcase
+    when "y" then break
+    when "n"
+      highlights = nil
+      assets.clear
+      break
+    when "e" then system(ENV.fetch("EDITOR", "vi"), highlights)
+    end
+  end
+end
+
+if NOTES_TAG
+  # gh release edit cannot generate notes, so ask the API for what create would have.
+  generated = capture("gh", "api", "repos/#{repo}/releases/generate-notes", "--jq", ".body", "-f", "tag_name=#{tag}",
+    *(["-f", "previous_tag_name=#{last_tag}"] unless last_tag.empty?))
+  notes = File.join(workdir, "notes.md")
+  File.write(notes, [highlights && File.read(highlights), generated].compact.join("\n\n"))
+  puts "", File.read(notes), ""
+  abort "#{tag}'s notes are left as they were" unless yes?("Replace the notes of #{tag}?")
+  assets.each { |path| step "gh", "release", "upload", tag, path, "--clobber" }
+  puts capture("gh", "release", "edit", tag, "--notes-file", notes)
   exit
 end
 
@@ -83,4 +190,11 @@ end
 FileUtils.rm_f gem_file
 
 step "git", "push", "--quiet", "origin", "main", "--follow-tags"
-puts capture("gh", "release", "create", tag, "--generate-notes", "--verify-tag")
+# gh puts the notes file above the generated notes, so Highlights opens them.
+create = ["gh", "release", "create", tag, "--generate-notes", "--verify-tag"]
+create += ["--notes-file", highlights] if highlights
+# An asset uploads onto an existing release, so one with assets starts as a draft.
+create << "--draft" unless assets.empty?
+puts capture(*create)
+assets.each { |path| step "gh", "release", "upload", tag, path }
+puts capture("gh", "release", "edit", tag, "--draft=false") unless assets.empty?

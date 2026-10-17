@@ -4,14 +4,16 @@ module ClaudeInbox
   class App
     # o opens the selected session's pull request and w its claude.ai/code
     # page, through whatever opens URLs on this platform; y copies the one
-    # of those the session has, or its id.
+    # of those the session has, or its id. With several PRs, o and y ask
+    # which first.
     module Browsing
       private
 
       def open_pr
-        pr = selected_session&.pr
-        return notice("no pull request linked — P sets one") unless pr
-        open_in_browser(pr.url, pr.short)
+        session = selected_session
+        return notice("no pull request linked — P sets one") unless session&.pr
+        return @modal = Dialog::PrPicker.new(:open, session) if session.prs.size > 1
+        open_in_browser(session.pr.url, session.pr.short)
       end
 
       def open_remote
@@ -23,7 +25,17 @@ module ClaudeInbox
       def yank
         session = selected_session
         return notice("nothing to copy") unless session
-        text, what = yank_target(session)
+        return @modal = Dialog::PrPicker.new(:copy, session) if session.prs.size > 1
+        copy_to_clipboard(*yank_target(session))
+      end
+
+      def pr_picked
+        kind, pr = @modal.kind, @modal.choice
+        @modal = nil
+        (kind == :open) ? open_in_browser(pr.url, pr.short) : copy_to_clipboard(pr.url, pr.short)
+      end
+
+      def copy_to_clipboard(text, what)
         in_background do
           @queue << [:notice, @clipboard.call(text) ? "copied #{what}" : "no clipboard tool found"]
         end

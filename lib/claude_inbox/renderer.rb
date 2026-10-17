@@ -11,7 +11,10 @@ module ClaudeInbox
   # `width` columns wide) plus a parallel Array of selectable items.
   # Pure: no terminal, no IO, no clock beyond the `now` it is handed.
   class Renderer
-    Frame = Struct.new(:lines, :items, :top)
+    Frame = Struct.new(:lines, :items, :top) do
+      # The same frame for a terminal drawn without color.
+      def plain = self.class.new(lines.map { |l| Text.strip_ansi(l) }, items, top)
+    end
 
     CHROME_ROWS = 2 # header + footer
 
@@ -34,16 +37,6 @@ module ClaudeInbox
     }.freeze
 
     SECTION_HUES = {pinned: :cyan, needs_you: :red, active: :yellow, snoozed: :purple}.freeze
-
-    # GitHub's colors. A draft has no hue, so it dims; a state missing from
-    # the table isn't named on the badge at all.
-    PR_HUES = {"OPEN" => :green, "DRAFT" => nil, "MERGED" => :purple, "CLOSED" => :red}.freeze
-
-    # What is wrong with an open PR, after its badge. Red for what puts the
-    # row in Needs You; a conflict dims, since it waits on a rebase, not on
-    # you. CLEAN and unknown say nothing.
-    PR_TROUBLE = {"FAILING" => [:red, "✗ checks"], "CHANGES_REQUESTED" => [:red, "changes requested"],
-                  "CONFLICTING" => [nil, "conflicts"]}.freeze
 
     SPINNER = %w[⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏].freeze
 
@@ -69,10 +62,10 @@ module ClaudeInbox
       ["za", "fold"], ["/", "filter"], ["q", "quit"]
     ].freeze
 
-    def initialize(color:, home: Dir.home)
-      @p = Pastel.new(enabled: color)
-      @theme = Theme.new(enabled: color)
-      @palette = Palette.new(enabled: color)
+    def initialize(home: Dir.home)
+      @p = Pastel.new(enabled: true)
+      @theme = Theme.new
+      @palette = Palette.new
       @home = home
     end
 
@@ -180,15 +173,19 @@ module ClaudeInbox
         header_chip(settled, "◦", "settled", compact) { |s| @p.dim(s) }
       ]
       chips << @p.dim("nothing running") if sections.all.empty?
-      [*chips, listening_chip(listening)].compact.join(compact ? "  " : @p.dim("  ·  "))
+      [*chips, listening_chip(listening, compact)].compact.join(compact ? "  " : @p.dim("  ·  "))
     end
 
-    # Red when the listener was asked for and isn't up. Nothing when it
-    # wasn't asked for.
-    def listening_chip(listening)
-      case listening&.state
-      when :listening then @theme.blue("◉ #{"lan" if listening.lan}:#{listening.port}")
-      when :in_use, :held, :failed then @theme.red("◉ !")
+    # Red, and saying why, when the listener was asked for and isn't up.
+    # Nothing when it wasn't asked for.
+    def listening_chip(listening, compact)
+      return unless listening
+      address = "#{"lan" if listening.lan}:#{listening.port}"
+      case listening.state
+      when :listening then @theme.blue("◉ #{address}")
+      when :held then @theme.red(compact ? "◉ #{address} held" : "◉ #{address} held by another inbox")
+      when :in_use then @theme.red("◉ #{address} in use")
+      when :failed then @theme.red("◉ #{address} failed")
       end
     end
 
@@ -218,20 +215,14 @@ module ClaudeInbox
       Text.pad(" " + section_color(name, "▎") + section_color(name, @p.bold(title)) + @p.dim("─" * fill) + @p.dim(count_s), width)
     end
 
-    def section_color(name, s) = tint(SECTION_HUES[name], s)
-
-    def tint(hue, s)
-      hue ? @theme.public_send(hue, s) : @p.dim(s)
-    end
+    def section_color(name, s) = @theme.tint(SECTION_HUES[name], s)
 
     # ----- body ---------------------------------------------------------------
 
     def body_lines(sections, width, view)
+      return [empty_state(width), []] if sections.all.empty?
       lines = []
       items = []
-      if sections.all.empty?
-        return [empty_state(width), []]
-      end
       selected = view.selected
       sections.each_pair do |name, rows|
         next if rows.empty?
@@ -326,7 +317,7 @@ module ClaudeInbox
 
       label_w = [width - chrome - Text.width(project_text), 0].max
       label = Text.truncate(row.label, label_w)
-      label = style_label(label, row, quiet, sel || (live && row.unread?))
+      label = style_label(label, row, quiet, sel || unread)
       first = " #{marker} #{glyph} " + Text.pad(label, label_w) + "  " + meta + "  " + project + " "
 
       return [Text.pad(first, width)] unless live
@@ -401,16 +392,13 @@ module ClaudeInbox
       pr ? base + @p.dim(" · ") + pr : base
     end
 
-    # "#885 open", or "#885 open · ✗ checks" when something is wrong. Only
-    # the first PR is shown.
+    # The headline PR, with a count of the rest. A settled row dims it.
     def pr_badge(s, section)
       pr = s.pr
       return nil unless pr
-      return @p.dim("#{pr.short} #{pr.state&.downcase}".strip) if section == :settled
-      return @p.dim(pr.short) unless PR_HUES.key?(pr.state)
-      badge = tint(PR_HUES[pr.state], "#{pr.short} #{pr.state.downcase}")
-      hue, trouble = PR_TROUBLE[pr.health]
-      trouble ? badge + @p.dim(" · ") + tint(hue, trouble) : badge
+      badge = (section == :settled) ? @p.dim("#{pr.short} #{pr.state&.downcase}".strip) : @theme.pr_badge(pr)
+      more = (s.prs.size > 1) ? @p.dim(" · +#{s.prs.size - 1}") : ""
+      badge + more
     end
 
     def state_badge(s)

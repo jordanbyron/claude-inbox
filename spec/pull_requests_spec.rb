@@ -11,6 +11,7 @@ RSpec.describe ClaudeInbox::PullRequests do
     pr = prs.status("https://github.com/jordanbyron/parks_genie/pull/885")
     expect(pr.number).to eq(885)
     expect(pr.state).to eq("DRAFT")
+    expect(pr.title).to eq("feat(sensors): edge probe")
     expect(pr.short).to eq("#885")
     expect(pr).not_to be_resolved
     expect(pr.health).to be_nil
@@ -49,6 +50,15 @@ RSpec.describe ClaudeInbox::PullRequests do
     expect(health.call(other, run.call("SUCCESS", "2026-10-16T13:40:00Z"))).to eq("FAILING")
   end
 
+  it "names its repo from a github pull url, and qualifies its number with it" do
+    pr = ClaudeInbox::PullRequest.new(number: 1020, url: "https://github.com/jordanbyron/parks_genie/pull/1020")
+    expect(pr.repo).to eq("jordanbyron/parks_genie")
+    expect(pr.qualified).to eq("jordanbyron/parks_genie#1020")
+    elsewhere = ClaudeInbox::PullRequest.new(number: 4, url: "https://gitlab.com/o/r/-/merge_requests/4")
+    expect(elsewhere.repo).to be_nil
+    expect(elsewhere.qualified).to eq("#4")
+  end
+
   it "wants you back for failing checks and requested changes, not for a conflict" do
     expect(ClaudeInbox::PullRequest.new(state: "OPEN", health: "FAILING")).to be_needs_you
     expect(ClaudeInbox::PullRequest.new(state: "OPEN", health: "CHANGES_REQUESTED")).to be_needs_you
@@ -63,7 +73,7 @@ RSpec.describe ClaudeInbox::PullRequests do
     ok = instance_double(Process::Status, success?: true)
     expect(ClaudeInbox::Subprocess).to receive(:capture)
       .with("gh", "pr", "view", "https://github.com/o/r/pull/1", "--json",
-        "number,state,isDraft,url,closedAt,statusCheckRollup,reviewDecision,mergeable")
+        "number,state,isDraft,url,closedAt,statusCheckRollup,reviewDecision,mergeable,title")
       .once.and_return(ClaudeInbox::Subprocess::Result.new(out, "", ok))
     pr = client.status("https://github.com/o/r/pull/1")
     expect(pr.state).to eq("OPEN")
@@ -102,6 +112,19 @@ RSpec.describe ClaudeInbox::PullRequests do
     expect(b.prs.map(&:number)).to eq([1])
   end
 
+  it "adds the rest of a stack the session opened to the daemon's one link" do
+    Dir.mktmpdir do |dir|
+      transcript = File.join(dir, "t.jsonl")
+      stdout = (1..3).map { |n| "✓ Created PR ##{n} (https://github.com/o/r/pull/#{n}) for b#{n}" }.join("\n")
+      File.write(transcript, JSON.generate("toolUseResult" => {"stdout" => stdout}) + "\n")
+      FileUtils.mkdir_p(File.join(dir, "aaa11111"))
+      File.write(File.join(dir, "aaa11111", "state.json"), JSON.generate("linkScanPath" => transcript,
+        "children" => [{"kind" => "pr", "href" => "https://github.com/o/r/pull/1"}]))
+      sessions = ClaudeInbox::JobState.enrich([session(id: "aaa11111")], jobs_dir: dir)
+      expect(prs.enrich(sessions, {}).first.prs.map(&:number)).to eq([1, 2, 3])
+    end
+  end
+
   it "reads when gh says a PR was merged or closed" do
     json = '{"number":9,"state":"MERGED","isDraft":false,"closedAt":"2026-09-28T14:00:00Z"}'
     expect(described_class.parse("u", json).resolved_at).to eq(Time.utc(2026, 9, 28, 14).to_i)
@@ -111,6 +134,7 @@ RSpec.describe ClaudeInbox::PullRequests do
   it "parses gh output, calling an open draft DRAFT" do
     pr = described_class.parse("u", '{"number":9,"state":"OPEN","isDraft":true,"title":"t","url":"u"}')
     expect(pr.state).to eq("DRAFT")
+    expect(pr.title).to eq("t")
     expect(described_class.parse("u", '{"state":"OPEN","isDraft":false}').state).to eq("OPEN")
     expect(described_class.parse("u", '{"state":"MERGED","isDraft":false}')).to be_merged
     expect(described_class.parse("u", "garbage")).to be_nil
@@ -213,7 +237,7 @@ RSpec.describe ClaudeInbox::PullRequests do
       asked = 0
       allow(first).to receive(:fetch) do |u|
         asked += 1
-        ClaudeInbox::PullRequest.new(number: 7, url: u, state: "MERGED", resolved_at: now.to_i - 60)
+        ClaudeInbox::PullRequest.new(number: 7, url: u, state: "MERGED", resolved_at: now.to_i - 60, title: "Ship it")
       end
       expect(first.status(url)).to be_merged
       expect(asked).to eq(1)
@@ -224,6 +248,7 @@ RSpec.describe ClaudeInbox::PullRequests do
       pr = second.status(url)
       expect(pr).to be_merged
       expect(pr.resolved_at).to eq(now.to_i - 60)
+      expect(pr.title).to eq("Ship it")
     end
   end
 

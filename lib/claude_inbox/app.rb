@@ -64,7 +64,7 @@ module ClaudeInbox
       @out = out
       @color = color
       @trust = trust
-      @renderer = Renderer.new(color: color)
+      @renderer = Renderer.new
       @input = Input.new(input, out)
       @queue = queue
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests,
@@ -198,6 +198,7 @@ module ClaudeInbox
       case @modal.press(name, key)
       when :cancel then @modal = nil
       when :snooze then snooze_chosen
+      when :pick then pr_picked
       when :confirm
         kind, id = @modal.kind, @modal.id
         @modal = nil
@@ -274,6 +275,7 @@ module ClaudeInbox
         tick: @tick / 2, loading: loading_for, listening: @listener.snapshot
       )
       frame = @renderer.frame(sections, view)
+      frame = frame.plain unless @color # --no-color: decided here and nowhere else
       placed(frame)
       @terminal.paint(frame.lines)
       dt = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0

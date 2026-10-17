@@ -14,8 +14,7 @@ module ClaudeInbox
       def section_of(selection)
         return nil if selection.nil?
         return selection.key if selection.fold?
-        each_pair { |name, rows| return name if rows.any? { |r| r.key == selection.key } }
-        nil
+        each_pair.find { |_, rows| rows.any? { |r| r.key == selection.key } }&.first
       end
 
       def selections(expanded) = stops(expanded).flat_map(&:last)

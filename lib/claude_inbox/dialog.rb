@@ -3,6 +3,7 @@
 require "tty-box"
 require_relative "text"
 require_relative "text_buffer"
+require_relative "theme"
 
 module ClaudeInbox
   # A small box over the list that claims every key until it answers. Like
@@ -18,13 +19,24 @@ module ClaudeInbox
     def initialize(kind, id)
       @kind = kind
       @id = id
+      @theme = Theme.new
     end
 
     def frame(width, caret = nil)
-      box = [width - 4, self.class::WIDTH].min
+      box = [width - 4, fit].min
       TTY::Box.frame(lines(box - 4, caret).join("\n"), title: {top_left: title}, padding: [0, 1], width: box)
         .split("\n")
     end
+
+    # How wide the box wants to be; the frame caps it at the terminal.
+    def fit = self.class::WIDTH
+
+    private
+
+    def key(name) = @theme.cyan_bold(name)
+
+    # A key and what it does.
+    def hint(name, action) = "#{key(name)}  #{@theme.dim(action)}"
 
     # `s` snooze: one key per choice, and the choice is read from `choice`.
     class Snooze < Dialog
@@ -42,14 +54,57 @@ module ClaudeInbox
 
       def title = " Snooze "
 
-      def lines(_width, _caret) = MENU.map { |k, label, _| "  #{k}  #{label}" } + ["", "  esc  cancel"]
+      def lines(_width, _caret) = MENU.map { |k, label, _| "  #{key(k)}  #{label}" } + ["", "  " + hint("esc", "cancel")]
 
       def press(name, key)
         return :cancel if name == :escape || key == "q"
-        entry = MENU.find { |k, _, _| k == key }
+        entry = MENU.assoc(key)
         return nil unless entry
         @choice = entry[2]
         :snooze
+      end
+    end
+
+    # `o` open and `y` copy on a session with several PRs: the headline
+    # first, and the same key again takes it. The PR is read from `choice`.
+    class PrPicker < Dialog
+      MARGIN = 6
+      KEYS = {open: "o", copy: "y"}.freeze
+      VERBS = {open: "open", copy: "copy"}.freeze
+
+      attr_reader :choice
+
+      def initialize(kind, session)
+        super(kind, session.key)
+        @prs = [session.pr, *session.prs.reject { |pr| pr.equal?(session.pr) }].first(9)
+      end
+
+      def title = " #{VERBS.fetch(kind).capitalize} pull request "
+
+      # Titles vary, so the box grows to the longest line plus some air,
+      # and never shrinks below a plain dialog.
+      def fit = [WIDTH, lines(Float::INFINITY, nil).map { |l| Text.width(l) }.max + MARGIN].max
+
+      def lines(width, _caret)
+        (@prs.each_with_index.map { |pr, i| "  #{key((i + 1).to_s)}  #{label(pr)}" } +
+          ["", "  #{hint(KEYS.fetch(kind), "#{VERBS.fetch(kind)} #{@prs.first.short}")} · #{key("esc")} #{@theme.dim("cancel")}"])
+          .map { |line| Text.truncate(line, width) }
+      end
+
+      def press(name, key)
+        return :cancel if name == :escape || key == "q"
+        @choice = @prs.first if key == KEYS.fetch(kind) || name == :return || name == :enter
+        @choice = @prs[key.to_i - 1] if key.to_s.match?(/\A[1-9]\z/)
+        @choice && :pick
+      end
+
+      private
+
+      # The list's badge, then the title. A bare #190 is ambiguous only
+      # once the list spans repos.
+      def label(pr)
+        name = (@prs.map(&:repo).uniq.size > 1) ? pr.qualified : pr.short
+        pr.title ? @theme.pr_badge(pr, name) + @theme.dim(" · ") + pr.title : @theme.pr_badge(pr, name)
       end
     end
 
@@ -63,13 +118,13 @@ module ClaudeInbox
 
       def lines(_width, _caret)
         case kind
-        when :stop then ["  Stop session #{id}?", "", "  y  stop it", "  esc  cancel"]
+        when :stop then ["  Stop session #{id}?", "", "  " + hint("y", "stop it"), "  " + hint("esc", "cancel")]
         when :delete
           ["  Delete session #{id}?", "  Its worktree and conversation", "  go with it.",
-            "", "  y  delete it", "  esc  keep it"]
+            "", "  " + hint("y", "delete it"), "  " + hint("esc", "keep it")]
         when :adopt
           ["  Pull this session into the daemon?", "  Its phone session ends and a",
-            "  new one takes its place.", "", "  y  adopt it", "  esc  cancel"]
+            "  new one takes its place.", "", "  " + hint("y", "adopt it"), "  " + hint("esc", "cancel")]
         end
       end
 
@@ -115,7 +170,7 @@ module ClaudeInbox
           "",
           "  You can install this later with claude-inbox install",
           "",
-          "      y  add it to Claude Code      esc  not now"]
+          "      #{hint("y", "add it to Claude Code")}      #{hint("esc", "not now")}"]
       end
     end
 
@@ -136,7 +191,8 @@ module ClaudeInbox
       def title = TITLES.fetch(kind)
 
       def lines(width, caret)
-        [QUESTIONS.fetch(kind), "", "  > " + @buffer.row(width - 4, cursor: caret), "", "  ⏎ save · esc cancel"]
+        [QUESTIONS.fetch(kind), "", "  > " + @buffer.row(width - 4, cursor: caret), "",
+          "  #{key("⏎")} #{@theme.dim("save")} · #{key("esc")} #{@theme.dim("cancel")}"]
       end
 
       def press(name, key)

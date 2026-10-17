@@ -40,7 +40,7 @@ a fullscreen terminal.
 
 `/inbox` opens it, `ctrl+x tab` focuses it and `esc` leaves. The keys are the
 ones below, with `ge` for `G`, `n` `p` for `Tab` `Shift+Tab`, and no `a`,
-`P`, `X`, `Ctrl-x`, `/`, `R`, `U` or `y`, and `s` has no `5`. `Enter`, or a click on a row, switches to the
+`P`, `X`, `Ctrl-x`, `/`, `R` or `U`, and `s` has no `5`. `Enter`, or a click on a row, switches to the
 session when you attached through `claude-inbox`.
 
 It opens when a session starts. To stop that, set
@@ -61,7 +61,8 @@ It opens when a session starts. To stop that, set
 Under each row is what the session is waiting on, what it produced, or its
 status line. A row with a pull request shows it as `#885 open`, `#885 merged`
 and so on, with `✗ checks`, `changes requested` or `conflicts` after it when
-something is wrong. A steady `◌` with `idle · 1 shell` means the agent stopped
+something is wrong, and `+2` after it when the session has two more.
+A steady `◌` with `idle · 1 shell` means the agent stopped
 and is waiting on a shell or sub-agent it started. A `●` marks a session you
 haven't attached to since it got blocked, in red, or finished, in blue; one
 you have attached to since is dimmed, unless `/color` tints it.
@@ -86,9 +87,9 @@ Vim bindings. Arrows and the mouse work too.
 | `u` | wake a snoozed session, or bring back a settled one |
 | `x` | settle by hand |
 | `a` | set a local alias |
-| `o` | open the pull request in the browser |
+| `o` | open the pull request in the browser; with several, `o` again opens the one that matters, `1`… another |
 | `w` | open the session at claude.ai/code |
-| `y` | copy the pull request url, or the session's address |
+| `y` | copy the pull request url, or the session's address; with several, `y` again copies the one that matters, `1`… another |
 | `P` | link a pull request by hand (empty clears) |
 | `X` | stop the session; `Enter` resumes it later |
 | `Ctrl-x` | delete the session, transcript and worktree for good |
