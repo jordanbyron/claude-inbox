@@ -156,11 +156,12 @@ module ClaudeInbox
         values[:permission_mode] = capped_mode(values[:permission_mode] || defaults.permission_mode || builtin_mode)
         paths = images.each_with_index.map { |bytes, i| Images.save(bytes, dir: @images_dir, index: i + 1) }
         values[:prompt] = SessionRequest.attach(values[:prompt], paths)
+        values, note = SessionRequest.without_stray_worktree(values)
         @queue << [:notice, "remote: starting session…"]
         id = Http.utf8(@spawn_lock.synchronize { @client.spawn(**values) })
         url = remote_url(id, wait: values[:remote] ? @bridge_wait : 0)
-        @queue << [:remote_started, id, via]
-        {id: id, name: values[:name], cwd: values[:cwd], url: url}
+        @queue << [:remote_started, id, via, note].compact
+        {id: id, name: values[:name], cwd: values[:cwd], url: url}.merge(note ? {note: note} : {})
       rescue SessionRequest::Invalid => e
         raise Http::Error.new(422, e.message, field: e.field)
       end

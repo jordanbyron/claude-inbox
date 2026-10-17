@@ -143,7 +143,8 @@ back to its default.
 Success is `201 {"id", "name", "cwd", "url"}`. `url` is the session's
 claude.ai/code page, or null if the session hasn't registered within three
 seconds. Without `remote` the inbox doesn't wait, since such a session seldom
-registers at all.
+registers at all. A `worktree` asked for outside a git repository is dropped,
+and the reply adds a `note` saying so.
 
 A refusal is `{"error", "field"}` with the message the form would show. A CLI
 refusal such as "Workspace not trusted" comes back as a 500.

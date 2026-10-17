@@ -46,6 +46,14 @@ RSpec.describe ClaudeInbox::App do
       end
     end
 
+    it "starts without the worktree it was asked for outside a git repo, and says so" do
+      Dir.mktmpdir do |dir|
+        press(app, "n", "h", "i", "\e[B", "\e[B", ctrl_u, *dir.chars, *["\e[B"] * 4, "l", ctrl_s)
+        expect(wait_for { screen(app).first.include?("started deadbeef — not in a git repo, so no worktree") }).to be(true)
+        expect(client.spawns.last[:worktree]).to be(false)
+      end
+    end
+
     it "reopens the form with the prompt and the error, instead of losing it, when the spawn fails" do
       client.fail_spawn("claude --bg failed: not a trusted directory")
       press(app, "n", *"fix the thing".chars, "\e[B", "\e[B", ctrl_u, *Dir.pwd.chars, ctrl_s)
@@ -86,6 +94,7 @@ RSpec.describe ClaudeInbox::App do
 
   describe "opening a new session" do
     it "strips a trailing worktree path so the new session lands in the repo it was cut from" do
+      app.step
       store.update(store.sessions + [
         session(
           id: "aaaa1111",
