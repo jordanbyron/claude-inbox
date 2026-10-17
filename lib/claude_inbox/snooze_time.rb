@@ -65,5 +65,6 @@ module ClaudeInbox
       day = now.to_date + days
       Time.new(day.year, day.month, day.day, hour, minute, 0, now.utc_offset).to_i
     end
+    private_class_method :clock, :weekday, :next_at, :at
   end
 end
