@@ -317,7 +317,7 @@ module ClaudeInbox
 
       label_w = [width - chrome - Text.width(project_text), 0].max
       label = Text.truncate(row.label, label_w)
-      label = style_label(label, row, quiet, sel || (live && row.unread?))
+      label = style_label(label, row, quiet, sel || unread)
       first = " #{marker} #{glyph} " + Text.pad(label, label_w) + "  " + meta + "  " + project + " "
 
       return [Text.pad(first, width)] unless live
