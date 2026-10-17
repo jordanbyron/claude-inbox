@@ -9,6 +9,7 @@ module Release
   class PullRequest < Data.define(:number, :title, :body, :labels)
     TYPE_LABELS = {"feat" => "enhancement", "fix" => "bug", "refactor" => "refactor", "docs" => "documentation"}.freeze
     FIELDS = "number,title,body,labels"
+    IMAGE = /!\[[^\]]*\]\((\S+?)\)|<img\b[^>]*\bsrc="([^"]+)"/
 
     def self.numbers_in(messages)
       messages.filter_map { |message| message.lstrip.lines.first.to_s[/\(#(\d+)\)\s*\z/, 1] }
@@ -24,5 +25,9 @@ module Release
       label = TYPE_LABELS[title[/\A(\w+)/]]
       label unless label.nil? || labels.intersect?(TYPE_LABELS.values)
     end
+
+    def feature? = title.match?(/\Afeat\b/)
+
+    def images = body.scan(IMAGE).flatten.compact
   end
 end

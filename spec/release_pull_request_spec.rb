@@ -33,4 +33,17 @@ RSpec.describe Release::PullRequest do
     chore = described_class.new(number: 1, title: "chore: bump deps", body: "", labels: [])
     expect(chore.missing_label).to be_nil
   end
+
+  it "is a feature when the prefix is feat, scoped or not" do
+    expect(described_class.parse(json).feature?).to be(true)
+    expect(described_class.new(number: 1, title: "feat(ui)!: add a key", body: "", labels: []).feature?).to be(true)
+    expect(described_class.new(number: 1, title: "fix: a feature", body: "", labels: []).feature?).to be(false)
+  end
+
+  it "finds the images in its description, markdown or html" do
+    body = "Before:\n![old](https://example.com/old.png)\n<img width=\"600\" src=\"https://example.com/new.png\" alt=\"new\">\n"
+    pull_request = described_class.new(number: 1, title: "feat: x", body: body, labels: [])
+    expect(pull_request.images).to eq(%w[https://example.com/old.png https://example.com/new.png])
+    expect(described_class.parse(json).images).to eq([])
+  end
 end

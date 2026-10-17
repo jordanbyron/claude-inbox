@@ -97,3 +97,10 @@ The notes GitHub generates are grouped by label, as `.github/release.yml`
 lays out. Before cutting the release, `bin/release` gives every PR since the
 last tag the label its prefix calls for, so an unlabeled `fix` still lands
 under Bug fixes.
+
+It then asks, for each `feat` PR, whether to highlight it. A highlighted PR
+with no screenshot in its description gets a prompt for a path or URL; a
+local file goes up as a release asset. `claude -p` drafts a Highlights
+section from the PRs you picked, which you accept, drop, or edit in
+`$EDITOR` before it opens the notes. Nothing is bumped, tagged or pushed
+until those questions are answered.
