@@ -18,6 +18,8 @@ Gem::Specification.new do |spec|
   spec.executables = ["claude-inbox"]
   spec.require_paths = ["lib"]
 
+  # Ruby 3.2 and 3.3 ship optparse 0.4, whose require_exact rejects --flag=VALUE.
+  spec.add_dependency "optparse", ">= 0.5"
   spec.add_dependency "tty-cursor", "~> 0.7"
   spec.add_dependency "tty-reader", "~> 0.9"
   spec.add_dependency "tty-screen", "~> 0.8"
