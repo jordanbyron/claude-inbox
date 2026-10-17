@@ -33,6 +33,8 @@ module ClaudeInbox
     end
 
     Applied = Data.define(:success, :output) do
+      def self.from(result) = new(success: result.success?, output: result.out + result.err)
+
       def success? = success
     end
 
@@ -105,7 +107,7 @@ module ClaudeInbox
 
     def install_gem
       result = @run.call(Gem.ruby, File.join(RbConfig::CONFIG["bindir"], "gem"), "install", "claude-inbox")
-      Applied.new(success: result.success?, output: result.out + result.err)
+      Applied.from(result)
     end
 
     def gem_update(latest)
@@ -140,7 +142,7 @@ module ClaudeInbox
       return Applied.new(success: false, output: "not on main (on #{branch})") unless branch == "main"
       return Applied.new(success: false, output: "the working tree is dirty") unless git("status", "--porcelain") == ""
       merged = @run.call("git", "-C", @root, "merge", "--ff-only", "--quiet", "main@{upstream}")
-      Applied.new(success: merged.success?, output: merged.out + merged.err)
+      Applied.from(merged)
     end
 
     def git(*args)
