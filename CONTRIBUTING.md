@@ -10,6 +10,9 @@ gh extension install basecamp/gh-signoff
 `bin/ci` uses gh-signoff to mark your PR as passing, so install it before you
 open one.
 
+In a Claude Code cloud session, `.claude/hooks/session-start.sh` does all of
+this when the session starts.
+
 For tab completion of `gh signoff`, add `eval "$(gh signoff completion)"` to
 `~/.zshrc`.
 
