@@ -73,5 +73,6 @@ module ClaudeInbox
     ensure
       writer.close
     end
+    private_class_method :feed
   end
 end
