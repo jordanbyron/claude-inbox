@@ -106,13 +106,8 @@ module ClaudeInbox
     # the caller knows whether the list is worth publishing again. A merge
     # date alone counts: it is what lets a PR the cache called merged settle.
     def refresh(sessions)
-      changed = false
-      fresh = sessions.map do |s|
-        s.with(prs: s.prs.map { |pr|
-          status(pr.url).tap { |now| changed = true if now != pr }
-        })
-      end
-      [fresh, changed]
+      fresh = sessions.map { |s| s.with(prs: s.prs.map { |pr| status(pr.url) }) }
+      [fresh, fresh.map(&:prs) != sessions.map(&:prs)]
     end
 
     # Best known state for a url, refreshed through gh when due.
