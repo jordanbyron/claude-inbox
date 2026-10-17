@@ -15,11 +15,15 @@ module ClaudeInbox
   # reaps, since deleting sessions stays with the inbox you can see, and it
   # exits at once while an inbox holds the writer lock.
   class Headless
+    RECHECK_EVERY = 60
+
     def initialize(client:, store:, pull_requests: PullRequests.new, actions: Actions.new, snapshot: Snapshot.new,
-      lock: WriterLock.new, updater: nil, notifier: Notifier.disabled)
+      lock: WriterLock.new, updater: nil, notifier: Notifier.disabled, recheck_every: RECHECK_EVERY)
       @lock = lock
       @snapshot = snapshot
       @updater = updater
+      @recheck_every = recheck_every
+      @notice = nil
       @queue = Queue.new
       @poller = Poller.new(client: client, store: store, pull_requests: pull_requests, reaper: Reaper.disabled,
         queue: @queue, snapshot: snapshot, actions: actions, notifier: notifier)
@@ -29,7 +33,7 @@ module ClaudeInbox
     def run
       return false unless @lock.take(role: "headless")
       @poller.start
-      check_for_update if @updater
+      Thread.new { watch_for_updates } if @updater
       loop { @queue.pop }
     end
 
@@ -38,8 +42,19 @@ module ClaudeInbox
     # After the poller is off, since the check may wait on the network. The
     # pane cannot swap the process under Claude Code, so the snapshot only
     # says a newer one is out, and a check that cannot tell says nothing.
+    # Re-checked because this process outlives an update applied from a
+    # terminal; the updater's day-long cache keeps that off the network.
+    def watch_for_updates
+      loop do
+        check_for_update
+        sleep @recheck_every
+      end
+    end
+
     def check_for_update
-      @snapshot.update = @updater.check&.notice
+      notice = @updater.check&.notice
+      return if notice == @notice
+      @notice = @snapshot.update = notice
       @poller.soon
     rescue Updater::Error
       nil
