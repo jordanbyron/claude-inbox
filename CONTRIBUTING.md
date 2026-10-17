@@ -104,3 +104,15 @@ local file goes up as a release asset. `claude -p` drafts a Highlights
 section from the PRs you picked, which you accept, drop, or edit in
 `$EDITOR` before it opens the notes. Nothing is bumped, tagged or pushed
 until those questions are answered.
+
+To rewrite the notes of a release that is already out, say to add a
+highlight it deserved:
+
+```sh
+bin/release --notes v0.8.0
+```
+
+It asks the same questions, shows the notes it would set, and asks before
+replacing them. GitHub reads `.github/release.yml` from the tag's own
+commit, so a release cut before the file existed keeps its flat list, with
+the highlights on top.
