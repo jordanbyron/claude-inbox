@@ -48,7 +48,7 @@ module ClaudeInbox
     # => JobState, or nil when there is no readable file for this id.
     def self.read(id, jobs_dir:)
       return nil unless id
-      new(JSON.parse(File.read(File.join(jobs_dir, id, "state.json"))))
+      new(JSON.parse(File.read(job_file(id, jobs_dir))))
     rescue JSON::ParserError, SystemCallError
       nil
     end
@@ -59,12 +59,15 @@ module ClaudeInbox
     # must not report a started session as failed.
     # ponytail: a daemon write racing this one can drop the color; re-apply on poll if that shows up.
     def self.write_color(id, color, jobs_dir:)
-      path = File.join(jobs_dir, id, "state.json")
+      path = job_file(id, jobs_dir)
       File.write("#{path}.tmp", JSON.generate(JSON.parse(File.read(path)).merge("color" => color)))
       File.rename("#{path}.tmp", path)
     rescue JSON::ParserError, SystemCallError
       nil
     end
+
+    def self.job_file(id, jobs_dir) = File.join(jobs_dir, id, "state.json")
+    private_class_method :job_file
 
     attr_reader :pr_urls, :transcript_path, :color, :intent, :bridge_id, :created_at
 
