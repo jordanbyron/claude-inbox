@@ -48,12 +48,8 @@ module ClaudeInbox
     # run); the last two are dropped before anyone downstream sees them.
     def remote? = origin == :remote
 
-    def subagent? = origin == :subagent
-
-    def headless? = origin == :headless
-
     # A remote worker is not unattended: a person drives it, just from claude.ai/code.
-    def unattended? = subagent? || headless?
+    def unattended? = %i[subagent headless].include?(origin)
 
     def terminal? = interactive? && !remote? && !unattended?
 
