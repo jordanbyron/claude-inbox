@@ -34,6 +34,39 @@ RSpec.describe ClaudeInbox::WriterLock do
     end
   end
 
+  it "ends a headless claude-inbox that holds the lock" do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "writer.lock")
+      holder = <<~RUBY
+        f = File.open(ARGV[0], File::RDWR | File::CREAT)
+        f.flock(File::LOCK_EX)
+        f.write("headless \#{Process.pid}")
+        f.flush
+        sleep
+      RUBY
+      pid = Process.spawn("ruby", "-e", holder, path, "claude-inbox", "--headless")
+      sleep 0.05 until File.exist?(path) && File.read(path) == "headless #{pid}"
+      expect(described_class.new(path: path).take(role: "inbox")).to be(true)
+      expect(Process.wait2(pid).last.termsig).to eq(Signal.list["TERM"])
+      expect(File.read(path)).to eq("inbox #{Process.pid}")
+    end
+  end
+
+  it "never signals a pid the file names that is not a headless claude-inbox" do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "writer.lock")
+      held = File.open(path, File::RDWR | File::CREAT)
+      held.flock(File::LOCK_EX)
+      bystander = Process.spawn("sleep", "30")
+      File.write(path, "headless #{bystander}")
+      expect(described_class.new(path: path).take(role: "inbox")).to be(false)
+      expect(Process.waitpid(bystander, Process::WNOHANG)).to be_nil
+    ensure
+      Process.kill("KILL", bystander) if bystander
+      held&.close
+    end
+  end
+
   it "is always held when disabled" do
     expect(described_class.disabled.take(role: "inbox")).to be(true)
   end
