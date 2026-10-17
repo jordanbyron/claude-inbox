@@ -19,7 +19,8 @@ RSpec.describe ClaudeInbox::Headless do
     let(:tmp) { Dir.mktmpdir }
     let(:path) { File.join(tmp, "snapshot.json") }
     let(:runs) { [] }
-    let(:fetch) { ->(_) { '{"version":"0.6.0"}' } }
+    let(:latest) { +"0.6.0" }
+    let(:fetch) { ->(_) { %({"version":"#{latest}"}) } }
     let(:updater) do
       ClaudeInbox::Updater.new(checkout: false, version: "0.5.0", cache_path: File.join(tmp, "update.json"), fetch: fetch,
         run: ->(*argv) { runs << argv })
@@ -28,7 +29,7 @@ RSpec.describe ClaudeInbox::Headless do
       described_class.new(client: RecordingClient.new, store: ClaudeInbox::Store.new(path: nil),
         pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil),
         actions: ClaudeInbox::Actions.disabled, snapshot: ClaudeInbox::Snapshot.new(path: path),
-        lock: ClaudeInbox::WriterLock.new(path: File.join(tmp, "writer.lock")), updater: updater)
+        lock: ClaudeInbox::WriterLock.new(path: File.join(tmp, "writer.lock")), updater: updater, recheck_every: 0.1)
     end
     let(:thread) { Thread.new { headless.run } }
 
@@ -42,6 +43,16 @@ RSpec.describe ClaudeInbox::Headless do
       expect(wait_for(timeout: 6) { File.exist?(path) && JSON.parse(File.read(path))["update"] == "v0.6.0 available" }).to be(true)
       expect(JSON.parse(File.read(path))["sections"].values.flatten.map { |r| r["id"] }).to include("f23c8673")
       expect(runs).to be_empty
+    end
+
+    # What `claude-inbox update` in a terminal leaves behind: the cache gone
+    # and this version the latest.
+    it "drops the notice once the update is applied elsewhere" do
+      thread
+      expect(wait_for(timeout: 6) { File.exist?(path) && JSON.parse(File.read(path))["update"] }).to be_truthy
+      latest.replace("0.5.0")
+      FileUtils.rm_f(File.join(tmp, "update.json"))
+      expect(wait_for(timeout: 6) { !JSON.parse(File.read(path)).key?("update") }).to be(true)
     end
 
     context "when the check cannot reach rubygems.org" do
