@@ -92,3 +92,8 @@ bin/release
 
 The version comes from the conventional-commit prefixes of the PRs merged
 since the last tag. If none is a `feat` or `fix`, there's nothing to release.
+
+The notes GitHub generates are grouped by label, as `.github/release.yml`
+lays out. Before cutting the release, `bin/release` gives every PR since the
+last tag the label its prefix calls for, so an unlabeled `fix` still lands
+under Bug fixes.
