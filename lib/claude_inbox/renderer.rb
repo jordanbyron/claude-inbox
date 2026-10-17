@@ -250,7 +250,7 @@ module ClaudeInbox
     def loading_state(width, height, waited, tick)
       return [] if waited < LOADING_QUIET
       block = [
-        centered(@theme.cyan_bold(SPINNER[tick % SPINNER.size]), width),
+        centered(@theme.cyan_bold(spinner(tick)), width),
         "",
         centered(tray(tick), width),
         "",
@@ -262,6 +262,8 @@ module ClaudeInbox
       end
       [""] * [(height - block.size) / 2, 0].max + block
     end
+
+    def spinner(tick) = SPINNER[tick % SPINNER.size]
 
     TRAY_SLOTS = 9
 
@@ -362,7 +364,7 @@ module ClaudeInbox
       case s.effective_state
       when "blocked" then @theme.red_bold("?")
       when "failed" then @theme.red_bold("✗")
-      when "working" then s.waiting_on_work? ? @theme.yellow("◌") : @theme.yellow(SPINNER[tick % SPINNER.size])
+      when "working" then s.waiting_on_work? ? @theme.yellow("◌") : @theme.yellow(spinner(tick))
       when "done" then @theme.green("✓")
       when "stopped" then @p.dim("■")
       else @p.dim("·")
