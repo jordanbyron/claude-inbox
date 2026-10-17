@@ -12,6 +12,35 @@ RSpec.describe ClaudeInbox::App do
 
   after { client.release }
 
+  describe "the cursor after a row leaves the list" do
+    it "lands on the row below the one settled" do
+      press(app, "j", "j", "j")
+      expect(app).to paint("trailforks skill handoff").on_selected_row
+      press(app, "x")
+      expect(app).to paint("sensor token resilience test").on_selected_row
+    end
+
+    it "lands on the row above when the last one is settled" do
+      press(app, "G", "x")
+      expect(app).to paint("github milestone review").on_selected_row
+    end
+
+    it "lands on the row below the one snoozed from the menu" do
+      press(app, "j", "j", "j", "s", "2")
+      expect(app).to paint("sensor token resilience test").on_selected_row
+    end
+
+    it "lands on the row below the one snoozed until a typed time" do
+      press(app, "j", "j", "j", "s", "5", "2", "h", "\r")
+      expect(app).to paint("sensor token resilience test").on_selected_row
+    end
+
+    it "stays put when the snooze menu is closed without a choice" do
+      press(app, "j", "j", "j", "s", "\e")
+      expect(app).to paint("trailforks skill handoff").on_selected_row
+    end
+  end
+
   describe "snooze by typing" do
     it "opens a prompt on 5 and snoozes until the time typed" do
       press(app, "s", "5")

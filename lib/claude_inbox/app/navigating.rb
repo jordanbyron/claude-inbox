@@ -47,6 +47,15 @@ module ClaudeInbox
         select(stops[(idx + delta).clamp(0, stops.size - 1)])
       end
 
+      # Before a row leaves the list: the stop below it, or above it at the
+      # bottom, so working down a section doesn't throw the cursor to the top.
+      def select_neighbour
+        stops = filtered.selections(@expanded)
+        idx = stops.index(@selected)
+        rest = stops - [@selected]
+        select(rest[idx.clamp(..rest.size - 1)]) if idx && rest.any?
+      end
+
       # Tab / Shift-Tab: first selectable row of the next / previous section.
       def jump_section(dir)
         sections = filtered

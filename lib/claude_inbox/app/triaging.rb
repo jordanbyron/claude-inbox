@@ -33,7 +33,9 @@ module ClaudeInbox
 
       def settle_selected
         return unless require_storable
-        @store.settle(@selected.key)
+        key = @selected.key
+        select_neighbour
+        @store.settle(key)
         notice("settled — u brings it back")
       end
 
@@ -44,8 +46,14 @@ module ClaudeInbox
 
       def snooze_chosen
         return @modal = Dialog::Prompt.new(:snooze, @modal.id, "") if @modal.choice == :custom
-        @store.snooze(@modal.id, @modal.choice)
+        snooze_modal_row(@modal.choice)
         @modal = nil
+      end
+
+      # A poll can move the cursor while the menu is up, so only step off a row still under it.
+      def snooze_modal_row(choice)
+        select_neighbour if @selected == Store::Selection.row(@modal.id)
+        @store.snooze(@modal.id, choice)
       end
 
       def open_alias_editor
@@ -67,7 +75,7 @@ module ClaudeInbox
         elsif @modal.kind == :snooze
           wake_at = SnoozeTime.parse(value, Time.now)
           return notice("try 45m, 2h, 3d, 17:00, 5pm, fri, tomorrow or tonight") unless wake_at
-          @store.snooze(@modal.id, wake_at)
+          snooze_modal_row(wake_at)
         elsif value.empty? || PullRequests.valid_url?(value)
           @store.set_pr(@modal.id, value)
           @poller.soon
