@@ -220,11 +220,9 @@ module ClaudeInbox
     # ----- body ---------------------------------------------------------------
 
     def body_lines(sections, width, view)
+      return [empty_state(width), []] if sections.all.empty?
       lines = []
       items = []
-      if sections.all.empty?
-        return [empty_state(width), []]
-      end
       selected = view.selected
       sections.each_pair do |name, rows|
         next if rows.empty?
