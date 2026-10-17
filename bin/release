@@ -9,6 +9,7 @@ require "bundler"
 require "fileutils"
 require "open3"
 require_relative "../release/next_version"
+require_relative "../release/pull_request"
 
 Dir.chdir(File.expand_path("..", __dir__))
 
@@ -39,6 +40,7 @@ last_tag = last_tag.strip
 
 if last_tag.empty?
   version = current
+  messages = []
   reason = "the first release, VERSION as-is"
 else
   messages = capture("git", "log", "#{last_tag}..HEAD", "--format=%B%x00").split("\0")
@@ -53,6 +55,20 @@ if version.nil?
 end
 
 tag = "v#{version}"
+
+# The release notes group pull requests by label, so give each one merged
+# since the last tag the label its prefix calls for.
+pull_requests = Release::PullRequest.numbers_in(messages).map do |number|
+  Release::PullRequest.parse(capture("gh", "pr", "view", number, "--json", Release::PullRequest::FIELDS))
+end
+pull_requests.each do |pull_request|
+  label = pull_request.missing_label or next
+  if DRY_RUN
+    puts "would label ##{pull_request.number} #{label}"
+  else
+    step "gh", "pr", "edit", pull_request.number.to_s, "--add-label", label
+  end
+end
 
 if DRY_RUN
   puts "would release #{tag}: #{reason}"
