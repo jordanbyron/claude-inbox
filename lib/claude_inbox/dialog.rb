@@ -70,7 +70,6 @@ module ClaudeInbox
     class PrPicker < Dialog
       MARGIN = 6
       KEYS = {open: "o", copy: "y"}.freeze
-      VERBS = {open: "open", copy: "copy"}.freeze
 
       attr_reader :choice
 
@@ -79,7 +78,7 @@ module ClaudeInbox
         @prs = [session.pr, *session.prs.reject { |pr| pr.equal?(session.pr) }].first(9)
       end
 
-      def title = " #{VERBS.fetch(kind).capitalize} pull request "
+      def title = " #{kind.to_s.capitalize} pull request "
 
       # Titles vary, so the box grows to the longest line plus some air,
       # and never shrinks below a plain dialog.
@@ -87,7 +86,7 @@ module ClaudeInbox
 
       def lines(width, _caret)
         (@prs.each_with_index.map { |pr, i| "  #{key((i + 1).to_s)}  #{label(pr)}" } +
-          ["", "  #{hint(KEYS.fetch(kind), "#{VERBS.fetch(kind)} #{@prs.first.short}")} · #{key("esc")} #{@theme.dim("cancel")}"])
+          ["", "  #{hint(KEYS.fetch(kind), "#{kind} #{@prs.first.short}")} · #{key("esc")} #{@theme.dim("cancel")}"])
           .map { |line| Text.truncate(line, width) }
       end
 
