@@ -380,14 +380,13 @@ module ClaudeInbox
         when :settled
           @p.dim("#{s.state} · #{Text.age(now.to_i - row.state_since.to_i)}")
         else
+          since = row.state_since && Text.age(now.to_i - row.state_since.to_i)
           if s.interactive?
             where = s.remote? ? "remote" : "your terminal"
-            age = row.state_since ? Text.age(now.to_i - row.state_since.to_i) : Text.age(now - s.started_at)
-            state_badge(s) + @p.dim(" · #{where} · #{age}")
+            state_badge(s) + @p.dim(" · #{where} · #{since || Text.age(now - s.started_at)}")
           else
-            age = row.state_since ? @p.dim(" · " + Text.age(now.to_i - row.state_since.to_i)) : ""
             remote = s.remote_control? ? @theme.blue(" ⇅") : ""
-            state_badge(s) + remote + age
+            state_badge(s) + remote + (since ? @p.dim(" · #{since}") : "")
           end
         end
       pr = pr_badge(s, section)
