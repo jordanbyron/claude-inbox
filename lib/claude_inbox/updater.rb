@@ -6,6 +6,7 @@ require "net/http"
 require "rbconfig"
 require_relative "../claude_inbox"
 require_relative "mod"
+require_relative "records"
 require_relative "subprocess"
 
 module ClaudeInbox
@@ -151,15 +152,14 @@ module ClaudeInbox
     end
 
     def fresh_cache
-      cache = JSON.parse(File.read(@cache_path))
+      cache = Records.read(@cache_path)
       cache["latest"] if cache["kind"] == kind.to_s && @clock.call.to_i - cache["checked_at"].to_i < FRESH_FOR
-    rescue SystemCallError, JSON::ParserError, TypeError
+    rescue SystemCallError, TypeError
       nil
     end
 
     def write_cache(latest)
-      FileUtils.mkdir_p(File.dirname(@cache_path))
-      File.write(@cache_path, JSON.generate(checked_at: @clock.call.to_i, kind: kind, latest: latest))
+      Records.save(@cache_path, {checked_at: @clock.call.to_i, kind: kind, latest: latest})
     end
   end
 end
