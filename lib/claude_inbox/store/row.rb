@@ -55,16 +55,18 @@ module ClaudeInbox
         entry&.acknowledged_at && entry.state_since.to_i <= entry.acknowledged_at.to_i
       end
 
-      # Finished or needing you since you last attached. Only a session you
-      # can attach to counts, since nothing else ever clears the mark.
+      # Finished or needing you, so it carries a read or unread mark. Only a
+      # session you can attach to counts, since nothing else ever clears it.
+      def markable? = session.actionable? && (session.finished? || session.needs_you?)
+
+      # Finished or needing you since you last attached.
       def unread?
-        return false unless session.actionable?
-        return false unless session.finished? || session.needs_you?
+        return false unless markable?
         entry&.last_visited_at.nil? || entry.state_since.to_i > entry.last_visited_at.to_i
       end
 
       # A finished or blocked session you have attached to since: you have seen what it wants.
-      def read? = session.actionable? && (session.finished? || session.needs_you?) && !unread?
+      def read? = markable? && !unread?
 
       # `u` overrides hand-settle and the PR rule alike, and holds until the
       # state actually changes rather than just for the next poll.
