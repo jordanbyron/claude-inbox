@@ -26,6 +26,7 @@ module ClaudeInbox
     FLAGS = {true => true, false => false, "yes" => true, "no" => false}.freeze
     MAX_PROMPT = 100_000
     MAX_NAME = 100
+    NOT_ONE_LINE = /[[:cntrl:]\u2028\u2029]/
 
     # The hash NewSessionForm#values builds, before `resolve`, from a
     # request's fields, or Invalid. "default" is nil. An unknown key is
@@ -123,7 +124,7 @@ module ClaudeInbox
     def self.name_param(value)
       return nil if value.nil?
       name = string_param(:name, value).strip
-      raise Invalid.new(:name, "a name is one line") if name.match?(/[[:cntrl:]\u2028\u2029]/)
+      raise Invalid.new(:name, "a name is one line") if name.match?(NOT_ONE_LINE)
       raise Invalid.new(:name, "the name is over #{MAX_NAME} characters") if name.length > MAX_NAME
       name.empty? ? nil : name
     end
@@ -143,7 +144,7 @@ module ClaudeInbox
     def self.cwd_param(value, dirs)
       cwd = string_param(:cwd, value || "").strip
       raise Invalid.new(:cwd, "a directory is required") if cwd.empty?
-      raise Invalid.new(:cwd, "a directory is one line") if cwd.match?(/[[:cntrl:]\u2028\u2029]/)
+      raise Invalid.new(:cwd, "a directory is one line") if cwd.match?(NOT_ONE_LINE)
       return File.expand_path(cwd) if cwd.match?(%r{\A(/|~(/|\z))})
       found = dirs.select { |dir| dir.end_with?("/#{cwd}") }
       raise Invalid.new(:cwd, "no directory called #{cwd}") if found.empty?
