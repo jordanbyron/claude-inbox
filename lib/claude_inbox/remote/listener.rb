@@ -322,14 +322,16 @@ module ClaudeInbox
           if slot[:busy] then @turning_away -= 1
           else
             @alive -= 1
-            release_unauthenticated(slot[:via]) unless slot[:authenticated]
+            release_unauthenticated(slot)
           end
         end
       end
 
       # Under the mutex. A host leaves the hash at zero, so it holds only
       # hosts connected now.
-      def release_unauthenticated(via)
+      def release_unauthenticated(slot)
+        return if slot[:authenticated]
+        via = slot[:via]
         @unauthenticated[via] -= 1
         @unauthenticated.delete(via) if @unauthenticated[via].zero?
       end
@@ -353,7 +355,7 @@ module ClaudeInbox
 
       def authenticated(slot)
         @mutex.synchronize do
-          release_unauthenticated(slot[:via]) unless slot[:authenticated]
+          release_unauthenticated(slot)
           slot[:authenticated] = true
         end
       end
