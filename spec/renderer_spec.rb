@@ -48,7 +48,7 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(f.lines).to eq(expected)
   end
 
-  it "dots a finished row blue and a blocked one red until attached to, then quiets the finished one but keeps its color bright, and gives the selected one the yellow caret" do
+  it "dots a finished row and a blocked one blue until attached to, then quiets the finished one but keeps its color bright, and gives the selected one the yellow caret" do
     done = session(id: "aaa11111", name: "fresh", state: "done")
     seen = session(id: "bbb22222", name: "seen", state: "done", job_state: ClaudeInbox::JobState.new("color" => "orange"))
     blocked = session(id: "ccc33333", name: "stuck", state: "blocked")
@@ -63,7 +63,7 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(colored.find { |l| l.include?("fresh") }).to include("\e[1mfresh")
     expect(colored.find { |l| l.include?("seen") }).to include("\e[38;5;208mseen\e[39m")
     expect(colored.find { |l| l.include?("stuck") }).to include("\e[1mstuck")
-    expect(colored.find { |l| l.include?("stuck") }).to include("\e[38;5;203;1m●")
+    expect(colored.find { |l| l.include?("stuck") }).to include("\e[38;5;75m●\e[0m")
     acknowledged = ClaudeInbox::Store.merge_entries({"ccc33333" => {"last_state" => "blocked", "state_since" => now.to_i - 60, "acknowledged_at" => now.to_i - 30, "last_visited_at" => now.to_i - 30}}, [blocked], now)
     seen_blocked = renderer.frame(ClaudeInbox::Store.sectionize([blocked], acknowledged, now), view.with(width: 60, height: 12)).plain.lines.join("\n")
     expect(seen_blocked).to match(/^   \? stuck .*needs you/)
@@ -338,7 +338,7 @@ RSpec.describe "renderer session colors" do
   it "keeps the glyph in the state's color while the label takes the session's" do
     s = session(id: "z", name: "tinted", state: "blocked", job_state: ClaudeInbox::JobState.new("color" => "green"))
     line = line_of.call(s, "tinted")
-    expect(line).to include("\e[38;5;203;1m●")
+    expect(line).to include("\e[38;5;75m●")
     expect(line).to include("\e[38;5;203;1mneeds you")
     expect(line).to include("\e[32m\e[1mtinted")
   end

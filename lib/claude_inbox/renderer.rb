@@ -304,8 +304,8 @@ module ClaudeInbox
       quiet = section == :settled || (live && row.read?)
       unread = live && row.unread?
       # A terminal cannot be attached to, so it is never read: while it waits on you it keeps its dot.
-      alert = live && s.needs_you? && (unread || !s.actionable?)
-      marker = marker_for(sel, unread, alert)
+      dotted = unread || (live && s.needs_you? && !s.actionable?)
+      marker = marker_for(sel, dotted)
       glyph = glyph_for(s, section, tick)
       meta = meta_for(row, section, now)
 
@@ -330,13 +330,12 @@ module ClaudeInbox
       [Text.pad(first, width), Text.pad(detail, width)]
     end
 
-    # The caret takes the column. Otherwise one filled dot asks for a look:
-    # red while the row needs you, blue when it only finished. Read, it
-    # clears, and the meta still says needs you.
-    def marker_for(sel, unread, alert)
+    # The caret takes the column. Otherwise a blue dot asks for a look, in
+    # every state: glyph and meta already say needs you in red, so the dot
+    # only says unread. Read, it clears.
+    def marker_for(sel, dotted)
       if sel then @theme.yellow_bold("▶")
-      elsif alert then @theme.red_bold("●")
-      elsif unread then @theme.blue("●")
+      elsif dotted then @theme.blue("●")
       else " "
       end
     end
