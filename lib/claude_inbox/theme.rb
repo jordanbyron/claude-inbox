@@ -38,6 +38,9 @@ module ClaudeInbox
     # or choice — the inverse of `color`, which puts the hue on the text.
     def pill(text, hue) = "\e[38;5;#{BG};48;5;#{HUES.fetch(hue)}m#{text}\e[0m"
 
+    # A footer's key hints: `n new  N pair`.
+    def hints(pairs) = pairs.map { |k, d| cyan_bold(k) + " " + dim(d) }.join("  ")
+
     private
 
     def color(text, hue, bold: false)
