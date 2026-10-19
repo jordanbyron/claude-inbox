@@ -460,17 +460,16 @@ export const register: Register = (on, options) => {
               // A finished or blocked row you have attached to since dims, as the gem's Active section draws it,
               // unless it is tinted: faint ink on a /color background is unreadable.
               const isRead = !isQuiet && one.actionable && ['done', 'stopped', 'blocked', 'failed'].includes(one.state) && !one.isUnread
-              // One dot asks for a look: red while the row needs you, blue when it only finished. A terminal
-              // cannot be attached to, so it is never read and keeps its dot while it waits.
+              // A blue dot asks for a look in every state, as the gem draws it: the glyph already says needs you
+              // in red. A terminal cannot be attached to, so it is never read and keeps its dot while it waits.
               const needsYou = one.state === 'blocked' || one.state === 'failed'
-              const alert = !isQuiet && needsYou && (one.isUnread || !one.actionable)
-              const dot = alert || (one.isUnread && !isQuiet)
+              const dot = !isQuiet && (one.isUnread || (needsYou && !one.actionable))
               const text = one.wakeAt !== undefined ? `${one.label} · ${wakeLabel(one.wakeAt)}` : one.label
               const tint = one.color ? TINT[one.color] : undefined
               return (
                 <Box key={viewKey(item)} flexDirection="column">
                   <Box>
-                    <Text color={isHere ? 'yellow' : alert ? 'red' : 'blue'}>{isHere ? '› ' : dot ? '● ' : '  '}</Text>
+                    <Text color={isHere ? 'yellow' : 'blue'}>{isHere ? '› ' : dot ? '● ' : '  '}</Text>
                     <Text color={COLOR[one.state]} dimColor={isQuiet || one.state === 'done'}>
                       {GLYPH[one.state] ?? '·'}{' '}
                     </Text>
