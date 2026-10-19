@@ -8,7 +8,8 @@ gh extension install basecamp/gh-signoff
 ```
 
 `bin/ci` uses gh-signoff to mark your PR as passing, so install it before you
-open one.
+open one. It also checks the pane in `mod/` with `claude plugin`, so it needs
+Claude Code on your `PATH`.
 
 For tab completion of `gh signoff`, add `eval "$(gh signoff completion)"` to
 `~/.zshrc`.
@@ -47,7 +48,7 @@ in `$TMPDIR/claude-inbox-fixture/listen.json`, and its starts start nothing.
 
 There's no hosted CI. `bin/ci` runs on your machine and reports back with
 [gh-signoff](https://github.com/basecamp/gh-signoff). The suite takes about
-four seconds.
+five seconds.
 
 1. Push your branch and open the PR.
 2. Run `bin/ci`. It runs `bundle install`, `standardrb`, `bundle-audit`,
@@ -68,6 +69,12 @@ PRs from forks. Open your PR against `jordanbyron/claude-inbox` and run
 `bin/ci` for your own feedback. Any signoff it sets lands on your fork, not
 on the PR. A maintainer reads the PR, checks it out, and runs `bin/ci` to sign
 it off. Each push you make after that needs another run.
+
+The specs run against an empty `HOME`, so your `~/.claude` and
+`~/.config/claude-inbox` neither change what they see nor get written to, and
+they read files as UTF-8 whatever your locale. A run in random order that
+passes on your machine should pass on anyone's; if one doesn't, rerun it with
+the `--seed` it printed and `--bisect` to find the example it depends on.
 
 While iterating:
 
