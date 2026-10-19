@@ -198,7 +198,7 @@ module ClaudeInbox
       text =
         if view.filter_editing then " " + @theme.cyan_bold("/") + view.filter.row(width - 2, cursor: caret)
         elsif view.filter then " " + @theme.cyan_bold("/") + view.filter.to_s + @p.dim("  esc clears")
-        else " " + footer_keys(view).map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
+        else " " + @theme.hints(footer_keys(view))
         end
       Text.pad(text, width)
     end
