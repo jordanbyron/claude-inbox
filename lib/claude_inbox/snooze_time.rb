@@ -28,8 +28,8 @@ module ClaudeInbox
       case head
       when nil then nil
       when "tonight", "evening" then rest.nil? ? next_at(now, EVENING) : nil
-      when "tomorrow" then (hm = rest ? clock(rest) : MORNING) && at(now, 1, hm)
-      when WEEKDAY then (hm = rest ? clock(rest) : MORNING) && weekday(now, WEEKDAYS[head[0, 3]], hm)
+      when "tomorrow" then (hm = time_of_day(rest)) && at(now, 1, hm)
+      when WEEKDAY then (hm = time_of_day(rest)) && weekday(now, WEEKDAYS[head[0, 3]], hm)
       else (hm = clock(text)) && next_at(now, hm)
       end
     end
@@ -49,6 +49,9 @@ module ClaudeInbox
       [hour, minute]
     end
 
+    # A day's snooze: the time after the word, else 9am.
+    def self.time_of_day(rest) = rest ? clock(rest) : MORNING
+
     # That day at `hm`, or a week on when it has already passed.
     def self.weekday(now, wday, hm)
       t = at(now, (wday - now.wday) % 7, hm)
@@ -65,6 +68,6 @@ module ClaudeInbox
       day = now.to_date + days
       Time.new(day.year, day.month, day.day, hour, minute, 0, now.utc_offset).to_i
     end
-    private_class_method :clock, :weekday, :next_at, :at
+    private_class_method :clock, :time_of_day, :weekday, :next_at, :at
   end
 end
