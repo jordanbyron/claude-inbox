@@ -87,6 +87,19 @@ test('a poll takes the notice from the snapshot', async ($, on) => {
   expect(set.update).toBe('v0.6.0 available')
 })
 
+test('an unread row that needs you takes the same blue dot as one that only finished', async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  on('state.get', ($, e, next) => {
+    if (e.key === 'rows') return seeded([{ ...ROWS[0], isUnread: true }, { ...ROWS[0], id: 'a2', isUnread: true }])
+    if (e.key === 'writtenAt') return seeded(1_700_000_000)
+    return next(e)
+  })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  // The caret takes one row's column; the header's red needs-you chip is no row's dot.
+  expect((await ui.findAll({ type: 'Text', text: '● ' })).filter(dot => dot.props.color === 'blue')).toHaveLength(1)
+})
+
 test("rows sit under the gem's sections, Settled folded until za opens it", async ($, on) => {
   mock.env(on, { HOME: '/Users/me' })
   mock.clock(on, { now: 1_700_000_000_000 })
