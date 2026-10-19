@@ -24,18 +24,18 @@ module ClaudeInbox
       return true unless @path
       FileUtils.mkdir_p(File.dirname(@path))
       file = File.open(@path, File::RDWR | File::CREAT, 0o600)
-      return hold(file, role) if file.flock(File::LOCK_EX | File::LOCK_NB)
+      return hold(file, role) if try_lock(file)
       holder_role, holder = file.read.split
       return refuse(file) unless role == "inbox" && holder_role == "headless" && headless?(holder.to_i)
       Process.kill("TERM", holder.to_i)
       EVICT_TRIES.times do
-        return hold(file, role) if file.flock(File::LOCK_EX | File::LOCK_NB)
+        return hold(file, role) if try_lock(file)
         sleep 0.1
       end
       refuse(file)
     rescue Errno::ESRCH, Errno::EPERM
       # The holder the file names is gone already: the lock is free.
-      file.flock(File::LOCK_EX | File::LOCK_NB) ? hold(file, role) : refuse(file)
+      try_lock(file) ? hold(file, role) : refuse(file)
     end
 
     private
@@ -47,6 +47,8 @@ module ClaudeInbox
       command = Subprocess.capture("ps", "-o", "command=", "-p", pid.to_s).out
       command.include?("claude-inbox") && command.split.include?("--headless")
     end
+
+    def try_lock(file) = file.flock(File::LOCK_EX | File::LOCK_NB)
 
     # After reading the holder the position sits at the end, and truncate does
     # not move it, so the write is rewound first or it lands after NUL padding.
