@@ -46,14 +46,12 @@ module ClaudeInbox
       # `x` holds through the session finishing; any other state change afterwards lifts it.
       def hand_settled?
         return false unless entry&.settled_at
-        session.finished? || entry.state_since.to_i <= entry.settled_at.to_i
+        session.finished? || unchanged_since?(entry.settled_at)
       end
 
       # Attaching marks the current state seen: out of Needs You, but into
       # Active rather than Settled, until the state changes again.
-      def acknowledged?
-        entry&.acknowledged_at && entry.state_since.to_i <= entry.acknowledged_at.to_i
-      end
+      def acknowledged? = unchanged_since?(entry&.acknowledged_at)
 
       # Finished or needing you, so it carries a read or unread mark. Only a
       # session you can attach to counts, since nothing else ever clears it.
@@ -62,7 +60,7 @@ module ClaudeInbox
       # Finished or needing you since you last attached.
       def unread?
         return false unless markable?
-        entry&.last_visited_at.nil? || entry.state_since.to_i > entry.last_visited_at.to_i
+        !unchanged_since?(entry&.last_visited_at)
       end
 
       # A finished or blocked session you have attached to since: you have seen what it wants.
@@ -70,9 +68,7 @@ module ClaudeInbox
 
       # `u` overrides hand-settle and the PR rule alike, and holds until the
       # state actually changes rather than just for the next poll.
-      def revived?
-        entry&.revived_at && entry.state_since.to_i <= entry.revived_at.to_i
-      end
+      def revived? = unchanged_since?(entry&.revived_at)
 
       # Failing checks or requested changes on the PR want you back the way
       # a blocked session does, once the agent has stopped working on it.
@@ -121,6 +117,10 @@ module ClaudeInbox
         else :active
         end
       end
+
+      private
+
+      def unchanged_since?(at) = at && entry.state_since.to_i <= at.to_i
     end
   end
 end
