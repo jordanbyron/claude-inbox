@@ -38,6 +38,9 @@ module ClaudeInbox
     # A key and what it does.
     def hint(name, action) = "#{key(name)}  #{@theme.dim(action)}"
 
+    # Esc or q closes a box. Prompt skips this, since q is text there.
+    def dismiss?(name, key) = name == :escape || key == "q"
+
     # `s` snooze: one key per choice, and the choice is read from `choice`.
     class Snooze < Dialog
       MENU = [
@@ -57,7 +60,7 @@ module ClaudeInbox
       def lines(_width, _caret) = MENU.map { |k, label, _| "  #{key(k)}  #{label}" } + ["", "  " + hint("esc", "cancel")]
 
       def press(name, key)
-        return :cancel if name == :escape || key == "q"
+        return :cancel if dismiss?(name, key)
         entry = MENU.assoc(key)
         return nil unless entry
         @choice = entry[2]
@@ -91,7 +94,7 @@ module ClaudeInbox
       end
 
       def press(name, key)
-        return :cancel if name == :escape || key == "q"
+        return :cancel if dismiss?(name, key)
         @choice = @prs.first if key == KEYS.fetch(kind) || name == :return || name == :enter
         @choice = @prs[key.to_i - 1] if key.to_s.match?(/\A[1-9]\z/)
         @choice && :pick
@@ -129,7 +132,7 @@ module ClaudeInbox
 
       def press(name, key)
         return :confirm if key == "y"
-        return :cancel if name == :escape || key == "n" || key == "q"
+        return :cancel if dismiss?(name, key) || key == "n"
         nil
       end
     end
