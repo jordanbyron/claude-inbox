@@ -41,7 +41,7 @@ module ClaudeInbox
           @asking = false
           return (key == "y") ? :rotate : nil
         end
-        return :cancel if name == :escape || key == "q"
+        return :cancel if dismiss?(name, key)
         return nil unless @snapshot.call.state == :listening
         case key
         when "c" then :copy
