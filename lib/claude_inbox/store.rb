@@ -91,6 +91,8 @@ module ClaudeInbox
 
     def sessions = @mutex.synchronize { @sessions.dup }
 
+    def actionable_keys = sessions.select(&:actionable?).map(&:key)
+
     def writable? = @writable
 
     def snooze(id, choice) = edit(id, "snooze", choice: choice.to_s) { |e| e.snooze(choice, @clock.call) }

@@ -538,6 +538,14 @@ RSpec.describe ClaudeInbox::Store do
     end
   end
 
+  describe "#actionable_keys" do
+    it "names only background sessions with an id" do
+      store = described_class.new(path: nil, clock: -> { now })
+      store.update([session(id: "a"), session(**interactive, session_id: "uuid")])
+      expect(store.actionable_keys).to eq(%w[a])
+    end
+  end
+
   describe "fixture end to end" do
     it "sections the captured sessions" do
       sessions = ClaudeInbox::FixtureClient.new(fixture_path("agents.json")).list

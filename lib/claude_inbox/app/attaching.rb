@@ -35,7 +35,7 @@ module ClaudeInbox
           @terminal.release do
             @terminal.pause unless @client.attach(id) { @switch.requested_for?(from) }
           end
-          id = @switch.take(@store.sessions.select(&:actionable?).map(&:key))
+          id = @switch.take(@store.actionable_keys)
         end
       end
 
