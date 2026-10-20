@@ -64,7 +64,7 @@ RSpec.describe ClaudeInbox::App do
 
   it "drops a paste that lands where nothing is typed, so its letters never act as keys" do
     press(app, ctrl_x, "\e[200~yes, every directory\e[201~")
-    expect(app).to paint("Delete session f23c8673?")
+    expect(app).to paint("Delete comma3x not booting?")
     expect(client.removed).to be_empty
     press(app, "\e", "N", "\e[200~query\e[201~")
     expect(app).to paint("Pair a phone")

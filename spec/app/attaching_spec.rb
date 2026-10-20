@@ -53,26 +53,26 @@ RSpec.describe ClaudeInbox::App do
   describe "ctrl-x deletes a session" do
     it "asks first and deletes once confirmed" do
       press(app, ctrl_x)
-      expect(app).to paint("Delete session f23c8673?")
+      expect(app).to paint("Delete comma3x not booting?")
       expect(client.removed).to be_empty
 
       press(app, "y")
       expect(wait_for { client.removed == %w[f23c8673] }).to be(true)
       expect(wait_for { store.entry("f23c8673").nil? }).to be(true)
-      expect(app).not_to paint("comma3x not booting")
+      expect(screen(app).drop(1).join("\n")).not_to include("comma3x not booting")
     end
 
     it "keeps the session when the confirm is dismissed" do
       ["\e", "n", "q"].each do |dismiss|
         press(app, ctrl_x, dismiss)
-        expect(app).not_to paint("Delete session")
+        expect(app).not_to paint("Delete comma3x")
         expect(client.removed).to be_empty
       end
     end
 
     it "refuses on a terminal row instead of arming a confirm it can't honour" do
       press(app, "\t", ctrl_x)
-      expect(app).not_to paint("Delete session")
+      expect(app).not_to paint(/Delete .*\?/)
       expect(app).to paint("terminal").in_status_line
     end
 
@@ -81,12 +81,18 @@ RSpec.describe ClaudeInbox::App do
     # passes no matter which way the key was routed.
     it "still stops rather than deletes on X, sharing the one confirm" do
       press(app, "X")
-      expect(app).to paint("Stop session f23c8673?")
+      expect(app).to paint("Stop comma3x not booting?")
 
       press(app, "y")
       expect(wait_for { client.stopped == %w[f23c8673] }).to be(true)
       expect(client.removed).to be_empty
       expect(store.entry("f23c8673")).not_to be_nil
+    end
+
+    it "names the session by its alias when it has one" do
+      store.set_alias("f23c8673", "comma boot")
+      press(app, "X")
+      expect(app).to paint("Stop comma boot?")
     end
   end
 
@@ -94,10 +100,10 @@ RSpec.describe ClaudeInbox::App do
     it "says so while the worker runs, then confirms once it is gone" do
       client.hold
       press(app, ctrl_x, "y")
-      expect(app).to paint("deleting f23c8673…").in_status_line
+      expect(app).to paint("deleting comma3x not booting…").in_status_line
 
       client.release
-      expect(wait_for { screen(app).first.include?("deleted f23c8673") }).to be(true)
+      expect(wait_for { screen(app).first.include?("deleted comma3x not booting") }).to be(true)
     end
   end
 end

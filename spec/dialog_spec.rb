@@ -103,15 +103,20 @@ RSpec.describe ClaudeInbox::Dialog do
     end
 
     it "takes y and nothing else, and says which it is asking about" do
-      stop = described_class::Confirm.new(:stop, "abc12345")
-      expect(stop.frame(60).join("\n")).to include "Stop session abc12345?"
+      stop = described_class::Confirm.new(:stop, "abc12345", "auth fix")
+      expect(stop.frame(60).join("\n")).to include "Stop auth fix?"
       expect(stop.press("Y", "Y")).to be_nil
       expect(stop.press("y", "y")).to eq(:confirm)
 
-      delete = described_class::Confirm.new(:delete, "abc12345")
-      expect(delete.frame(60).join("\n")).to include "Delete session abc12345?"
+      delete = described_class::Confirm.new(:delete, "abc12345", "auth fix")
+      expect(delete.frame(60).join("\n")).to include "Delete auth fix?"
       expect(delete.press("n", "n")).to eq(:cancel)
       expect(delete.press(:escape, "\e")).to eq(:cancel)
+    end
+
+    it "cuts a long name to one line rather than wrapping it" do
+      stop = described_class::Confirm.new(:stop, "abc12345", "fix the extremely flaky spec in the remote listener")
+      expect(stop.frame(60)[1]).to include "Stop fix the extremely flaky spec in…?"
     end
   end
 

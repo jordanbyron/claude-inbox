@@ -53,7 +53,7 @@ module ClaudeInbox
 
       def open_confirm(kind)
         return unless require_actionable
-        @modal = Dialog::Confirm.new(kind, @selected.key)
+        @modal = Dialog::Confirm.new(kind, @selected.key, label_for(@selected.key))
       end
 
       def stop_session(id)
@@ -64,11 +64,12 @@ module ClaudeInbox
       end
 
       def delete_session(id)
-        notice("deleting #{id}…")
+        label = label_for(id)
+        notice("deleting #{label}…")
         in_background do
           @client.rm(id)
           @store.forget(id)
-          @queue << [:notice, "deleted #{id}"]
+          @queue << [:notice, "deleted #{label}"]
           @poller.soon
         end
       end
