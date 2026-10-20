@@ -142,7 +142,7 @@ RSpec.describe ClaudeInbox::Renderer do
   end
 
   it "lists snoozed rows when expanded, and folds them by default" do
-    entries = {"823b882f" => {"wake_at" => now.to_i + 900, "snoozed_at" => now.to_i}}
+    entries = {"823b882f" => {"wake_at" => now.to_i + 900}}
     snoozed_sections = ClaudeInbox::Store.sectionize(
       sessions,
       ClaudeInbox::Store.merge_entries(entries, sessions, now),

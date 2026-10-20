@@ -50,8 +50,6 @@ module ClaudeInbox
 
       def parked? = wake_at == UNTIL_WOKEN
 
-      def snoozed_at = @h["snoozed_at"]
-
       def last_state = @h["last_state"]
 
       def state_since = @h["state_since"]
@@ -82,6 +80,9 @@ module ClaudeInbox
       def observe(session, now)
         now_i = now.to_i
         if last_state != session.effective_state
+          # Only a change of state wakes a snooze early, not trouble on the
+          # PR: a session blocked when you snoozed it stays snoozed.
+          @h.delete("wake_at") if last_state && session.needs_you?
           @h["last_state"] = session.effective_state
           @h["state_since"] = now_i
         end
@@ -96,7 +97,6 @@ module ClaudeInbox
         @h["last_seen"] = now_i
         row = Row.new(session: session, entry: self)
         @h.delete("wake_at") if row.woken?(now_i)
-        @h.delete("snoozed_at") unless wake_at
         @h.delete("settled_at") unless row.hand_settled?
         @h.delete("acknowledged_at") unless row.acknowledged?
         @h.delete("revived_at") unless row.revived?
@@ -105,13 +105,11 @@ module ClaudeInbox
 
       def snooze(choice, now)
         @h["wake_at"] = self.class.snooze_until(choice, now)
-        @h["snoozed_at"] = now.to_i
       end
 
       # Also lifts a hand-settle and a PR settle, so `u` undoes `x` and a resolved PR alike.
       def wake(now)
         @h.delete("wake_at")
-        @h.delete("snoozed_at")
         @h.delete("settled_at")
         @h["revived_at"] = now.to_i
       end
@@ -121,7 +119,6 @@ module ClaudeInbox
       def settle(now)
         @h["settled_at"] = now.to_i
         @h.delete("wake_at")
-        @h.delete("snoozed_at")
         @h.delete("revived_at")
       end
 

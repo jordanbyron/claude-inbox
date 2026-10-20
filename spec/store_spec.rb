@@ -287,7 +287,6 @@ RSpec.describe ClaudeInbox::Store do
       entries = {
         "a" => {
           "wake_at" => now.to_i + 900,
-          "snoozed_at" => now.to_i - 300,
           "last_state" => "working",
           "state_since" => now.to_i - 400
         }
@@ -303,7 +302,6 @@ RSpec.describe ClaudeInbox::Store do
       entries = {
         "a" => {
           "wake_at" => described_class::UNTIL_WOKEN,
-          "snoozed_at" => now.to_i - 300,
           "last_state" => "working",
           "state_since" => now.to_i - 400
         }
@@ -315,7 +313,7 @@ RSpec.describe ClaudeInbox::Store do
     it "keeps an already-blocked session snoozed" do
       seen = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 600}}
       entries = described_class.merge_entries(seen, [session(id: "a", state: "blocked")], now)
-      snoozed = entries.merge("a" => entries["a"].merge("wake_at" => now.to_i + 900, "snoozed_at" => now.to_i))
+      snoozed = entries.merge("a" => entries["a"].merge("wake_at" => now.to_i + 900))
       later = described_class.merge_entries(snoozed, [session(id: "a", state: "blocked")], now + 60)
       sec = described_class.sectionize([session(id: "a", state: "blocked")], later, now + 60)
       expect(sec.snoozed.map(&:key)).to eq(%w[a])
@@ -512,10 +510,9 @@ RSpec.describe ClaudeInbox::Store do
     end
 
     it "clears an elapsed snooze" do
-      entries = {"a" => {"wake_at" => now.to_i - 1, "snoozed_at" => now.to_i - 901, "last_state" => "working"}}
+      entries = {"a" => {"wake_at" => now.to_i - 1, "last_state" => "working"}}
       e = described_class.merge_entries(entries, [session(id: "a")], now)
       expect(e["a"]).not_to include("wake_at")
-      expect(e["a"]).not_to include("snoozed_at")
     end
 
     it "keeps aliases and prunes stale entries" do

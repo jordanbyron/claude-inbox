@@ -32,14 +32,9 @@ module ClaudeInbox
         [label, session.cwd, session.intent, session.summary].any? { |field| field.to_s.downcase.include?(q) }
       end
 
-      # A session already blocked when you snoozed it stays snoozed; one that
-      # *becomes* blocked or fails afterwards wakes early.
-      def woken?(now)
-        return false if wake_at.nil?
-        return true if session.needs_you? && entry.state_since.to_i > entry.snoozed_at.to_i
-        return false if parked?
-        wake_at.to_i <= now.to_i
-      end
+      # Its timer has run out. Becoming blocked or failed wakes it sooner,
+      # but only Entry#observe sees that change happen.
+      def woken?(now) = !wake_at.nil? && !parked? && wake_at.to_i <= now.to_i
 
       def snoozed?(now) = wake_at && !woken?(now)
 
