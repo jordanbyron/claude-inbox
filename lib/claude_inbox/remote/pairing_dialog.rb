@@ -87,7 +87,7 @@ module ClaudeInbox
       def key_lines(s)
         return ["  paired phones get 401 until they pair again —", "  rotate? y/n"] if @asking
         keys = (s.state == :listening) ? [%w[c copy], ["r", "new token"], %w[esc close]] : [%w[esc close]]
-        ["  " + keys.map { |k, action| "#{key(k)} #{@theme.dim(action)}" }.join("  ")]
+        ["  " + @theme.hints(keys)]
       end
     end
   end
