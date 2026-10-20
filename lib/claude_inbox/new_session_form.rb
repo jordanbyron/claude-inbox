@@ -35,6 +35,10 @@ module ClaudeInbox
     # editable field spends these on its own text instead.
     CYCLE = {:left => -1, :right => 1, "h" => -1, "l" => 1, " " => 1}.freeze
 
+    # Option slips for Ctrl on the two submit keys. Option-s arrives as Esc
+    # then s, and that Esc asked to discard the prompt.
+    SLIPS = {alt_s: "that's option-s — ctrl-s starts it", alt_o: "that's option-o — ctrl-o starts and attaches"}.freeze
+
     def initialize(cwd:, dirs: [], home: Dir.home, clipboard: Images.method(:from_clipboard))
       @p = Pastel.new(enabled: true)
       @theme = Theme.new
@@ -83,6 +87,7 @@ module ClaudeInbox
       when :escape then return escape_pressed
       when :ctrl_s then return submit(attach: false)
       when :ctrl_o then return submit(attach: true)
+      when *SLIPS.keys then @error = SLIPS[name]
       when :ctrl_v then paste_clipboard
       when :tab then complete_dir || move(1)
       when :down then move(1)

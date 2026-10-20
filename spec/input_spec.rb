@@ -14,6 +14,12 @@ RSpec.describe ClaudeInbox::Input do
     expect(input.events("\egg")).to eq([[:key, :escape, "\e"], [:key, "g", "g"], [:key, "g", "g"]])
   end
 
+  it "names an escape glued to one letter as the Option chord a Mac sends" do
+    expect(input.events("\es")).to eq([[:key, :alt_s, "\es"]])
+    expect(input.events("\eS")).to eq([[:key, :escape, "\e"], [:key, "S", "S"]])
+    expect(described_class.unglued("\es")).to eq([[:escape, "\e"], ["s", "s"]])
+  end
+
   it "hands a paste over once it closes, and says it is open until then" do
     expect(input.events("\e[200~hel")).to eq([])
     expect(input).to be_pasting
