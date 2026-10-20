@@ -5,14 +5,13 @@ RSpec.describe ClaudeInbox::Store::Entry do
 
   describe "readers" do
     it "names every key state.json holds" do
-      h = {"alias" => "x", "pr" => "u", "wake_at" => 1, "snoozed_at" => 2, "last_state" => "done", "state_since" => 3,
+      h = {"alias" => "x", "pr" => "u", "wake_at" => 1, "last_state" => "done", "state_since" => 3,
            "last_seen" => 4, "pinned" => true, "pinned_at" => 5, "settled_at" => 6, "acknowledged_at" => 7,
            "revived_at" => 8, "reap_failed_at" => 9, "last_visited_at" => 10, "reap_error" => "no"}
       e = described_class.new(h)
       expect(e.alias_name).to eq("x")
       expect(e.pr).to eq("u")
       expect(e.wake_at).to eq(1)
-      expect(e.snoozed_at).to eq(2)
       expect(e.last_state).to eq("done")
       expect(e.state_since).to eq(3)
       expect(e.last_seen).to eq(4)
@@ -83,23 +82,19 @@ RSpec.describe ClaudeInbox::Store::Entry do
     it "clears an elapsed snooze" do
       e = described_class.new(
         "wake_at" => now.to_i - 1,
-        "snoozed_at" => now.to_i - 901,
         "last_state" => "working"
       ).observe(session(id: "a"), now)
       expect(e.to_h).not_to include "wake_at"
-      expect(e.to_h).not_to include "snoozed_at"
     end
 
     it "keeps a snooze that has not elapsed, and a parked one for ever" do
       e = described_class.new(
         "wake_at" => now.to_i + 900,
-        "snoozed_at" => now.to_i,
         "last_state" => "working"
       ).observe(session(id: "a"), now + 60)
       expect(e.wake_at).to eq(now.to_i + 900)
       parked = described_class.new(
         "wake_at" => ClaudeInbox::Store::UNTIL_WOKEN,
-        "snoozed_at" => now.to_i,
         "last_state" => "working"
       ).observe(session(id: "a"), now + 86_400 * 30)
       expect(parked.wake_at).to eq(ClaudeInbox::Store::UNTIL_WOKEN)
@@ -108,13 +103,26 @@ RSpec.describe ClaudeInbox::Store::Entry do
     it "wakes a snooze when the session becomes blocked afterwards" do
       h = {
         "wake_at" => now.to_i + 900,
-        "snoozed_at" => now.to_i - 300,
         "last_state" => "working",
         "state_since" => now.to_i - 400
       }
       e = described_class.new(h).observe(session(id: "a", state: "blocked"), now)
       expect(e.to_h).not_to include "wake_at"
-      expect(e.to_h).not_to include "snoozed_at"
+    end
+
+    it "keeps the snooze of a blocked session when its PR's health changes" do
+      pr = [ClaudeInbox::PullRequest.new(number: 7, state: "OPEN", health: "CONFLICTING")]
+      h = {"wake_at" => now.to_i + 86_400, "last_state" => "blocked", "state_since" => now.to_i - 600}
+      e = described_class.new(h).observe(session(id: "a", state: "blocked", prs: pr), now)
+      expect(e.state_since).to eq(now.to_i)
+      expect(e.wake_at).to eq(now.to_i + 86_400)
+    end
+
+    it "keeps a snooze on the first poll of a row snoozed before any poll saw it" do
+      e = described_class.blank(now)
+      e.snooze(:h1, now)
+      e.observe(session(id: "a", state: "blocked"), now + 5)
+      expect(e.wake_at).to eq(now.to_i + 3600)
     end
 
     it "keeps a hand-settle while the session finishes, and lifts it on any other change" do
@@ -181,10 +189,9 @@ RSpec.describe ClaudeInbox::Store::Entry do
   describe "mutators" do
     subject(:entry) { described_class.new({}) }
 
-    it "snooze sets the wake time and when it was asked for" do
+    it "snooze sets the wake time" do
       entry.snooze(:h1, now)
       expect(entry.wake_at).to eq(now.to_i + 3600)
-      expect(entry.snoozed_at).to eq(now.to_i)
       entry.snooze(:until_woken, now)
       expect(entry).to be_parked
     end

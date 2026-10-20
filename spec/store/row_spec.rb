@@ -180,11 +180,11 @@ RSpec.describe ClaudeInbox::Store::Row do
 
     it "never reaps a pin or a snooze, however long it has been parked" do
       expect(described_class.new(session(id: "a", state: "done"), ClaudeInbox::Store::Entry.new(quiet.merge("pinned" => true)))).not_to be_reapable(now.to_i)
-      expect(described_class.new(session(id: "a", state: "done"), ClaudeInbox::Store::Entry.new(quiet.merge("wake_at" => ClaudeInbox::Store::UNTIL_WOKEN, "snoozed_at" => 1)))).not_to be_reapable(now.to_i)
+      expect(described_class.new(session(id: "a", state: "done"), ClaudeInbox::Store::Entry.new(quiet.merge("wake_at" => ClaudeInbox::Store::UNTIL_WOKEN)))).not_to be_reapable(now.to_i)
     end
 
     it "reaps once an elapsed snooze has woken it" do
-      woken = quiet.merge("wake_at" => now.to_i - 60, "snoozed_at" => now.to_i - 120)
+      woken = quiet.merge("wake_at" => now.to_i - 60)
       expect(described_class.new(session(id: "a", state: "done"), ClaudeInbox::Store::Entry.new(woken))).to be_reapable(now.to_i)
     end
 
