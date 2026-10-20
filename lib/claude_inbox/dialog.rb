@@ -116,13 +116,19 @@ module ClaudeInbox
     class Confirm < Dialog
       TITLES = {stop: " Stop ", delete: " Delete ", adopt: " Adopt "}.freeze
 
+      # `label` is the name the list shows; the id is what App acts on.
+      def initialize(kind, id, label = id)
+        super(kind, id)
+        @label = label
+      end
+
       def title = TITLES.fetch(kind)
 
-      def lines(_width, _caret)
+      def lines(width, _caret)
         case kind
-        when :stop then ["  Stop session #{id}?", "", "  " + hint("y", "stop it"), "  " + hint("esc", "cancel")]
+        when :stop then [ask("Stop", width), "", "  " + hint("y", "stop it"), "  " + hint("esc", "cancel")]
         when :delete
-          ["  Delete session #{id}?", "  Its worktree and conversation", "  go with it.",
+          [ask("Delete", width), "  Its worktree and conversation", "  go with it.",
             "", "  " + hint("y", "delete it"), "  " + hint("esc", "keep it")]
         when :adopt
           ["  Pull this session into the daemon?", "  Its phone session ends and a",
@@ -135,6 +141,11 @@ module ClaudeInbox
         return :cancel if dismiss?(name, key) || key == "n"
         nil
       end
+
+      private
+
+      # One line, so a long name is cut rather than wrapped mid-word.
+      def ask(verb, width) = "  #{verb} #{Text.truncate(@label.to_s, width - Text.width(verb) - 4)}?"
     end
 
     # The first launch without the Claude Code pane asks once whether to add
