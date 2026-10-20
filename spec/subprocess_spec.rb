@@ -26,6 +26,21 @@ RSpec.describe ClaudeInbox::Subprocess do
     %w[BUNDLE_GEMFILE RUBYOPT].each { |k| ENV[k] = saved[k] }
   end
 
+  it "takes the ruby asdf pinned to run us off the PATH a child gets" do
+    env = {
+      "ASDF_INSTALL_PATH" => "/asdf/installs/ruby/3.4.9",
+      "ASDF_INSTALL_VERSION" => "3.4.9",
+      "ASDF_DATA_DIR" => "/asdf",
+      "PATH" => "/asdf/installs/ruby/3.4.9/bin:/asdf/installs/ruby/3.4.9/lib/ruby/gems/.0/bin:/asdf/shims:/usr/bin"
+    }
+    expect(described_class.unpinned(env)).to eq("ASDF_DATA_DIR" => "/asdf", "PATH" => "/asdf/shims:/usr/bin")
+  end
+
+  it "leaves PATH alone when asdf did not start us" do
+    env = {"PATH" => "/usr/local/bin:/usr/bin"}
+    expect(described_class.unpinned(env)).to eq(env)
+  end
+
   it "keeps the rest of the environment" do
     r = described_class.capture("env")
     expect(r.out).to match(/^HOME=#{Regexp.escape(Dir.home)}$/)
