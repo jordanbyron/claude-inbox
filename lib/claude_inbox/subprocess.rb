@@ -10,15 +10,27 @@ module ClaudeInbox
       def success? = status.success?
     end
 
+    # `asdf exec`, which the ruby shim runs us through, puts the ruby it
+    # picked ahead of every shim on PATH and names it in ASDF_INSTALL_PATH.
+    # Left in place, every session runs our ruby whatever its project's
+    # .tool-versions says.
+    def self.unpinned(env)
+      install = env["ASDF_INSTALL_PATH"] or return env
+      prefix = File.join(install, "")
+      path = env.fetch("PATH", "").split(File::PATH_SEPARATOR).reject { |dir| dir.start_with?(prefix) }
+      env.reject { |k, _| k.start_with?("ASDF_INSTALL_") }.merge("PATH" => path.join(File::PATH_SEPARATOR))
+    end
+
     # Children start in the environment from before Bundler, or every ruby a
-    # session runs, in any project, loads our Gemfile. Handed to exec rather
-    # than set on ENV, which the poll and background threads share.
-    CHILD_ENV = defined?(Bundler.unbundled_env) ? Bundler.unbundled_env.freeze : nil
+    # session runs, in any project, loads our Gemfile, and from before asdf
+    # pinned our ruby. Handed to exec rather than set on ENV, which the poll
+    # and background threads share.
+    CHILD_ENV = unpinned(defined?(Bundler.unbundled_env) ? Bundler.unbundled_env : ENV.to_h).freeze
 
     module_function
 
     # argv as exec and Process.spawn take it, with CHILD_ENV in place of ours.
-    def command(*argv) = CHILD_ENV ? [CHILD_ENV, *argv, {unsetenv_others: true}] : argv
+    def command(*argv) = [CHILD_ENV, *argv, {unsetenv_others: true}]
 
     # `input` is written before any output is read, so it is for the few
     # bytes a clipboard takes, not a stream.
