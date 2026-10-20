@@ -114,7 +114,14 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
 - A prompt beginning with a slash command is expanded, `$ARGUMENTS` and all,
   in `-p` and `--bg` alike (checked on 2.1.274 with a project command).
   Installed plugins are listed in `~/.claude/plugins/installed_plugins.json`,
-  keyed `name@marketplace`, each pointing at its `installPath`; claude.ai's
+  keyed `name@marketplace`, each pointing at its `installPath`. Being listed
+  doesn't make a plugin load: a session loads only those its `enabledPlugins`
+  sets to `true`, read from `~/.claude/settings.json` then the cwd's
+  `.claude/settings.json` and `settings.local.json`, the last to set a key
+  winning. An entry's `scope` and `projectPath` play no part, so a plugin
+  installed for one project loads in any directory whose settings enable it,
+  and not in that project's subdirectories, whose settings are their own
+  (checked on 2.1.304 with `claude plugin list --json`). claude.ai's
   synced skills sit in `~/.claude/skills/synced/<bucket>/<name>/SKILL.md`
   and show up as `anthropic-skills:<name>`. Built-ins such as `/init` live
   inside the CLI and aren't on disk.
