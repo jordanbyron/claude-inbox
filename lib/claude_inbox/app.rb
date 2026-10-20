@@ -173,7 +173,12 @@ module ClaudeInbox
       @input.typed(text).each { |name, c| handle_key(name, c) } if typing
     end
 
+    # Only the form gives an Option chord a meaning; anywhere else it is the
+    # Esc and letter it was before Input named it.
     def handle_key(name, key)
+      if Input.alt?(name) && !(@modal.is_a?(NewSessionForm) && NewSessionForm::SLIPS.key?(name))
+        return Input.unglued(key).each { |n, k| handle_key(n, k) }
+      end
       return handle_modal_key(name, key) if @modal
       return handle_line_key(name, key) if filter_editing?
 
