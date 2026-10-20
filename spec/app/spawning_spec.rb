@@ -72,7 +72,7 @@ RSpec.describe ClaudeInbox::App do
       expect(app).to paint("ctrl-s starts it")
       expect(app).not_to paint("Discard this session?")
       press(app, "\e[B", "\e[B", ctrl_u, *Dir.pwd.chars, ctrl_s)
-      expect(app).to paint("starting session…").in_status_line
+      expect(wait_for { screen(app).first.include?("started deadbeef") }).to be(true)
     end
 
     it "keeps any other glued escape as esc then the letter" do
