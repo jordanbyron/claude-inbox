@@ -3,23 +3,38 @@
 require "json"
 
 module ClaudeInbox
-  # What `claude` will use when a flag is left off: read from the same
-  # settings files it reads, most specific wins. Values are strings, or
-  # nil when nothing sets them — then the CLI decides at launch.
+  # What a `claude` session in a directory gets from the settings files it
+  # reads, most specific wins: the defaults for flags left off, and the
+  # plugins it loads.
   module Settings
+    # Strings, or nil when nothing sets them: then the CLI decides at launch.
     Defaults = Struct.new(:model, :effort, :permission_mode, :remote)
 
     def self.defaults(cwd, home: Dir.home)
-      user = read(File.join(home, ".claude", "settings.json"))
-      project = read(File.join(cwd, ".claude", "settings.json"))
-      local = read(File.join(cwd, ".claude", "settings.local.json"))
-      layers = [user, project, local]
+      user, project, local = layers = layers(cwd, home)
       Defaults.new(
         model: pick(layers, "model"),
         effort: pick(layers, "effortLevel"),
         permission_mode: pick(layers, "permissions", "defaultMode"),
         remote: remote_control(user, project, local, read(File.join(home, ".claude.json")))
       )
+    end
+
+    # The "name@marketplace" keys of the plugins a session in cwd loads.
+    # Its install scope plays no part; see docs/cli-quirks.md.
+    def self.enabled_plugins(cwd, home: Dir.home)
+      layers(cwd, home).each_with_object({}) do |h, on|
+        plugins = h["enabledPlugins"]
+        on.merge!(plugins) if plugins.is_a?(Hash)
+      end.select { |_, v| v == true }.keys
+    end
+
+    def self.layers(cwd, home)
+      [
+        read(File.join(home, ".claude", "settings.json")),
+        read(File.join(cwd, ".claude", "settings.json")),
+        read(File.join(cwd, ".claude", "settings.local.json"))
+      ]
     end
 
     # "Enable Remote Control for all sessions" in /config. The CLI lets a
@@ -47,6 +62,6 @@ module ClaudeInbox
       end
       nil
     end
-    private_class_method :remote_control, :pick
+    private_class_method :layers, :remote_control, :pick
   end
 end
