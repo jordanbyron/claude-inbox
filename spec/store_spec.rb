@@ -202,6 +202,37 @@ RSpec.describe ClaudeInbox::Store do
       expect(store.sections.pinned.map(&:key)).to eq(%w[a])
     end
 
+    it "sorts every section but Snoozed by when each session last spoke with --sort=activity" do
+      entries = {
+        "a" => {"pinned" => true, "pinned_at" => now.to_i, "last_state" => "working"},
+        "b" => {"pinned" => true, "pinned_at" => now.to_i - 60, "last_state" => "working"}
+      }
+      sessions = [
+        session(id: "a", last_message_at: now - 600),
+        session(id: "b", last_message_at: now - 60),
+        session(id: "c", state: "blocked", last_message_at: now - 600),
+        session(id: "d", state: "blocked", last_message_at: now - 60),
+        session(id: "e", state: "working", started_at: now - 60, last_message_at: now - 900),
+        session(id: "f", state: "done", started_at: now - 3600, last_message_at: now - 30),
+        session(id: "g", state: "done", **merged, last_message_at: now - 300),
+        session(id: "h", state: "done", **merged, last_message_at: now - 20)
+      ]
+      sec = described_class.sectionize(sessions, entries, now, sort: "activity")
+      expect(sec.pinned.map(&:key)).to eq(%w[b a])
+      expect(sec.needs_you.map(&:key)).to eq(%w[d c])
+      expect(sec.active.map(&:key)).to eq(%w[f e])
+      expect(sec.settled.map(&:key)).to eq(%w[h g])
+      expect(described_class.sectionize(sessions, entries, now).active.map(&:key)).to eq(%w[e f])
+    end
+
+    it "falls back to the inbox's own clock, then the start, for a session with no transcript" do
+      entries = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 60}, "b" => {"last_state" => "blocked", "state_since" => now.to_i - 600}}
+      sessions = [session(id: "a", state: "blocked"), session(id: "b", state: "blocked")]
+      expect(described_class.sectionize(sessions, entries, now, sort: "activity").needs_you.map(&:key)).to eq(%w[a b])
+      later = [session(id: "c", started_at: now - 600), session(id: "d", started_at: now - 60)]
+      expect(described_class.sectionize(later, {}, now, sort: "activity").active.map(&:key)).to eq(%w[d c])
+    end
+
     it "sorts Pinned with the most recently pinned first" do
       entries = {
         "a" => {"pinned" => true, "pinned_at" => now.to_i - 60},

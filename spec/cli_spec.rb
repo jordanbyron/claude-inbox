@@ -40,6 +40,12 @@ RSpec.describe ClaudeInbox::CLI do
       expect(cli[].options[:listen]).to eq({port: 7500, lan: true, allowed_modes: %w[plan]})
     end
 
+    it "keeps each section's own order unless --sort says otherwise, and refuses an order it doesn't know" do
+      expect(cli[].options[:sort]).to eq("default")
+      expect(cli["--sort=activity"].options[:sort]).to eq("activity")
+      expect { cli["--sort=name"].options }.to raise_error(SystemExit).and output(/\Aclaude-inbox: /).to_stderr
+    end
+
     it "refuses an unknown flag, an abbreviation, a stray argument and a bad port" do
       [["--bogus"], ["--no-col"], ["inbox"], ["--listen=http"], ["--fixture"]].each do |argv|
         expect { cli[*argv].options }.to raise_error(SystemExit).and output(/\Aclaude-inbox: /).to_stderr

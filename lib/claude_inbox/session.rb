@@ -10,7 +10,7 @@ module ClaudeInbox
   # move under it.
   Session = Data.define(
     :id, :cwd, :kind, :started_at, :session_id, :name,
-    :state, :pid, :status, :waiting_for, :origin, :prs, :job_state, :bridge_id
+    :state, :pid, :status, :waiting_for, :origin, :prs, :job_state, :bridge_id, :last_message_at
   ) do
     # Every member is optional so the parser and the specs name only what they
     # have; prs is [] rather than nil so nobody asks whether PullRequests has run.

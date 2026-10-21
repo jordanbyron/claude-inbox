@@ -59,6 +59,10 @@ It opens when a session starts. To stop that, set
 5. **Settled.** Settled with `x`, or every pull request is merged or closed.
    Collapsed.
 
+`--sort=activity` puts the session that spoke most recently first in every
+section but Snoozed, read from its transcript. Put it in the config file to
+keep it.
+
 Under each row is what the session is waiting on, what it produced, or its
 status line. A row with a pull request shows it as `#885 open`, `#885 merged`
 and so on, with `✗ checks`, `changes requested` or `conflicts` after it when

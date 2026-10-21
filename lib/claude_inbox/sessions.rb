@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative "job_state"
+require_relative "transcript"
 
 module ClaudeInbox
   # Puts the list together. JobState goes before PullRequests because the PR
@@ -11,6 +12,7 @@ module ClaudeInbox
 
     def load(client:, pull_requests:, overrides:)
       sessions = JobState.enrich(client.list, jobs_dir: client.jobs_dir)
+      sessions = Transcript.enrich(sessions)
       pull_requests.enrich(sessions, overrides)
     end
   end

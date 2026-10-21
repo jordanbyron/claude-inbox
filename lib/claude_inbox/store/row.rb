@@ -19,6 +19,10 @@ module ClaudeInbox
 
       def state_since = entry&.state_since
 
+      # When the session last said anything, as its transcript has it; the
+      # inbox's own clock, then the process start, when there is none to ask.
+      def spoke_at = session.last_message_at&.to_i || state_since || session.started_at&.to_i || 0
+
       def pinned_at = entry&.pinned_at
 
       def pinned? = entry&.pinned?
