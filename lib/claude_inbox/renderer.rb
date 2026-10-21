@@ -65,7 +65,6 @@ module ClaudeInbox
     def initialize(home: Dir.home)
       @p = Pastel.new(enabled: true)
       @theme = Theme.new
-      @palette = Palette.new
       @home = home
     end
 
@@ -354,7 +353,7 @@ module ClaudeInbox
         elsif bold then @p.bold(label)
         else label
         end
-      @palette.paint(styled, row.session.color)
+      Palette.paint(styled, row.session.color)
     end
 
     def glyph_for(s, section, tick)

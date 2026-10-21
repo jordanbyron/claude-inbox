@@ -42,7 +42,6 @@ module ClaudeInbox
     def initialize(cwd:, dirs: [], home: Dir.home, clipboard: Images.method(:from_clipboard))
       @p = Pastel.new(enabled: true)
       @theme = Theme.new
-      @palette = Palette.new
       @home = home
       @clipboard = clipboard
       @places = dirs.map { |path| Place.new(path, SessionRequest.label(path, dirs), path.sub(/\A#{Regexp.escape(home)}(?=\/|\z)/, "~")) }
@@ -326,7 +325,7 @@ module ClaudeInbox
         f.choices.map { |c|
           text = (c == DEFAULT) ? default_text(f) : c
           if c == f.value then (on ? @theme.pill(" #{text} ", :cyan) : @theme.cyan_bold(" #{text} "))
-          elsif f.key == :color then @palette.paint(" #{text} ", c)
+          elsif f.key == :color then Palette.paint(" #{text} ", c)
           else @p.dim(" #{text} ")
           end
         }.join(" ")
