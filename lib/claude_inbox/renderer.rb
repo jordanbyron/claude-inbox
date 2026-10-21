@@ -375,7 +375,8 @@ module ClaudeInbox
       base =
         case section
         when :snoozed
-          row.parked? ? @theme.purple("parked") : @theme.purple("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
+          wake = row.parked? ? @theme.purple("parked") : @theme.purple("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
+          row.pinned? ? wake + @theme.cyan(" ★") : wake
         when :settled
           @p.dim("#{s.state} · #{Text.age(now.to_i - row.state_since.to_i)}")
         else

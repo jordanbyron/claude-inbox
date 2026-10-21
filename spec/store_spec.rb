@@ -165,14 +165,9 @@ RSpec.describe ClaudeInbox::Store do
       expect(sec.active).to be_empty
     end
 
-    it "overrides needs_you, snoozed and settled" do
+    it "overrides needs_you and settled" do
       entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i, "last_state" => "blocked"}}
       expect(described_class.sectionize([session(id: "a", state: "blocked")], entries, now).pinned.map(&:key)).to eq(%w[a])
-
-      entries = {
-        "a" => {"pinned" => true, "pinned_at" => now.to_i, "wake_at" => now.to_i + 900, "last_state" => "working"}
-      }
-      expect(described_class.sectionize([session(id: "a")], entries, now).pinned.map(&:key)).to eq(%w[a])
 
       entries = {
         "a" => {
@@ -184,6 +179,27 @@ RSpec.describe ClaudeInbox::Store do
         }
       }
       expect(described_class.sectionize([session(id: "a", state: "done")], entries, now).pinned.map(&:key)).to eq(%w[a])
+    end
+
+    it "yields to a snooze, and is pinned again once the snooze runs out" do
+      entries = {
+        "a" => {"pinned" => true, "pinned_at" => now.to_i, "wake_at" => now.to_i + 900, "last_state" => "working"}
+      }
+      sec = described_class.sectionize([session(id: "a")], entries, now)
+      expect(sec.snoozed.map(&:key)).to eq(%w[a])
+      expect(sec.pinned).to be_empty
+
+      expect(described_class.sectionize([session(id: "a")], entries, now + 901).pinned.map(&:key)).to eq(%w[a])
+    end
+
+    it "keeps the pin through a snooze and a wake" do
+      store = described_class.new(path: nil, clock: -> { now })
+      store.update([session(id: "a")])
+      store.toggle_pin("a")
+      store.snooze("a", :h1)
+      expect(store.sections.snoozed.map(&:key)).to eq(%w[a])
+      store.wake("a")
+      expect(store.sections.pinned.map(&:key)).to eq(%w[a])
     end
 
     it "sorts Pinned with the most recently pinned first" do
@@ -219,12 +235,13 @@ RSpec.describe ClaudeInbox::Store do
         reader.update([session(id: "a")])
         reader.snooze("a", :h1)
         reader.toggle_pin("a")
-        expect(reader.sections.pinned.map(&:key)).to eq(%w[a])
+        expect(reader.sections.snoozed.map(&:key)).to eq(%w[a])
+        expect(reader.entry("a")["pinned"]).to be(true)
         expect(ClaudeInbox::Actions.new(dir: requests, clock: -> { now }).drain(writer)).to eq(2)
         expect(writer.entry("a")["wake_at"]).to eq(now.to_i + 3600)
         expect(writer.entry("a")["pinned"]).to be(true)
         reader.update([session(id: "a")])
-        expect(reader.sections.pinned.map(&:key)).to eq(%w[a])
+        expect(reader.sections.snoozed.map(&:key)).to eq(%w[a])
         expect(reader).not_to be_writable
         expect { reader.set_alias("a", "x") }.to raise_error(ClaudeInbox::Store::NotWritable)
         expect { reader.set_pr("a", "https://github.com/o/r/pull/1") }.to raise_error(ClaudeInbox::Store::NotWritable)

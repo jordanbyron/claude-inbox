@@ -24,8 +24,9 @@ RSpec.describe ClaudeInbox::Actions do
       expect(Dir.children(dir)).to be_empty
       sections = store.sections
       expect(sections.settled.map(&:key)).to eq(%w[a])
-      expect(sections.pinned.map(&:key)).to eq(%w[b])
+      expect(sections.snoozed.map(&:key)).to eq(%w[b])
       expect(store.entry("b")["wake_at"]).to eq(now.to_i + 3600)
+      expect(store.entry("b")["pinned"]).to be(true)
     end
   end
 
