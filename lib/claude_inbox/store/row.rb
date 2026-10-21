@@ -26,10 +26,12 @@ module ClaudeInbox
       def reap_failed_at = entry&.reap_failed_at
 
       # Names get shortened and forgotten, so the filter also reads what the
-      # session was asked to do and what it says it is doing now.
+      # session was asked to do, what it says it is doing now, and the pull
+      # requests linked to it, so `#885` finds the session behind a review.
       def matches?(query)
         q = query.downcase
-        [label, session.cwd, session.intent, session.summary].any? { |field| field.to_s.downcase.include?(q) }
+        prs = session.prs.flat_map { |pr| [pr.qualified, pr.url, pr.title] }
+        [label, session.cwd, session.intent, session.summary, *prs].any? { |field| field.to_s.downcase.include?(q) }
       end
 
       # Its timer has run out. Becoming blocked or failed wakes it sooner,

@@ -93,7 +93,7 @@ Vim bindings. Arrows and the mouse work too.
 | `P` | link a pull request by hand (empty clears) |
 | `X` | stop the session; `Enter` resumes it later |
 | `Ctrl-x` | delete the session, transcript and worktree for good |
-| `/` | filter; `Enter` keeps it, `Esc` clears |
+| `/` | filter by name, directory, prompt, status or pull request (`#885` or its title); `Enter` keeps it, `Esc` clears |
 | `R` | poll now |
 | `U` | update claude-inbox when the header says a newer one is out |
 | `q` | quit |
@@ -154,7 +154,8 @@ covers ssh, the JSON API and an iOS Shortcut.
 ## Pull requests
 
 Pull requests show up when a session's transcript links to them. Install
-`gh` to keep their state current. Use `P` to link one by hand.
+`gh` to keep their state current. Use `P` to link one by hand, and `/#885`
+to find the session behind a pull request.
 
 ## Notifications
 
