@@ -157,6 +157,13 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(expanded.items.compact.map(&:key)).to include("823b882f")
   end
 
+  it "stars a snoozed row that is pinned, since its section no longer shows the pin" do
+    entries = {"823b882f" => {"wake_at" => now.to_i + 900, "pinned" => true, "pinned_at" => now.to_i}}
+    sec = ClaudeInbox::Store.sectionize(sessions, ClaudeInbox::Store.merge_entries(entries, sessions, now), now)
+    expanded = renderer.frame(sec, view.with(width: 80, height: 30, expanded: {snoozed: true})).plain
+    expect(expanded.lines.join("\n")).to match(/wakes in 15m ★/)
+  end
+
   it "truncates long emoji names instead of slicing" do
     sec = ClaudeInbox::Store.sectionize([session(id: "z", name: "🎉" * 60)], {}, now)
     f = renderer.frame(sec, view.with(width: 60, height: 10)).plain

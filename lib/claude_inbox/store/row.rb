@@ -103,10 +103,11 @@ module ClaudeInbox
       end
 
       # The terminal outranks everything: never settle or hide a session you are in.
+      # A snooze outranks the pin, which stays put and returns when it wakes.
       def section(now)
         if session.terminal? then session.needs_you? ? :needs_you : :active
-        elsif pinned? then :pinned
         elsif snoozed?(now) then :snoozed
+        elsif pinned? then :pinned
         elsif !revived? && settled? then :settled # a resolved PR outranks Needs You
         elsif session.needs_you? || pr_needs_you? then acknowledged? ? :active : :needs_you
         else :active

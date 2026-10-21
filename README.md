@@ -49,7 +49,8 @@ It opens when a session starts. To stop that, set
 
 ## Sections
 
-1. **Pinned.** Rows you pinned with `t`.
+1. **Pinned.** Rows you pinned with `t`. Snoozing a pinned row moves it to
+   Snoozed, marked `★`, until it wakes back into Pinned.
 2. **Needs you.** Blocked or failed sessions, or ones whose pull request has
    failing checks or changes requested, that you haven't attached to yet.
 3. **Active.** Everything else that's running or not yet settled, including
