@@ -42,13 +42,12 @@ module ClaudeInbox
     # two requests saving in the same millisecond apart. Readable by the
     # owner only: a photo can be anything.
     def self.save(bytes, dir:, index:, now: Time.now)
-      data = bytes.b
-      ext = extension(data)
+      ext = extension(bytes)
       raise Unsupported, "not a PNG, JPEG, GIF or WebP image" unless ext
       FileUtils.mkdir_p(dir)
       prune(dir, now)
       path = File.join(dir, "#{now.strftime("%Y%m%d-%H%M%S-%L")}-#{index}-#{SecureRandom.hex(3)}#{ext}")
-      File.open(path, File::WRONLY | File::CREAT | File::EXCL | File::BINARY, 0o600) { |f| f.write(data) }
+      File.open(path, File::WRONLY | File::CREAT | File::EXCL | File::BINARY, 0o600) { |f| f.write(bytes) }
       path
     end
 
