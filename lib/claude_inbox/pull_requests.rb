@@ -119,7 +119,7 @@ module ClaudeInbox
       end
     end
 
-    # Parse `gh pr view --json` output. Pure so it can be tested.
+    # Parse `gh pr view --json` output.
     def self.parse(url, json)
       h = JSON.parse(json)
       state = (h["state"] == "OPEN" && h["isDraft"]) ? "DRAFT" : h["state"]
