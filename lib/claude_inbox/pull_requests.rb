@@ -54,25 +54,18 @@ module ClaudeInbox
 
   # Finds the PRs a session is tied to and keeps their state fresh.
   #
-  # Claude Code already does the hard part: the daemon scans each background
-  # session's transcript for links and writes them to the session's job state
-  # file, which JobState reads onto `job_state`; `claude agents --json` does
-  # not expose them.
-  # It is a link scan, so a session that merely mentions a PR gets it too.
-  # The daemon keeps one PR per session, so StackLinks adds the rest of a
-  # stack the session opened.
-  # Interactive sessions have no job file; for those the store's `pr` override
-  # is the only source.
+  # The links come from the daemon's scan of each background session's
+  # transcript, so a session that merely mentions a PR gets it too. The
+  # daemon keeps one PR per session, so StackLinks adds the rest of a stack
+  # the session opened. Interactive sessions have no job file; for those the
+  # store's `pr` override is the only source.
   #
-  # State comes first from our own record of resolved PRs, then from
-  # ~/.claude/gh-pr-status-cache.json (whatever Claude Code last saw), then
-  # from `gh pr view` for PRs that are still open, at most once per
-  # REFRESH_AFTER. A merged or closed PR never changes again, so once gh has
-  # said so, and when, it is written to RESOLVED_PATH and never asked about
-  # again. Claude Code's cache never says when, and says nothing at all about
-  # most of a link scan's PRs: it only covers PRs its own sessions opened.
+  # A merged or closed PR never changes again, so once gh has said so, and
+  # when, it goes in RESOLVED_PATH and gh is never asked about it again.
+  # Claude Code's cache never says when, and only covers PRs its own
+  # sessions opened.
   #
-  # `enrich` never touches gh; it is what stands between `claude agents` and
+  # `enrich` never touches gh, since it stands between `claude agents` and
   # the first frame. `refresh` is the slow half, one network round trip per
   # open PR, and the poller calls it after the list has already gone up.
   class PullRequests
@@ -93,11 +86,10 @@ module ClaudeInbox
       @stacks = StackLinks.new
     end
 
-    # Each session with its `prs` set from what is already known, asking
-    # nobody. The scanned links come off `job_state`, so a session without
-    # one (interactive, or forgotten) has none; Sessions.load sees to the
-    # order. `overrides` maps session key => url for links set by hand; an
-    # override replaces the scanned list.
+    # Each session with its `prs` set from what is already known. The scanned
+    # links come off `job_state`, so Sessions.load reads that first.
+    # `overrides` maps session key => url for links set by hand; an override
+    # replaces the scanned list.
     def enrich(sessions, overrides)
       sessions.map do |s|
         urls = overrides[s.key] ? [overrides[s.key]] : scanned(s.job_state)
