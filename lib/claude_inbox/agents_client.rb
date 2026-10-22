@@ -110,7 +110,7 @@ module ClaudeInbox
     # you type in: the headless print mode and the SDK's stream protocol.
     HEADLESS_FLAGS = %w[-p --print --input-format --output-format].freeze
 
-    # pid => origin, given `ps` for the sessions and for their parents. Pure.
+    # pid => origin, given `ps` for the sessions and for their parents.
     # A headless run's parent is whatever shell spawned it, not the claude
     # that asked for it, so only its own command line gives it away.
     def self.origins(rows, parent_cmd)
@@ -133,7 +133,7 @@ module ClaudeInbox
 
     # pid => bridge session id, for the workers a `claude remote-control`
     # server spawned: each is started with `--session-id cse_…`, the same id
-    # a background session records as bridgeSessionId. Pure.
+    # a background session records as bridgeSessionId.
     def self.bridge_ids(rows)
       rows.filter_map { |pid, _, cmd| (m = cmd.match(/--session-id[= ](cse_\w+)/)) && [pid, m[1]] }.to_h
     end
