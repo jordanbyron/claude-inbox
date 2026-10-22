@@ -9,26 +9,42 @@ module ClaudeInbox
   # sent. Only the `user` and `assistant` records are messages: the CLI
   # appends undated bookkeeping records long after a session has finished,
   # so the file's mtime says nothing.
-  module Transcript
+  #
+  # Every poll asks, and a transcript that ends in a long run of other
+  # records costs a scan each time, so each file is read again only once
+  # it has grown.
+  class Transcript
     MESSAGE_TYPES = %w[user assistant].freeze
     CHUNK = 64 * 1024
 
-    module_function
+    def initialize
+      @seen = {} # path => [size, time]
+      @mutex = Mutex.new
+    end
 
     def enrich(sessions, home: Dir.home)
       sessions.map { |s| s.with(last_message_at: last_message_at(path_for(s, home))) }
     end
 
+    def last_message_at(path)
+      return nil unless path
+      @mutex.synchronize do
+        size = File.size(path)
+        seen_size, at = @seen[path]
+        return at if seen_size == size
+        at = File.open(path, "rb") { |f| scan_back(f) }
+        @seen[path] = [size, at]
+        at
+      end
+    rescue SystemCallError
+      nil
+    end
+
+    private
+
     def path_for(session, home)
       session.job_state&.transcript_path ||
         (session.cwd && session.session_id && AgentsClient.transcript_path(session.cwd, session.session_id, home: home))
-    end
-
-    def last_message_at(path)
-      return nil unless path
-      File.open(path, "rb") { |f| scan_back(f) }
-    rescue SystemCallError
-      nil
     end
 
     def scan_back(file)

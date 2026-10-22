@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 RSpec.describe ClaudeInbox::Sessions do
-  subject(:sessions) { described_class.load(client: client, pull_requests: pull_requests, overrides: overrides) }
+  subject(:sessions) { described_class.load(client: client, pull_requests: pull_requests, transcripts: ClaudeInbox::Transcript.new, overrides: overrides) }
 
   let(:client) { ClaudeInbox::FixtureClient.new(fixture_path("agents.json")) }
   let(:pull_requests) do
