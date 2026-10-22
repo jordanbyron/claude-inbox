@@ -98,6 +98,19 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(text).to include("⇅ 1 remote")
   end
 
+  it "ages a row by when its session last spoke, not by how long it has been in its state" do
+    talking = session(id: "aaa11111", name: "talking", last_message_at: now - 30)
+    quiet = session(id: "bbb22222", name: "quiet", last_message_at: now - 7200)
+    entries = {
+      "aaa11111" => {"last_state" => "working", "state_since" => now.to_i - 7200},
+      "bbb22222" => {"last_state" => "working", "state_since" => now.to_i - 7200}
+    }
+    sec = ClaudeInbox::Store.sectionize([talking, quiet], entries, now)
+    text = renderer.frame(sec, view.with(width: 60, height: 12, tick: 0)).plain.lines.join("\n")
+    expect(text).to match(/⠋ talking\s+working · 30s  proj/)
+    expect(text).to match(/⠋ quiet\s+working · 2h  proj/)
+  end
+
   it "marks a background session with Remote Control on, and only that one" do
     rc = session(state: "done", job_state: ClaudeInbox::JobState.new("respawnFlags" => ["--remote-control"]))
     bridged = ClaudeInbox::JobState.new("bridgeSessionId" => "cse_01AB")

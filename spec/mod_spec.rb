@@ -143,7 +143,7 @@ RSpec.describe ClaudeInbox::Mod do
     pr = ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: "OPEN")
     sessions = [
       session(id: "a1", state: "blocked", name: "needs an answer", session_id: "u-a1"),
-      session(id: "b2", state: "working", name: "still going", prs: [pr], session_id: "u-b2"),
+      session(id: "b2", state: "working", name: "still going", prs: [pr], session_id: "u-b2", last_message_at: now - 300),
       session(id: "c3", state: "done", name: "put away", session_id: "u-c3")
     ]
     entries = {"c3" => {"last_state" => "done", "state_since" => now.to_i - 90, "settled_at" => now.to_i - 60}}

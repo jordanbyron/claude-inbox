@@ -13,6 +13,7 @@ export type InboxRow = {
   isUnread: boolean
   line?: string
   wakeAt?: number | 'until_woken'
+  lastMessageAt?: number
   remote?: string
   color?: string
   pr?: { short: string; state: string; url: string }
