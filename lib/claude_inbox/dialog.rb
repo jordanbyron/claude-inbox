@@ -106,7 +106,8 @@ module ClaudeInbox
       # once the list spans repos.
       def label(pr)
         name = (@prs.map(&:repo).uniq.size > 1) ? pr.qualified : pr.short
-        pr.title ? @theme.pr_badge(pr, name) + @theme.dim(" · ") + pr.title : @theme.pr_badge(pr, name)
+        badge = @theme.pr_badge(pr, name)
+        pr.title ? badge + @theme.dim(" · ") + pr.title : badge
       end
     end
 
