@@ -3,16 +3,14 @@
 require_relative "text"
 
 module ClaudeInbox
-  # One editable string with a cursor in it. Every edit and all the cursor
-  # arithmetic live here, so callers never index into the text themselves:
-  # they hand over keypresses and ask for something to draw.
+  # One editable string with a cursor in it. Callers hand over keypresses
+  # and ask for something to draw; they never index into the text.
   #
   # Positions count cells, not bytes or characters. A cell is a grapheme
-  # cluster — prompts and session names carry emoji, and character indexes
-  # cut them in half — or a chip: an attached Image or a long Pasted text,
-  # each shown as one token (`[Image #1]`, `[Pasted text #1 +40 lines]`)
-  # that moves and deletes as one unit, the way Claude Code's own prompt
-  # treats them.
+  # cluster, since prompts and session names carry emoji that character
+  # indexes cut in half. Or it is a chip, an attached Image or a long Pasted
+  # text shown as one token (`[Image #1]`, `[Pasted text #1 +40 lines]`)
+  # that moves and deletes as one unit, as in Claude Code's own prompt.
   #
   #   b = TextBuffer.new("ab")
   #   b.press(:left, "\e[D")
@@ -56,14 +54,13 @@ module ClaudeInbox
       }.join
     end
 
-    # Swaps the whole text out and parks the cursor at the end — what
-    # completion wants after it extends a path.
+    # The cursor ends up at the end, where completion wants it after it
+    # extends a path.
     def replace(text)
       @g = text.grapheme_clusters
       @cursor = @g.size
     end
 
-    # Everything before the cursor, as one string.
     def head = @g[0...@cursor].join
 
     # How completion drops a picked command in over the half-typed one.
@@ -165,7 +162,7 @@ module ClaudeInbox
 
     # One entry per display row: [cells, offset of its first cell]. A
     # cursor at the end of a row that is already full has no cell of its
-    # own, so it gets a row of its own — what a terminal does when text
+    # own, so it gets a row of its own, as a terminal does when text
     # reaches the right margin.
     def wrapped(width)
       rows = logical_lines.flat_map do |line, start|
@@ -252,7 +249,6 @@ module ClaudeInbox
       @cursor = at
     end
 
-    # Back over any spaces, then over the word itself.
     def delete_word
       at = @cursor
       at -= 1 while at > 0 && @g[at - 1] == " "
