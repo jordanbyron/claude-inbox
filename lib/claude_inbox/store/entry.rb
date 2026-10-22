@@ -26,11 +26,7 @@ module ClaudeInbox
         when Integer then choice
         when :m15 then now.to_i + 15 * 60
         when :h1 then now.to_i + 3600
-        when :tomorrow_9am
-          t = Time.at(now.to_i)
-          t9 = Time.new(t.year, t.month, t.day, 9, 0, 0, t.utc_offset)
-          t9 += 86_400 if t9 <= t
-          t9.to_i
+        when :tomorrow_9am then SnoozeTime.parse("9am", now)
         when :until_woken then UNTIL_WOKEN
         else raise ArgumentError, "unknown snooze #{choice.inspect}"
         end
