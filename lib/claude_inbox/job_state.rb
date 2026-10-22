@@ -8,17 +8,9 @@ module ClaudeInbox
   # ~/.claude/jobs/<id>/state.json. The only reader of that file, and the
   # only writer: a new session's color.
   #
-  # `claude agents --json` reports one word, `state`, and "working" covers two
-  # different situations: the agent is thinking, or the agent is idle and
-  # something it started earlier — a watch shell, a sub-agent — is still open.
-  # The file tells them apart: `tempo` is the agent's own pulse, `fan` names
-  # each outstanding piece of work, and `detail` is the session's own status
-  # line, with `needs` naming what it is waiting on while blocked and
-  # `output.result` what it produced once done. It also carries the PR links
-  # the daemon scanned out of the transcript and the transcript's path, which
-  # PullRequests reads through here, the color `/color` set on the session,
-  # which `claude agents --json` drops, and `intent`, the prompt the session
-  # was started from, and `createdAt`, when it was.
+  # `claude agents --json` says "working" both while the agent thinks and
+  # while it sits idle on a shell or sub-agent it started. This file tells
+  # the two apart, and holds what the JSON drops (docs/cli-quirks.md).
   #
   # Never cached. A color changes the moment you type `/color`, so every poll
   # asks the file again.
@@ -40,7 +32,7 @@ module ClaudeInbox
 
     # Each background session with its job file read onto `job_state`, or nil
     # when there is none: interactive sessions have no job file, and neither
-    # does one the daemon has already forgotten. Sessions.load calls this.
+    # does one the daemon has already forgotten.
     def self.enrich(sessions, jobs_dir:)
       sessions.map { |s| s.background? ? s.with(job_state: read(s.id, jobs_dir: jobs_dir)) : s }
     end
@@ -91,7 +83,6 @@ module ClaudeInbox
     # a wake, are the only record of Remote Control being on it.
     def remote_control? = flags.include?("--remote-control")
 
-    # True when the agent has stopped and is only waiting on what it started.
     def waiting_on_work? = agent_idle? && in_flight?
 
     # What the session needs while blocked, what it produced once done,
