@@ -27,7 +27,6 @@ module ClaudeInbox
       classify_origins(parse(r.out))
     end
 
-    # Poll interval for the agents-view watchdog below.
     WATCH_INTERVAL = 0.05
 
     # Hands the terminal to the child; caller must have restored cooked mode.
@@ -35,14 +34,11 @@ module ClaudeInbox
     # False when the attach failed on its own, as a session that cannot be
     # woken does: the CLI prints why and exits 1.
     #
-    # Pressing ← inside an attached session detaches it and then `claude
-    # attach` execs itself in place as `claude agents` (same pid). There is
-    # no flag or env var that suppresses only that relaunch: the one switch
-    # that exists disables attach too. So we watch the child's command line
-    # and, the moment it becomes the agents view, terminate it. The user then
-    # lands back in the inbox instead of native agent view.
-    # The block, polled with the command line, ends the attach early when it
-    # answers true: how a switch request from another front end is honoured.
+    # ← turns `claude attach` into `claude agents` in place, and nothing
+    # switches off only that (docs/cli-quirks.md), so the watchdog kills the
+    # child once it does. The block, polled alongside, ends the attach early
+    # when it answers true. That is how a switch request from another front
+    # end is honoured.
     def attach(id, &stop)
       pid = Process.spawn(*Subprocess.command(@bin, "attach", id))
       watchdog = Thread.new { kill_when_agents_view(pid, &stop) }
@@ -76,8 +72,7 @@ module ClaudeInbox
     # its path completion escapes them; a quoted path is not recognized.
     def self.mention(path) = "@" + path.gsub(" ", "\\ ")
 
-    # Pure so it can be tested: a setting left nil leaves its flag off. The
-    # prompt goes after "--", where a leading dash is text rather than an
+    # The prompt goes after "--", where a leading dash is text rather than an
     # unknown option, and --remote-control sits just before it: its optional
     # name would otherwise eat the prompt (both checked on 2.1.282).
     def self.spawn_args(bin, prompt:, model: nil, effort: nil, permission_mode: nil, worktree: false, name: nil, remote: false)
@@ -116,13 +111,8 @@ module ClaudeInbox
     HEADLESS_FLAGS = %w[-p --print --input-format --output-format].freeze
 
     # pid => origin, given `ps` for the sessions and for their parents. Pure.
-    #
-    #   :remote    a Remote Control worker: --sdk-url, or a `claude rc` parent
-    #   :headless  `claude -p "..."` or an SDK stream run. Its parent is
-    #              whatever shell spawned it, not the claude that asked for
-    #              it, so only its own command line gives it away
-    #   :subagent  parented by another claude process
-    #   :terminal  everything else, which is a claude you are sitting in
+    # A headless run's parent is whatever shell spawned it, not the claude
+    # that asked for it, so only its own command line gives it away.
     def self.origins(rows, parent_cmd)
       rows.to_h do |pid, ppid, cmd|
         parent = parent_cmd[ppid].to_s
@@ -185,10 +175,6 @@ module ClaudeInbox
       assign_origins(sessions, origins_from(rows), self.class.bridge_ids(rows))
     end
 
-    # Tags each interactive session with where it is driven from (pid =>
-    # origin, terminal when unlisted) and the bridge a remote one is served
-    # over, and drops the unattended ones, whose parent is the row worth
-    # showing.
     def assign_origins(sessions, origins, bridges)
       sessions
         .map { |s| s.interactive? ? s.with(origin: origins.fetch(s.pid, :terminal), bridge_id: bridges[s.pid]) : s }
@@ -259,9 +245,7 @@ module ClaudeInbox
       @bridges = bridges
     end
 
-    # Fixture rows carry no process tree; tag each interactive row from the
-    # pid => origin map the test hands in, otherwise as a terminal, then drop
-    # the unattended ones same as the real client does.
+    # Fixture rows carry no process tree.
     def list
       assign_origins(parse(File.read(@path)), @origins, @bridges)
     end
