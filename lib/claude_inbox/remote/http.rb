@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../text"
+
 module ClaudeInbox
   module Remote
     # The little of HTTP/1.1 the listener speaks: one request per
@@ -42,7 +44,10 @@ module ClaudeInbox
           @details = details
         end
 
-        def body = {error: Http.utf8(message), **details.transform_values { |v| v.is_a?(Integer) ? v : Http.utf8(v) }}
+        # The JSON generator warns on stderr, which is the terminal, about a
+        # binary string and raises on a bad byte, and a message can quote CLI
+        # output or request bytes.
+        def body = {error: Text.utf8(message), **details.transform_values { |v| v.is_a?(Integer) ? v : Text.utf8(v) }}
 
         private
 
@@ -79,11 +84,6 @@ module ClaudeInbox
       end
 
       def self.monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-
-      # The JSON generator warns on stderr, which is the terminal, about a
-      # binary string and raises on a bad byte, and a message can quote CLI
-      # output or request bytes.
-      def self.utf8(text) = String.new(text.to_s, encoding: Encoding::UTF_8).scrub("\uFFFD")
 
       # `deadline` (on the monotonic clock) bounds the whole head, not each
       # read: a per-read timeout lets a byte every few seconds hold the
