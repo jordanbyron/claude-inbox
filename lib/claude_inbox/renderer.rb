@@ -7,9 +7,8 @@ require_relative "theme"
 require_relative "store"
 
 module ClaudeInbox
-  # sections -> Array<String> (one entry per terminal row, each exactly
-  # `width` columns wide) plus a parallel Array of selectable items.
-  # Pure: no terminal, no IO, no clock beyond the `now` it is handed.
+  # Turns the sections and a View into a Frame, every line exactly `width`
+  # columns. Pure: no terminal, no IO, no clock beyond the `now` it is handed.
   class Renderer
     Frame = Struct.new(:lines, :items, :top) do
       # The same frame for a terminal drawn without color.
@@ -312,7 +311,7 @@ module ClaudeInbox
       chrome = 1 + 1 + 1 + 1 + 1 + 2 + Text.width(meta) + 2 + 1
       # Project is only cut once the label has given up all its space too,
       # so the row can never exceed `width` and fall into Text.pad's blind
-      # tail-chop (which used to land mid-project-name with no ellipsis).
+      # tail-chop.
       project_text = Text.truncate(s.project, [width - chrome, 0].max)
       project = quiet ? @p.dim(project_text) : @theme.cyan(project_text)
 
@@ -416,8 +415,8 @@ module ClaudeInbox
     end
 
     # "working" while the agent is thinking, "idle" once it has stopped and
-    # only the work it kicked off is still open — with that work named either
-    # way, since "working · 2 agents" is the answer to "working on what?".
+    # only the work it kicked off is still open. Either way the work is
+    # named, since "working · 2 agents" answers "working on what?".
     def working_badge(s)
       return @theme.yellow("waiting#{": #{s.waiting_for}" if s.waiting_for}") if s.status == "waiting"
       label = s.job_state&.in_flight_label
@@ -431,7 +430,6 @@ module ClaudeInbox
 
     # ----- modal --------------------------------------------------------------
 
-    # Centre a block of lines over the frame.
     def overlay(lines, block, width)
       block_w = block.map { |l| Text.width(l) }.max || 0
       left = [(width - block_w) / 2, 0].max
