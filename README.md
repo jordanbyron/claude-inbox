@@ -59,6 +59,10 @@ It opens when a session starts. To stop that, set
 5. **Settled.** Settled with `x`, or every pull request is merged or closed.
    Collapsed.
 
+`--sort=activity` puts the session that spoke most recently first in every
+section but Snoozed, read from its transcript. Put it in the config file to
+keep it.
+
 Under each row is what the session is waiting on, what it produced, or its
 status line. A row with a pull request shows it as `#885 open`, `#885 merged`
 and so on, with `✗ checks`, `changes requested` or `conflicts` after it when
@@ -66,7 +70,9 @@ something is wrong, and `+2` after it when the session has two more.
 A steady `◌` with `idle · 1 shell` means the agent stopped
 and is waiting on a shell or sub-agent it started. A blue `●` marks a session you
 haven't attached to since it got blocked or finished; one you have attached
-to since is dimmed, unless `/color` tints it.
+to since is dimmed, unless `/color` tints it. The age after the badge is how
+long since the session last said anything, read from its transcript: a
+`working` row that spoke 30s ago is still talking, one silent for 2h is not.
 
 ## Keys
 

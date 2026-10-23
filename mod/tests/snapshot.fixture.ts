@@ -29,7 +29,8 @@ export const SNAPSHOT = `{
           "short": "#7",
           "state": "open",
           "url": "https://github.com/o/r/pull/7"
-        }
+        },
+        "last_message_at": 1789599700
       }
     ],
     "snoozed": [],

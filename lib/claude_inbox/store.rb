@@ -41,7 +41,13 @@ module ClaudeInbox
       Row.new(session: session, entry: hash && Entry.new(hash))
     end
 
-    def self.sectionize(sessions, entries, now)
+    # `activity` puts the session that spoke most recently first in every
+    # section but Snoozed, which stays in wake order. The default keeps each
+    # section's own order: Pinned by pin, Needs You and Settled by the state
+    # clock, Active by start with running sessions first.
+    SORTS = %w[default activity].freeze
+
+    def self.sectionize(sessions, entries, now, sort: "default")
       sec = Sections.new(pinned: [], needs_you: [], active: [], snoozed: [], settled: [])
       sessions.each do |s|
         row = row_for(s, entries)
@@ -52,6 +58,7 @@ module ClaudeInbox
       sec.active.sort_by! { |r| [r.session.finished? ? 1 : 0, -(r.session.started_at&.to_i || 0)] }
       sec.snoozed.sort_by! { |r| r.parked? ? [1, 0] : [0, r.wake_at.to_i] }
       sec.settled.sort_by! { |r| -(r.state_since || 0) }
+      %i[pinned needs_you active settled].each { |name| sec[name].sort_by! { |r| -r.spoke_at } } if sort == "activity"
       sec
     end
 
@@ -61,9 +68,10 @@ module ClaudeInbox
     # second inbox open at once, which reads along with the first rather
     # than overwriting what it and the pane's requests settled, and sends
     # its own edits to the first through the `relay` as requests.
-    def initialize(path: DEFAULT_PATH, clock: -> { Time.now }, writable: true, relay: nil)
+    def initialize(path: DEFAULT_PATH, clock: -> { Time.now }, writable: true, relay: nil, sort: "default")
       @path = path
       @clock = clock
+      @sort = sort
       @writable = writable
       @relay = relay
       @mutex = Mutex.new
@@ -87,7 +95,7 @@ module ClaudeInbox
     end
 
     def sections(now = @clock.call)
-      @mutex.synchronize { self.class.sectionize(@sessions, @entries, now) }
+      @mutex.synchronize { self.class.sectionize(@sessions, @entries, now, sort: @sort) }
     end
 
     def sessions = @mutex.synchronize { @sessions.dup }

@@ -377,14 +377,14 @@ module ClaudeInbox
           wake = row.parked? ? @theme.purple("parked") : @theme.purple("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
           row.pinned? ? wake + @theme.cyan(" ★") : wake
         when :settled
-          @p.dim("#{s.state} · #{Text.age(now.to_i - row.state_since.to_i)}")
+          @p.dim("#{s.state} · #{Text.age(now.to_i - row.spoke_at)}")
         else
           if s.interactive?
             where = s.remote? ? "remote" : "your terminal"
-            age = row.state_since ? Text.age(now.to_i - row.state_since.to_i) : Text.age(now - s.started_at)
+            age = Text.age(now.to_i - row.spoke_at)
             state_badge(s) + @p.dim(" · #{where} · #{age}")
           else
-            age = row.state_since ? @p.dim(" · " + Text.age(now.to_i - row.state_since.to_i)) : ""
+            age = @p.dim(" · " + Text.age(now.to_i - row.spoke_at))
             remote = s.remote_control? ? @theme.blue(" ⇅") : ""
             state_badge(s) + remote + age
           end
