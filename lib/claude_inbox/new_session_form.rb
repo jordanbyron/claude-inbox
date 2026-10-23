@@ -12,12 +12,11 @@ require_relative "text_buffer"
 require_relative "theme"
 
 module ClaudeInbox
-  # State and key handling for the "new session" modal. Pure: returns what
-  # happened so the App can act on it. Rendering returns plain lines; the
-  # App wraps them in a box.
+  # The `n` form a new session is composed in. Pure: it says what happened
+  # and the App acts on it.
   class NewSessionForm
     # `value` is a TextBuffer on :text and :multiline fields and the picked
-    # string on :choice ones — `kind` says which.
+    # string on :choice ones.
     Field = Struct.new(:key, :label, :kind, :value, :choices)
 
     # A directory the Directory field offers, shown by its shortest
@@ -71,11 +70,9 @@ module ClaudeInbox
 
     # => :cancel | :start | :start_and_attach | :changed
     def press(name, raw)
-      # `:start`/`:start_and_attach` leave the form up until the spawn is
-      # known to have worked, so a failure (untrusted directory, `claude`
-      # missing, ...) can hand the composed prompt back instead of losing
-      # it; there is no way to cancel a spawn already under way, so every
-      # key is swallowed until the App reports back.
+      # A start leaves the form up until the spawn has worked, so a failure
+      # can hand the prompt back. A spawn under way can't be cancelled, so
+      # every key is swallowed until the App reports back.
       return :changed if @busy
       return confirm_discard_press(name, raw) if @confirm_discard
       @error = nil
@@ -149,8 +146,7 @@ module ClaudeInbox
       @defaults = Settings.defaults(cwd, home: @home)
     end
 
-    # Full-screen body: a tall prompt editor, then one row per setting with
-    # every choice visible. Exactly `height` lines.
+    # The whole body, exactly `height` lines.
     def screen(width, height)
       inner_w = width - 4
       fixed = 3 + 2 + 1 + (@fields.size - 1) + 1
@@ -189,11 +185,8 @@ module ClaudeInbox
       @theme.hints(keys)
     end
 
-    # The App's `claude --bg` call failed after `:start`/`:start_and_attach`
-    # already handed the form off — an untrusted directory, a stale binary,
-    # a permissions error. The composed prompt is still here, so the form
-    # reopens on it with the reason shown instead of the App just logging
-    # the failure and losing the draft.
+    # The App's `claude --bg` call failed after a start. The form shows why,
+    # over the prompt it kept.
     def submission_failed(message)
       @busy = false
       @error = message
