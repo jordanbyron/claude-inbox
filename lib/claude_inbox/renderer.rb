@@ -141,7 +141,7 @@ module ClaudeInbox
         bar = "█" * filled + "░" * (10 - filled)
         left = w.resets_at.to_i - now.to_i if resets && w.resets_at
         figure = left&.positive? ? "#{w.percent}% · #{Text.age(left)} left" : "#{w.percent}%"
-        "#{@p.dim(w.label)} #{@theme.public_send(usage_hue(w.percent), bar)} #{@p.dim(figure)}"
+        "#{@p.dim(w.label)} #{@theme.tint(usage_hue(w.percent), bar)} #{@p.dim(figure)}"
       end.join("  ")
     end
 
