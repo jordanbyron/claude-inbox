@@ -28,10 +28,10 @@ module ClaudeInbox
         .split("\n")
     end
 
+    private
+
     # How wide the box wants to be; the frame caps it at the terminal.
     def fit = self.class::WIDTH
-
-    private
 
     def key(name) = @theme.cyan_bold(name)
 
@@ -83,10 +83,6 @@ module ClaudeInbox
 
       def title = " #{kind.to_s.capitalize} pull request "
 
-      # Titles vary, so the box grows to the longest line plus some air,
-      # and never shrinks below a plain dialog.
-      def fit = [WIDTH, lines(Float::INFINITY, nil).map { |l| Text.width(l) }.max + MARGIN].max
-
       def lines(width, _caret)
         (@prs.each_with_index.map { |pr, i| "  #{key((i + 1).to_s)}  #{label(pr)}" } +
           ["", "  #{hint(KEYS.fetch(kind), "#{kind} #{@prs.first.short}")} · #{key("esc")} #{@theme.dim("cancel")}"])
@@ -101,6 +97,10 @@ module ClaudeInbox
       end
 
       private
+
+      # Titles vary, so the box grows to the longest line plus some air,
+      # and never shrinks below a plain dialog.
+      def fit = [WIDTH, lines(Float::INFINITY, nil).map { |l| Text.width(l) }.max + MARGIN].max
 
       # The list's badge, then the title. A bare #190 is ambiguous only
       # once the list spans repos.
