@@ -13,8 +13,7 @@ require_relative "../text"
 
 module ClaudeInbox
   module Remote
-    # The opt-in HTTP listener a phone starts sessions through: the port, the
-    # connection limits, the static files and the Pairing token, in front of
+    # The opt-in HTTP listener a phone starts sessions through, in front of
     # Start. Like the Poller it reaches App only through the queue, and it
     # never writes to the terminal: every failure becomes a response or a
     # notice. It is App's only way into Remote.
@@ -103,7 +102,6 @@ module ClaudeInbox
       # App: never binds, and answers :off.
       def self.disabled = new(client: nil, store: nil, queue: nil, pairing: nil, port: nil)
 
-      # `start_options` are Start's own.
       def initialize(queue:, port:, pairing: Pairing.new, lan: false, allowed_modes: DEFAULT_MODES,
         lock_path: LOCK_PATH, fixture: false, retry_every: RETRY_EVERY, **start_options)
         @queue = queue
@@ -327,8 +325,7 @@ module ClaudeInbox
         end
       end
 
-      # Under the mutex. A host leaves the hash at zero, so it holds only
-      # hosts connected now.
+      # Under the mutex.
       def release_unauthenticated(slot)
         return if slot[:authenticated]
         via = slot[:via]
@@ -393,10 +390,6 @@ module ClaudeInbox
         raise Http::Error.new(401, "missing or wrong token: press N in the inbox and pair again", headers: {"WWW-Authenticate" => "Bearer"})
       end
 
-      # The same outcome from the same place again moves up with a count, so
-      # a host sending bad tokens can't push everything else out of the list.
-      # Every start, and every refusal once the token has checked out, is
-      # listed for `N`.
       def answer(request, io, via)
         status, headers, body, note = @start.call(request, io, via)
         remember(via, note) if note
@@ -406,6 +399,8 @@ module ClaudeInbox
         raise
       end
 
+      # The same outcome from the same place again moves up with a count, so
+      # a host sending bad tokens can't push everything else out of the list.
       def remember(via, result)
         result = Text.printable(result)
         @mutex.synchronize do
