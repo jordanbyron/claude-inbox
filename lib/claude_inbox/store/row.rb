@@ -54,10 +54,6 @@ module ClaudeInbox
       # Active rather than Settled, until the state changes again.
       def acknowledged? = unchanged_since?(entry&.acknowledged_at)
 
-      # Finished or needing you, so it carries a read or unread mark. Only a
-      # session you can attach to counts, since nothing else ever clears it.
-      def markable? = session.actionable? && (session.finished? || session.needs_you?)
-
       # Finished or needing you since you last attached.
       def unread?
         return false unless markable?
@@ -121,6 +117,10 @@ module ClaudeInbox
       end
 
       private
+
+      # Finished or needing you, so it carries a read or unread mark. Only a
+      # session you can attach to counts, since nothing else ever clears it.
+      def markable? = session.actionable? && (session.finished? || session.needs_you?)
 
       def unchanged_since?(at) = at && entry.state_since.to_i <= at.to_i
     end
