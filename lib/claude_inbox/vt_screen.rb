@@ -2,6 +2,7 @@
 
 require "strscan"
 require "unicode/display_width"
+require_relative "text"
 
 module ClaudeInbox
   # A deliberately small cursor-addressed screen model that turns captured
@@ -22,7 +23,7 @@ module ClaudeInbox
     end
 
     def feed(str)
-      ss = StringScanner.new(str.dup.force_encoding("UTF-8").scrub)
+      ss = StringScanner.new(Text.utf8(str))
       until ss.eos?
         if ss.scan(CSI)
           csi(ss[1], ss[2])
