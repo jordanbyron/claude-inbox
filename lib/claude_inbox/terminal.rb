@@ -6,10 +6,8 @@ require "tty-screen"
 require_relative "painter"
 
 module ClaudeInbox
-  # The screen the inbox draws on: the alt screen and the mouse and wheel
-  # modes that come and go with it, raw mode on the input, the cached size,
-  # and the Painter that diffs frames onto it. `release` hands the whole
-  # thing to a child that wants the tty and takes it back afterwards.
+  # The screen the inbox draws on, lent with `release` to a child that
+  # wants the tty.
   class Terminal
     ALT_ON = "\e[?1049h"
     ALT_OFF = "\e[?1049l"
@@ -19,11 +17,8 @@ module ClaudeInbox
     # know the mode ignore it and keep scrolling their own history.
     WHEEL_KEYS_ON = "\e[?1007h"
     WHEEL_KEYS_OFF = "\e[?1007l"
-    # Real mouse reporting: button events plus the SGR encoding, so clicks
-    # and wheel ticks arrive as escape sequences we parse ourselves (Mouse)
-    # instead of the terminal only ever translating the wheel to arrow
-    # keys. Terminals that don't understand either mode just ignore it and
-    # fall back to WHEEL_KEYS_ON's translation, or their own scrollback.
+    # Button events in the SGR encoding, which Mouse parses. A terminal that
+    # knows neither mode falls back to WHEEL_KEYS_ON, or its own scrollback.
     MOUSE_ON = "\e[?1000h\e[?1006h"
     MOUSE_OFF = "\e[?1006l\e[?1000l"
     # Bracketed paste: what is pasted arrives fenced off from what is typed
@@ -54,7 +49,7 @@ module ClaudeInbox
       resized
     end
 
-    # Safe to call twice, and from at_exit: the second call is a no-op.
+    # Safe to call twice, and from at_exit.
     def restore
       return if @restored
       @restored = true
