@@ -371,42 +371,40 @@ RSpec.describe "renderer session colors" do
     expect(line).to include("#{orange}tinted\e[39m")
   end
 
-  it "says what is wrong with an open PR after its badge, red when it wants you" do
-    badge = ->(state, health) {
-      s = session(id: "z", name: "shipit", state: "done",
-        prs: [ClaudeInbox::PullRequest.new(number: 7, state: state, health: health)])
-      line_of.call(s, "shipit")
-    }
-    open = "\e[38;5;108m#7 open\e[0m"
-    expect(badge.call("OPEN", "FAILING")).to include("#{open}\e[2m · \e[0m\e[38;5;203m✗ checks\e[0m")
-    expect(badge.call("OPEN", "CHANGES_REQUESTED")).to include("#{open}\e[2m · \e[0m\e[38;5;203mchanges requested\e[0m")
-    expect(badge.call("OPEN", "CONFLICTING")).to include("#{open}\e[2m · \e[0m\e[2mconflicts\e[0m")
-    expect(badge.call("DRAFT", "FAILING")).to include("\e[2m#7 draft\e[0m\e[2m · \e[0m\e[38;5;203m✗ checks\e[0m")
-    expect(badge.call("OPEN", "CLEAN")).to match(/#{Regexp.escape(open)}\s/)
-    expect(badge.call("OPEN", nil)).to match(/#{Regexp.escape(open)}\s/)
-    expect(ClaudeInbox::Text.width(badge.call("OPEN", "FAILING"))).to eq(80)
+  it "badges a session's PR on its row, saying what is wrong with an open one" do
+    theme = ClaudeInbox::Theme.new
+    [["OPEN", "FAILING"], ["OPEN", "CONFLICTING"], ["DRAFT", "FAILING"], ["MERGED", nil], [nil, nil]].each do |state, health|
+      pr = ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: state, health: health)
+      line = line_of.call(session(id: "z", name: "shipit", state: "done", prs: [pr]), "shipit")
+      expect(line).to include(theme.pr_badge(pr))
+      expect(ClaudeInbox::Text.width(line)).to eq(80)
+    end
   end
 
-  it "colors a PR badge by its state and dims a draft or an unknown one" do
-    badge = ->(state) {
-      s = session(id: "z", name: "shipit", prs: [ClaudeInbox::PullRequest.new(number: 7, state: state)])
-      line_of.call(s, "shipit")
-    }
-    expect(badge.call("OPEN")).to include("\e[38;5;108m#7 open\e[0m")
-    expect(badge.call("DRAFT")).to include("\e[2m#7 draft\e[0m")
-    expect(badge.call("MERGED")).to include("\e[38;5;176m#7 merged\e[0m")
-    expect(badge.call("CLOSED")).to include("\e[38;5;203m#7 closed\e[0m")
-    expect(badge.call(nil)).to include("\e[2m#7\e[0m")
+  it "links a row's PR by its number, so a click there can open it" do
+    pr = ClaudeInbox::PullRequest.new(number: 3413, url: "https://gitlab.com/c/uk43/-/merge_requests/3413", state: "OPEN")
+    sec = ClaudeInbox::Store.sectionize([session(id: "z", name: "shipit", prs: [pr])], {}, now)
+    frame = renderer.frame(sec, view)
+    row = frame.lines.index { |l| l.include?("shipit") } + 1
+    text = ClaudeInbox::Text.strip_ansi(frame.lines[row - 1])
+    col = text.index("#3413") + 1
+    expect(text).to include("#3413 open")
+    expect(frame.link_at(row, col).to_h.slice(:url, :text)).to eq(url: pr.url, text: "#3413")
+    expect(frame.link_at(row, col + 4)&.url).to eq(pr.url)
+    expect(frame.link_at(row, col - 2)).to be_nil
+    expect(frame.link_at(row, col + 6)).to be_nil
+    expect(frame.plain.link_at(row, col)&.url).to eq(pr.url)
   end
 
-  it "counts the PRs past the headline after its badge, settled or not" do
-    prs = [7, 8, 9].map { |n| ClaudeInbox::PullRequest.new(number: n, state: "OPEN") }
+  it "counts the PRs past the headline after its badge, and dims it once settled" do
+    theme = ClaudeInbox::Theme.new
+    prs = [7, 8, 9].map { |n| ClaudeInbox::PullRequest.new(number: n, url: "https://github.com/o/r/pull/#{n}", state: "OPEN") }
     s = session(id: "z", name: "shipit", state: "done", prs: prs)
-    expect(line_of.call(s, "shipit")).to include("#7 open\e[0m\e[2m · +2\e[0m")
+    expect(line_of.call(s, "shipit")).to include(theme.pr_badge(prs.first) + "\e[2m · +2\e[0m")
     entries = ClaudeInbox::Store.merge_entries({"z" => {"settled_at" => now.to_i}}, [s], now)
     line = renderer.frame(ClaudeInbox::Store.sectionize([s], entries, now), view.with(expanded: {settled: true}))
       .lines.find { |l| l.include?("shipit") }
-    expect(line).to include("\e[2m#7 open\e[0m\e[2m · +2\e[0m")
+    expect(line).to include(theme.pr_badge(prs.first, quiet: true) + "\e[2m · +2\e[0m")
   end
 
   it "still pads a colored row to exactly the frame width" do

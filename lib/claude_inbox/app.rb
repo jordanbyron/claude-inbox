@@ -71,8 +71,8 @@ module ClaudeInbox
         reaper: reaper, queue: @queue, snapshot: snapshot, actions: actions, notifier: notifier)
       @listener = listen ? Remote::Listener.new(client: client, store: store, queue: @queue, **listen) : Remote::Listener.disabled
       @selected = nil
-      @row_items = []
-      @top = 0
+      @frame = Renderer::Frame.new([], [], 0)
+      @pointer_at = nil
       @expanded = Hash.new(false)
       @keymap = Keymap.new
       @tick = 0
@@ -190,12 +190,24 @@ module ClaudeInbox
     # the normal action table (see handle_key); mouse input defers to the
     # same rule rather than reaching past whatever has focus.
     def handle_mouse(event)
+      @pointer_at = [event.row, event.col]
+      link = link_under_pointer
+      return click_link(link) if event.kind == :click && link
       return if @modal || filter_editing?
       case event.kind
       when :click then click_row(event.row)
       when :scroll_up then perform(:up)
       when :scroll_down then perform(:down)
       end
+    end
+
+    def click_link(link)
+      return open_in_browser(link.url, link.text) unless @modal
+      pr_picked if @modal.pick_by_url(link.url)
+    end
+
+    def link_under_pointer
+      @frame.link_at(*@pointer_at) if @pointer_at && !filter_editing?
     end
 
     def handle_modal_key(name, key)
@@ -274,15 +286,15 @@ module ClaudeInbox
       ensure_selection(sections)
       @tick += 1
       view = Renderer::View.new(
-        width: width, height: height, now: now, selected: @selected&.key, top: @top, expanded: @expanded,
+        width: width, height: height, now: now, selected: @selected&.key, top: @frame.top, expanded: @expanded,
         modal: modal_lines(width), screen: screen_lines(width, body_h),
         status: status_text(now), usage: @rate_limits.windows(now), filter: filter, filter_editing: filter_editing?,
         tick: @tick / 2, loading: loading_for, listening: @listener.snapshot
       )
-      frame = @renderer.frame(sections, view)
-      frame = frame.plain unless @color # --no-color: decided here and nowhere else
-      placed(frame)
-      @terminal.paint(frame.lines)
+      @frame = @renderer.frame(sections, view)
+      @frame = @frame.plain unless @color # --no-color: decided here and nowhere else
+      @terminal.paint(@frame.lines)
+      @terminal.pointer(!link_under_pointer.nil?)
       dt = monotonic - t0
       Debug.log("render #{(dt * 1000).round}ms") if dt > 0.05
     end

@@ -17,6 +17,10 @@ RSpec.describe ClaudeInbox::PullRequests do
     expect(pr.health).to be_nil
   end
 
+  it "numbers a GitLab merge request from its link" do
+    expect(prs.status("https://gitlab.com/c/uk43/-/merge_requests/3413").short).to eq("#3413")
+  end
+
   it "reads what is wrong with an open PR, and nothing of a resolved one" do
     view = ->(**fields) {
       described_class.parse("u", JSON.generate({"number" => 9, "state" => "OPEN", "isDraft" => false,

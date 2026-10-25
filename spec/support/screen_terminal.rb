@@ -3,7 +3,7 @@
 # Stands in for Terminal: a fixed size, the last frame painted, as text, and
 # how many times a failed child held the screen.
 class ScreenTerminal
-  attr_reader :lines, :size, :pauses
+  attr_reader :lines, :size, :pauses, :pointer_shape
 
   def initialize
     @size = [80, 27]
@@ -16,4 +16,6 @@ class ScreenTerminal
   def release = yield
 
   def pause = @pauses += 1
+
+  def pointer(over_link) = @pointer_shape = over_link ? :hand : :default
 end

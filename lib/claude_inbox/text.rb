@@ -6,14 +6,41 @@ module ClaudeInbox
   # Width-aware string helpers. Never use String#[] on user-facing text:
   # session names carry emoji and glyphs that break byte/char slicing.
   module Text
-    ANSI = /\e\[[0-9;?]*[A-Za-z]/
+    # An OSC 8 hyperlink's opening or, with an empty url, its closing.
+    LINK = /\e\]8;[^;\e]*;[^\e]*\e\\/
+    CSI = /\e\[[0-9;?]*[A-Za-z]/
+    ANSI = /#{CSI}|#{LINK}/
     # A grapheme, or an escape that takes no column.
     GLYPH = /#{ANSI}|\X/
     ELLIPSIS = "…"
+    LINK_END = "\e]8;;\e\\"
 
     module_function
 
     def strip_ansi(s) = s.gsub(ANSI, "")
+
+    # The url comes from a transcript, so a control character in it is dropped.
+    def link(s, url) = "\e]8;;#{url.delete("\x00-\x1f\x7f")}\e\\#{s}#{LINK_END}"
+
+    Link = Data.define(:columns, :url, :text)
+
+    def links(s)
+      found = []
+      col = 0
+      start = url = text = nil
+      s.scan(GLYPH) do |g|
+        if g.start_with?("\e]8;")
+          found << Link.new(start...col, url, text) if url
+          url = g[/\A\e\]8;[^;\e]*;([^\e]+)/, 1]
+          start = col
+          text = +""
+        elsif !g.start_with?("\e")
+          text << g if url
+          col += Unicode::DisplayWidth.of(g)
+        end
+      end
+      found
+    end
 
     # Bytes that aren't UTF-8 become U+FFFD.
     def utf8(s) = String.new(s.to_s, encoding: Encoding::UTF_8).scrub("\uFFFD")
@@ -32,8 +59,8 @@ module ClaudeInbox
       take(s, w - width(ELLIPSIS)) << ELLIPSIS
     end
 
-    # First `n` columns, no ellipsis. Colors survive the cut, and a reset
-    # closes whichever one the cut left open.
+    # First `n` columns, no ellipsis. Colors and links survive the cut, and
+    # the cut closes whichever one it left open.
     def take(s, n)
       out = +""
       used = 0
@@ -43,6 +70,8 @@ module ClaudeInbox
         out << g
         used += gw
       end
+      last_link = out.scan(LINK).last
+      out << LINK_END if last_link && last_link != LINK_END
       (out.include?("\e") && !out.end_with?("\e[0m")) ? out << "\e[0m" : out
     end
 

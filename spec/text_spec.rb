@@ -31,6 +31,13 @@ RSpec.describe ClaudeInbox::Text do
     expect(described_class.take("plain", 3)).to eq("pla")
   end
 
+  it "links text without widening it, and closes a link the cut lands inside" do
+    linked = described_class.link("#885", "https://github.com/o/r/pull/7\e[2J")
+    expect(linked).to eq("\e]8;;https://github.com/o/r/pull/7[2J\e\\#885\e]8;;\e\\")
+    expect(described_class.width(linked)).to eq(4)
+    expect(described_class.truncate(linked, 3)).to eq("\e]8;;https://github.com/o/r/pull/7[2J\e\\#8\e]8;;\e\\\e[0m…")
+  end
+
   it "wraps on display width" do
     expect(described_class.wrap("the quick brown fox", 9)).to eq(["the quick", "brown fox"])
     expect(described_class.wrap("abcdefghij", 4)).to eq(%w[abcd efgh ij])

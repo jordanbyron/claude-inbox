@@ -30,6 +30,18 @@ RSpec.describe ClaudeInbox::Terminal do
     expect(left.index(described_class::MOUSE_OFF)).to be < left.index(described_class::ALT_OFF)
   end
 
+  it "sends the hand pointer when it changes, and again after handing the screen back" do
+    terminal.enter
+    drain(out)
+    terminal.pointer(true)
+    terminal.pointer(true)
+    expect(drain(out).scan(described_class::POINTER).size).to eq(1)
+    terminal.release {}
+    drain(out)
+    terminal.pointer(true)
+    expect(drain(out)).to include(described_class::POINTER)
+  end
+
   it "asks for bracketed paste for the duration of the alt screen and hands it back" do
     terminal.enter
     expect(drain(out)).to include(described_class::PASTE_ON)

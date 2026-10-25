@@ -29,9 +29,9 @@ RSpec.describe ClaudeInbox::Dialog do
 
   describe "pr picker" do
     let(:prs) do
-      [ClaudeInbox::PullRequest.new(number: 189, state: "MERGED"),
-        ClaudeInbox::PullRequest.new(number: 190, state: "OPEN", health: "FAILING", title: "Install the pane from the CLI"),
-        ClaudeInbox::PullRequest.new(number: 191)]
+      [ClaudeInbox::PullRequest.new(number: 189, url: "https://github.com/o/r/pull/189", state: "MERGED"),
+        ClaudeInbox::PullRequest.new(number: 190, url: "https://github.com/o/r/pull/190", state: "OPEN", health: "FAILING", title: "Install the pane from the CLI"),
+        ClaudeInbox::PullRequest.new(number: 191, url: "https://github.com/o/r/pull/191")]
     end
     let(:dialog) { described_class::PrPicker.new(:open, session(prs: prs)) }
     let(:plain) { ->(lines) { lines.map { |l| ClaudeInbox::Text.strip_ansi(l) } } }
@@ -62,6 +62,12 @@ RSpec.describe ClaudeInbox::Dialog do
       expect(widths.call(dialog.frame(40))).to eq([36])
       short = described_class::PrPicker.new(:open, session(prs: prs.first(1) + prs.last(1)))
       expect(widths.call(short.frame(100))).to eq([described_class::WIDTH])
+    end
+
+    it "cuts its title to a box narrower than it, keeping the box square" do
+      frame = dialog.frame(20)
+      expect(frame.map { |l| ClaudeInbox::Text.width(l) }.uniq).to eq([16])
+      expect(frame.first).to start_with("┌ Open pull").and end_with("…┐")
     end
 
     it "badges each PR as the list does, keys in the footer's color" do

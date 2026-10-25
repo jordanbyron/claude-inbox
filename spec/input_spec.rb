@@ -28,7 +28,7 @@ RSpec.describe ClaudeInbox::Input do
   end
 
   it "turns a mouse report into a mouse event" do
-    expect(input.events("\e[<0;5;3M")).to eq([[:mouse, ClaudeInbox::Mouse::Event.new(:click, 3)]])
+    expect(input.events("\e[<0;5;3M")).to eq([[:mouse, ClaudeInbox::Mouse::Event.new(:click, 3, 5)]])
   end
 
   it "names the characters of a paste typed out" do

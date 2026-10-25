@@ -7,12 +7,6 @@ module ClaudeInbox
     module Navigating
       private
 
-      # Remembers where the frame put the rows, so a click can find one.
-      def placed(frame)
-        @row_items = frame.items
-        @top = frame.top
-      end
-
       # The row to land on once a poll lists it, as after a spawn.
       def select_later(id)
         @pending_select = id
@@ -100,7 +94,7 @@ module ClaudeInbox
       # no item of its own; a click there resolves to the row above it.
       def row_item_at(row)
         idx = row - 1
-        @row_items[idx] || (@row_items[idx - 1] if idx > 0 && @row_items[idx - 1]&.row?)
+        @frame.items[idx] || (@frame.items[idx - 1] if idx > 0 && @frame.items[idx - 1]&.row?)
       end
     end
   end

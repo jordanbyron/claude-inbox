@@ -169,7 +169,7 @@ module ClaudeInbox
     end
 
     def seed(url)
-      number = url[%r{/pull/(\d+)}, 1]&.to_i
+      number = url[%r{/(?:pull|-/merge_requests)/(\d+)}, 1]&.to_i
       cached = resolved[url] || claude_cache[url]
       PullRequest.new(number: cached&.dig("number") || number, url: url, state: cached&.dig("state"),
         resolved_at: cached&.dig("resolved_at"), title: cached&.dig("title"))

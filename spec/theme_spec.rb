@@ -2,12 +2,28 @@
 
 RSpec.describe ClaudeInbox::Theme do
   let(:theme) { described_class.new }
+  let(:pr) { ->(**attrs) { ClaudeInbox::PullRequest.new(url: "https://github.com/o/r/pull/#{attrs[:number]}", **attrs) } }
+  let(:linked) { ->(text, number) { ClaudeInbox::Text.link(theme.underline(text), "https://github.com/o/r/pull/#{number}") } }
 
-  it "badges a PR in GitHub's colors, naming what is wrong with it" do
-    failing = ClaudeInbox::PullRequest.new(number: 190, state: "OPEN", health: "FAILING")
-    expect(theme.pr_badge(failing)).to eq(theme.green("#190 open") + theme.dim(" · ") + theme.red("✗ checks"))
-    expect(theme.pr_badge(ClaudeInbox::PullRequest.new(number: 7, state: "MERGED"), "o/r#7")).to eq(theme.purple("o/r#7 merged"))
-    expect(theme.pr_badge(ClaudeInbox::PullRequest.new(number: 8, state: "DRAFT"))).to eq(theme.dim("#8 draft"))
-    expect(theme.pr_badge(ClaudeInbox::PullRequest.new(number: 9))).to eq(theme.dim("#9"))
+  it "badges a PR in GitHub's colors, its number a link, naming what is wrong with it" do
+    failing = pr.call(number: 190, state: "OPEN", health: "FAILING")
+    expect(theme.pr_badge(failing)).to eq(linked.call(theme.green("#190"), 190) + theme.green(" open") + theme.dim(" · ") + theme.red("✗ checks"))
+    expect(theme.pr_badge(pr.call(number: 7, state: "MERGED"), "o/r#7")).to eq(linked.call(theme.purple("o/r#7"), 7) + theme.purple(" merged"))
+    expect(theme.pr_badge(pr.call(number: 8, state: "DRAFT"))).to eq(linked.call(theme.dim("#8"), 8) + theme.dim(" draft"))
+    expect(theme.pr_badge(pr.call(number: 9))).to eq(linked.call(theme.dim("#9"), 9))
+  end
+
+  it "names requested changes in red, dims a conflict, and says nothing of a clean PR" do
+    open = ->(health) { theme.pr_badge(pr.call(number: 7, state: "OPEN", health: health)) }
+    badge = linked.call(theme.green("#7"), 7) + theme.green(" open")
+    expect(open.call("CHANGES_REQUESTED")).to eq(badge + theme.dim(" · ") + theme.red("changes requested"))
+    expect(open.call("CONFLICTING")).to eq(badge + theme.dim(" · ") + theme.dim("conflicts"))
+    expect(open.call("CLEAN")).to eq(badge)
+    expect(open.call(nil)).to eq(badge)
+  end
+
+  it "dims a quiet badge and leaves out what is wrong with it" do
+    badge = theme.pr_badge(pr.call(number: 190, state: "OPEN", health: "FAILING"), quiet: true)
+    expect(badge).to eq(linked.call(theme.dim("#190"), 190) + theme.dim(" open"))
   end
 end

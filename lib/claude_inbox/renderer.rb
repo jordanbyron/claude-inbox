@@ -12,7 +12,12 @@ module ClaudeInbox
   class Renderer
     Frame = Struct.new(:lines, :items, :top) do
       # The same frame for a terminal drawn without color.
-      def plain = self.class.new(lines.map { |l| Text.strip_ansi(l) }, items, top)
+      def plain = self.class.new(lines.map { |l| l.gsub(Text::CSI, "") }, items, top)
+
+      def link_at(row, col)
+        @links ||= lines.map { |l| Text.links(l) }
+        @links.fetch(row - 1, []).find { |link| link.columns.cover?(col - 1) }
+      end
     end
 
     CHROME_ROWS = 2 # header + footer
@@ -396,7 +401,7 @@ module ClaudeInbox
     def pr_badge(s, section)
       pr = s.pr
       return nil unless pr
-      badge = (section == :settled) ? @p.dim("#{pr.short} #{pr.state&.downcase}".strip) : @theme.pr_badge(pr)
+      badge = @theme.pr_badge(pr, quiet: section == :settled)
       more = (s.prs.size > 1) ? @p.dim(" · +#{s.prs.size - 1}") : ""
       badge + more
     end
@@ -434,7 +439,8 @@ module ClaudeInbox
       block_w = block.map { |l| Text.width(l) }.max || 0
       left = [(width - block_w) / 2, 0].max
       top = [(lines.size - block.size) / 2, 0].max
-      out = lines.dup
+      # Nothing behind a pop-up is clickable.
+      out = lines.map { |l| l.gsub(Text::LINK, "") }
       block.each_with_index do |bl, i|
         y = top + i
         next if y >= out.size

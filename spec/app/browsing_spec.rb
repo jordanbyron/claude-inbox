@@ -47,6 +47,30 @@ RSpec.describe ClaudeInbox::App do
       expect(screen(app).join("\n")).not_to include("Open pull request")
     end
 
+    it "opens the one clicked in the box, and takes no hand pointer outside it" do
+      link.call(stack)
+      press(app, "o")
+      outside = screen(app).index { |l| l.include?("#856") }
+      press(app, "\e[<35;#{screen(app)[outside].index("#856") + 1};#{outside + 1}M")
+      expect(terminal.pointer_shape).to eq(:default)
+      row = screen(app).index { |l| l.include?("2  #190") }
+      press(app, "\e[<35;#{screen(app)[row].index("#190") + 1};#{row + 1}M")
+      expect(terminal.pointer_shape).to eq(:hand)
+      press(app, "\e[<0;#{screen(app)[row].index("#190") + 1};#{row + 1}M")
+      expect(wait_for { opened.any? }).to be(true)
+      expect(opened).to eq(["https://github.com/o/r/pull/190"])
+      expect(screen(app).join("\n")).not_to include("Open pull request")
+    end
+
+    it "gives the hand back when the box opens under a pointer that has not moved" do
+      link.call(stack)
+      row = screen(app).index { |l| l.include?("#191") }
+      press(app, "\e[<35;#{screen(app)[row].index("#191") + 1};#{row + 1}M")
+      expect(terminal.pointer_shape).to eq(:hand)
+      press(app, "o")
+      expect(terminal.pointer_shape).to eq(:default)
+    end
+
     it "opens the nth on a digit, or nothing on esc" do
       link.call(stack)
       press(app, "o", "3")
@@ -55,6 +79,45 @@ RSpec.describe ClaudeInbox::App do
       press(app, "o", "\e")
       expect(screen(app).join("\n")).not_to include("Open pull request")
       expect(opened.size).to eq(1)
+    end
+  end
+
+  describe "a row's pull request" do
+    before do
+      app
+      allow(ClaudeInbox::Subprocess).to receive(:capture) { |*args| opened << args.last }
+      link.call(stack.first(1))
+    end
+
+    let(:at) do
+      ->(text) {
+        row = screen(app).index { |l| l.include?(text) }
+        [row + 1, screen(app)[row].index(text) + 1]
+      }
+    end
+
+    it "opens on a click, without attaching to the session" do
+      row, col = at.call("#190")
+      press(app, "\e[<0;#{col};#{row}M")
+      expect(screen(app).first).to include("opening #190")
+      expect(wait_for { opened.any? }).to be(true)
+      expect(opened).to eq(["https://github.com/o/r/pull/190"])
+      expect(client.attached).to be_empty
+    end
+
+    it "still attaches on a click elsewhere on the row" do
+      row, _ = at.call("#190")
+      press(app, "\e[<0;5;#{row}M")
+      expect(client.attached).to eq(["f23c8673"])
+      expect(opened).to be_empty
+    end
+
+    it "takes a hand pointer while the pointer is over it, and gives it back off it" do
+      row, col = at.call("#190")
+      press(app, "\e[<35;#{col};#{row}M")
+      expect(terminal.pointer_shape).to eq(:hand)
+      press(app, "\e[<35;5;#{row}M")
+      expect(terminal.pointer_shape).to eq(:default)
     end
   end
 
