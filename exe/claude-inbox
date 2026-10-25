@@ -1,6 +1,10 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
+# Claude's files are UTF-8 whatever the locale says; under LANG=C a read of
+# ~/.claude.json would otherwise come back US-ASCII and fail to parse.
+Encoding.default_external = Encoding::UTF_8
+
 require "claude_inbox"
 require "claude_inbox/cli"
 

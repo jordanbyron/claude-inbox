@@ -8,7 +8,8 @@ gh extension install basecamp/gh-signoff
 ```
 
 `bin/ci` uses gh-signoff to mark your PR as passing, so install it before you
-open one.
+open one. It also checks the pane in `mod/` with `claude plugin`, so it needs
+Claude Code on your `PATH`.
 
 For tab completion of `gh signoff`, add `eval "$(gh signoff completion)"` to
 `~/.zshrc`.
@@ -68,6 +69,9 @@ PRs from forks. Open your PR against `jordanbyron/claude-inbox` and run
 `bin/ci` for your own feedback. Any signoff it sets lands on your fork, not
 on the PR. A maintainer reads the PR, checks it out, and runs `bin/ci` to sign
 it off. Each push you make after that needs another run.
+
+The specs run against an empty `HOME` and read files as UTF-8 whatever your
+locale.
 
 While iterating:
 
