@@ -374,39 +374,45 @@ RSpec.describe "renderer session colors" do
   it "says what is wrong with an open PR after its badge, red when it wants you" do
     badge = ->(state, health) {
       s = session(id: "z", name: "shipit", state: "done",
-        prs: [ClaudeInbox::PullRequest.new(number: 7, state: state, health: health)])
+        prs: [ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: state, health: health)])
       line_of.call(s, "shipit")
     }
-    open = "\e[38;5;108m#7 open\e[0m"
+    open = "\e[38;5;108mPR #7 open\e[0m"
     expect(badge.call("OPEN", "FAILING")).to include("#{open}\e[2m · \e[0m\e[38;5;203m✗ checks\e[0m")
     expect(badge.call("OPEN", "CHANGES_REQUESTED")).to include("#{open}\e[2m · \e[0m\e[38;5;203mchanges requested\e[0m")
     expect(badge.call("OPEN", "CONFLICTING")).to include("#{open}\e[2m · \e[0m\e[2mconflicts\e[0m")
-    expect(badge.call("DRAFT", "FAILING")).to include("\e[2m#7 draft\e[0m\e[2m · \e[0m\e[38;5;203m✗ checks\e[0m")
-    expect(badge.call("OPEN", "CLEAN")).to match(/#{Regexp.escape(open)}\s/)
-    expect(badge.call("OPEN", nil)).to match(/#{Regexp.escape(open)}\s/)
+    expect(badge.call("DRAFT", "FAILING")).to include("\e[2mPR #7 draft\e[0m\e[2m · \e[0m\e[38;5;203m✗ checks\e[0m")
+    expect(badge.call("OPEN", "CLEAN")).to include("#{open}#{ClaudeInbox::Text::LINK_END} ")
+    expect(badge.call("OPEN", nil)).to include("#{open}#{ClaudeInbox::Text::LINK_END} ")
     expect(ClaudeInbox::Text.width(badge.call("OPEN", "FAILING"))).to eq(80)
   end
 
   it "colors a PR badge by its state and dims a draft or an unknown one" do
     badge = ->(state) {
-      s = session(id: "z", name: "shipit", prs: [ClaudeInbox::PullRequest.new(number: 7, state: state)])
+      s = session(id: "z", name: "shipit", prs: [ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: state)])
       line_of.call(s, "shipit")
     }
-    expect(badge.call("OPEN")).to include("\e[38;5;108m#7 open\e[0m")
-    expect(badge.call("DRAFT")).to include("\e[2m#7 draft\e[0m")
-    expect(badge.call("MERGED")).to include("\e[38;5;176m#7 merged\e[0m")
-    expect(badge.call("CLOSED")).to include("\e[38;5;203m#7 closed\e[0m")
-    expect(badge.call(nil)).to include("\e[2m#7\e[0m")
+    expect(badge.call("OPEN")).to include("\e[38;5;108mPR #7 open\e[0m")
+    expect(badge.call("DRAFT")).to include("\e[2mPR #7 draft\e[0m")
+    expect(badge.call("MERGED")).to include("\e[38;5;176mPR #7 merged\e[0m")
+    expect(badge.call("CLOSED")).to include("\e[38;5;203mPR #7 closed\e[0m")
+    expect(badge.call(nil)).to include("\e[2mPR #7\e[0m")
+  end
+
+  it "links a PR badge to the pull request" do
+    pr = ClaudeInbox::PullRequest.new(url: "https://gitlab.com/c/uk43/-/merge_requests/3413", state: "OPEN")
+    s = session(id: "z", name: "shipit", prs: [pr])
+    expect(line_of.call(s, "shipit")).to include(ClaudeInbox::Text.link("\e[38;5;108mMR !3413 open\e[0m", pr.url))
   end
 
   it "counts the PRs past the headline after its badge, settled or not" do
-    prs = [7, 8, 9].map { |n| ClaudeInbox::PullRequest.new(number: n, state: "OPEN") }
+    prs = [7, 8, 9].map { |n| ClaudeInbox::PullRequest.new(number: n, url: "https://github.com/o/r/pull/#{n}", state: "OPEN") }
     s = session(id: "z", name: "shipit", state: "done", prs: prs)
-    expect(line_of.call(s, "shipit")).to include("#7 open\e[0m\e[2m · +2\e[0m")
+    expect(line_of.call(s, "shipit")).to include("PR #7 open\e[0m#{ClaudeInbox::Text::LINK_END}\e[2m · +2\e[0m")
     entries = ClaudeInbox::Store.merge_entries({"z" => {"settled_at" => now.to_i}}, [s], now)
     line = renderer.frame(ClaudeInbox::Store.sectionize([s], entries, now), view.with(expanded: {settled: true}))
       .lines.find { |l| l.include?("shipit") }
-    expect(line).to include("\e[2m#7 open\e[0m\e[2m · +2\e[0m")
+    expect(line).to include("\e[2mPR #7 open\e[0m#{ClaudeInbox::Text::LINK_END}\e[2m · +2\e[0m")
   end
 
   it "still pads a colored row to exactly the frame width" do

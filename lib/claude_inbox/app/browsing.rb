@@ -44,7 +44,7 @@ module ClaudeInbox
       # A link set by hand wins over the scan, as it does once the poll lands.
       def yank_target(session)
         linked = @store.pr_for(session.key)
-        return [linked, "#" + linked[%r{/pull/(\d+)}, 1]] if linked
+        return [linked, "PR #" + linked[%r{/pull/(\d+)}, 1]] if linked
         return [session.pr.url, session.pr.short] if session.pr
         return [session.remote_url, session.remote_url] if session.remote_url
         [session.key, session.key]

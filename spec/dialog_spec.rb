@@ -38,10 +38,10 @@ RSpec.describe ClaudeInbox::Dialog do
 
     it "lists the headline first, then the rest in order" do
       expect(dialog.frame(60).join("\n")).to include(" Open pull request ")
-      expect(plain.call(dialog.lines(60, nil))).to eq(["  1  #190 open · ✗ checks · Install the pane from the CLI",
-        "  2  #189 merged", "  3  #191", "", "  o  open #190 · esc cancel"])
+      expect(plain.call(dialog.lines(60, nil))).to eq(["  1  PR #190 open · ✗ checks · Install the pane from the CLI",
+        "  2  PR #189 merged", "  3  PR #191", "", "  o  open PR #190 · esc cancel"])
       copy = described_class::PrPicker.new(:copy, session(prs: prs))
-      expect(plain.call(copy.lines(40, nil)).last).to eq("  y  copy #190 · esc cancel")
+      expect(plain.call(copy.lines(40, nil)).last).to eq("  y  copy PR #190 · esc cancel")
     end
 
     it "names the repo of each PR once they span repos, and cuts lines to the box" do
@@ -50,15 +50,15 @@ RSpec.describe ClaudeInbox::Dialog do
         ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7")]
       picker = described_class::PrPicker.new(:open, session(prs: across))
       expect(plain.call(picker.lines(60, nil)).first(2)).to eq(["  1  jordanbyron/parks_genie#1020 open · changes requested", "  2  o/r#7"])
-      expect(plain.call(picker.lines(60, nil)).last).to eq("  o  open #1020 · esc cancel")
+      expect(plain.call(picker.lines(60, nil)).last).to eq("  o  open PR #1020 · esc cancel")
       expect(picker.lines(20, nil).map { |l| ClaudeInbox::Text.width(l) }.max).to eq(20)
       same = [across.first, ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/jordanbyron/parks_genie/pull/7")]
-      expect(plain.call(described_class::PrPicker.new(:open, session(prs: same)).lines(60, nil))[1]).to eq("  2  #7")
+      expect(plain.call(described_class::PrPicker.new(:open, session(prs: same)).lines(60, nil))[1]).to eq("  2  PR #7")
     end
 
     it "widens the box to its longest line, within the terminal" do
       widths = ->(frame) { frame.map { |l| ClaudeInbox::Text.width(l) }.uniq }
-      expect(widths.call(dialog.frame(100))).to eq([63])
+      expect(widths.call(dialog.frame(100))).to eq([66])
       expect(widths.call(dialog.frame(40))).to eq([36])
       short = described_class::PrPicker.new(:open, session(prs: prs.first(1) + prs.last(1)))
       expect(widths.call(short.frame(100))).to eq([described_class::WIDTH])

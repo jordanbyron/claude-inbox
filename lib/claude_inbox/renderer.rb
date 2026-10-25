@@ -397,6 +397,7 @@ module ClaudeInbox
       pr = s.pr
       return nil unless pr
       badge = (section == :settled) ? @p.dim("#{pr.short} #{pr.state&.downcase}".strip) : @theme.pr_badge(pr)
+      badge = Text.link(badge, pr.url)
       more = (s.prs.size > 1) ? @p.dim(" · +#{s.prs.size - 1}") : ""
       badge + more
     end

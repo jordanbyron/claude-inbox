@@ -32,7 +32,7 @@ RSpec.describe ClaudeInbox::App do
     it "opens a lone pull request straight away" do
       link.call(stack.first(1))
       press(app, "o")
-      expect(screen(app).first).to include("opening #190")
+      expect(screen(app).first).to include("opening PR #190")
       expect(wait_for { opened.any? }).to be(true)
       expect(opened).to eq(["https://github.com/o/r/pull/190"])
     end
@@ -40,7 +40,7 @@ RSpec.describe ClaudeInbox::App do
     it "asks which of several, and o again opens the headline" do
       link.call(stack)
       press(app, "o")
-      expect(screen(app).join("\n")).to include("1  #191 open · ✗ checks")
+      expect(screen(app).join("\n")).to include("1  PR #191 open · ✗ checks")
       press(app, "o")
       expect(wait_for { opened.any? }).to be(true)
       expect(opened).to eq(["https://github.com/o/r/pull/191"])
@@ -65,13 +65,13 @@ RSpec.describe ClaudeInbox::App do
     it "copies a pull request linked by hand before anything else" do
       store.set_pr("f23c8673", "https://github.com/o/r/pull/7")
       press(app, "y")
-      expect(wait_for { screen(app).first.include?("copied #7") }).to be(true)
+      expect(wait_for { screen(app).first.include?("copied PR #7") }).to be(true)
       expect(copied).to eq(["https://github.com/o/r/pull/7"])
     end
 
     it "copies the scanned pull request" do
       press(app, "j", "j", "j", "j", "y")
-      expect(wait_for { screen(app).first.include?("copied #885") }).to be(true)
+      expect(wait_for { screen(app).first.include?("copied PR #885") }).to be(true)
       expect(copied).to eq(["https://github.com/jordanbyron/parks_genie/pull/885"])
     end
 
@@ -93,7 +93,7 @@ RSpec.describe ClaudeInbox::App do
       press(app, "y")
       expect(screen(app).join("\n")).to include("Copy pull request")
       press(app, "y")
-      expect(wait_for { screen(app).first.include?("copied #191") }).to be(true)
+      expect(wait_for { screen(app).first.include?("copied PR #191") }).to be(true)
       expect(copied).to eq(["https://github.com/o/r/pull/191"])
     end
 

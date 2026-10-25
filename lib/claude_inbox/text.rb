@@ -6,14 +6,22 @@ module ClaudeInbox
   # Width-aware string helpers. Never use String#[] on user-facing text:
   # session names carry emoji and glyphs that break byte/char slicing.
   module Text
-    ANSI = /\e\[[0-9;?]*[A-Za-z]/
+    # An OSC 8 hyperlink's opening or, with an empty url, its closing.
+    LINK = /\e\]8;[^;\e]*;[^\e]*\e\\/
+    ANSI = /\e\[[0-9;?]*[A-Za-z]|#{LINK}/
     # A grapheme, or an escape that takes no column.
     GLYPH = /#{ANSI}|\X/
     ELLIPSIS = "…"
+    LINK_END = "\e]8;;\e\\"
 
     module_function
 
     def strip_ansi(s) = s.gsub(ANSI, "")
+
+    # `s` as a link to `url` in a terminal that supports them, plain text in
+    # one that doesn't. The url comes from a transcript, so it cannot carry
+    # a control character out of the sequence.
+    def link(s, url) = "\e]8;;#{url.delete("\x00-\x1f\x7f")}\e\\#{s}#{LINK_END}"
 
     # Bytes that aren't UTF-8 become U+FFFD.
     def utf8(s) = String.new(s.to_s, encoding: Encoding::UTF_8).scrub("\uFFFD")
@@ -32,8 +40,8 @@ module ClaudeInbox
       take(s, w - width(ELLIPSIS)) << ELLIPSIS
     end
 
-    # First `n` columns, no ellipsis. Colors survive the cut, and a reset
-    # closes whichever one the cut left open.
+    # First `n` columns, no ellipsis. Colors and links survive the cut, and
+    # the cut closes whichever one it left open.
     def take(s, n)
       out = +""
       used = 0
@@ -43,6 +51,8 @@ module ClaudeInbox
         out << g
         used += gw
       end
+      last_link = out.scan(LINK).last
+      out << LINK_END if last_link && last_link != LINK_END
       (out.include?("\e") && !out.end_with?("\e[0m")) ? out << "\e[0m" : out
     end
 

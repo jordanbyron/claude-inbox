@@ -20,7 +20,14 @@ module ClaudeInbox
   # Code's cache knows nothing of it, and a resolved PR has none. `title`
   # is whatever gh or the cache last called it, nil until one has.
   PullRequest = Struct.new(:number, :url, :state, :resolved_at, :health, :title) do
-    def short = number ? "##{number}" : url.to_s.sub(%r{\Ahttps?://(www\.)?}, "")
+    # As Claude Code names them: "PR #885", or "MR !3413" for a GitLab link.
+    def short
+      iid = url.to_s[%r{/-/merge_requests/(\d+)}, 1]
+      if iid then "MR !#{iid}"
+      elsif number then "PR ##{number}"
+      else url.to_s.sub(%r{\Ahttps?://(www\.)?}, "")
+      end
+    end
 
     def repo = url.to_s[%r{\Ahttps://github\.com/([^/\s]+/[^/\s]+)/pull/\d+}, 1]
 
