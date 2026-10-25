@@ -192,8 +192,7 @@ module ClaudeInbox
 
     # A modal or an open filter line already claims every keypress ahead of
     # the normal action table (see handle_key); mouse input defers to the
-    # same rule rather than reaching past whatever has focus. Only a box's
-    # own links are drawn while it is up, so a click on one is the box's.
+    # same rule rather than reaching past whatever has focus.
     def handle_mouse(event)
       link = @frame.link_at(event.row, event.col) unless filter_editing?
       point_at(link) if event.kind == :move

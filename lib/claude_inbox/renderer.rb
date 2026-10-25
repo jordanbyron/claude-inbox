@@ -440,6 +440,7 @@ module ClaudeInbox
       block_w = block.map { |l| Text.width(l) }.max || 0
       left = [(width - block_w) / 2, 0].max
       top = [(lines.size - block.size) / 2, 0].max
+      # Nothing behind a pop-up is clickable.
       out = lines.map { |l| l.gsub(Text::LINK, "") }
       block.each_with_index do |bl, i|
         y = top + i
