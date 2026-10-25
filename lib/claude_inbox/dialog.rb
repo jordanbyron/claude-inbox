@@ -103,7 +103,9 @@ module ClaudeInbox
       def fit = [WIDTH, lines(Float::INFINITY, nil).map { |l| Text.width(l) }.max + MARGIN].max
 
       # The list's badge, then the title. A bare #190 is ambiguous only
-      # once the list spans repos. TTY::Box cannot measure a link.
+      # once the list spans repos. The box library counts a link's hidden
+      # characters as text and cuts the line off, so the numbers in this box
+      # are not links.
       def label(pr)
         name = (@prs.map(&:repo).uniq.size > 1) ? pr.qualified : pr.short
         badge = @theme.pr_badge(pr, name).gsub(Text::LINK, "")
