@@ -11,8 +11,14 @@ module ClaudeInbox
   # columns. Pure: no terminal, no IO, no clock beyond the `now` it is handed.
   class Renderer
     Frame = Struct.new(:lines, :items, :top) do
-      # The same frame for a terminal drawn without color.
-      def plain = self.class.new(lines.map { |l| Text.strip_ansi(l) }, items, top)
+      # The same frame for a terminal drawn without color. Links stay.
+      def plain = self.class.new(lines.map { |l| l.gsub(Text::CSI, "") }, items, top)
+
+      # The url drawn at a terminal's 1-based row and column, if any.
+      def link_at(row, col)
+        @links ||= lines.map { |l| Text.links(l) }
+        @links.fetch(row - 1, []).find { |link| link.columns.cover?(col - 1) }&.url
+      end
     end
 
     CHROME_ROWS = 2 # header + footer
@@ -396,8 +402,7 @@ module ClaudeInbox
     def pr_badge(s, section)
       pr = s.pr
       return nil unless pr
-      badge = (section == :settled) ? @p.dim("#{pr.short} #{pr.state&.downcase}".strip) : @theme.pr_badge(pr)
-      badge = Text.link(badge, pr.url)
+      badge = @theme.pr_badge(pr, quiet: section == :settled)
       more = (s.prs.size > 1) ? @p.dim(" · +#{s.prs.size - 1}") : ""
       badge + more
     end

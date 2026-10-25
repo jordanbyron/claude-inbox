@@ -56,7 +56,7 @@ RSpec.describe ClaudeInbox::PullRequests do
     expect(pr.qualified).to eq("jordanbyron/parks_genie#1020")
     elsewhere = ClaudeInbox::PullRequest.new(number: 4, url: "https://gitlab.com/o/r/-/merge_requests/4")
     expect(elsewhere.repo).to be_nil
-    expect(elsewhere.qualified).to eq("MR !4")
+    expect(elsewhere.qualified).to eq("!4")
   end
 
   it "names a pull request as Claude Code does, and a link it can't number by its address" do

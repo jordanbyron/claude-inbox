@@ -21,17 +21,26 @@ module ClaudeInbox
   # is whatever gh or the cache last called it, nil until one has.
   PullRequest = Struct.new(:number, :url, :state, :resolved_at, :health, :title) do
     # As Claude Code names them: "PR #885", or "MR !3413" for a GitLab link.
-    def short
-      iid = url.to_s[%r{/-/merge_requests/(\d+)}, 1]
-      if iid then "MR !#{iid}"
-      elsif number then "PR ##{number}"
-      else url.to_s.sub(%r{\Ahttps?://(www\.)?}, "")
+    def short = ref ? "#{kind} #{ref}" : url.to_s.sub(%r{\Ahttps?://(www\.)?}, "")
+
+    def kind
+      if merge_request_iid then "MR"
+      elsif number then "PR"
+      end
+    end
+
+    # "#885" or "!3413": the part of the name Claude Code underlines as a link.
+    def ref
+      if merge_request_iid then "!#{merge_request_iid}"
+      elsif number then "##{number}"
       end
     end
 
     def repo = url.to_s[%r{\Ahttps://github\.com/([^/\s]+/[^/\s]+)/pull/\d+}, 1]
 
-    def qualified = (number && repo) ? "#{repo}##{number}" : short
+    def qualified = (number && repo) ? "#{repo}##{number}" : ref
+
+    def merge_request_iid = url.to_s[%r{/-/merge_requests/(\d+)}, 1]
 
     def trouble = PR_TROUBLE[health]
 

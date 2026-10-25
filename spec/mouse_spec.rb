@@ -2,7 +2,7 @@
 
 RSpec.describe ClaudeInbox::Mouse do
   it "parses a left click press" do
-    expect(described_class.events("\e[<0;5;3M")).to eq([described_class::Event.new(:click, 3)])
+    expect(described_class.events("\e[<0;5;3M")).to eq([described_class::Event.new(:click, 3, 5)])
   end
 
   it "ignores a release" do
@@ -18,22 +18,26 @@ RSpec.describe ClaudeInbox::Mouse do
     expect(described_class.events("\e[<32;5;3M")).to eq([])
   end
 
+  it "reads the pointer moving with no button held, where it is" do
+    expect(described_class.events("\e[<35;12;4M")).to eq([described_class::Event.new(:move, 4, 12)])
+  end
+
   it "counts a shift-click as a click" do
-    expect(described_class.events("\e[<4;5;3M")).to eq([described_class::Event.new(:click, 3)])
+    expect(described_class.events("\e[<4;5;3M")).to eq([described_class::Event.new(:click, 3, 5)])
   end
 
   it "parses wheel ticks by direction" do
-    expect(described_class.events("\e[<64;1;1M")).to eq([described_class::Event.new(:scroll_up, 1)])
-    expect(described_class.events("\e[<65;1;1M")).to eq([described_class::Event.new(:scroll_down, 1)])
+    expect(described_class.events("\e[<64;1;1M")).to eq([described_class::Event.new(:scroll_up, 1, 1)])
+    expect(described_class.events("\e[<65;1;1M")).to eq([described_class::Event.new(:scroll_down, 1, 1)])
   end
 
   it "reads a modifier-held wheel tick the same way" do
-    expect(described_class.events("\e[<80;1;1M")).to eq([described_class::Event.new(:scroll_up, 1)])
+    expect(described_class.events("\e[<80;1;1M")).to eq([described_class::Event.new(:scroll_up, 1, 1)])
   end
 
   it "scans several reports glued onto one read" do
     expect(described_class.events("\e[<0;5;3M\e[<0;5;3m\e[<65;2;2M")).to eq([
-      described_class::Event.new(:click, 3), described_class::Event.new(:scroll_down, 2)
+      described_class::Event.new(:click, 3, 5), described_class::Event.new(:scroll_down, 2, 2)
     ])
   end
 

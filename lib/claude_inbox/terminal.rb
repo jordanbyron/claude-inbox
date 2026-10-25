@@ -17,10 +17,14 @@ module ClaudeInbox
     # know the mode ignore it and keep scrolling their own history.
     WHEEL_KEYS_ON = "\e[?1007h"
     WHEEL_KEYS_OFF = "\e[?1007l"
-    # Button events in the SGR encoding, which Mouse parses. A terminal that
-    # knows neither mode falls back to WHEEL_KEYS_ON, or its own scrollback.
-    MOUSE_ON = "\e[?1000h\e[?1006h"
-    MOUSE_OFF = "\e[?1006l\e[?1000l"
+    # Any-motion events in the SGR encoding, which Mouse parses: the pointer
+    # moving too, so a link can take a hand pointer. A terminal that knows
+    # neither mode falls back to WHEEL_KEYS_ON, or its own scrollback.
+    MOUSE_ON = "\e[?1003h\e[?1006h"
+    MOUSE_OFF = "\e[?1006l\e[?1003l"
+    # OSC 22 sets the pointer's shape. Terminals without it ignore it.
+    POINTER = "\e]22;pointer\e\\"
+    POINTER_OFF = "\e]22;default\e\\"
     # Bracketed paste: what is pasted arrives fenced off from what is typed
     # (Paste), and a pasted image, which has no text, arrives as an empty
     # fence rather than not at all.
@@ -54,7 +58,7 @@ module ClaudeInbox
       return if @restored
       @restored = true
       @input.console_mode = @mode if @mode && @input.tty?
-      @out.print TTY::Cursor.show, PASTE_OFF, MOUSE_OFF, WHEEL_KEYS_OFF, ALT_OFF
+      @out.print TTY::Cursor.show, POINTER_OFF, PASTE_OFF, MOUSE_OFF, WHEEL_KEYS_OFF, ALT_OFF
       @out.flush
     rescue
       nil
@@ -92,6 +96,11 @@ module ClaudeInbox
     end
 
     def paint(lines) = @painter.paint(lines)
+
+    def pointer(over_link)
+      @out.print(over_link ? POINTER : POINTER_OFF)
+      @out.flush
+    end
 
     private
 

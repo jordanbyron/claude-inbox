@@ -65,9 +65,9 @@ keep it.
 
 Under each row is what the session is waiting on, what it produced, or its
 status line. A row with a pull request shows it as `PR #885 open`, `PR #885
-merged` and so on, or `MR !3413 open` for a GitLab merge request, as a link
-your terminal can open, with `✗ checks`, `changes requested` or `conflicts` after it when
-something is wrong, and `+2` after it when the session has two more.
+merged` and so on, or `MR !3413 open` for a GitLab merge request, with
+`✗ checks`, `changes requested` or `conflicts` after it when something is
+wrong, and `+2` after it when the session has two more.
 A steady `◌` with `idle · 1 shell` means the agent stopped
 and is waiting on a shell or sub-agent it started. A blue `●` marks a session you
 haven't attached to since it got blocked or finished; one you have attached

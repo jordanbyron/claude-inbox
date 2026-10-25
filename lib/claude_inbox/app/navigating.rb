@@ -10,6 +10,7 @@ module ClaudeInbox
       # Remembers where the frame put the rows, so a click can find one.
       def placed(frame)
         @row_items = frame.items
+        @frame = frame
         @top = frame.top
       end
 

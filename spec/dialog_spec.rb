@@ -29,9 +29,9 @@ RSpec.describe ClaudeInbox::Dialog do
 
   describe "pr picker" do
     let(:prs) do
-      [ClaudeInbox::PullRequest.new(number: 189, state: "MERGED"),
-        ClaudeInbox::PullRequest.new(number: 190, state: "OPEN", health: "FAILING", title: "Install the pane from the CLI"),
-        ClaudeInbox::PullRequest.new(number: 191)]
+      [ClaudeInbox::PullRequest.new(number: 189, url: "https://github.com/o/r/pull/189", state: "MERGED"),
+        ClaudeInbox::PullRequest.new(number: 190, url: "https://github.com/o/r/pull/190", state: "OPEN", health: "FAILING", title: "Install the pane from the CLI"),
+        ClaudeInbox::PullRequest.new(number: 191, url: "https://github.com/o/r/pull/191")]
     end
     let(:dialog) { described_class::PrPicker.new(:open, session(prs: prs)) }
     let(:plain) { ->(lines) { lines.map { |l| ClaudeInbox::Text.strip_ansi(l) } } }
@@ -49,7 +49,7 @@ RSpec.describe ClaudeInbox::Dialog do
         state: "OPEN", health: "CHANGES_REQUESTED"),
         ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7")]
       picker = described_class::PrPicker.new(:open, session(prs: across))
-      expect(plain.call(picker.lines(60, nil)).first(2)).to eq(["  1  jordanbyron/parks_genie#1020 open · changes requested", "  2  o/r#7"])
+      expect(plain.call(picker.lines(64, nil)).first(2)).to eq(["  1  PR jordanbyron/parks_genie#1020 open · changes requested", "  2  PR o/r#7"])
       expect(plain.call(picker.lines(60, nil)).last).to eq("  o  open PR #1020 · esc cancel")
       expect(picker.lines(20, nil).map { |l| ClaudeInbox::Text.width(l) }.max).to eq(20)
       same = [across.first, ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/jordanbyron/parks_genie/pull/7")]
@@ -64,11 +64,11 @@ RSpec.describe ClaudeInbox::Dialog do
       expect(widths.call(short.frame(100))).to eq([described_class::WIDTH])
     end
 
-    it "badges each PR as the list does, keys in the footer's color" do
+    it "badges each PR as the list does, unlinked, keys in the footer's color" do
       theme = ClaudeInbox::Theme.new
       lines = dialog.lines(60, nil)
-      expect(lines[0]).to start_with("  #{theme.cyan_bold("1")}  #{theme.pr_badge(prs[1])}")
-      expect(lines[1]).to include(theme.pr_badge(prs[0]))
+      expect(lines[0]).to start_with("  #{theme.cyan_bold("1")}  #{theme.pr_badge(prs[1]).gsub(ClaudeInbox::Text::LINK, "")}")
+      expect(lines[1]).to include(theme.pr_badge(prs[0]).gsub(ClaudeInbox::Text::LINK, ""))
     end
 
     it "picks the headline on its own key or enter" do

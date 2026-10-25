@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "text"
+
 module ClaudeInbox
   # Chrome hues tuned to Atom One Dark rather than the terminal profile's
   # own ANSI reds and greens. 256-color indices, since those render the
@@ -26,13 +28,20 @@ module ClaudeInbox
     # The hue, or dim when there is none.
     def tint(hue, text) = hue ? public_send(hue, text) : dim(text)
 
-    # "#885 open", or "#885 open · ✗ checks" when something is wrong.
-    # `name` replaces the bare number where that would be ambiguous.
-    def pr_badge(pr, name = pr.short)
-      return dim(name) unless PR_HUES.key?(pr.state)
-      badge = tint(PR_HUES[pr.state], "#{name} #{pr.state.downcase}")
-      pr.trouble ? badge + dim(" · ") + tint(PR_TROUBLE_HUES[pr.health], pr.trouble) : badge
+    # "PR #885 open", or "PR #885 open · ✗ checks" when something is wrong,
+    # drawn as Claude Code draws a PR: the kind dim, the ref an underlined
+    # link. `ref` replaces the bare number where that would be ambiguous. A
+    # quiet badge is dim and leaves the trouble out.
+    def pr_badge(pr, ref = pr.ref, quiet: false)
+      hue = PR_HUES[pr.state] unless quiet
+      linked = ->(text) { Text.link(underline(tint(hue, text)), pr.url) }
+      name = ref ? dim("#{pr.kind} ") + linked.call(ref) : linked.call(pr.short)
+      return name unless PR_HUES.key?(pr.state)
+      badge = name + tint(hue, " #{pr.state.downcase}")
+      (pr.trouble && !quiet) ? badge + dim(" · ") + tint(PR_TROUBLE_HUES[pr.health], pr.trouble) : badge
     end
+
+    def underline(text) = "\e[4m#{text}\e[24m"
 
     # A filled pill: editor-background text on the hue, for a selected row
     # or choice — the inverse of `color`, which puts the hue on the text.

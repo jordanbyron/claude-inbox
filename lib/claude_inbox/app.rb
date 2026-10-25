@@ -72,6 +72,8 @@ module ClaudeInbox
       @listener = listen ? Remote::Listener.new(client: client, store: store, queue: @queue, **listen) : Remote::Listener.disabled
       @selected = nil
       @row_items = []
+      @frame = Renderer::Frame.new([], [], 0)
+      @over_link = false
       @top = 0
       @expanded = Hash.new(false)
       @keymap = Keymap.new
@@ -106,13 +108,16 @@ module ClaudeInbox
         @resize = false
         @terminal.resized
       end
-      handle_input(input) if input
+      events = input ? handle_input(input) : []
       # A paste arrives a character per read and shows nothing until it
-      # closes, so a frame per character would only stall a long one.
-      render unless @input.pasting?
+      # closes, so a frame per character would only stall a long one. The
+      # pointer moving reports many times a second and changes nothing drawn.
+      render unless @input.pasting? || only_moves?(events)
     end
 
     private
+
+    def only_moves?(events) = events.any? && events.all? { |kind, e| kind == :mouse && e.kind == :move }
 
     def install_traps
       at_exit { @terminal.restore }
@@ -190,12 +195,21 @@ module ClaudeInbox
     # the normal action table (see handle_key); mouse input defers to the
     # same rule rather than reaching past whatever has focus.
     def handle_mouse(event)
+      link = @frame.link_at(event.row, event.col) unless @modal || filter_editing?
+      point_at(link) if event.kind == :move
       return if @modal || filter_editing?
       case event.kind
-      when :click then click_row(event.row)
+      when :click then link ? open_in_browser(link, "the pull request") : click_row(event.row)
       when :scroll_up then perform(:up)
       when :scroll_down then perform(:down)
       end
+    end
+
+    # The pointer is told only when it crosses into or out of a link.
+    def point_at(link)
+      return if @over_link == !link.nil?
+      @over_link = !link.nil?
+      @terminal.pointer(@over_link)
     end
 
     def handle_modal_key(name, key)
