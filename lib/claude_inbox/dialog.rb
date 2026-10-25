@@ -83,8 +83,8 @@ module ClaudeInbox
 
       def title = " #{kind.to_s.capitalize} pull request "
 
-      # Drawn by hand: TTY::Box counts a link's hidden characters as text
-      # and cuts the line off.
+      # Drawn by hand: TTY::Box counts a link's hidden characters toward the
+      # line's width, so it would clip every line that has a link.
       def frame(width, _caret = nil)
         inner = [width - 4, fit].min - 2
         ["┌#{title}#{"─" * (inner - Text.width(title))}┐",
