@@ -4,13 +4,9 @@ require_relative "settings"
 
 module ClaudeInbox
   # The slash commands `claude` would offer at its own prompt, read from the
-  # same places it reads them: `.claude/commands/*.md` and
-  # `.claude/skills/*/SKILL.md` under the project and the home directory,
-  # the skills and commands of the plugins enabled there (named
-  # `plugin:name`), and the skills claude.ai syncs down
-  # (`anthropic-skills:name`). Built-ins live inside the CLI and are not
-  # listed; typing one still works, since the prompt goes to `claude --bg`
-  # verbatim.
+  # same places it reads them (docs/cli-quirks.md). Built-ins live inside
+  # the CLI and are not listed; typing one still works, since the prompt
+  # goes to `claude --bg` verbatim.
   #
   # Pure: filesystem in, plain values out. Nothing here runs `claude`.
   module SlashCommands
@@ -61,7 +57,6 @@ module ClaudeInbox
       end
     end
 
-    # "name", or "plugin:name" when it comes from a plugin.
     def qualify(prefix, name) = [prefix, name].compact.join(":")
 
     # `installed_plugins.json` maps "name@marketplace" to where the plugin
@@ -77,8 +72,6 @@ module ClaudeInbox
       end
     end
 
-    # claude.ai's synced skills sit in one bucket per account under
-    # ~/.claude/skills/synced and answer to the anthropic-skills prefix.
     def synced(home)
       Dir.glob(File.join(home, ".claude", "skills", "synced", "*", "")).flat_map do |bucket|
         skills(bucket, prefix: SYNCED_PLUGIN)
