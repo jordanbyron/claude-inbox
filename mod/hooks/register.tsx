@@ -502,11 +502,13 @@ export const register: Register = (on, options) => {
                     {one.pr ? (
                       <Box flexShrink={0}>
                         <Text dimColor> {one.pr.ref ? `${one.pr.kind} ` : ''}</Text>
-                        <Link href={one.pr.url}>
-                          <Text underline color={isQuiet ? undefined : PR_COLOR[one.pr.state]} dimColor={isQuiet}>
-                            {one.pr.ref ?? one.pr.short}
-                          </Text>
-                        </Link>
+                        <Box key={`pr:${itemKey(item)}`} hover={{ backgroundColor: 'subtle' }}>
+                          <Link href={one.pr.url}>
+                            <Text underline color={isQuiet ? undefined : PR_COLOR[one.pr.state]} dimColor={isQuiet}>
+                              {one.pr.ref ?? one.pr.short}
+                            </Text>
+                          </Link>
+                        </Box>
                         <Text color={isQuiet ? undefined : PR_COLOR[one.pr.state]} dimColor={isQuiet}>
                           {one.pr.state ? ` ${one.pr.state}` : ''}
                         </Text>
