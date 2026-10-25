@@ -71,10 +71,8 @@ module ClaudeInbox
         reaper: reaper, queue: @queue, snapshot: snapshot, actions: actions, notifier: notifier)
       @listener = listen ? Remote::Listener.new(client: client, store: store, queue: @queue, **listen) : Remote::Listener.disabled
       @selected = nil
-      @row_items = []
       @frame = Renderer::Frame.new([], [], 0)
       @over_link = false
-      @top = 0
       @expanded = Hash.new(false)
       @keymap = Keymap.new
       @tick = 0
@@ -287,15 +285,14 @@ module ClaudeInbox
       ensure_selection(sections)
       @tick += 1
       view = Renderer::View.new(
-        width: width, height: height, now: now, selected: @selected&.key, top: @top, expanded: @expanded,
+        width: width, height: height, now: now, selected: @selected&.key, top: @frame.top, expanded: @expanded,
         modal: modal_lines(width), screen: screen_lines(width, body_h),
         status: status_text(now), usage: @rate_limits.windows(now), filter: filter, filter_editing: filter_editing?,
         tick: @tick / 2, loading: loading_for, listening: @listener.snapshot
       )
-      frame = @renderer.frame(sections, view)
-      frame = frame.plain unless @color # --no-color: decided here and nowhere else
-      placed(frame)
-      @terminal.paint(frame.lines)
+      @frame = @renderer.frame(sections, view)
+      @frame = @frame.plain unless @color # --no-color: decided here and nowhere else
+      @terminal.paint(@frame.lines)
       dt = monotonic - t0
       Debug.log("render #{(dt * 1000).round}ms") if dt > 0.05
     end
