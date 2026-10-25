@@ -64,6 +64,12 @@ RSpec.describe ClaudeInbox::Dialog do
       expect(widths.call(short.frame(100))).to eq([described_class::WIDTH])
     end
 
+    it "cuts its title to a box narrower than it, keeping the box square" do
+      frame = dialog.frame(20)
+      expect(frame.map { |l| ClaudeInbox::Text.width(l) }.uniq).to eq([16])
+      expect(frame.first).to start_with("┌ Open pull").and end_with("…┐")
+    end
+
     it "badges each PR as the list does, keys in the footer's color" do
       theme = ClaudeInbox::Theme.new
       lines = dialog.lines(60, nil)

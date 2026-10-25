@@ -34,7 +34,8 @@ module ClaudeInbox
     def fit = self.class::WIDTH
 
     def bordered(rows, inner)
-      ["┌#{title}#{"─" * (inner - Text.width(title))}┐", *rows.map { |row| "│#{row}│" }, "└#{"─" * inner}┘"]
+      top = Text.truncate(title, inner)
+      ["┌#{top}#{"─" * (inner - Text.width(top))}┐", *rows.map { |row| "│#{row}│" }, "└#{"─" * inner}┘"]
     end
 
     def key(name) = @theme.cyan_bold(name)
