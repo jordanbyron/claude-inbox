@@ -72,7 +72,7 @@ module ClaudeInbox
       @listener = listen ? Remote::Listener.new(client: client, store: store, queue: @queue, **listen) : Remote::Listener.disabled
       @selected = nil
       @frame = Renderer::Frame.new([], [], 0)
-      @over_link = false
+      @pointer_at = nil
       @expanded = Hash.new(false)
       @keymap = Keymap.new
       @tick = 0
@@ -106,17 +106,13 @@ module ClaudeInbox
         @resize = false
         @terminal.resized
       end
-      events = input ? handle_input(input) : []
+      handle_input(input) if input
       # A paste arrives a character per read and shows nothing until it
-      # closes, so a frame per character would only stall a long one. Mouse
-      # moves arrive many times a second and only change the pointer's
-      # shape, so they don't redraw the screen.
-      render unless @input.pasting? || only_mouse_moving?(events)
+      # closes, so a frame per character would only stall a long one.
+      render unless @input.pasting?
     end
 
     private
-
-    def only_mouse_moving?(events) = events.any? && events.all? { |kind, e| kind == :mouse && e.kind == :move }
 
     def install_traps
       at_exit { @terminal.restore }
@@ -194,8 +190,8 @@ module ClaudeInbox
     # the normal action table (see handle_key); mouse input defers to the
     # same rule rather than reaching past whatever has focus.
     def handle_mouse(event)
-      link = @frame.link_at(event.row, event.col) unless filter_editing?
-      point_at(link) if event.kind == :move
+      @pointer_at = [event.row, event.col]
+      link = link_under_pointer
       return click_link(link) if event.kind == :click && link
       return if @modal || filter_editing?
       case event.kind
@@ -210,10 +206,8 @@ module ClaudeInbox
       pr_picked if @modal.pick_by_url(link.url)
     end
 
-    def point_at(link)
-      return if @over_link == !link.nil?
-      @over_link = !link.nil?
-      @terminal.pointer(@over_link)
+    def link_under_pointer
+      @frame.link_at(*@pointer_at) if @pointer_at && !filter_editing?
     end
 
     def handle_modal_key(name, key)
@@ -300,6 +294,7 @@ module ClaudeInbox
       @frame = @renderer.frame(sections, view)
       @frame = @frame.plain unless @color # --no-color: decided here and nowhere else
       @terminal.paint(@frame.lines)
+      @terminal.pointer(!link_under_pointer.nil?)
       dt = monotonic - t0
       Debug.log("render #{(dt * 1000).round}ms") if dt > 0.05
     end

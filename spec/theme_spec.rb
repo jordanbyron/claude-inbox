@@ -13,6 +13,15 @@ RSpec.describe ClaudeInbox::Theme do
     expect(theme.pr_badge(pr.call(number: 9))).to eq(linked.call(theme.dim("#9"), 9))
   end
 
+  it "names requested changes in red, dims a conflict, and says nothing of a clean PR" do
+    open = ->(health) { theme.pr_badge(pr.call(number: 7, state: "OPEN", health: health)) }
+    badge = linked.call(theme.green("#7"), 7) + theme.green(" open")
+    expect(open.call("CHANGES_REQUESTED")).to eq(badge + theme.dim(" · ") + theme.red("changes requested"))
+    expect(open.call("CONFLICTING")).to eq(badge + theme.dim(" · ") + theme.dim("conflicts"))
+    expect(open.call("CLEAN")).to eq(badge)
+    expect(open.call(nil)).to eq(badge)
+  end
+
   it "dims a quiet badge and leaves out what is wrong with it" do
     badge = theme.pr_badge(pr.call(number: 190, state: "OPEN", health: "FAILING"), quiet: true)
     expect(badge).to eq(linked.call(theme.dim("#190"), 190) + theme.dim(" open"))

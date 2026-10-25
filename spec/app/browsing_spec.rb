@@ -52,7 +52,7 @@ RSpec.describe ClaudeInbox::App do
       press(app, "o")
       outside = screen(app).index { |l| l.include?("#856") }
       press(app, "\e[<35;#{screen(app)[outside].index("#856") + 1};#{outside + 1}M")
-      expect(terminal.pointer_shape).to be_nil
+      expect(terminal.pointer_shape).to eq(:default)
       row = screen(app).index { |l| l.include?("2  #190") }
       press(app, "\e[<35;#{screen(app)[row].index("#190") + 1};#{row + 1}M")
       expect(terminal.pointer_shape).to eq(:hand)
@@ -60,6 +60,15 @@ RSpec.describe ClaudeInbox::App do
       expect(wait_for { opened.any? }).to be(true)
       expect(opened).to eq(["https://github.com/o/r/pull/190"])
       expect(screen(app).join("\n")).not_to include("Open pull request")
+    end
+
+    it "gives the hand back when the box opens under a pointer that has not moved" do
+      link.call(stack)
+      row = screen(app).index { |l| l.include?("#191") }
+      press(app, "\e[<35;#{screen(app)[row].index("#191") + 1};#{row + 1}M")
+      expect(terminal.pointer_shape).to eq(:hand)
+      press(app, "o")
+      expect(terminal.pointer_shape).to eq(:default)
     end
 
     it "opens the nth on a digit, or nothing on esc" do

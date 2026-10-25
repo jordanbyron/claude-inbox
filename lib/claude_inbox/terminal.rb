@@ -37,6 +37,7 @@ module ClaudeInbox
       @painter = Painter.new(out)
       @restored = true
       @size = nil
+      @over_link = false
     end
 
     # The tty's mode is kept as found, not assumed: `cooked!` sets a stock
@@ -57,6 +58,7 @@ module ClaudeInbox
     def restore
       return if @restored
       @restored = true
+      @over_link = false
       @input.console_mode = @mode if @mode && @input.tty?
       @out.print TTY::Cursor.show, POINTER_OFF, PASTE_OFF, MOUSE_OFF, WHEEL_KEYS_OFF, ALT_OFF
       @out.flush
@@ -98,6 +100,8 @@ module ClaudeInbox
     def paint(lines) = @painter.paint(lines)
 
     def pointer(over_link)
+      return if over_link == @over_link
+      @over_link = over_link
       @out.print(over_link ? POINTER : POINTER_OFF)
       @out.flush
     end
