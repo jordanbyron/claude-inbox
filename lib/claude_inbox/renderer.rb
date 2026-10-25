@@ -11,10 +11,9 @@ module ClaudeInbox
   # columns. Pure: no terminal, no IO, no clock beyond the `now` it is handed.
   class Renderer
     Frame = Struct.new(:lines, :items, :top) do
-      # The same frame for a terminal drawn without color. Links stay.
+      # The same frame for a terminal drawn without color.
       def plain = self.class.new(lines.map { |l| l.gsub(Text::CSI, "") }, items, top)
 
-      # The link drawn at a terminal's 1-based row and column, if any.
       def link_at(row, col)
         @links ||= lines.map { |l| Text.links(l) }
         @links.fetch(row - 1, []).find { |link| link.columns.cover?(col - 1) }

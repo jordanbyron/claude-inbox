@@ -24,7 +24,6 @@ module ClaudeInbox
 
     Link = Data.define(:columns, :url, :text)
 
-    # The links in a drawn line, by the 0-based columns they cover.
     def links(s)
       found = []
       col = 0
