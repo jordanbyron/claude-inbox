@@ -54,10 +54,35 @@ RSpec.describe ClaudeInbox::SlashCommands do
         "#{home}/.claude/plugins/installed_plugins.json" => {
           version: 2,
           plugins: {"skill-creator@official" => [{scope: "user", installPath: plugin}]}
-        }.to_json
+        }.to_json,
+        "#{home}/.claude/settings.json" => {enabledPlugins: {"skill-creator@official" => true}}.to_json
       }.each { |path, body| FileUtils.mkdir_p(File.dirname(path)) && File.write(path, body) }
       list = described_class.list(cwd: home, home: home)
       expect(list.map(&:name)).to eq(%w[anthropic-skills:docs skill-creator:eval skill-creator:skill-creator])
+    end
+  end
+
+  it "lists a plugin only where settings enable it, wherever it was installed" do
+    Dir.mktmpdir do |home|
+      Dir.mktmpdir do |proj|
+        Dir.mktmpdir do |other|
+          review = "#{home}/.claude/plugins/cache/m/dev-workflow/1"
+          {
+            "#{review}/skills/pr-review/SKILL.md" => "---\ndescription: Review a PR\n---\n",
+            "#{home}/.claude/plugins/installed_plugins.json" => {
+              version: 2,
+              plugins: {"dev-workflow@m" => [{scope: "project", projectPath: proj, installPath: review}]}
+            }.to_json,
+            "#{proj}/.claude/settings.json" => {enabledPlugins: {"dev-workflow@m" => true}}.to_json,
+            "#{other}/.claude/settings.local.json" => {enabledPlugins: {"dev-workflow@m" => true}}.to_json
+          }.each { |path, body| FileUtils.mkdir_p(File.dirname(path)) && File.write(path, body) }
+          FileUtils.mkdir_p("#{proj}/app")
+          expect(described_class.list(cwd: proj, home: home).map(&:name)).to eq(%w[dev-workflow:pr-review])
+          expect(described_class.list(cwd: other, home: home).map(&:name)).to eq(%w[dev-workflow:pr-review])
+          expect(described_class.list(cwd: "#{proj}/app", home: home)).to eq([])
+          expect(described_class.list(cwd: home, home: home)).to eq([])
+        end
+      end
     end
   end
 

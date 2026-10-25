@@ -9,7 +9,7 @@ module ClaudeInbox
   # Closing with 39 (default foreground) rather than 0 (reset everything)
   # matters: the label is often already bold or italic and a full reset
   # would strip that back off.
-  class Palette
+  module Palette
     ANSI = {
       "red" => 31, "green" => 32, "yellow" => 33,
       "blue" => 34, "purple" => 35, "cyan" => 36
@@ -22,7 +22,7 @@ module ClaudeInbox
 
     RESET = "\e[39m"
 
-    def paint(text, name)
+    def self.paint(text, name)
       seq = SEQUENCES[name]
       seq ? seq + text + RESET : text
     end

@@ -165,14 +165,9 @@ RSpec.describe ClaudeInbox::Store do
       expect(sec.active).to be_empty
     end
 
-    it "overrides needs_you, snoozed and settled" do
+    it "overrides needs_you and settled" do
       entries = {"a" => {"pinned" => true, "pinned_at" => now.to_i, "last_state" => "blocked"}}
       expect(described_class.sectionize([session(id: "a", state: "blocked")], entries, now).pinned.map(&:key)).to eq(%w[a])
-
-      entries = {
-        "a" => {"pinned" => true, "pinned_at" => now.to_i, "wake_at" => now.to_i + 900, "last_state" => "working"}
-      }
-      expect(described_class.sectionize([session(id: "a")], entries, now).pinned.map(&:key)).to eq(%w[a])
 
       entries = {
         "a" => {
@@ -184,6 +179,58 @@ RSpec.describe ClaudeInbox::Store do
         }
       }
       expect(described_class.sectionize([session(id: "a", state: "done")], entries, now).pinned.map(&:key)).to eq(%w[a])
+    end
+
+    it "yields to a snooze, and is pinned again once the snooze runs out" do
+      entries = {
+        "a" => {"pinned" => true, "pinned_at" => now.to_i, "wake_at" => now.to_i + 900, "last_state" => "working"}
+      }
+      sec = described_class.sectionize([session(id: "a")], entries, now)
+      expect(sec.snoozed.map(&:key)).to eq(%w[a])
+      expect(sec.pinned).to be_empty
+
+      expect(described_class.sectionize([session(id: "a")], entries, now + 901).pinned.map(&:key)).to eq(%w[a])
+    end
+
+    it "keeps the pin through a snooze and a wake" do
+      store = described_class.new(path: nil, clock: -> { now })
+      store.update([session(id: "a")])
+      store.toggle_pin("a")
+      store.snooze("a", :h1)
+      expect(store.sections.snoozed.map(&:key)).to eq(%w[a])
+      store.wake("a")
+      expect(store.sections.pinned.map(&:key)).to eq(%w[a])
+    end
+
+    it "sorts every section but Snoozed by when each session last spoke with --sort=activity" do
+      entries = {
+        "a" => {"pinned" => true, "pinned_at" => now.to_i, "last_state" => "working"},
+        "b" => {"pinned" => true, "pinned_at" => now.to_i - 60, "last_state" => "working"}
+      }
+      sessions = [
+        session(id: "a", last_message_at: now - 600),
+        session(id: "b", last_message_at: now - 60),
+        session(id: "c", state: "blocked", last_message_at: now - 600),
+        session(id: "d", state: "blocked", last_message_at: now - 60),
+        session(id: "e", state: "working", started_at: now - 60, last_message_at: now - 900),
+        session(id: "f", state: "done", started_at: now - 3600, last_message_at: now - 30),
+        session(id: "g", state: "done", **merged, last_message_at: now - 300),
+        session(id: "h", state: "done", **merged, last_message_at: now - 20)
+      ]
+      sec = described_class.sectionize(sessions, entries, now, sort: "activity")
+      expect(sec.pinned.map(&:key)).to eq(%w[b a])
+      expect(sec.needs_you.map(&:key)).to eq(%w[d c])
+      expect(sec.active.map(&:key)).to eq(%w[f e])
+      expect(sec.settled.map(&:key)).to eq(%w[h g])
+      expect(described_class.sectionize(sessions, entries, now).active.map(&:key)).to eq(%w[e f])
+    end
+
+    it "falls back to the inbox's own clock, then the start, for a session with no transcript" do
+      entries = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 60}, "b" => {"last_state" => "blocked", "state_since" => now.to_i - 600}}
+      sessions = [session(id: "a", state: "blocked"), session(id: "b", state: "blocked")]
+      expect(described_class.sectionize(sessions, entries, now, sort: "activity").needs_you.map(&:key)).to eq(%w[a b])
+      later = [session(id: "c", started_at: now - 600), session(id: "d", started_at: now - 60)]
+      expect(described_class.sectionize(later, {}, now, sort: "activity").active.map(&:key)).to eq(%w[d c])
     end
 
     it "sorts Pinned with the most recently pinned first" do
@@ -219,12 +266,13 @@ RSpec.describe ClaudeInbox::Store do
         reader.update([session(id: "a")])
         reader.snooze("a", :h1)
         reader.toggle_pin("a")
-        expect(reader.sections.pinned.map(&:key)).to eq(%w[a])
+        expect(reader.sections.snoozed.map(&:key)).to eq(%w[a])
+        expect(reader.entry("a")["pinned"]).to be(true)
         expect(ClaudeInbox::Actions.new(dir: requests, clock: -> { now }).drain(writer)).to eq(2)
         expect(writer.entry("a")["wake_at"]).to eq(now.to_i + 3600)
         expect(writer.entry("a")["pinned"]).to be(true)
         reader.update([session(id: "a")])
-        expect(reader.sections.pinned.map(&:key)).to eq(%w[a])
+        expect(reader.sections.snoozed.map(&:key)).to eq(%w[a])
         expect(reader).not_to be_writable
         expect { reader.set_alias("a", "x") }.to raise_error(ClaudeInbox::Store::NotWritable)
         expect { reader.set_pr("a", "https://github.com/o/r/pull/1") }.to raise_error(ClaudeInbox::Store::NotWritable)
@@ -287,7 +335,6 @@ RSpec.describe ClaudeInbox::Store do
       entries = {
         "a" => {
           "wake_at" => now.to_i + 900,
-          "snoozed_at" => now.to_i - 300,
           "last_state" => "working",
           "state_since" => now.to_i - 400
         }
@@ -303,7 +350,6 @@ RSpec.describe ClaudeInbox::Store do
       entries = {
         "a" => {
           "wake_at" => described_class::UNTIL_WOKEN,
-          "snoozed_at" => now.to_i - 300,
           "last_state" => "working",
           "state_since" => now.to_i - 400
         }
@@ -315,7 +361,7 @@ RSpec.describe ClaudeInbox::Store do
     it "keeps an already-blocked session snoozed" do
       seen = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 600}}
       entries = described_class.merge_entries(seen, [session(id: "a", state: "blocked")], now)
-      snoozed = entries.merge("a" => entries["a"].merge("wake_at" => now.to_i + 900, "snoozed_at" => now.to_i))
+      snoozed = entries.merge("a" => entries["a"].merge("wake_at" => now.to_i + 900))
       later = described_class.merge_entries(snoozed, [session(id: "a", state: "blocked")], now + 60)
       sec = described_class.sectionize([session(id: "a", state: "blocked")], later, now + 60)
       expect(sec.snoozed.map(&:key)).to eq(%w[a])
@@ -512,10 +558,9 @@ RSpec.describe ClaudeInbox::Store do
     end
 
     it "clears an elapsed snooze" do
-      entries = {"a" => {"wake_at" => now.to_i - 1, "snoozed_at" => now.to_i - 901, "last_state" => "working"}}
+      entries = {"a" => {"wake_at" => now.to_i - 1, "last_state" => "working"}}
       e = described_class.merge_entries(entries, [session(id: "a")], now)
       expect(e["a"]).not_to include("wake_at")
-      expect(e["a"]).not_to include("snoozed_at")
     end
 
     it "keeps aliases and prunes stale entries" do
@@ -538,6 +583,14 @@ RSpec.describe ClaudeInbox::Store do
       expect(described_class.folded?(:settled, {})).to be(true)
       expect(described_class.folded?(:settled, {settled: true})).to be(false)
       expect(described_class.folded?(:active, {})).to be(false)
+    end
+  end
+
+  describe "#actionable_keys" do
+    it "names only background sessions with an id" do
+      store = described_class.new(path: nil, clock: -> { now })
+      store.update([session(id: "a"), session(**interactive, session_id: "uuid")])
+      expect(store.actionable_keys).to eq(%w[a])
     end
   end
 

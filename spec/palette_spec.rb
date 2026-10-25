@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 RSpec.describe ClaudeInbox::Palette do
-  subject(:palette) { described_class.new }
+  subject(:palette) { described_class }
 
   it "paints the six session colors ansi can name with the terminal's own color" do
     expect(palette.paint("x", "red")).to eq("\e[31mx\e[39m")

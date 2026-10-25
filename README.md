@@ -49,7 +49,8 @@ It opens when a session starts. To stop that, set
 
 ## Sections
 
-1. **Pinned.** Rows you pinned with `t`.
+1. **Pinned.** Rows you pinned with `t`. Snoozing a pinned row moves it to
+   Snoozed, marked `★`, until it wakes back into Pinned.
 2. **Needs you.** Blocked or failed sessions, or ones whose pull request has
    failing checks or changes requested, that you haven't attached to yet.
 3. **Active.** Everything else that's running or not yet settled, including
@@ -58,14 +59,20 @@ It opens when a session starts. To stop that, set
 5. **Settled.** Settled with `x`, or every pull request is merged or closed.
    Collapsed.
 
+`--sort=activity` puts the session that spoke most recently first in every
+section but Snoozed, read from its transcript. Put it in the config file to
+keep it.
+
 Under each row is what the session is waiting on, what it produced, or its
 status line. A row with a pull request shows it as `#885 open`, `#885 merged`
 and so on, with `✗ checks`, `changes requested` or `conflicts` after it when
 something is wrong, and `+2` after it when the session has two more.
 A steady `◌` with `idle · 1 shell` means the agent stopped
-and is waiting on a shell or sub-agent it started. A `●` marks a session you
-haven't attached to since it got blocked, in red, or finished, in blue; one
-you have attached to since is dimmed, unless `/color` tints it.
+and is waiting on a shell or sub-agent it started. A blue `●` marks a session you
+haven't attached to since it got blocked or finished; one you have attached
+to since is dimmed, unless `/color` tints it. The age after the badge is how
+long since the session last said anything, read from its transcript: a
+`working` row that spoke 30s ago is still talking, one silent for 2h is not.
 
 ## Keys
 
@@ -93,7 +100,7 @@ Vim bindings. Arrows and the mouse work too.
 | `P` | link a pull request by hand (empty clears) |
 | `X` | stop the session; `Enter` resumes it later |
 | `Ctrl-x` | delete the session, transcript and worktree for good |
-| `/` | filter; `Enter` keeps it, `Esc` clears |
+| `/` | filter by name, directory, prompt, status or pull request (`#885` or its title); `Enter` keeps it, `Esc` clears |
 | `R` | poll now |
 | `U` | update claude-inbox when the header says a newer one is out |
 | `q` | quit |
@@ -105,7 +112,8 @@ Vim bindings. Arrows and the mouse work too.
 `n` opens a form for the prompt, name, directory, model, effort, permissions,
 worktree, Remote Control and color, which tints the row as `/color` would.
 `Tab` moves between fields, `Ctrl-S` starts the session and `Ctrl-O` starts
-it and attaches.
+it and attaches. `Option-S` or `Option-O` by mistake only says which key you
+meant; it no longer reads as `Esc` and asks to discard the prompt.
 
 Paste an image on macOS, or drop a file into the prompt, and refer to it as
 `[Image #1]`. Type `/` for a menu of your skills.
@@ -153,7 +161,8 @@ covers ssh, the JSON API and an iOS Shortcut.
 ## Pull requests
 
 Pull requests show up when a session's transcript links to them. Install
-`gh` to keep their state current. Use `P` to link one by hand.
+`gh` to keep their state current. Use `P` to link one by hand, and `/#885`
+to find the session behind a pull request.
 
 ## Notifications
 

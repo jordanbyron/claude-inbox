@@ -114,7 +114,14 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
 - A prompt beginning with a slash command is expanded, `$ARGUMENTS` and all,
   in `-p` and `--bg` alike (checked on 2.1.274 with a project command).
   Installed plugins are listed in `~/.claude/plugins/installed_plugins.json`,
-  keyed `name@marketplace`, each pointing at its `installPath`; claude.ai's
+  keyed `name@marketplace`, each pointing at its `installPath`. Being listed
+  doesn't make a plugin load: a session loads only those its `enabledPlugins`
+  sets to `true`, read from `~/.claude/settings.json` then the cwd's
+  `.claude/settings.json` and `settings.local.json`, the last to set a key
+  winning. An entry's `scope` and `projectPath` play no part, so a plugin
+  installed for one project loads in any directory whose settings enable it,
+  and not in that project's subdirectories, whose settings are their own
+  (checked on 2.1.304 with `claude plugin list --json`). claude.ai's
   synced skills sit in `~/.claude/skills/synced/<bucket>/<name>/SKILL.md`
   and show up as `anthropic-skills:<name>`. Built-ins such as `/init` live
   inside the CLI and aren't on disk.
@@ -126,6 +133,14 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
 - Terminal.app puts the tty's active process in the tab title, so a poller
   that forks `claude` every few seconds makes the title flicker. Every helper
   subprocess here is started with `setsid` so it has no controlling tty.
+- A transcript's `user` and `assistant` records carry a `timestamp`; most
+  of the rest (`last-prompt`, `ai-title`, `mode`, `cost-state`, …) carry
+  none, and the CLI keeps appending them after the session has finished:
+  one done at 13:28 had its file written at 14:28 (seen on 2.1.306). So the
+  file's mtime is not when the last message was sent, and the job file's
+  `updatedAt` only says when the daemon last wrote it. A single `user`
+  record can run to 370KB, a tool result in full, so a fixed tail read can
+  miss the last message.
 - A background session's `sessionId` in the JSON is the uuid its transcript
   file is named after, and a plugin's `$.session.id()` inside that session
   answers the same uuid (checked on 2.1.288: the job's `linkScanPath` ends in

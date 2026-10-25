@@ -38,6 +38,9 @@ module ClaudeInbox
     # A key and what it does.
     def hint(name, action) = "#{key(name)}  #{@theme.dim(action)}"
 
+    # Esc or q closes a box. Prompt skips this, since q is text there.
+    def dismiss?(name, key) = name == :escape || key == "q"
+
     # `s` snooze: one key per choice, and the choice is read from `choice`.
     class Snooze < Dialog
       MENU = [
@@ -57,7 +60,7 @@ module ClaudeInbox
       def lines(_width, _caret) = MENU.map { |k, label, _| "  #{key(k)}  #{label}" } + ["", "  " + hint("esc", "cancel")]
 
       def press(name, key)
-        return :cancel if name == :escape || key == "q"
+        return :cancel if dismiss?(name, key)
         entry = MENU.assoc(key)
         return nil unless entry
         @choice = entry[2]
@@ -70,7 +73,6 @@ module ClaudeInbox
     class PrPicker < Dialog
       MARGIN = 6
       KEYS = {open: "o", copy: "y"}.freeze
-      VERBS = {open: "open", copy: "copy"}.freeze
 
       attr_reader :choice
 
@@ -79,7 +81,7 @@ module ClaudeInbox
         @prs = [session.pr, *session.prs.reject { |pr| pr.equal?(session.pr) }].first(9)
       end
 
-      def title = " #{VERBS.fetch(kind).capitalize} pull request "
+      def title = " #{kind.to_s.capitalize} pull request "
 
       # Titles vary, so the box grows to the longest line plus some air,
       # and never shrinks below a plain dialog.
@@ -87,12 +89,12 @@ module ClaudeInbox
 
       def lines(width, _caret)
         (@prs.each_with_index.map { |pr, i| "  #{key((i + 1).to_s)}  #{label(pr)}" } +
-          ["", "  #{hint(KEYS.fetch(kind), "#{VERBS.fetch(kind)} #{@prs.first.short}")} · #{key("esc")} #{@theme.dim("cancel")}"])
+          ["", "  #{hint(KEYS.fetch(kind), "#{kind} #{@prs.first.short}")} · #{key("esc")} #{@theme.dim("cancel")}"])
           .map { |line| Text.truncate(line, width) }
       end
 
       def press(name, key)
-        return :cancel if name == :escape || key == "q"
+        return :cancel if dismiss?(name, key)
         @choice = @prs.first if key == KEYS.fetch(kind) || name == :return || name == :enter
         @choice = @prs[key.to_i - 1] if key.to_s.match?(/\A[1-9]\z/)
         @choice && :pick
@@ -104,7 +106,8 @@ module ClaudeInbox
       # once the list spans repos.
       def label(pr)
         name = (@prs.map(&:repo).uniq.size > 1) ? pr.qualified : pr.short
-        pr.title ? @theme.pr_badge(pr, name) + @theme.dim(" · ") + pr.title : @theme.pr_badge(pr, name)
+        badge = @theme.pr_badge(pr, name)
+        pr.title ? badge + @theme.dim(" · ") + pr.title : badge
       end
     end
 
@@ -114,13 +117,19 @@ module ClaudeInbox
     class Confirm < Dialog
       TITLES = {stop: " Stop ", delete: " Delete ", adopt: " Adopt "}.freeze
 
+      # `label` is the name the list shows; the id is what App acts on.
+      def initialize(kind, id, label = id)
+        super(kind, id)
+        @label = label
+      end
+
       def title = TITLES.fetch(kind)
 
-      def lines(_width, _caret)
+      def lines(width, _caret)
         case kind
-        when :stop then ["  Stop session #{id}?", "", "  " + hint("y", "stop it"), "  " + hint("esc", "cancel")]
+        when :stop then [ask("Stop", width), "", "  " + hint("y", "stop it"), "  " + hint("esc", "cancel")]
         when :delete
-          ["  Delete session #{id}?", "  Its worktree and conversation", "  go with it.",
+          [ask("Delete", width), "  Its worktree and conversation", "  go with it.",
             "", "  " + hint("y", "delete it"), "  " + hint("esc", "keep it")]
         when :adopt
           ["  Pull this session into the daemon?", "  Its phone session ends and a",
@@ -130,9 +139,14 @@ module ClaudeInbox
 
       def press(name, key)
         return :confirm if key == "y"
-        return :cancel if name == :escape || key == "n" || key == "q"
+        return :cancel if dismiss?(name, key) || key == "n"
         nil
       end
+
+      private
+
+      # One line, so a long name is cut rather than wrapped mid-word.
+      def ask(verb, width) = "  #{verb} #{Text.truncate(@label.to_s, width - Text.width(verb) - 4)}?"
     end
 
     # The first launch without the Claude Code pane asks once whether to add

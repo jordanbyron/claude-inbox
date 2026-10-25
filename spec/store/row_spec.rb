@@ -32,6 +32,22 @@ RSpec.describe ClaudeInbox::Store::Row do
       expect(r.matches?("synonym")).to be(true)
     end
 
+    it "searches each pull request by number, repo, url or title" do
+      prs = [
+        ClaudeInbox::PullRequest.new(number: 885, url: "https://github.com/acme/app/pull/885", title: "Fix the reindex"),
+        ClaudeInbox::PullRequest.new(number: 912, url: "https://github.com/acme/lib/pull/912")
+      ]
+      r = described_class.new(session(id: "a", name: "SEAR-1594", cwd: "/srv/app", prs:), nil)
+      expect(r.matches?("#885")).to be(true)
+      expect(r.matches?("#912")).to be(true)
+      expect(r.matches?("acme/lib#912")).to be(true)
+      expect(r.matches?("https://github.com/acme/app/pull/885")).to be(true)
+      expect(r.matches?("reindex")).to be(true)
+      expect(r.matches?("#88")).to be(true)
+      expect(r.matches?("#1885")).to be(false)
+      expect(r.matches?("#913")).to be(false)
+    end
+
     it "leaves an interactive session searchable by name and cwd alone" do
       r = described_class.new(session(id: nil, session_id: "u1", kind: "interactive", name: "shell",
         cwd: "/srv/app", job_state: nil), nil)
@@ -180,11 +196,11 @@ RSpec.describe ClaudeInbox::Store::Row do
 
     it "never reaps a pin or a snooze, however long it has been parked" do
       expect(described_class.new(session(id: "a", state: "done"), ClaudeInbox::Store::Entry.new(quiet.merge("pinned" => true)))).not_to be_reapable(now.to_i)
-      expect(described_class.new(session(id: "a", state: "done"), ClaudeInbox::Store::Entry.new(quiet.merge("wake_at" => ClaudeInbox::Store::UNTIL_WOKEN, "snoozed_at" => 1)))).not_to be_reapable(now.to_i)
+      expect(described_class.new(session(id: "a", state: "done"), ClaudeInbox::Store::Entry.new(quiet.merge("wake_at" => ClaudeInbox::Store::UNTIL_WOKEN)))).not_to be_reapable(now.to_i)
     end
 
     it "reaps once an elapsed snooze has woken it" do
-      woken = quiet.merge("wake_at" => now.to_i - 60, "snoozed_at" => now.to_i - 120)
+      woken = quiet.merge("wake_at" => now.to_i - 60)
       expect(described_class.new(session(id: "a", state: "done"), ClaudeInbox::Store::Entry.new(woken))).to be_reapable(now.to_i)
     end
 

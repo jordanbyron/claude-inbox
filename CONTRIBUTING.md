@@ -89,7 +89,9 @@ gh signoff status        # is HEAD signed off?
 ## Cutting a release
 
 You need push rights to the `claude-inbox` gem on rubygems.org (`gem signin`,
-with your OTP at hand) and `gh` signed in to this repo. Then, on `main` with
+with your OTP at hand) and `gh` signed in to this repo. With the 1Password
+CLI (`op`) signed in, the push reads its OTP from the item named by
+`RUBYGEMS_OP_ITEM` (default `RubyGems`) instead of prompting. Then, on `main` with
 a clean tree at `origin/main`:
 
 ```sh

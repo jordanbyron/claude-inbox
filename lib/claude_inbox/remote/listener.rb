@@ -200,11 +200,11 @@ module ClaudeInbox
         authenticated(slot) if slot
         Http.write(io, *answer(request, io, via))
       rescue Http::Error => e
-        Http.write(io, e.status, Http::JSON_TYPE.merge(e.headers), JSON.generate(e.body))
+        refuse(io, e)
       rescue => e
         # A message can name a path under the home directory, which is
         # nobody's business before the token checks out.
-        Http.write(io, 500, Http::JSON_TYPE, JSON.generate(error: authorized ? Http.utf8(e.message) : "internal error"))
+        refuse(io, Http::Error.new(500, authorized ? e.message : "internal error"))
       end
 
       private
@@ -322,23 +322,27 @@ module ClaudeInbox
           if slot[:busy] then @turning_away -= 1
           else
             @alive -= 1
-            release_unauthenticated(slot[:via]) unless slot[:authenticated]
+            release_unauthenticated(slot)
           end
         end
       end
 
       # Under the mutex. A host leaves the hash at zero, so it holds only
       # hosts connected now.
-      def release_unauthenticated(via)
+      def release_unauthenticated(slot)
+        return if slot[:authenticated]
+        via = slot[:via]
         @unauthenticated[via] -= 1
         @unauthenticated.delete(via) if @unauthenticated[via].zero?
       end
+
+      def refuse(io, error) = Http.write(io, error.status, Http::JSON_TYPE.merge(error.headers), JSON.generate(error.body))
 
       # `handle` answers every failure it can; what is left is the socket
       # itself going away, and a thread must not report that on stderr.
       def serve(sock, slot)
         if slot[:busy]
-          Http.write(sock, 503, Http::JSON_TYPE.merge("Retry-After" => "2"), JSON.generate(error: "busy: try again in a moment"))
+          refuse(sock, Http::Error.new(503, "busy: try again in a moment", headers: {"Retry-After" => "2"}))
         else
           handle(sock, via: slot[:via], slot: slot)
         end
@@ -353,7 +357,7 @@ module ClaudeInbox
 
       def authenticated(slot)
         @mutex.synchronize do
-          release_unauthenticated(slot[:via]) unless slot[:authenticated]
+          release_unauthenticated(slot)
           slot[:authenticated] = true
         end
       end

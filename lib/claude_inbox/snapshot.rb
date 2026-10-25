@@ -45,6 +45,7 @@ module ClaudeInbox
       {
         "id" => row.key, "session" => s.session_id, "label" => row.label, "state" => s.effective_state, "actionable" => s.actionable?,
         "waiting" => s.waiting_on_work? || nil, "unread" => row.unread? || nil, "line" => s.summary, "wake_at" => row.wake_at, "remote" => s.remote_url, "color" => s.color,
+        "last_message_at" => s.last_message_at&.to_i,
         "pr" => pr && {"short" => pr.short, "state" => pr.state&.downcase, "url" => pr.url}
       }.compact
     end

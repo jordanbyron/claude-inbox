@@ -65,7 +65,6 @@ module ClaudeInbox
     def initialize(home: Dir.home)
       @p = Pastel.new(enabled: true)
       @theme = Theme.new
-      @palette = Palette.new
       @home = home
     end
 
@@ -198,7 +197,7 @@ module ClaudeInbox
       text =
         if view.filter_editing then " " + @theme.cyan_bold("/") + view.filter.row(width - 2, cursor: caret)
         elsif view.filter then " " + @theme.cyan_bold("/") + view.filter.to_s + @p.dim("  esc clears")
-        else " " + footer_keys(view).map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
+        else " " + @theme.hints(footer_keys(view))
         end
       Text.pad(text, width)
     end
@@ -304,8 +303,8 @@ module ClaudeInbox
       quiet = section == :settled || (live && row.read?)
       unread = live && row.unread?
       # A terminal cannot be attached to, so it is never read: while it waits on you it keeps its dot.
-      alert = live && s.needs_you? && (unread || !s.actionable?)
-      marker = marker_for(sel, unread, alert)
+      dotted = unread || (live && s.needs_you? && !s.actionable?)
+      marker = marker_for(sel, dotted)
       glyph = glyph_for(s, section, tick)
       meta = meta_for(row, section, now)
 
@@ -330,13 +329,12 @@ module ClaudeInbox
       [Text.pad(first, width), Text.pad(detail, width)]
     end
 
-    # The caret takes the column. Otherwise one filled dot asks for a look:
-    # red while the row needs you, blue when it only finished. Read, it
-    # clears, and the meta still says needs you.
-    def marker_for(sel, unread, alert)
+    # The caret takes the column. Otherwise a blue dot asks for a look, in
+    # every state: glyph and meta already say needs you in red, so the dot
+    # only says unread. Read, it clears.
+    def marker_for(sel, dotted)
       if sel then @theme.yellow_bold("▶")
-      elsif alert then @theme.red_bold("●")
-      elsif unread then @theme.blue("●")
+      elsif dotted then @theme.blue("●")
       else " "
       end
     end
@@ -355,7 +353,7 @@ module ClaudeInbox
         elsif bold then @p.bold(label)
         else label
         end
-      @palette.paint(styled, row.session.color)
+      Palette.paint(styled, row.session.color)
     end
 
     def glyph_for(s, section, tick)
@@ -376,16 +374,17 @@ module ClaudeInbox
       base =
         case section
         when :snoozed
-          row.parked? ? @theme.purple("parked") : @theme.purple("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
+          wake = row.parked? ? @theme.purple("parked") : @theme.purple("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
+          row.pinned? ? wake + @theme.cyan(" ★") : wake
         when :settled
-          @p.dim("#{s.state} · #{Text.age(now.to_i - row.state_since.to_i)}")
+          @p.dim("#{s.state} · #{Text.age(now.to_i - row.spoke_at)}")
         else
           if s.interactive?
             where = s.remote? ? "remote" : "your terminal"
-            age = row.state_since ? Text.age(now.to_i - row.state_since.to_i) : Text.age(now - s.started_at)
+            age = Text.age(now.to_i - row.spoke_at)
             state_badge(s) + @p.dim(" · #{where} · #{age}")
           else
-            age = row.state_since ? @p.dim(" · " + Text.age(now.to_i - row.state_since.to_i)) : ""
+            age = @p.dim(" · " + Text.age(now.to_i - row.spoke_at))
             remote = s.remote_control? ? @theme.blue(" ⇅") : ""
             state_badge(s) + remote + age
           end

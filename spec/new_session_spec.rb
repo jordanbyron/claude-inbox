@@ -305,6 +305,16 @@ RSpec.describe ClaudeInbox::NewSessionForm do
     expect(form.press("y", "y")).to eq(:cancel)
   end
 
+  it "warns on option-s and option-o, slips for the ctrl keys, and leaves the prompt alone" do
+    form.press("h", "h")
+    expect(form.press(:alt_s, "\es")).to eq(:changed)
+    expect(form.footer).to include("ctrl-s starts it")
+    expect(form.press(:alt_o, "\eo")).to eq(:changed)
+    expect(form.footer).to include("ctrl-o starts and attaches")
+    expect(form.screen(80, 24).join("\n")).not_to include("Discard this session?")
+    expect(form.values[:prompt]).to eq("h")
+  end
+
   describe "recent directories" do
     let(:dirs) { %w[code/inbox code/site work/site].map { |d| File.join(home, d).tap { |p| FileUtils.mkdir_p(p) } } }
     let(:form) { described_class.new(cwd: Dir.pwd, home: home, dirs: dirs) }

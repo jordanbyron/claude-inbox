@@ -17,7 +17,7 @@ module ClaudeInbox
   class Headless
     RECHECK_EVERY = 60
 
-    def initialize(client:, store:, pull_requests: PullRequests.new, actions: Actions.new, snapshot: Snapshot.new,
+    def initialize(client:, store:, pull_requests: PullRequests.new, transcripts: Transcript.new, actions: Actions.new, snapshot: Snapshot.new,
       lock: WriterLock.new, updater: nil, notifier: Notifier.disabled, recheck_every: RECHECK_EVERY)
       @lock = lock
       @snapshot = snapshot
@@ -25,7 +25,7 @@ module ClaudeInbox
       @recheck_every = recheck_every
       @notice = nil
       @queue = Queue.new
-      @poller = Poller.new(client: client, store: store, pull_requests: pull_requests, reaper: Reaper.disabled,
+      @poller = Poller.new(client: client, store: store, pull_requests: pull_requests, transcripts: transcripts, reaper: Reaper.disabled,
         queue: @queue, snapshot: snapshot, actions: actions, notifier: notifier)
     end
 

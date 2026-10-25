@@ -9,6 +9,15 @@ module ClaudeInbox
   # keys. Hides what tty-reader does with ESC, echo and a paste, so App sees
   # events and not the raw bytes.
   class Input
+    # macOS sends Option-s as "\es", so an Esc glued to one lowercase letter
+    # is taken as Option held with it.
+    ALT = /\A\e([a-z])\z/
+
+    def self.alt?(name) = name.to_s.start_with?("alt_")
+
+    # An Option chord as the quick Esc-then-letter it may also have been.
+    def self.unglued(raw) = [[:escape, "\e"], [raw[1], raw[1]]]
+
     def initialize(input, out)
       @input = input
       @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
@@ -51,7 +60,7 @@ module ClaudeInbox
       out
     end
 
-    def key_name(key) = @reader.console.keys[key] || key
+    def key_name(key) = @reader.console.keys[key] || key[ALT, 1]&.then { |c| :"alt_#{c}" } || key
 
     # tty-reader glues ESC to whatever arrives within 100ms, so a fast
     # "esc gg" comes in as one unknown key "\egg". Vim hands make that
@@ -59,6 +68,7 @@ module ClaudeInbox
     def split_keys(key)
       return [key] if key.size <= 1 || @reader.console.keys.key?(key)
       return [key] unless key.start_with?("\e")
+      return [key] if key.match?(ALT)
       ["\e"] + key[1..].chars
     end
   end

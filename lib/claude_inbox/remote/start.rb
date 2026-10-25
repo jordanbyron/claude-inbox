@@ -158,7 +158,7 @@ module ClaudeInbox
         values[:prompt] = SessionRequest.attach(values[:prompt], paths)
         values, note = SessionRequest.without_stray_worktree(values)
         @queue << [:notice, "remote: starting session…"]
-        id = Http.utf8(@spawn_lock.synchronize { @client.spawn(**values) })
+        id = Text.utf8(@spawn_lock.synchronize { @client.spawn(**values) })
         url = remote_url(id, wait: values[:remote] ? @bridge_wait : 0)
         @queue << [:remote_started, id, via, note].compact
         {id: id, name: values[:name], cwd: values[:cwd], url: url}.merge(note ? {note: note} : {})

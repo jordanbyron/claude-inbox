@@ -35,4 +35,12 @@ RSpec.describe ClaudeInbox::Settings do
     File.write("#{proj}/.claude/settings.json", {remoteControlAtStartup: false}.to_json)
     expect(described_class.defaults(proj, home: home).remote).to eq("no")
   end
+
+  it "enables a plugin by the most specific settings file that names it" do
+    File.write("#{home}/.claude/settings.json", {enabledPlugins: {"a@m" => true, "b@m" => true, "c@m" => false}}.to_json)
+    File.write("#{proj}/.claude/settings.json", {enabledPlugins: {"b@m" => false, "c@m" => true, "d@m" => true}}.to_json)
+    File.write("#{proj}/.claude/settings.local.json", {enabledPlugins: {"d@m" => false}}.to_json)
+    expect(described_class.enabled_plugins(proj, home: home)).to contain_exactly("a@m", "c@m")
+    expect(described_class.enabled_plugins(home, home: home)).to contain_exactly("a@m", "b@m")
+  end
 end

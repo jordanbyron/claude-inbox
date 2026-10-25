@@ -38,6 +38,9 @@ module ClaudeInbox
 
       def selected_session = session_for(@selected&.key)
 
+      # The alias if one is set, as the row shows it, rather than the bare id.
+      def label_for(key) = session_for(key)&.then { |s| @store.row(s).label } || key
+
       def page = [Renderer.body_height(@terminal.size[1]), 1].max
 
       def move(delta)

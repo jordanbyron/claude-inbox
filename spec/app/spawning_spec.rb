@@ -66,6 +66,23 @@ RSpec.describe ClaudeInbox::App do
     end
   end
 
+  describe "option held for ctrl" do
+    it "warns on option-s rather than asking to discard, and ctrl-s still starts" do
+      press(app, "n", "h", "i", "\es")
+      expect(app).to paint("ctrl-s starts it")
+      expect(app).not_to paint("Discard this session?")
+      press(app, "\e[B", "\e[B", ctrl_u, *Dir.pwd.chars, ctrl_s)
+      expect(wait_for { screen(app).first.include?("started deadbeef") }).to be(true)
+    end
+
+    it "keeps any other glued escape as esc then the letter" do
+      press(app, "n", "h", "i", "\eh")
+      expect(app).to paint("Discard this session?")
+      press(app, "y", "\ej")
+      expect(app).to paint("claude-inbox-38").on_selected_row
+    end
+  end
+
   describe "a session started from another device" do
     it "says so, without moving the cursor or closing the form someone is typing in" do
       press(app, "j")

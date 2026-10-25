@@ -48,7 +48,7 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(f.lines).to eq(expected)
   end
 
-  it "dots a finished row blue and a blocked one red until attached to, then quiets the finished one but keeps its color bright, and gives the selected one the yellow caret" do
+  it "dots a finished row and a blocked one blue until attached to, then quiets the finished one but keeps its color bright, and gives the selected one the yellow caret" do
     done = session(id: "aaa11111", name: "fresh", state: "done")
     seen = session(id: "bbb22222", name: "seen", state: "done", job_state: ClaudeInbox::JobState.new("color" => "orange"))
     blocked = session(id: "ccc33333", name: "stuck", state: "blocked")
@@ -63,7 +63,7 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(colored.find { |l| l.include?("fresh") }).to include("\e[1mfresh")
     expect(colored.find { |l| l.include?("seen") }).to include("\e[38;5;208mseen\e[39m")
     expect(colored.find { |l| l.include?("stuck") }).to include("\e[1mstuck")
-    expect(colored.find { |l| l.include?("stuck") }).to include("\e[38;5;203;1m●")
+    expect(colored.find { |l| l.include?("stuck") }).to include("\e[38;5;75m●\e[0m")
     acknowledged = ClaudeInbox::Store.merge_entries({"ccc33333" => {"last_state" => "blocked", "state_since" => now.to_i - 60, "acknowledged_at" => now.to_i - 30, "last_visited_at" => now.to_i - 30}}, [blocked], now)
     seen_blocked = renderer.frame(ClaudeInbox::Store.sectionize([blocked], acknowledged, now), view.with(width: 60, height: 12)).plain.lines.join("\n")
     expect(seen_blocked).to match(/^   \? stuck .*needs you/)
@@ -96,6 +96,19 @@ RSpec.describe ClaudeInbox::Renderer do
     text = renderer.frame(sec, view.with(width: 90, height: 12)).plain.lines.join("\n")
     expect(text).to match(/✓ web\s+done · remote/)
     expect(text).to include("⇅ 1 remote")
+  end
+
+  it "ages a row by when its session last spoke, not by how long it has been in its state" do
+    talking = session(id: "aaa11111", name: "talking", last_message_at: now - 30)
+    quiet = session(id: "bbb22222", name: "quiet", last_message_at: now - 7200)
+    entries = {
+      "aaa11111" => {"last_state" => "working", "state_since" => now.to_i - 7200},
+      "bbb22222" => {"last_state" => "working", "state_since" => now.to_i - 7200}
+    }
+    sec = ClaudeInbox::Store.sectionize([talking, quiet], entries, now)
+    text = renderer.frame(sec, view.with(width: 60, height: 12, tick: 0)).plain.lines.join("\n")
+    expect(text).to match(/⠋ talking\s+working · 30s  proj/)
+    expect(text).to match(/⠋ quiet\s+working · 2h  proj/)
   end
 
   it "marks a background session with Remote Control on, and only that one" do
@@ -142,7 +155,7 @@ RSpec.describe ClaudeInbox::Renderer do
   end
 
   it "lists snoozed rows when expanded, and folds them by default" do
-    entries = {"823b882f" => {"wake_at" => now.to_i + 900, "snoozed_at" => now.to_i}}
+    entries = {"823b882f" => {"wake_at" => now.to_i + 900}}
     snoozed_sections = ClaudeInbox::Store.sectionize(
       sessions,
       ClaudeInbox::Store.merge_entries(entries, sessions, now),
@@ -155,6 +168,13 @@ RSpec.describe ClaudeInbox::Renderer do
 
     expanded = renderer.frame(snoozed_sections, view.with(width: 80, height: 30, expanded: {snoozed: true})).plain
     expect(expanded.items.compact.map(&:key)).to include("823b882f")
+  end
+
+  it "stars a snoozed row that is pinned, since its section no longer shows the pin" do
+    entries = {"823b882f" => {"wake_at" => now.to_i + 900, "pinned" => true, "pinned_at" => now.to_i}}
+    sec = ClaudeInbox::Store.sectionize(sessions, ClaudeInbox::Store.merge_entries(entries, sessions, now), now)
+    expanded = renderer.frame(sec, view.with(width: 80, height: 30, expanded: {snoozed: true})).plain
+    expect(expanded.lines.join("\n")).to match(/wakes in 15m ★/)
   end
 
   it "truncates long emoji names instead of slicing" do
@@ -338,7 +358,7 @@ RSpec.describe "renderer session colors" do
   it "keeps the glyph in the state's color while the label takes the session's" do
     s = session(id: "z", name: "tinted", state: "blocked", job_state: ClaudeInbox::JobState.new("color" => "green"))
     line = line_of.call(s, "tinted")
-    expect(line).to include("\e[38;5;203;1m●")
+    expect(line).to include("\e[38;5;75m●")
     expect(line).to include("\e[38;5;203;1mneeds you")
     expect(line).to include("\e[32m\e[1mtinted")
   end

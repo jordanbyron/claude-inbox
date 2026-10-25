@@ -6,10 +6,11 @@ module ClaudeInbox
   # The slash commands `claude` would offer at its own prompt, read from the
   # same places it reads them: `.claude/commands/*.md` and
   # `.claude/skills/*/SKILL.md` under the project and the home directory,
-  # the skills and commands of installed plugins (named `plugin:name`), and
-  # the skills claude.ai syncs down (`anthropic-skills:name`). Built-ins
-  # live inside the CLI and are not listed; typing one still works, since
-  # the prompt goes to `claude --bg` verbatim.
+  # the skills and commands of the plugins enabled there (named
+  # `plugin:name`), and the skills claude.ai syncs down
+  # (`anthropic-skills:name`). Built-ins live inside the CLI and are not
+  # listed; typing one still works, since the prompt goes to `claude --bg`
+  # verbatim.
   #
   # Pure: filesystem in, plain values out. Nothing here runs `claude`.
   module SlashCommands
@@ -27,7 +28,7 @@ module ClaudeInbox
       [
         *from_dir(File.join(cwd, ".claude")),
         *from_dir(File.join(home, ".claude")),
-        *plugins(home),
+        *plugins(cwd, home),
         *synced(home)
       ].uniq(&:name).sort_by(&:name)
     end
@@ -65,9 +66,10 @@ module ClaudeInbox
 
     # `installed_plugins.json` maps "name@marketplace" to where the plugin
     # was unpacked: one entry, or a list of them, one per install scope.
-    def plugins(home)
+    def plugins(cwd, home)
       installed = Settings.read(File.join(home, ".claude", "plugins", "installed_plugins.json"))
-      (installed["plugins"] || {}).flat_map do |key, entries|
+      enabled = Settings.enabled_plugins(cwd, home:)
+      (installed["plugins"] || {}).slice(*enabled).flat_map do |key, entries|
         plugin = key.split("@").first
         Array(entries).filter_map { |e| e["installPath"] if e.is_a?(Hash) }.uniq.flat_map do |root|
           from_dir(root, prefix: plugin)

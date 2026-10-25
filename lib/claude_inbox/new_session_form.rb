@@ -35,10 +35,13 @@ module ClaudeInbox
     # editable field spends these on its own text instead.
     CYCLE = {:left => -1, :right => 1, "h" => -1, "l" => 1, " " => 1}.freeze
 
+    # Option slips for Ctrl on the two submit keys. Option-s arrives as Esc
+    # then s, and that Esc asked to discard the prompt.
+    SLIPS = {alt_s: "that's option-s — ctrl-s starts it", alt_o: "that's option-o — ctrl-o starts and attaches"}.freeze
+
     def initialize(cwd:, dirs: [], home: Dir.home, clipboard: Images.method(:from_clipboard))
       @p = Pastel.new(enabled: true)
       @theme = Theme.new
-      @palette = Palette.new
       @home = home
       @clipboard = clipboard
       @places = dirs.map { |path| Place.new(path, SessionRequest.label(path, dirs), path.sub(/\A#{Regexp.escape(home)}(?=\/|\z)/, "~")) }
@@ -83,6 +86,7 @@ module ClaudeInbox
       when :escape then return escape_pressed
       when :ctrl_s then return submit(attach: false)
       when :ctrl_o then return submit(attach: true)
+      when *SLIPS.keys then @error = SLIPS[name]
       when :ctrl_v then paste_clipboard
       when :tab then complete_dir || move(1)
       when :down then move(1)
@@ -169,10 +173,10 @@ module ClaudeInbox
 
     def footer
       return @p.dim("starting session…") if @busy
-      return hints([["y", "discard"], ["esc", "keep editing"]]) if @confirm_discard
+      return @theme.hints([["y", "discard"], ["esc", "keep editing"]]) if @confirm_discard
       return @theme.red(@error) if @error
       return @p.dim("matches: ") + @candidates.join(@p.dim("  ")) if @candidates
-      return hints([["↑ ↓", "choose"], ["⇥ ⏎", "pick"], ["esc", "close"]]) if menu
+      return @theme.hints([["↑ ↓", "choose"], ["⇥ ⏎", "pick"], ["esc", "close"]]) if menu
       keys =
         case focused.kind
         when :multiline then [["⏎", "newline"], ["^V", "image"]]
@@ -182,7 +186,7 @@ module ClaudeInbox
       keys.unshift(["^U", "recent"]) if focused.key == :cwd && @places.any?
       keys += [["^S", "start"], ["^O", "start & open"],
         ["⇥", (focused.key == :cwd) ? "complete / next" : "next"], ["esc", "cancel"]]
-      hints(keys)
+      @theme.hints(keys)
     end
 
     # The App's `claude --bg` call failed after `:start`/`:start_and_attach`
@@ -299,8 +303,6 @@ module ClaudeInbox
       rows
     end
 
-    def hints(pairs) = pairs.map { |k, d| @theme.cyan_bold(k) + " " + @p.dim(d) }.join("  ")
-
     def field_label(f)
       on = f.equal?(focused)
       (on ? @theme.yellow_bold("▶ ") : "  ") + (on ? @p.bold(Text.pad(f.label, 14)) : @p.dim(Text.pad(f.label, 14)))
@@ -323,7 +325,7 @@ module ClaudeInbox
         f.choices.map { |c|
           text = (c == DEFAULT) ? default_text(f) : c
           if c == f.value then (on ? @theme.pill(" #{text} ", :cyan) : @theme.cyan_bold(" #{text} "))
-          elsif f.key == :color then @palette.paint(" #{text} ", c)
+          elsif f.key == :color then Palette.paint(" #{text} ", c)
           else @p.dim(" #{text} ")
           end
         }.join(" ")

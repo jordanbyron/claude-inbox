@@ -38,6 +38,7 @@ export type SnapshotRow = {
   unread?: boolean
   line?: string
   wake_at?: number | 'until_woken'
+  last_message_at?: number
   remote?: string
   color?: string
   pr?: { short?: string; state?: string; url?: string }
@@ -142,6 +143,7 @@ export function rowOf(section: Section, one: SnapshotRow): InboxRow {
     isUnread: one.unread === true,
     line: one.line,
     wakeAt: one.wake_at,
+    lastMessageAt: one.last_message_at,
     remote: one.remote,
     color: one.color,
     pr,
@@ -155,7 +157,10 @@ function wakeLabel(wakeAt: number | 'until_woken'): string {
 }
 
 function ago(seconds: number): string {
-  return seconds < 60 ? 'just now' : `${Math.floor(seconds / 60)}m ago`
+  if (seconds < 60) return 'just now'
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`
+  return `${Math.floor(seconds / 86_400)}d ago`
 }
 
 async function inboxFile($: EngineInterface, path: string): Promise<string> {
@@ -337,7 +342,8 @@ export const register: Register = (on, options) => {
     const chord = await read($, pending)
     const written = await read($, writtenAt)
     const release = await read($, newer)
-    const ageS = (await nowS($)) - written
+    const now = await nowS($)
+    const ageS = now - written
     const groups = groupsOf(list, folded, viewing)
     const flat = groups.flatMap(group => group.items)
     const at = onList(flat, await read($, cursor))
@@ -460,17 +466,16 @@ export const register: Register = (on, options) => {
               // A finished or blocked row you have attached to since dims, as the gem's Active section draws it,
               // unless it is tinted: faint ink on a /color background is unreadable.
               const isRead = !isQuiet && one.actionable && ['done', 'stopped', 'blocked', 'failed'].includes(one.state) && !one.isUnread
-              // One dot asks for a look: red while the row needs you, blue when it only finished. A terminal
-              // cannot be attached to, so it is never read and keeps its dot while it waits.
+              // A blue dot asks for a look in every state, as the gem draws it: the glyph already says needs you
+              // in red. A terminal cannot be attached to, so it is never read and keeps its dot while it waits.
               const needsYou = one.state === 'blocked' || one.state === 'failed'
-              const alert = !isQuiet && needsYou && (one.isUnread || !one.actionable)
-              const dot = alert || (one.isUnread && !isQuiet)
+              const dot = !isQuiet && (one.isUnread || (needsYou && !one.actionable))
               const text = one.wakeAt !== undefined ? `${one.label} · ${wakeLabel(one.wakeAt)}` : one.label
               const tint = one.color ? TINT[one.color] : undefined
               return (
                 <Box key={viewKey(item)} flexDirection="column">
                   <Box>
-                    <Text color={isHere ? 'yellow' : alert ? 'red' : 'blue'}>{isHere ? '› ' : dot ? '● ' : '  '}</Text>
+                    <Text color={isHere ? 'yellow' : 'blue'}>{isHere ? '› ' : dot ? '● ' : '  '}</Text>
                     <Text color={COLOR[one.state]} dimColor={isQuiet || one.state === 'done'}>
                       {GLYPH[one.state] ?? '·'}{' '}
                     </Text>
@@ -496,6 +501,11 @@ export const register: Register = (on, options) => {
                           {' '}
                           {one.pr.short} {one.pr.state}
                         </Text>
+                      </Box>
+                    ) : null}
+                    {one.lastMessageAt !== undefined ? (
+                      <Box flexShrink={0}>
+                        <Text dimColor> {ago(now - one.lastMessageAt)}</Text>
                       </Box>
                     ) : null}
                   </Box>

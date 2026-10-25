@@ -19,6 +19,10 @@ module ClaudeInbox
 
       def state_since = entry&.state_since
 
+      # When the session last said anything, as its transcript has it; the
+      # inbox's own clock, then the process start, when there is none to ask.
+      def spoke_at = session.last_message_at&.to_i || state_since || session.started_at&.to_i || 0
+
       def pinned_at = entry&.pinned_at
 
       def pinned? = entry&.pinned?
@@ -26,51 +30,46 @@ module ClaudeInbox
       def reap_failed_at = entry&.reap_failed_at
 
       # Names get shortened and forgotten, so the filter also reads what the
-      # session was asked to do and what it says it is doing now.
+      # session was asked to do, what it says it is doing now, and the pull
+      # requests linked to it, so `#885` finds the session behind a review.
       def matches?(query)
         q = query.downcase
-        [label, session.cwd, session.intent, session.summary].any? { |field| field.to_s.downcase.include?(q) }
+        prs = session.prs.flat_map { |pr| [pr.qualified, pr.url, pr.title] }
+        [label, session.cwd, session.intent, session.summary, *prs].any? { |field| field.to_s.downcase.include?(q) }
       end
 
-      # A session already blocked when you snoozed it stays snoozed; one that
-      # *becomes* blocked or fails afterwards wakes early.
-      def woken?(now)
-        return false if wake_at.nil?
-        return true if session.needs_you? && entry.state_since.to_i > entry.snoozed_at.to_i
-        return false if parked?
-        wake_at.to_i <= now.to_i
-      end
+      # Its timer has run out. Becoming blocked or failed wakes it sooner,
+      # but only Entry#observe sees that change happen.
+      def woken?(now) = !wake_at.nil? && !parked? && wake_at.to_i <= now.to_i
 
       def snoozed?(now) = wake_at && !woken?(now)
 
       # `x` holds through the session finishing; any other state change afterwards lifts it.
       def hand_settled?
         return false unless entry&.settled_at
-        session.finished? || entry.state_since.to_i <= entry.settled_at.to_i
+        session.finished? || unchanged_since?(entry.settled_at)
       end
 
       # Attaching marks the current state seen: out of Needs You, but into
       # Active rather than Settled, until the state changes again.
-      def acknowledged?
-        entry&.acknowledged_at && entry.state_since.to_i <= entry.acknowledged_at.to_i
-      end
+      def acknowledged? = unchanged_since?(entry&.acknowledged_at)
 
-      # Finished or needing you since you last attached. Only a session you
-      # can attach to counts, since nothing else ever clears the mark.
+      # Finished or needing you, so it carries a read or unread mark. Only a
+      # session you can attach to counts, since nothing else ever clears it.
+      def markable? = session.actionable? && (session.finished? || session.needs_you?)
+
+      # Finished or needing you since you last attached.
       def unread?
-        return false unless session.actionable?
-        return false unless session.finished? || session.needs_you?
-        entry&.last_visited_at.nil? || entry.state_since.to_i > entry.last_visited_at.to_i
+        return false unless markable?
+        !unchanged_since?(entry&.last_visited_at)
       end
 
       # A finished or blocked session you have attached to since: you have seen what it wants.
-      def read? = session.actionable? && (session.finished? || session.needs_you?) && !unread?
+      def read? = markable? && !unread?
 
       # `u` overrides hand-settle and the PR rule alike, and holds until the
       # state actually changes rather than just for the next poll.
-      def revived?
-        entry&.revived_at && entry.state_since.to_i <= entry.revived_at.to_i
-      end
+      def revived? = unchanged_since?(entry&.revived_at)
 
       # Failing checks or requested changes on the PR want you back the way
       # a blocked session does, once the agent has stopped working on it.
@@ -110,15 +109,20 @@ module ClaudeInbox
       end
 
       # The terminal outranks everything: never settle or hide a session you are in.
+      # A snooze outranks the pin, which stays put and returns when it wakes.
       def section(now)
         if session.terminal? then session.needs_you? ? :needs_you : :active
-        elsif pinned? then :pinned
         elsif snoozed?(now) then :snoozed
+        elsif pinned? then :pinned
         elsif !revived? && settled? then :settled # a resolved PR outranks Needs You
         elsif session.needs_you? || pr_needs_you? then acknowledged? ? :active : :needs_you
         else :active
         end
       end
+
+      private
+
+      def unchanged_since?(at) = at && entry.state_since.to_i <= at.to_i
     end
   end
 end

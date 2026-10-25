@@ -8,14 +8,13 @@ module ClaudeInbox
   # Reaps sessions that have sat idle past Store::REAP_AFTER.
   #
   # The one thing in the inbox that destroys anything without being asked
-  # first, so the whole of it lives here rather than spread through the poll
-  # loop, along with the append-only log that is the last record a session
-  # ever existed once `claude rm` has taken its transcript.
+  # first, so all of it lives here, along with the append-only log that is
+  # the last record a session ever existed once `claude rm` has taken its
+  # transcript.
   #
-  # Unpushed work is safe by construction. `claude rm` refuses a worktree
-  # holding commits that aren't pushed and reports a --discard-unpushed token
-  # to override it; nothing here ever passes that token, so a refusal is the
-  # end of it. Refusals are logged and retried at most daily.
+  # Unpushed work is safe: `claude rm` refuses it, and nothing here
+  # overrides that (docs/cli-quirks.md). Refusals are logged and retried at
+  # most daily.
   class Reaper
     RETRY_AFTER = 24 * 3600
     DEFAULT_LOG = File.join(Dir.home, ".config", "claude-inbox", "reaped.log")
@@ -27,14 +26,13 @@ module ClaudeInbox
       @enabled = enabled
     end
 
-    # For --fixture runs and tests: selects nothing, deletes nothing, and
-    # needs neither a client nor a store to do it.
+    # For --fixture runs and tests: selects nothing, deletes nothing.
     def self.disabled = new(nil, nil, enabled: false)
 
-    # Reaps everything due, returning the keys it actually deleted so the
-    # caller can drop those rows before they reach the store. Refusals come
-    # back as survivors rather than exceptions: one worktree with unpushed
-    # commits must not stop the rest of the sweep.
+    # Returns the keys it deleted, so the caller can drop those rows before
+    # they reach the store. Refusals come back as survivors rather than
+    # exceptions: one worktree with unpushed commits must not stop the rest
+    # of the sweep.
     #
     # Raises if the log cannot be opened, before anything is deleted. No
     # audit trail, no reaping.

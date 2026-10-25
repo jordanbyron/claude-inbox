@@ -47,7 +47,7 @@ module ClaudeInbox
 
     # The reaper deletes sessions and the listener lets other machines in,
     # so both are off unless `bin/claude-inbox` switches them on.
-    def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
+    def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new, transcripts: Transcript.new,
       rate_limits: RateLimits.new, reaper: Reaper.disabled, snapshot: Snapshot.disabled, switch: Switch.disabled,
       actions: Actions.disabled, notifier: Notifier.disabled, listen: nil, updater: nil, argv: [], out: $stdout, input: $stdin, color: true,
       trust: Trust.method(:projects), terminal: Terminal.new(out, input), queue: Queue.new, pane_offer: Mod::Offer.disabled,
@@ -67,7 +67,7 @@ module ClaudeInbox
       @renderer = Renderer.new
       @input = Input.new(input, out)
       @queue = queue
-      @poller = Poller.new(client: client, store: store, pull_requests: pull_requests,
+      @poller = Poller.new(client: client, store: store, pull_requests: pull_requests, transcripts: transcripts,
         reaper: reaper, queue: @queue, snapshot: snapshot, actions: actions, notifier: notifier)
       @listener = listen ? Remote::Listener.new(client: client, store: store, queue: @queue, **listen) : Remote::Listener.disabled
       @selected = nil
@@ -173,7 +173,12 @@ module ClaudeInbox
       @input.typed(text).each { |name, c| handle_key(name, c) } if typing
     end
 
+    # Only the form gives an Option chord a meaning; anywhere else it is the
+    # Esc and letter it was before Input named it.
     def handle_key(name, key)
+      if Input.alt?(name) && !(@modal.is_a?(NewSessionForm) && NewSessionForm::SLIPS.key?(name))
+        return Input.unglued(key).each { |n, k| handle_key(n, k) }
+      end
       return handle_modal_key(name, key) if @modal
       return handle_line_key(name, key) if filter_editing?
 
