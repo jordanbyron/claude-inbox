@@ -47,6 +47,21 @@ RSpec.describe ClaudeInbox::App do
       expect(screen(app).join("\n")).not_to include("Open pull request")
     end
 
+    it "opens the one clicked in the box, and takes no hand pointer outside it" do
+      link.call(stack)
+      press(app, "o")
+      outside = screen(app).index { |l| l.include?("#856") }
+      press(app, "\e[<35;#{screen(app)[outside].index("#856") + 1};#{outside + 1}M")
+      expect(terminal.pointer_shape).to be_nil
+      row = screen(app).index { |l| l.include?("2  #190") }
+      press(app, "\e[<35;#{screen(app)[row].index("#190") + 1};#{row + 1}M")
+      expect(terminal.pointer_shape).to eq(:hand)
+      press(app, "\e[<0;#{screen(app)[row].index("#190") + 1};#{row + 1}M")
+      expect(wait_for { opened.any? }).to be(true)
+      expect(opened).to eq(["https://github.com/o/r/pull/190"])
+      expect(screen(app).join("\n")).not_to include("Open pull request")
+    end
+
     it "opens the nth on a digit, or nothing on esc" do
       link.call(stack)
       press(app, "o", "3")

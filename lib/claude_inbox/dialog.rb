@@ -83,6 +83,20 @@ module ClaudeInbox
 
       def title = " #{kind.to_s.capitalize} pull request "
 
+      # Drawn by hand: TTY::Box counts a link's hidden characters as text
+      # and cuts the line off.
+      def frame(width, _caret = nil)
+        inner = [width - 4, fit].min - 2
+        ["┌#{title}#{"─" * (inner - Text.width(title))}┐",
+          *lines(inner - 2, nil).map { |l| "│ #{Text.pad(l, inner - 2)} │" },
+          "└#{"─" * inner}┘"]
+      end
+
+      def pick_by_url(url)
+        @choice = @prs.find { |pr| pr.url == url }
+        @choice && :pick
+      end
+
       def lines(width, _caret)
         (@prs.each_with_index.map { |pr, i| "  #{key((i + 1).to_s)}  #{label(pr)}" } +
           ["", "  #{hint(KEYS.fetch(kind), "#{kind} #{@prs.first.short}")} · #{key("esc")} #{@theme.dim("cancel")}"])
@@ -103,12 +117,10 @@ module ClaudeInbox
       def fit = [WIDTH, lines(Float::INFINITY, nil).map { |l| Text.width(l) }.max + MARGIN].max
 
       # The list's badge, then the title. A bare #190 is ambiguous only
-      # once the list spans repos. The box library counts a link's hidden
-      # characters as text and cuts the line off, so the numbers in this box
-      # are not links.
+      # once the list spans repos.
       def label(pr)
         name = (@prs.map(&:repo).uniq.size > 1) ? pr.qualified : pr.short
-        badge = @theme.pr_badge(pr, name).gsub(Text::LINK, "")
+        badge = @theme.pr_badge(pr, name)
         pr.title ? badge + @theme.dim(" · ") + pr.title : badge
       end
     end

@@ -67,8 +67,8 @@ RSpec.describe ClaudeInbox::Dialog do
     it "badges each PR as the list does, keys in the footer's color" do
       theme = ClaudeInbox::Theme.new
       lines = dialog.lines(60, nil)
-      expect(lines[0]).to start_with("  #{theme.cyan_bold("1")}  #{theme.pr_badge(prs[1]).gsub(ClaudeInbox::Text::LINK, "")}")
-      expect(lines[1]).to include(theme.pr_badge(prs[0]).gsub(ClaudeInbox::Text::LINK, ""))
+      expect(lines[0]).to start_with("  #{theme.cyan_bold("1")}  #{theme.pr_badge(prs[1])}")
+      expect(lines[1]).to include(theme.pr_badge(prs[0]))
     end
 
     it "picks the headline on its own key or enter" do
