@@ -75,6 +75,7 @@ RSpec.describe ClaudeInbox::App do
     it "opens on a click, without attaching to the session" do
       row, col = at.call("#190")
       press(app, "\e[<0;#{col};#{row}M")
+      expect(screen(app).first).to include("opening #190")
       expect(wait_for { opened.any? }).to be(true)
       expect(opened).to eq(["https://github.com/o/r/pull/190"])
       expect(client.attached).to be_empty

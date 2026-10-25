@@ -14,10 +14,10 @@ module ClaudeInbox
       # The same frame for a terminal drawn without color. Links stay.
       def plain = self.class.new(lines.map { |l| l.gsub(Text::CSI, "") }, items, top)
 
-      # The url drawn at a terminal's 1-based row and column, if any.
+      # The link drawn at a terminal's 1-based row and column, if any.
       def link_at(row, col)
         @links ||= lines.map { |l| Text.links(l) }
-        @links.fetch(row - 1, []).find { |link| link.columns.cover?(col - 1) }&.url
+        @links.fetch(row - 1, []).find { |link| link.columns.cover?(col - 1) }
       end
     end
 

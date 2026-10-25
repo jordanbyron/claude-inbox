@@ -22,19 +22,21 @@ module ClaudeInbox
     # The url comes from a transcript, so a control character in it is dropped.
     def link(s, url) = "\e]8;;#{url.delete("\x00-\x1f\x7f")}\e\\#{s}#{LINK_END}"
 
-    Link = Data.define(:columns, :url)
+    Link = Data.define(:columns, :url, :text)
 
     # The links in a drawn line, by the 0-based columns they cover.
     def links(s)
       found = []
       col = 0
-      opened = nil
+      start = url = text = nil
       s.scan(GLYPH) do |g|
         if g.start_with?("\e]8;")
-          found << Link.new(opened[0]...col, opened[1]) if opened
-          url = g[/\A\e\]8;[^;\e]*;([^\e]*)/, 1]
-          opened = url.empty? ? nil : [col, url]
+          found << Link.new(start...col, url, text) if url
+          url = g[/\A\e\]8;[^;\e]*;([^\e]+)/, 1]
+          start = col
+          text = +""
         elsif !g.start_with?("\e")
+          text << g if url
           col += Unicode::DisplayWidth.of(g)
         end
       end

@@ -389,11 +389,11 @@ RSpec.describe "renderer session colors" do
     text = ClaudeInbox::Text.strip_ansi(frame.lines[row - 1])
     col = text.index("#3413") + 1
     expect(text).to include("#3413 open")
-    expect(frame.link_at(row, col)).to eq(pr.url)
-    expect(frame.link_at(row, col + 4)).to eq(pr.url)
+    expect(frame.link_at(row, col).to_h.slice(:url, :text)).to eq(url: pr.url, text: "#3413")
+    expect(frame.link_at(row, col + 4)&.url).to eq(pr.url)
     expect(frame.link_at(row, col - 2)).to be_nil
     expect(frame.link_at(row, col + 6)).to be_nil
-    expect(frame.plain.link_at(row, col)).to eq(pr.url)
+    expect(frame.plain.link_at(row, col)&.url).to eq(pr.url)
   end
 
   it "counts the PRs past the headline after its badge, and dims it once settled" do

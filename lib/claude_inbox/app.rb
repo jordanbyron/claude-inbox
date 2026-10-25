@@ -198,7 +198,7 @@ module ClaudeInbox
       point_at(link) if event.kind == :move
       return if @modal || filter_editing?
       case event.kind
-      when :click then link ? open_in_browser(link, "the pull request") : click_row(event.row)
+      when :click then link ? open_in_browser(link.url, link.text) : click_row(event.row)
       when :scroll_up then perform(:up)
       when :scroll_down then perform(:down)
       end
