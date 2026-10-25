@@ -16,7 +16,8 @@ export type InboxRow = {
   lastMessageAt?: number
   remote?: string
   color?: string
-  pr?: { short: string; state: string; url: string }
+  // `kind` and `ref` ("MR", "!3413") are absent for a link the gem cannot number.
+  pr?: { short: string; kind?: string; ref?: string; state: string; url: string }
 }
 
 export type Folds = { snoozed: boolean; settled: boolean }

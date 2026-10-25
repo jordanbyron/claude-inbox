@@ -41,7 +41,7 @@ export type SnapshotRow = {
   last_message_at?: number
   remote?: string
   color?: string
-  pr?: { short?: string; state?: string; url?: string }
+  pr?: { short?: string; kind?: string; ref?: string; state?: string; url?: string }
 }
 type Snapshot = { written_at?: number; update?: string; sections?: Partial<Record<Section, SnapshotRow[]>> }
 // This session, as the gem's files name it, and the headless inbox this module may start.
@@ -131,7 +131,10 @@ async function readJson<T>($: EngineInterface, path: string, fallback: T): Promi
 }
 
 export function rowOf(section: Section, one: SnapshotRow): InboxRow {
-  const pr = one.pr?.short && one.pr.url ? { short: one.pr.short, state: one.pr.state ?? '', url: one.pr.url } : undefined
+  const pr =
+    one.pr?.short && one.pr.url
+      ? { short: one.pr.short, kind: one.pr.kind, ref: one.pr.ref, state: one.pr.state ?? '', url: one.pr.url }
+      : undefined
   return {
     section,
     id: one.id,
@@ -335,7 +338,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button } = $.ui.resolve(e)
+    const { Box, Text, Button, Link } = $.ui.resolve(e)
     const list = await read($, rows)
     const viewing = await read($, current)
     const folded = await read($, folds)
@@ -495,11 +498,17 @@ export const register: Register = (on, options) => {
                       </Button>
                     </Box>
                     {/* The label gives up its cells to the PR chip, which would otherwise wrap under it. */}
+                    {/* Drawn as Claude Code draws a PR: the kind dim, the ref an underlined link. */}
                     {one.pr ? (
                       <Box flexShrink={0}>
+                        <Text dimColor> {one.pr.ref ? `${one.pr.kind} ` : ''}</Text>
+                        <Link href={one.pr.url}>
+                          <Text underline color={isQuiet ? undefined : PR_COLOR[one.pr.state]} dimColor={isQuiet}>
+                            {one.pr.ref ?? one.pr.short}
+                          </Text>
+                        </Link>
                         <Text color={isQuiet ? undefined : PR_COLOR[one.pr.state]} dimColor={isQuiet}>
-                          {' '}
-                          {one.pr.short} {one.pr.state}
+                          {one.pr.state ? ` ${one.pr.state}` : ''}
                         </Text>
                       </Box>
                     ) : null}

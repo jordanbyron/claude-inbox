@@ -11,7 +11,7 @@ const PANE = {
 
 const ROWS = [
   { section: 'needs_you', id: 'a1', label: 'needs an answer', state: 'blocked', actionable: true, line: 'confirm: drop it?' },
-  { section: 'active', id: 'b2', label: 'still going', state: 'working', actionable: true, line: 'running bin/ci', pr: { short: '#7', state: 'open', url: 'https://github.com/o/r/pull/7' } },
+  { section: 'active', id: 'b2', label: 'still going', state: 'working', actionable: true, line: 'running bin/ci', pr: { short: 'PR #7', kind: 'PR', ref: '#7', state: 'open', url: 'https://github.com/o/r/pull/7' } },
   { section: 'active', id: 'uuid-term', label: 'a terminal', state: 'working', actionable: false },
   { section: 'active', id: 'd4', label: 'finished unseen', state: 'done', actionable: true, isUnread: true },
   { section: 'settled', id: 'c3', label: 'put away', state: 'done', actionable: true },
@@ -129,7 +129,10 @@ test("rows sit under the gem's sections, Settled folded until za opens it", asyn
     expect((await ui.findAll({ type: 'Text', text: '● ' })).filter(dot => dot.props.color === 'blue')).toHaveLength(1)
     expect((await ui.find({ type: 'Text', text: 'finished unseen' }))?.props.bold).toBe(true)
     expect(await ui.find({ type: 'Text', text: 'still going' })).toBeUndefined()
-    expect(await ui.find({ type: 'Text', text: /#7 open/ })).toBeDefined()
+    expect((await ui.find({ type: 'Link' }))?.props.href).toBe('https://github.com/o/r/pull/7')
+    expect((await ui.find({ type: 'Text', text: '#7' }))?.props.underline).toBe(true)
+    expect(await ui.find({ type: 'Text', text: ' PR ' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: ' open' })).toBeDefined()
     expect(await ui.find({ text: /1 folded/ })).toBeDefined()
     expect(await ui.find({ text: /put away/ })).toBeUndefined()
     await ui.press({ key: 'g' })

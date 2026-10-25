@@ -27,6 +27,8 @@ export const SNAPSHOT = `{
         "actionable": true,
         "pr": {
           "short": "PR #7",
+          "kind": "PR",
+          "ref": "#7",
           "state": "open",
           "url": "https://github.com/o/r/pull/7"
         },
