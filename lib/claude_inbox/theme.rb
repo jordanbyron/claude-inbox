@@ -28,9 +28,8 @@ module ClaudeInbox
     # The hue, or dim when there is none.
     def tint(hue, text) = hue ? public_send(hue, text) : dim(text)
 
-    # "#885 open", or "#885 open · ✗ checks" when something is wrong, the
-    # name an underlined link. `name` replaces the bare number where that
-    # would be ambiguous. A quiet badge is dim and leaves the trouble out.
+    # "#885 open", or "#885 open · ✗ checks" when something is wrong.
+    # `name` replaces the bare number where that would be ambiguous.
     def pr_badge(pr, name = pr.short, quiet: false)
       hue = PR_HUES[pr.state] unless quiet
       linked = Text.link(underline(tint(hue, name)), pr.url)
