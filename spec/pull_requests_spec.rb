@@ -12,9 +12,13 @@ RSpec.describe ClaudeInbox::PullRequests do
     expect(pr.number).to eq(885)
     expect(pr.state).to eq("DRAFT")
     expect(pr.title).to eq("feat(sensors): edge probe")
-    expect(pr.short).to eq("PR #885")
+    expect(pr.short).to eq("#885")
     expect(pr).not_to be_resolved
     expect(pr.health).to be_nil
+  end
+
+  it "numbers a GitLab merge request from its link" do
+    expect(prs.status("https://gitlab.com/c/uk43/-/merge_requests/3413").short).to eq("#3413")
   end
 
   it "reads what is wrong with an open PR, and nothing of a resolved one" do
@@ -56,13 +60,7 @@ RSpec.describe ClaudeInbox::PullRequests do
     expect(pr.qualified).to eq("jordanbyron/parks_genie#1020")
     elsewhere = ClaudeInbox::PullRequest.new(number: 4, url: "https://gitlab.com/o/r/-/merge_requests/4")
     expect(elsewhere.repo).to be_nil
-    expect(elsewhere.qualified).to eq("!4")
-  end
-
-  it "names a pull request as Claude Code does, and a link it can't number by its address" do
-    expect(ClaudeInbox::PullRequest.new(number: 885, url: "https://github.com/o/r/pull/885").short).to eq("PR #885")
-    expect(ClaudeInbox::PullRequest.new(url: "https://gitlab.com/c/uk43/-/merge_requests/3413").short).to eq("MR !3413")
-    expect(ClaudeInbox::PullRequest.new(url: "https://bitbucket.org/o/r/pull-requests/2").short).to eq("bitbucket.org/o/r/pull-requests/2")
+    expect(elsewhere.qualified).to eq("#4")
   end
 
   it "wants you back for failing checks and requested changes, not for a conflict" do

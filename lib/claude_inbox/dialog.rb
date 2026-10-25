@@ -103,11 +103,10 @@ module ClaudeInbox
       def fit = [WIDTH, lines(Float::INFINITY, nil).map { |l| Text.width(l) }.max + MARGIN].max
 
       # The list's badge, then the title. A bare #190 is ambiguous only
-      # once the list spans repos. TTY::Box cannot measure a link, and a
-      # click on a box goes nowhere, so the badge here is not one.
+      # once the list spans repos. TTY::Box cannot measure a link.
       def label(pr)
-        ref = (@prs.map(&:repo).uniq.size > 1) ? pr.qualified : pr.ref
-        badge = @theme.pr_badge(pr, ref).gsub(Text::LINK, "")
+        name = (@prs.map(&:repo).uniq.size > 1) ? pr.qualified : pr.short
+        badge = @theme.pr_badge(pr, name).gsub(Text::LINK, "")
         pr.title ? badge + @theme.dim(" · ") + pr.title : badge
       end
     end

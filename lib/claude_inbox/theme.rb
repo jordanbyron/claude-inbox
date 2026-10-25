@@ -28,16 +28,14 @@ module ClaudeInbox
     # The hue, or dim when there is none.
     def tint(hue, text) = hue ? public_send(hue, text) : dim(text)
 
-    # "PR #885 open", or "PR #885 open · ✗ checks" when something is wrong,
-    # drawn as Claude Code draws a PR: the kind dim, the ref an underlined
-    # link. `ref` replaces the bare number where that would be ambiguous. A
-    # quiet badge is dim and leaves the trouble out.
-    def pr_badge(pr, ref = pr.ref, quiet: false)
+    # "#885 open", or "#885 open · ✗ checks" when something is wrong, the
+    # name an underlined link. `name` replaces the bare number where that
+    # would be ambiguous. A quiet badge is dim and leaves the trouble out.
+    def pr_badge(pr, name = pr.short, quiet: false)
       hue = PR_HUES[pr.state] unless quiet
-      linked = ->(text) { Text.link(underline(tint(hue, text)), pr.url) }
-      name = ref ? dim("#{pr.kind} ") + linked.call(ref) : linked.call(pr.short)
-      return name unless PR_HUES.key?(pr.state)
-      badge = name + tint(hue, " #{pr.state.downcase}")
+      linked = Text.link(underline(tint(hue, name)), pr.url)
+      return linked unless PR_HUES.key?(pr.state)
+      badge = linked + tint(hue, " #{pr.state.downcase}")
       (pr.trouble && !quiet) ? badge + dim(" · ") + tint(PR_TROUBLE_HUES[pr.health], pr.trouble) : badge
     end
 

@@ -19,9 +19,7 @@ module ClaudeInbox
 
     def strip_ansi(s) = s.gsub(ANSI, "")
 
-    # `s` as a link to `url` in a terminal that supports them, plain text in
-    # one that doesn't. The url comes from a transcript, so it cannot carry
-    # a control character out of the sequence.
+    # The url comes from a transcript, so a control character in it is dropped.
     def link(s, url) = "\e]8;;#{url.delete("\x00-\x1f\x7f")}\e\\#{s}#{LINK_END}"
 
     Link = Data.define(:columns, :url)

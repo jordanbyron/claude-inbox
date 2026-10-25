@@ -32,10 +32,10 @@ RSpec.describe ClaudeInbox::Text do
   end
 
   it "links text without widening it, and closes a link the cut lands inside" do
-    linked = described_class.link("PR #7", "https://github.com/o/r/pull/7\e[2J")
-    expect(linked).to eq("\e]8;;https://github.com/o/r/pull/7[2J\e\\PR #7\e]8;;\e\\")
-    expect(described_class.width(linked)).to eq(5)
-    expect(described_class.truncate(linked, 4)).to eq("\e]8;;https://github.com/o/r/pull/7[2J\e\\PR \e]8;;\e\\\e[0m…")
+    linked = described_class.link("#885", "https://github.com/o/r/pull/7\e[2J")
+    expect(linked).to eq("\e]8;;https://github.com/o/r/pull/7[2J\e\\#885\e]8;;\e\\")
+    expect(described_class.width(linked)).to eq(4)
+    expect(described_class.truncate(linked, 3)).to eq("\e]8;;https://github.com/o/r/pull/7[2J\e\\#8\e]8;;\e\\\e[0m…")
   end
 
   it "wraps on display width" do

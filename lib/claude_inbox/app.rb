@@ -205,7 +205,6 @@ module ClaudeInbox
       end
     end
 
-    # The pointer is told only when it crosses into or out of a link.
     def point_at(link)
       return if @over_link == !link.nil?
       @over_link = !link.nil?

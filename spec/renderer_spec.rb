@@ -381,14 +381,14 @@ RSpec.describe "renderer session colors" do
     end
   end
 
-  it "links a row's PR by its ref, so a click there can open it" do
-    pr = ClaudeInbox::PullRequest.new(url: "https://gitlab.com/c/uk43/-/merge_requests/3413", state: "OPEN")
+  it "links a row's PR by its number, so a click there can open it" do
+    pr = ClaudeInbox::PullRequest.new(number: 3413, url: "https://gitlab.com/c/uk43/-/merge_requests/3413", state: "OPEN")
     sec = ClaudeInbox::Store.sectionize([session(id: "z", name: "shipit", prs: [pr])], {}, now)
     frame = renderer.frame(sec, view)
     row = frame.lines.index { |l| l.include?("shipit") } + 1
     text = ClaudeInbox::Text.strip_ansi(frame.lines[row - 1])
-    col = text.index("!3413") + 1
-    expect(text).to include("MR !3413 open")
+    col = text.index("#3413") + 1
+    expect(text).to include("#3413 open")
     expect(frame.link_at(row, col)).to eq(pr.url)
     expect(frame.link_at(row, col + 4)).to eq(pr.url)
     expect(frame.link_at(row, col - 2)).to be_nil
