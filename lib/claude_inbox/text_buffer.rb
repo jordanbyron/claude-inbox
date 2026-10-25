@@ -35,6 +35,8 @@ module ClaudeInbox
 
     def initialize(text = "")
       @widths = Hash.new { |h, s| h[s] = Text.width(s) }
+      @images = 0
+      @pastes = 0
       replace(text)
     end
 
@@ -77,11 +79,11 @@ module ClaudeInbox
 
     # Chips are numbered per kind and never reused, so a second image is
     # `[Image #2]` even after the first was deleted, as Claude Code does.
-    def attach(path) = place(Image.new(@images = (@images || 0) + 1, path))
+    def attach(path) = place(Image.new(@images += 1, path))
 
     def paste(text)
       return insert(text) if text.size <= FOLD_CHARS && text.count("\n") < FOLD_LINES
-      place(Pasted.new(@pastes = (@pastes || 0) + 1, text))
+      place(Pasted.new(@pastes += 1, text))
     end
 
     # Handles one keypress: readline's editing keys, plus printable text.
