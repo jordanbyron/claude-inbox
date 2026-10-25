@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
 module ClaudeInbox
-  # Runs a helper command with stdout/stderr captured, in its own session so
-  # it is not associated with our tty. Terminal.app (and others) put the
-  # "active process" of the tty in the tab title; without this the title
-  # flips to "claude" or "ps" on every poll.
+  # Runs a helper command with its output captured, in a session of its own
+  # so it never reaches the tab title (docs/cli-quirks.md).
   module Subprocess
     Result = Struct.new(:out, :err, :status) do
       def success? = status.success?
