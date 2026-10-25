@@ -133,7 +133,7 @@ module ClaudeInbox
     # clone follows the fork.
     def fetch_upstream
       remote = git("config", "branch.main.remote") or raise Error, "main tracks no remote"
-      fetched = @run.call("git", "-C", @root, "fetch", "--quiet", remote)
+      fetched = run_git("fetch", "--quiet", remote)
       raise Error, "git fetch #{remote} failed: #{fetched.err.strip}" unless fetched.success?
       git("rev-parse", "main@{upstream}") or raise Error, "main tracks no remote"
     end
@@ -142,12 +142,14 @@ module ClaudeInbox
       branch = git("symbolic-ref", "--short", "HEAD")
       return Applied.new(success: false, output: "not on main (on #{branch})") unless branch == "main"
       return Applied.new(success: false, output: "the working tree is dirty") unless git("status", "--porcelain") == ""
-      merged = @run.call("git", "-C", @root, "merge", "--ff-only", "--quiet", "main@{upstream}")
+      merged = run_git("merge", "--ff-only", "--quiet", "main@{upstream}")
       Applied.from(merged)
     end
 
+    def run_git(*args) = @run.call("git", "-C", @root, *args)
+
     def git(*args)
-      result = @run.call("git", "-C", @root, *args)
+      result = run_git(*args)
       result.out.strip if result.success?
     end
 
