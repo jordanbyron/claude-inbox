@@ -111,12 +111,12 @@ module ClaudeInbox
       # closes, so a frame per character would only stall a long one. Mouse
       # moves arrive many times a second and only change the pointer's
       # shape, so they don't redraw the screen.
-      render unless @input.pasting? || only_moves?(events)
+      render unless @input.pasting? || only_mouse_moving?(events)
     end
 
     private
 
-    def only_moves?(events) = events.any? && events.all? { |kind, e| kind == :mouse && e.kind == :move }
+    def only_mouse_moving?(events) = events.any? && events.all? { |kind, e| kind == :mouse && e.kind == :move }
 
     def install_traps
       at_exit { @terminal.restore }
