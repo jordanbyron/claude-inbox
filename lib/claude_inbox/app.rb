@@ -87,7 +87,7 @@ module ClaudeInbox
     end
 
     def run
-      @booted_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      @booted_at = monotonic
       install_traps
       @terminal.enter
       @poller.start
@@ -264,7 +264,7 @@ module ClaudeInbox
     end
 
     def render
-      t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      t0 = monotonic
       now = Time.now
       all = @store.sections(now)
       @snapshot.write(all, now)
@@ -283,7 +283,7 @@ module ClaudeInbox
       frame = frame.plain unless @color # --no-color: decided here and nowhere else
       placed(frame)
       @terminal.paint(frame.lines)
-      dt = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+      dt = monotonic - t0
       Debug.log("render #{(dt * 1000).round}ms") if dt > 0.05
     end
 
@@ -309,11 +309,13 @@ module ClaudeInbox
     # already says how to retry.
     def loading_for
       return nil if @last_poll || @error || !@booted_at
-      Process.clock_gettime(Process::CLOCK_MONOTONIC) - @booted_at
+      monotonic - @booted_at
     end
 
     def notice(msg)
       @notice = [msg, Time.now + 4]
     end
+
+    def monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC)
   end
 end
