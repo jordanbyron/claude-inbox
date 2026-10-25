@@ -48,7 +48,7 @@ in `$TMPDIR/claude-inbox-fixture/listen.json`, and its starts start nothing.
 
 There's no hosted CI. `bin/ci` runs on your machine and reports back with
 [gh-signoff](https://github.com/basecamp/gh-signoff). The suite takes about
-five seconds.
+four seconds.
 
 1. Push your branch and open the PR.
 2. Run `bin/ci`. It runs `bundle install`, `standardrb`, `bundle-audit`,
@@ -70,11 +70,8 @@ PRs from forks. Open your PR against `jordanbyron/claude-inbox` and run
 on the PR. A maintainer reads the PR, checks it out, and runs `bin/ci` to sign
 it off. Each push you make after that needs another run.
 
-The specs run against an empty `HOME`, so your `~/.claude` and
-`~/.config/claude-inbox` neither change what they see nor get written to, and
-they read files as UTF-8 whatever your locale. A run in random order that
-passes on your machine should pass on anyone's; if one doesn't, rerun it with
-the `--seed` it printed and `--bisect` to find the example it depends on.
+The specs run against an empty `HOME` and read files as UTF-8 whatever your
+locale.
 
 While iterating:
 

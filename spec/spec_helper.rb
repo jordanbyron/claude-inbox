@@ -6,15 +6,11 @@ require "json"
 require "tmpdir"
 require "fileutils"
 
-# As exe/claude-inbox sets it, so the suite reads files the way the app does
-# under any locale.
+# As exe/claude-inbox sets it, whatever the locale.
 Encoding.default_external = Encoding::UTF_8
 
-# lib/ resolves ~/.claude and ~/.config/claude-inbox when it loads, so the
-# home it sees is an empty one: no example reads your settings, trusted
-# directories or inbox state, or writes over them. Set after bundler/setup,
-# which still wants the real home to find its config, and in the environment
-# Bundler saved too, since that is the one Subprocess hands its children.
+# lib/ resolves ~ when it loads, so it must see an empty home: set after
+# bundler/setup, which needs the real one, and in the env Subprocess hands on.
 home = Dir.mktmpdir("claude-inbox-home")
 ENV["HOME"] = Bundler::ORIGINAL_ENV["HOME"] = home
 at_exit { FileUtils.remove_entry(home) }
@@ -31,8 +27,7 @@ RSpec.configure do |config|
   config.order = :random
   Kernel.srand config.seed
 
-  # An exit or abort the example didn't expect fails that example; left
-  # alone it would end the run there, reporting no failures.
+  # A stray exit would otherwise end the run reporting no failures.
   config.around do |example|
     example.run
   rescue SystemExit => e
