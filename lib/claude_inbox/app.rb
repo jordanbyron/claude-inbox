@@ -108,8 +108,9 @@ module ClaudeInbox
       end
       events = input ? handle_input(input) : []
       # A paste arrives a character per read and shows nothing until it
-      # closes, so a frame per character would only stall a long one. The
-      # pointer moving reports many times a second and changes nothing drawn.
+      # closes, so a frame per character would only stall a long one. Mouse
+      # moves arrive many times a second and only change the pointer's
+      # shape, so they don't redraw the screen.
       render unless @input.pasting? || only_moves?(events)
     end
 
