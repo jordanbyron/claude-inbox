@@ -144,13 +144,13 @@ module ClaudeInbox
 
       def lines(width, _caret)
         case kind
-        when :stop then [ask("Stop", width), "", "  " + hint("y", "stop it"), "  " + hint("esc", "cancel")]
+        when :stop then [ask("Stop", width), *answers("stop it", "cancel")]
         when :delete
           [ask("Delete", width), "  Its worktree and conversation", "  go with it.",
-            "", "  " + hint("y", "delete it"), "  " + hint("esc", "keep it")]
+            *answers("delete it", "keep it")]
         when :adopt
           ["  Pull this session into the daemon?", "  Its phone session ends and a",
-            "  new one takes its place.", "", "  " + hint("y", "adopt it"), "  " + hint("esc", "cancel")]
+            "  new one takes its place.", *answers("adopt it", "cancel")]
         end
       end
 
@@ -164,6 +164,8 @@ module ClaudeInbox
 
       # One line, so a long name is cut rather than wrapped mid-word.
       def ask(verb, width) = "  #{verb} #{Text.truncate(@label.to_s, width - Text.width(verb) - 4)}?"
+
+      def answers(yes, no) = ["", "  " + hint("y", yes), "  " + hint("esc", no)]
     end
 
     # The first launch without the Claude Code pane asks once whether to add
