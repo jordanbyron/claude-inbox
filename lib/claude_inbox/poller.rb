@@ -58,17 +58,17 @@ module ClaudeInbox
       sessions = Sessions.load(client: @client, pull_requests: @pull_requests, transcripts: @transcripts, overrides: @store.pr_overrides)
       doomed = @reaper.due(sessions, now)
       @store.hide(doomed)
-      publish(sessions)
+      publish(sessions, now)
       reaped = []
       begin
         reaped = @reaper.sweep(sessions.select { |s| doomed.include?(s.key) }, now)
       ensure
         @store.release(doomed - reaped)
       end
-      publish(sessions) if reaped != doomed
+      publish(sessions, now) if reaped != doomed
       @queue << [:notice, @reaper.report(reaped)] if reaped.any?
       fresh, moved = @pull_requests.refresh(sessions)
-      publish(fresh) if moved
+      publish(fresh, now) if moved
     rescue => e
       @queue << [:error, e.message]
     end
@@ -82,10 +82,10 @@ module ClaudeInbox
 
     # The notifier compares the sections from just before the hand-over, so
     # a row you woke or unpinned yourself since the last poll says nothing.
-    def publish(sessions)
+    def publish(sessions, fetched_at)
       now = @clock.call
       before = @store.sections(now)
-      @store.update(sessions)
+      @store.update(sessions, fetched_at:)
       after = @store.sections(now)
       @snapshot.write(after, now)
       @notifier.deliver(before, after) { |msg| @queue << [:notice, msg] }

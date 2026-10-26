@@ -549,6 +549,50 @@ RSpec.describe ClaudeInbox::Store do
       expect(store.sections.active.first).to be_unread
     end
 
+    it "keeps the leave open past a list asked for before you left" do
+      clock = now
+      store = described_class.new(path: nil, clock: -> { clock })
+      store.update([session(id: "a", state: "working")])
+      store.visit("a") { clock += 10 }
+      store.update([session(id: "a", state: "working")], fetched_at: clock - 5)
+      clock += 10
+      store.update([session(id: "a", state: "done")])
+      expect(store.sections.active.first).not_to be_unread
+    end
+
+    it "relays one acknowledge per change a reader sees, and holds the leave until the writer takes it" do
+      Dir.mktmpdir do |dir|
+        clock = now
+        path = File.join(dir, "state.json")
+        requests = File.join(dir, "actions")
+        writer = described_class.new(path:, clock: -> { clock })
+        reader = described_class.new(path:, clock: -> { clock }, writable: false,
+          relay: ClaudeInbox::Actions.new(dir: requests, clock: -> { clock }))
+        drain = -> { ClaudeInbox::Actions.new(dir: requests, clock: -> { clock }).drain(writer) }
+        poll = ->(state) { [writer, reader].each { |store| store.update([session(id: "a", state:)]) } }
+        poll.call("working")
+        reader.visit("a") do
+          expect(drain.call).to eq(1)
+          2.times { poll.call("working") }
+          expect(drain.call).to eq(0)
+          clock += 10
+          poll.call("done")
+        end
+        expect(drain.call).to eq(1)
+        clock += 10
+        poll.call("blocked")
+        poll.call("blocked")
+        expect(drain.call).to eq(2)
+        poll.call("blocked")
+        expect(reader.sections.active.first).not_to be_unread
+        clock += 10
+        poll.call("working")
+        poll.call("done")
+        expect(drain.call).to eq(0)
+        expect(reader.sections.active.first).to be_unread
+      end
+    end
+
     it "holds an acknowledged PR failure in Active until the PR's health changes again" do
       done = ->(health) { session(id: "a", state: "done", prs: [ClaudeInbox::PullRequest.new(number: 7, state: "OPEN", health: health)]) }
       entries = described_class.merge_entries({}, [done.call(nil)], now)

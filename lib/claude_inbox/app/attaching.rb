@@ -36,6 +36,7 @@ module ClaudeInbox
               @terminal.pause unless @client.attach(id) { @switch.requested_for?(from) }
             end
           end
+          @poller.soon
           id = @switch.take(@store.actionable_keys)
         end
       end

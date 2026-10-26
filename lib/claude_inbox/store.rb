@@ -79,29 +79,36 @@ module ClaudeInbox
       @hidden = Set.new
       @forgotten = Set.new
       @visiting = Set.new
-      @leaving = Set.new
+      @leaving = {}
       @entries = load
     end
 
     # A hidden or forgotten key the daemon has stopped listing is released;
-    # one it still lists stays out of sight.
-    def update(sessions)
-      @mutex.synchronize do
+    # one it still lists stays out of sight. `fetched_at` is when the list
+    # was asked for, which can be well before it is handed over.
+    def update(sessions, fetched_at: @clock.call)
+      seen = @mutex.synchronize do
         keys = sessions.map(&:key)
         @hidden &= keys
         @forgotten &= keys
         @sessions = sessions.reject { |s| @hidden.include?(s.key) || @forgotten.include?(s.key) }
         @entries = self.class.merge_entries(@writable ? @entries : load, @sessions, @clock.call)
-        (@visiting | @leaving).each { |id| see(id) if @entries[id] }
-        @leaving.clear
+        # A list asked for before you left can predate what you saw last.
+        left = @leaving.select { |_, left_at| fetched_at >= left_at }.keys
+        seen = (@visiting.to_a | left).select { |id| see(id) }
+        # A reader reloads state.json each poll, so it holds the visit open
+        # until the writer has taken its acknowledge.
+        (@writable ? left : left - seen).each { |id| @leaving.delete(id) }
         save
+        seen
       end
+      seen.each { |id| relay("acknowledge", id) }
     end
 
     # You are in the session for the length of the block, so whatever it
-    # does meanwhile is seen, not unread. The first poll after you leave
-    # still counts: a state that changed in your last seconds there is only
-    # recorded then.
+    # does meanwhile is seen, not unread. The first list asked for after you
+    # leave still counts: a state that changed in your last seconds there is
+    # only recorded then.
     def visit(id)
       acknowledge(id)
       @mutex.synchronize { @visiting << id }
@@ -109,7 +116,7 @@ module ClaudeInbox
     ensure
       @mutex.synchronize do
         @visiting.delete(id)
-        @leaving << id
+        @leaving[id] = @clock.call
       end
     end
 
@@ -192,13 +199,20 @@ module ClaudeInbox
         yield Entry.new(@entries[id] ||= Entry.blank(@clock.call).to_h)
         save
       end
+      relay(action, id, **detail)
+    end
+
+    def relay(action, id, **detail)
       @relay&.request(action, id, **detail) unless @writable
     end
 
-    # `edit` without its lock, for `update`, which already holds it.
+    # Acknowledges the state the last poll found, and says whether it had to:
+    # `Entry#observe` drops an acknowledgement once the state outruns it.
     def see(id)
-      Entry.new(@entries[id]).acknowledge(@clock.call)
-      @relay&.request("acknowledge", id) unless @writable
+      entry = @entries[id] && Entry.new(@entries[id])
+      return false if entry.nil? || entry.acknowledged_at
+      entry.acknowledge(@clock.call)
+      true
     end
 
     def load
