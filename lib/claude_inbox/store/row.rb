@@ -3,7 +3,8 @@
 module ClaudeInbox
   class Store
     # A session paired with its Entry (nil until a poll has recorded one), with
-    # the triage rules as its methods; each takes `now`, so a Row is pure.
+    # the triage rules as its methods. A rule that depends on the time takes
+    # `now`, so a Row is pure.
     Row = Struct.new(:session, :entry) do
       def key = session.key
 
@@ -118,8 +119,8 @@ module ClaudeInbox
 
       private
 
-      # Finished or needing you, so it carries a read or unread mark. Only a
-      # session you can attach to counts, since nothing else ever clears it.
+      # Only a session you can attach to carries a read or unread mark, since
+      # nothing else ever clears it.
       def markable? = session.actionable? && (session.finished? || session.needs_you?)
 
       def unchanged_since?(at) = at && entry.state_since.to_i <= at.to_i
