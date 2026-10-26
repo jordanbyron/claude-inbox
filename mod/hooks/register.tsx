@@ -95,6 +95,11 @@ function itemKey(item: Item): string {
   return item.kind === 'fold' ? `fold:${item.section}` : `row:${item.row.id ?? item.row.label}`
 }
 
+// The Button drawn for a row's pull request, a click on which opens it.
+function prKey(item: Item): string | undefined {
+  return item.kind === 'row' && item.row.pr ? `pr:${itemKey(item)}` : undefined
+}
+
 // The visible box drawn for an item, what the pane scrolls to.
 function viewKey(item: Item): string {
   return `view:${itemKey(item)}`
@@ -313,14 +318,18 @@ export const register: Register = (on, options) => {
   // the cursor's item, the arrows move it to the next, and the cursor follows.
   on('ui.focus', { requestId: PANE }, async ($, e, next) => {
     const flat = await listed($)
+    const was = onList(flat, await read($, cursor))
     if (e.element === undefined) {
-      const item = flat[onList(flat, await read($, cursor))]
+      const item = flat[was]
       return item ? next({ ...e, element: itemKey(item) }) : next(e)
     }
-    const at = flat.findIndex(item => itemKey(item) === e.element)
+    // A PR chip's Button sits in the ring between its row and the next: the ring arrives on it going down
+    // from its own row, so it passes on to the next; going up, or by a click, it lands on its own row.
+    const chipOf = flat.findIndex(item => prKey(item) === e.element)
+    const at = chipOf < 0 ? flat.findIndex(item => itemKey(item) === e.element) : chipOf === was ? Math.min(chipOf + 1, flat.length - 1) : chipOf
     if (at < 0) return {}
     await update($, cursor, () => at)
-    return next(e)
+    return next({ ...e, element: itemKey(flat[at]!) })
   })
 
   // An arrow in a focused pane scrolls its body a row while the tree is taller than the
@@ -335,7 +344,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button, Link } = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
     const list = await read($, rows)
     const viewing = await read($, current)
     const folded = await read($, folds)
@@ -383,6 +392,12 @@ export const register: Register = (on, options) => {
       if (item.row === viewing) return $.ui.toast('you are in this session')
       if (!item.row.id || !item.row.actionable) return $.ui.toast('this session cannot be attached')
       void requestSwitch($, host, item.row.id)
+    }
+    // The click's focus may have walked the ring past the row, so the cursor is put back on it.
+    const openPr = (item: Item) => () => {
+      if (item.kind !== 'row' || !item.row.pr) return
+      const url = item.row.pr.url
+      void moveTo($, flat, flat.indexOf(item)).then(() => openInBrowser($, url))
     }
 
     // Only the keys a chord allows are mounted while it waits, so any other key is a no-op.
@@ -475,10 +490,13 @@ export const register: Register = (on, options) => {
               return (
                 <Box key={viewKey(item)} flexDirection="column">
                   <Box>
-                    <Text color={isHere ? 'yellow' : 'blue'}>{isHere ? '› ' : dot ? '● ' : '  '}</Text>
-                    <Text color={COLOR[one.state]} dimColor={isQuiet || one.state === 'done'}>
-                      {GLYPH[one.state] ?? '·'}{' '}
-                    </Text>
+                    {/* Only the label gives way to a long row: a squeezed glyph wraps under itself. */}
+                    <Box flexShrink={0}>
+                      <Text color={isHere ? 'yellow' : 'blue'}>{isHere ? '› ' : dot ? '● ' : '  '}</Text>
+                      <Text color={COLOR[one.state]} dimColor={isQuiet || one.state === 'done'}>
+                        {GLYPH[one.state] ?? '·'}{' '}
+                      </Text>
+                    </Box>
                     {/* A Button cannot truncate, so its Box clips a long label to the row. A Button takes no
                         color either, so a session's /color is the Box's background rather than the label's ink. */}
                     <Box key={`label:${itemKey(item)}`} height={1} flexShrink={1} overflow="hidden" backgroundColor={tint}>
@@ -494,15 +512,19 @@ export const register: Register = (on, options) => {
                         {one.isUnread && !isQuiet ? <Text bold>{text}</Text> : text}
                       </Button>
                     </Box>
-                    {/* The label gives up its cells to the PR chip, which would otherwise wrap under it. */}
+                    {/* Takes what a short label leaves, so the PR and age sit at the right edge on every row;
+                        the label's own box would stretch a /color tint across it. */}
+                    <Box flexGrow={1} />
+                    {/* The label gives up its cells to the PR chip, which would otherwise wrap under it. The chip is
+                        a Button rather than a Link: a terminal without OSC 8 cannot click a Link, and prints its URL. */}
                     {one.pr ? (
                       <Box flexShrink={0}>
-                        <Box key={`pr:${itemKey(item)}`} marginLeft={1} hover={{ backgroundColor: 'subtle' }}>
-                          <Link href={one.pr.url}>
+                        <Box marginLeft={1}>
+                          <Button key={prKey(item)} plain label={one.pr.short} onPress={openPr(item)}>
                             <Text underline color={isQuiet ? undefined : PR_COLOR[one.pr.state]} dimColor={isQuiet}>
                               {one.pr.short}
                             </Text>
-                          </Link>
+                          </Button>
                         </Box>
                         <Text color={isQuiet ? undefined : PR_COLOR[one.pr.state]} dimColor={isQuiet}>
                           {' '}

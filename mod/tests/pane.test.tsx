@@ -129,7 +129,7 @@ test("rows sit under the gem's sections, Settled folded until za opens it", asyn
     expect((await ui.findAll({ type: 'Text', text: '● ' })).filter(dot => dot.props.color === 'blue')).toHaveLength(1)
     expect((await ui.find({ type: 'Text', text: 'finished unseen' }))?.props.bold).toBe(true)
     expect(await ui.find({ type: 'Text', text: 'still going' })).toBeUndefined()
-    expect((await ui.find({ type: 'Link' }))?.props.href).toBe('https://github.com/o/r/pull/7')
+    expect((await ui.find({ type: 'Button', key: 'pr:row:b2' }))?.props.label).toBe('#7')
     expect((await ui.find({ type: 'Text', text: '#7' }))?.props.underline).toBe(true)
     expect(await ui.find({ text: /1 folded/ })).toBeDefined()
     expect(await ui.find({ text: /put away/ })).toBeUndefined()
@@ -250,7 +250,7 @@ test('a switch hands the keys back to the prompt before it asks, so a return lan
   await ui.unmount()
 })
 
-test('o and w hand the keys back to the prompt before they open the browser', async ($, on) => {
+test('o, w and a click on the PR hand the keys back to the prompt before they open the browser', async ($, on) => {
   mock.env(on, { HOME: '/Users/me' })
   mock.clock(on, { now: 1_700_000_000_000 })
   const remote = { ...ROWS[1], remote: 'https://claude.ai/code/session_b2' }
@@ -271,6 +271,7 @@ test('o and w hand the keys back to the prompt before they open the browser', as
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'o' })
   await ui.press({ key: 'w' })
+  await ui.press({ key: 'pr:row:b2' })
   expect(calls).toEqual([
     'close inbox',
     'open inbox',
@@ -278,6 +279,9 @@ test('o and w hand the keys back to the prompt before they open the browser', as
     'close inbox',
     'open inbox',
     'open https://claude.ai/code/session_b2',
+    'close inbox',
+    'open inbox',
+    'open https://github.com/o/r/pull/7',
   ])
   await ui.unmount()
 })
@@ -359,4 +363,24 @@ test('with openOnStart off only /inbox opens it', { options: { openOnStart: fals
   await $.session.start({ cwd: '/tmp/proj', surface: 'terminal', isInteractive: true })
   await polled
   expect(opened).toEqual([])
+})
+
+test("the ring steps over a row's PR chip: down to the next row, up onto its own", async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  on('state.get', ($, e, next) => (e.key === 'rows' ? seeded(ROWS) : e.key === 'writtenAt' ? seeded(1_700_000_000) : next(e)))
+  const landed: (string | undefined)[] = []
+  on('ui.focus', ($, e) => {
+    landed.push(e.element)
+    return {}
+  })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  // The harness has no ring to walk, so the test raises ui.focus as the engine does for an arrow.
+  const arrowOnto = (element: string) =>
+    $.ui.focus({ component: 'Pane', requestId: 'inbox', plugin: 'inbox-pane', element, origin: { kind: 'person' } } as never)
+  await arrowOnto('row:b2')
+  await arrowOnto('pr:row:b2')
+  await arrowOnto('pr:row:b2')
+  expect(landed).toEqual(['row:b2', 'row:uuid-term', 'row:b2'])
+  await ui.unmount()
 })
