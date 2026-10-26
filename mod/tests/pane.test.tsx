@@ -131,6 +131,7 @@ test("rows sit under the gem's sections, Settled folded until za opens it", asyn
     expect(await ui.find({ type: 'Text', text: 'still going' })).toBeUndefined()
     expect((await ui.find({ type: 'Link' }))?.props.href).toBe('https://github.com/o/r/pull/7')
     expect((await ui.find({ type: 'Text', text: '#7' }))?.props.underline).toBe(true)
+    expect((await ui.find({ type: 'Box', key: 'pr:row:b2' }))?.props).toMatchObject({ width: 2, height: 1, overflow: 'hidden' })
     expect(await ui.find({ text: /1 folded/ })).toBeDefined()
     expect(await ui.find({ text: /put away/ })).toBeUndefined()
     await ui.press({ key: 'g' })

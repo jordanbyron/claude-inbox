@@ -494,10 +494,18 @@ export const register: Register = (on, options) => {
                         {one.isUnread && !isQuiet ? <Text bold>{text}</Text> : text}
                       </Button>
                     </Box>
-                    {/* The label gives up its cells to the PR chip, which would otherwise wrap under it. */}
+                    {/* The label gives up its cells to the PR chip, which would otherwise wrap under it. A terminal
+                        without OSC 8 draws a Link's URL after its text, so the link is clipped to its text. */}
                     {one.pr ? (
                       <Box flexShrink={0}>
-                        <Box key={`pr:${itemKey(item)}`} marginLeft={1} hover={{ backgroundColor: 'subtle' }}>
+                        <Box
+                          key={`pr:${itemKey(item)}`}
+                          marginLeft={1}
+                          width={one.pr.short.length}
+                          height={1}
+                          overflow="hidden"
+                          hover={{ backgroundColor: 'subtle' }}
+                        >
                           <Link href={one.pr.url}>
                             <Text underline color={isQuiet ? undefined : PR_COLOR[one.pr.state]} dimColor={isQuiet}>
                               {one.pr.short}
