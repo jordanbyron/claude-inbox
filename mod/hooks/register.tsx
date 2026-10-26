@@ -335,7 +335,7 @@ export const register: Register = (on, options) => {
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Box, Text, Button, Link } = $.ui.resolve(e)
+    const { Box, Text, Button } = $.ui.resolve(e)
     const list = await read($, rows)
     const viewing = await read($, current)
     const folded = await read($, folds)
@@ -494,23 +494,16 @@ export const register: Register = (on, options) => {
                         {one.isUnread && !isQuiet ? <Text bold>{text}</Text> : text}
                       </Button>
                     </Box>
-                    {/* The label gives up its cells to the PR chip, which would otherwise wrap under it. A terminal
-                        without OSC 8 draws a Link's URL after its text, so the link is clipped to its text. */}
+                    {/* The label gives up its cells to the PR chip, which would otherwise wrap under it. The chip is
+                        a Button rather than a Link: a terminal without OSC 8 cannot click a Link, and prints its URL. */}
                     {one.pr ? (
                       <Box flexShrink={0}>
-                        <Box
-                          key={`pr:${itemKey(item)}`}
-                          marginLeft={1}
-                          width={one.pr.short.length}
-                          height={1}
-                          overflow="hidden"
-                          hover={{ backgroundColor: 'subtle' }}
-                        >
-                          <Link href={one.pr.url}>
+                        <Box marginLeft={1}>
+                          <Button key={`pr:${itemKey(item)}`} plain label={one.pr.short} onPress={() => void openInBrowser($, one.pr!.url)}>
                             <Text underline color={isQuiet ? undefined : PR_COLOR[one.pr.state]} dimColor={isQuiet}>
                               {one.pr.short}
                             </Text>
-                          </Link>
+                          </Button>
                         </Box>
                         <Text color={isQuiet ? undefined : PR_COLOR[one.pr.state]} dimColor={isQuiet}>
                           {' '}

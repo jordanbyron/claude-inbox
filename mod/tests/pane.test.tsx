@@ -129,9 +129,8 @@ test("rows sit under the gem's sections, Settled folded until za opens it", asyn
     expect((await ui.findAll({ type: 'Text', text: '● ' })).filter(dot => dot.props.color === 'blue')).toHaveLength(1)
     expect((await ui.find({ type: 'Text', text: 'finished unseen' }))?.props.bold).toBe(true)
     expect(await ui.find({ type: 'Text', text: 'still going' })).toBeUndefined()
-    expect((await ui.find({ type: 'Link' }))?.props.href).toBe('https://github.com/o/r/pull/7')
+    expect((await ui.find({ type: 'Button', key: 'pr:row:b2' }))?.props.label).toBe('#7')
     expect((await ui.find({ type: 'Text', text: '#7' }))?.props.underline).toBe(true)
-    expect((await ui.find({ type: 'Box', key: 'pr:row:b2' }))?.props).toMatchObject({ width: 2, height: 1, overflow: 'hidden' })
     expect(await ui.find({ text: /1 folded/ })).toBeDefined()
     expect(await ui.find({ text: /put away/ })).toBeUndefined()
     await ui.press({ key: 'g' })
@@ -251,7 +250,7 @@ test('a switch hands the keys back to the prompt before it asks, so a return lan
   await ui.unmount()
 })
 
-test('o and w hand the keys back to the prompt before they open the browser', async ($, on) => {
+test('o, w and a click on the PR hand the keys back to the prompt before they open the browser', async ($, on) => {
   mock.env(on, { HOME: '/Users/me' })
   mock.clock(on, { now: 1_700_000_000_000 })
   const remote = { ...ROWS[1], remote: 'https://claude.ai/code/session_b2' }
@@ -272,6 +271,7 @@ test('o and w hand the keys back to the prompt before they open the browser', as
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'o' })
   await ui.press({ key: 'w' })
+  await ui.press({ key: 'pr:row:b2' })
   expect(calls).toEqual([
     'close inbox',
     'open inbox',
@@ -279,6 +279,9 @@ test('o and w hand the keys back to the prompt before they open the browser', as
     'close inbox',
     'open inbox',
     'open https://claude.ai/code/session_b2',
+    'close inbox',
+    'open inbox',
+    'open https://github.com/o/r/pull/7',
   ])
   await ui.unmount()
 })
