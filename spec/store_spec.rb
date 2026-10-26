@@ -531,6 +531,24 @@ RSpec.describe ClaudeInbox::Store do
       end
     end
 
+    it "keeps a session read while you are in it, and through the first poll after you leave" do
+      clock = now
+      store = described_class.new(path: nil, clock: -> { clock })
+      store.update([session(id: "a", state: "working")])
+      store.visit("a") do
+        clock += 10
+        store.update([session(id: "a", state: "done")])
+        expect(store.sections.active.first).not_to be_unread
+      end
+      clock += 10
+      store.update([session(id: "a", state: "blocked")])
+      expect(store.sections.active.first).not_to be_unread
+      clock += 10
+      store.update([session(id: "a", state: "working")])
+      store.update([session(id: "a", state: "done")])
+      expect(store.sections.active.first).to be_unread
+    end
+
     it "holds an acknowledged PR failure in Active until the PR's health changes again" do
       done = ->(health) { session(id: "a", state: "done", prs: [ClaudeInbox::PullRequest.new(number: 7, state: "OPEN", health: health)]) }
       entries = described_class.merge_entries({}, [done.call(nil)], now)

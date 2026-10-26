@@ -78,6 +78,8 @@ module ClaudeInbox
       @sessions = []
       @hidden = Set.new
       @forgotten = Set.new
+      @visiting = Set.new
+      @leaving = Set.new
       @entries = load
     end
 
@@ -90,7 +92,24 @@ module ClaudeInbox
         @forgotten &= keys
         @sessions = sessions.reject { |s| @hidden.include?(s.key) || @forgotten.include?(s.key) }
         @entries = self.class.merge_entries(@writable ? @entries : load, @sessions, @clock.call)
+        (@visiting | @leaving).each { |id| see(id) if @entries[id] }
+        @leaving.clear
         save
+      end
+    end
+
+    # You are in the session for the length of the block, so whatever it
+    # does meanwhile is seen, not unread. The first poll after you leave
+    # still counts: a state that changed in your last seconds there is only
+    # recorded then.
+    def visit(id)
+      acknowledge(id)
+      @mutex.synchronize { @visiting << id }
+      yield
+    ensure
+      @mutex.synchronize do
+        @visiting.delete(id)
+        @leaving << id
       end
     end
 
@@ -174,6 +193,12 @@ module ClaudeInbox
         save
       end
       @relay&.request(action, id, **detail) unless @writable
+    end
+
+    # `edit` without its lock, for `update`, which already holds it.
+    def see(id)
+      Entry.new(@entries[id]).acknowledge(@clock.call)
+      @relay&.request("acknowledge", id) unless @writable
     end
 
     def load
