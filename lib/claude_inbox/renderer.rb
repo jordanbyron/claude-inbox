@@ -375,22 +375,21 @@ module ClaudeInbox
 
     def meta_for(row, section, now)
       s = row.session
+      age = Text.age(now.to_i - row.spoke_at)
       base =
         case section
         when :snoozed
           wake = row.parked? ? @theme.purple("parked") : @theme.purple("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
           row.pinned? ? wake + @theme.cyan(" ★") : wake
         when :settled
-          @p.dim("#{s.state} · #{Text.age(now.to_i - row.spoke_at)}")
+          @p.dim("#{s.state} · #{age}")
         else
           if s.interactive?
             where = s.remote? ? "remote" : "your terminal"
-            age = Text.age(now.to_i - row.spoke_at)
             state_badge(s) + @p.dim(" · #{where} · #{age}")
           else
-            age = @p.dim(" · " + Text.age(now.to_i - row.spoke_at))
             remote = s.remote_control? ? @theme.blue(" ⇅") : ""
-            state_badge(s) + remote + age
+            state_badge(s) + remote + @p.dim(" · #{age}")
           end
         end
       pr = pr_badge(s, section)
