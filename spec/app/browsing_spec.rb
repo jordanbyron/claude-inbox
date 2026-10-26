@@ -37,13 +37,13 @@ RSpec.describe ClaudeInbox::App do
       expect(opened).to eq(["https://github.com/o/r/pull/190"])
     end
 
-    it "asks which of several, and o again opens the oldest open one" do
+    it "asks which of several, and o again opens the headline" do
       link.call(stack)
       press(app, "o")
-      expect(screen(app).join("\n")).to include("2  #191 open · ✗ checks")
+      expect(screen(app).join("\n")).to include("1  #191 open · ✗ checks")
       press(app, "o")
       expect(wait_for { opened.any? }).to be(true)
-      expect(opened).to eq(["https://github.com/o/r/pull/190"])
+      expect(opened).to eq(["https://github.com/o/r/pull/191"])
       expect(screen(app).join("\n")).not_to include("Open pull request")
     end
 
@@ -53,12 +53,12 @@ RSpec.describe ClaudeInbox::App do
       outside = screen(app).index { |l| l.include?("#856") }
       press(app, "\e[<35;#{screen(app)[outside].index("#856") + 1};#{outside + 1}M")
       expect(terminal.pointer_shape).to eq(:default)
-      row = screen(app).index { |l| l.include?("2  #191") }
-      press(app, "\e[<35;#{screen(app)[row].index("#191") + 1};#{row + 1}M")
+      row = screen(app).index { |l| l.include?("2  #190") }
+      press(app, "\e[<35;#{screen(app)[row].index("#190") + 1};#{row + 1}M")
       expect(terminal.pointer_shape).to eq(:hand)
-      press(app, "\e[<0;#{screen(app)[row].index("#191") + 1};#{row + 1}M")
+      press(app, "\e[<0;#{screen(app)[row].index("#190") + 1};#{row + 1}M")
       expect(wait_for { opened.any? }).to be(true)
-      expect(opened).to eq(["https://github.com/o/r/pull/191"])
+      expect(opened).to eq(["https://github.com/o/r/pull/190"])
       expect(screen(app).join("\n")).not_to include("Open pull request")
     end
 
@@ -151,13 +151,13 @@ RSpec.describe ClaudeInbox::App do
       expect(copied).to eq(["f23c8673"])
     end
 
-    it "asks which of several, and y again copies the oldest open one" do
+    it "asks which of several, and y again copies the headline" do
       link.call(stack)
       press(app, "y")
       expect(screen(app).join("\n")).to include("Copy pull request")
       press(app, "y")
-      expect(wait_for { screen(app).first.include?("copied #190") }).to be(true)
-      expect(copied).to eq(["https://github.com/o/r/pull/190"])
+      expect(wait_for { screen(app).first.include?("copied #191") }).to be(true)
+      expect(copied).to eq(["https://github.com/o/r/pull/191"])
     end
 
     context "without a clipboard tool" do

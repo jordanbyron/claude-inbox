@@ -102,10 +102,8 @@ module ClaudeInbox
     # The PR you would act on. One only mentioned loses to any live one.
     def pr = prs.each_with_index.min_by { |pr, i| [headline_rank(pr), i] }&.first
 
-    # The PRs in the order you would work through them: open, then drafts,
-    # each oldest first so a stack reads up from its base; then the resolved,
-    # newest first; the merely mentioned last. Trouble doesn't move a PR
-    # here; that is the headline's job.
+    # Oldest first so a stack reads up from its base; trouble is the
+    # headline's job, not this order's.
     def prs_by_status = prs.each_with_index.sort_by { |pr, i| [*status_order(pr), i] }.map(&:first)
 
     private
