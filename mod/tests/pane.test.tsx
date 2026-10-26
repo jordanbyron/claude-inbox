@@ -364,3 +364,23 @@ test('with openOnStart off only /inbox opens it', { options: { openOnStart: fals
   await polled
   expect(opened).toEqual([])
 })
+
+test("the ring steps over a row's PR chip: down to the next row, up onto its own", async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  on('state.get', ($, e, next) => (e.key === 'rows' ? seeded(ROWS) : e.key === 'writtenAt' ? seeded(1_700_000_000) : next(e)))
+  const landed: (string | undefined)[] = []
+  on('ui.focus', ($, e) => {
+    landed.push(e.element)
+    return {}
+  })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  // The harness has no ring to walk, so the test raises ui.focus as the engine does for an arrow.
+  const arrowOnto = (element: string) =>
+    $.ui.focus({ component: 'Pane', requestId: 'inbox', plugin: 'inbox-pane', element, origin: { kind: 'person' } } as never)
+  await arrowOnto('row:b2')
+  await arrowOnto('pr:row:b2')
+  await arrowOnto('pr:row:b2')
+  expect(landed).toEqual(['row:b2', 'row:uuid-term', 'row:b2'])
+  await ui.unmount()
+})
