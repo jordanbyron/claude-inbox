@@ -102,8 +102,7 @@ module ClaudeInbox
 
     def unquote(s)
       s = s.sub(/\A[>|][-+]?\z/, "")
-      quoted = s.size >= 2 && ((s.start_with?('"') && s.end_with?('"')) || (s.start_with?("'") && s.end_with?("'")))
-      s = s[1..-2] if quoted
+      s = s[1..-2] if s.match?(/\A(["']).*\1\z/)
       s.gsub("''", "'")
     end
     private_class_method :from_dir, :skills, :commands, :qualify, :plugins, :synced, :frontmatter, :unquote
