@@ -512,6 +512,9 @@ export const register: Register = (on, options) => {
                         {one.isUnread && !isQuiet ? <Text bold>{text}</Text> : text}
                       </Button>
                     </Box>
+                    {/* Takes what a short label leaves, so the PR and age sit at the right edge on every row;
+                        the label's own box would stretch a /color tint across it. */}
+                    <Box flexGrow={1} />
                     {/* The label gives up its cells to the PR chip, which would otherwise wrap under it. The chip is
                         a Button rather than a Link: a terminal without OSC 8 cannot click a Link, and prints its URL. */}
                     {one.pr ? (
