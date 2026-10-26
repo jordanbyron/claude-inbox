@@ -73,8 +73,8 @@ module ClaudeInbox
       end
     end
 
-    # `o` open and `y` copy on a session with several PRs: the headline
-    # first, and the same key again takes it. The PR is read from `choice`.
+    # `o` open and `y` copy on a session with several PRs, in
+    # Session#prs_by_status order; the same key again takes the first. The PR is read from `choice`.
     class PrPicker < Dialog
       MARGIN = 6
       KEYS = {open: "o", copy: "y"}.freeze
@@ -83,7 +83,7 @@ module ClaudeInbox
 
       def initialize(kind, session)
         super(kind, session.key)
-        @prs = [session.pr, *session.prs.reject { |pr| pr.equal?(session.pr) }].first(9)
+        @prs = session.prs_by_status.first(9)
       end
 
       def title = " #{kind.to_s.capitalize} pull request "

@@ -36,7 +36,7 @@ RSpec.describe ClaudeInbox::Dialog do
     let(:dialog) { described_class::PrPicker.new(:open, session(prs: prs)) }
     let(:plain) { ->(lines) { lines.map { |l| ClaudeInbox::Text.strip_ansi(l) } } }
 
-    it "lists the headline first, then the rest in order" do
+    it "lists the PRs by status" do
       expect(dialog.frame(60).join("\n")).to include(" Open pull request ")
       expect(plain.call(dialog.lines(60, nil))).to eq(["  1  #190 open · ✗ checks · Install the pane from the CLI",
         "  2  #189 merged", "  3  #191", "", "  o  open #190 · esc cancel"])
@@ -77,7 +77,7 @@ RSpec.describe ClaudeInbox::Dialog do
       expect(lines[1]).to include(theme.pr_badge(prs[0]))
     end
 
-    it "picks the headline on its own key or enter" do
+    it "picks the first on its own key or enter" do
       expect(dialog.press("o", "o")).to eq(:pick)
       expect(dialog.choice.number).to eq(190)
       copy = described_class::PrPicker.new(:copy, session(prs: prs))

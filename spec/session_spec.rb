@@ -48,6 +48,19 @@ RSpec.describe ClaudeInbox::Session do
     end
   end
 
+  describe "prs_by_status" do
+    let(:pr) { ->(number, state, **rest) { ClaudeInbox::PullRequest.new(number: number, state: state, **rest) } }
+
+    it "puts open PRs first, then drafts, oldest first; then the resolved, newest first; the mentioned last" do
+      later = session.created_at.to_i + 60
+      prs = [pr.call(281, "DRAFT", health: "CONFLICTING"), pr.call(279, "DRAFT"),
+        pr.call(285, "MERGED", resolved_at: later), pr.call(282, "MERGED", resolved_at: later),
+        pr.call(270, "MERGED", resolved_at: session.created_at.to_i - 60), pr.call(290, nil),
+        pr.call(286, "OPEN", health: "FAILING"), pr.call(284, "OPEN", health: "CLEAN")]
+      expect(session(prs: prs).prs_by_status.map(&:number)).to eq([284, 286, 279, 281, 285, 282, 270, 290])
+    end
+  end
+
   # The poller publishes a list and then keeps working on it, so a step that
   # learns something new must not reach into what is already on screen.
   it "answers with a copy from with, leaving the original as it was" do
