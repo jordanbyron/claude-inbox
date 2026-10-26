@@ -333,7 +333,7 @@ module ClaudeInbox
 
     def prompt_box(f, w, h)
       on = f.equal?(focused)
-      edge = on ? ->(s) { @theme.cyan(s) } : ->(s) { @p.dim(s) }
+      edge = ->(s) { @theme.tint((:cyan if on), s) }
       rows, hidden = f.value.view(w - 4, h, cursor: (caret if on), chip: ->(s) { @theme.cyan_bold(s) })
       rows = [@p.dim("What should this session do?")] if f.value.empty? && !on
       rows += [""] * (h - rows.size)
