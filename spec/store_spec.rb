@@ -549,14 +549,15 @@ RSpec.describe ClaudeInbox::Store do
       expect(store.sections.active.first).to be_unread
     end
 
-    it "keeps the leave open past a list asked for before you left" do
+    it "counts a list asked for before you left as seen, and keeps the leave open past it" do
       clock = now
       store = described_class.new(path: nil, clock: -> { clock })
       store.update([session(id: "a", state: "working")])
       store.visit("a") { clock += 10 }
-      store.update([session(id: "a", state: "working")], fetched_at: clock - 5)
+      store.update([session(id: "a", state: "done")], fetched_at: clock - 5)
+      expect(store.sections.active.first).not_to be_unread
       clock += 10
-      store.update([session(id: "a", state: "done")])
+      store.update([session(id: "a", state: "blocked")])
       expect(store.sections.active.first).not_to be_unread
     end
 

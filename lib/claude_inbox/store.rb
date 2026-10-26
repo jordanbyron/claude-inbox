@@ -93,9 +93,10 @@ module ClaudeInbox
         @forgotten &= keys
         @sessions = sessions.reject { |s| @hidden.include?(s.key) || @forgotten.include?(s.key) }
         @entries = self.class.merge_entries(@writable ? @entries : load, @sessions, @clock.call)
-        # A list asked for before you left can predate what you saw last.
+        # A list asked for before you left shows only what happened while you
+        # were there; the first one asked for after closes the visit.
         left = @leaving.select { |_, left_at| fetched_at >= left_at }.keys
-        seen = (@visiting.to_a | left).select { |id| see(id) }
+        seen = (@visiting.to_a | @leaving.keys).select { |id| see(id) }
         # A reader reloads state.json each poll, so it holds the visit open
         # until the writer has taken its acknowledge.
         (@writable ? left : left - seen).each { |id| @leaving.delete(id) }
