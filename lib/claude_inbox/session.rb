@@ -99,19 +99,34 @@ module ClaudeInbox
 
     def project = cwd ? File.basename(cwd) : ""
 
-    # The PR you would act on. One resolved before the session began was
-    # only mentioned (as Row#settled? judges), so it loses to any live one.
+    # The PR you would act on. One only mentioned loses to any live one.
     def pr = prs.each_with_index.min_by { |pr, i| [headline_rank(pr), i] }&.first
+
+    # Oldest first so a stack reads up from its base; trouble is the
+    # headline's job, not this order's.
+    def prs_by_status = prs.each_with_index.sort_by { |pr, i| [*status_order(pr), i] }.map(&:first)
 
     private
 
     def headline_rank(pr)
-      if !pr.known? || pr.resolved_before?(created_at) then 4
+      if mentioned?(pr) then 4
       elsif pr.needs_you? then 0
       elsif pr.health == "CONFLICTING" then 1
       elsif !pr.resolved? then 2
       else 3
       end
     end
+
+    def status_order(pr)
+      age = pr.number.to_i
+      if mentioned?(pr) then [3, age]
+      elsif pr.state == "OPEN" then [0, age]
+      elsif pr.state == "DRAFT" then [1, age]
+      else [2, -age]
+      end
+    end
+
+    # Unknown, or resolved before the session began (as Row#settled? judges).
+    def mentioned?(pr) = !pr.known? || pr.resolved_before?(created_at)
   end
 end
