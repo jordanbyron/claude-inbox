@@ -29,12 +29,14 @@ module ClaudeInbox
       # failed attach leaves its reason on screen until a key is pressed.
       def attach(id)
         while id
-          @store.acknowledge(id)
           @switch.clear
           from = session_for(id)&.session_id
-          @terminal.release do
-            @terminal.pause unless @client.attach(id) { @switch.requested_for?(from) }
+          @store.visit(id) do
+            @terminal.release do
+              @terminal.pause unless @client.attach(id) { @switch.requested_for?(from) }
+            end
           end
+          @poller.soon
           id = @switch.take(@store.actionable_keys)
         end
       end

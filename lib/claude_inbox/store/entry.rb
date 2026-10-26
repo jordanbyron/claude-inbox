@@ -60,7 +60,8 @@ module ClaudeInbox
 
       def acknowledged_at = @h["acknowledged_at"]
 
-      # When you last attached. Never cleared, unlike `acknowledged_at`.
+      # When you last saw it: an attach, or a change it made while you were
+      # in it. Never cleared, unlike `acknowledged_at`.
       def last_visited_at = @h["last_visited_at"]
 
       def revived_at = @h["revived_at"]
