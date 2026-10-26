@@ -45,10 +45,17 @@ RSpec.describe ClaudeInbox::WriterLock do
         sleep
       RUBY
       pid = Process.spawn("ruby", "-e", holder, path, "claude-inbox", "--headless")
-      sleep 0.05 until File.exist?(path) && File.read(path) == "headless #{pid}"
+      expect(wait_for(timeout: 5) { File.exist?(path) && File.read(path) == "headless #{pid}" }).to be(true)
       expect(described_class.new(path: path).take(role: "inbox")).to be(true)
-      expect(Process.wait2(pid).last.termsig).to eq(Signal.list["TERM"])
+      status = nil
+      wait_for { status ||= Process.wait2(pid, Process::WNOHANG)&.last }
+      expect(status&.termsig).to eq(Signal.list["TERM"])
       expect(File.read(path)).to eq("inbox #{Process.pid}")
+    ensure
+      if pid && status.nil?
+        Process.kill("KILL", pid)
+        Process.wait(pid)
+      end
     end
   end
 
