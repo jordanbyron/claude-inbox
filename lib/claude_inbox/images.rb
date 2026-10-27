@@ -30,9 +30,7 @@ module ClaudeInbox
     # macOS only: osascript ships with the OS, and PNG is the flavor a
     # screenshot puts there.
     def self.from_clipboard(dir: DEFAULT_DIR, now: Time.now, run: Subprocess.method(:capture))
-      FileUtils.mkdir_p(dir)
-      prune(dir, now)
-      path = File.join(dir, now.strftime("%Y%m%d-%H%M%S-%L.png"))
+      path = arrival_path(dir, now, ".png")
       return Clipboard.new(path, nil) if run.call("osascript", "-e", CLIPBOARD_PNG, path).success?
       text = run.call("pbpaste")
       Clipboard.new(nil, (text.success? && !text.out.empty?) ? text.out : nil)
@@ -44,9 +42,7 @@ module ClaudeInbox
     def self.save(bytes, dir:, index:, now: Time.now)
       ext = extension(bytes)
       raise Unsupported, "not a PNG, JPEG, GIF or WebP image" unless ext
-      FileUtils.mkdir_p(dir)
-      prune(dir, now)
-      path = File.join(dir, "#{now.strftime("%Y%m%d-%H%M%S-%L")}-#{index}-#{SecureRandom.hex(3)}#{ext}")
+      path = arrival_path(dir, now, "-#{index}-#{SecureRandom.hex(3)}#{ext}")
       File.open(path, File::WRONLY | File::CREAT | File::EXCL | File::BINARY, 0o600) { |f| f.write(bytes) }
       path
     end
@@ -77,6 +73,12 @@ module ClaudeInbox
       File.file?(path) ? path : nil
     end
 
+    def self.arrival_path(dir, now, suffix)
+      FileUtils.mkdir_p(dir)
+      prune(dir, now)
+      File.join(dir, now.strftime("%Y%m%d-%H%M%S-%L") + suffix)
+    end
+
     # Pruned on the way in, because nothing else knows when a session
     # stopped needing its image.
     def self.prune(dir, now)
@@ -86,6 +88,6 @@ module ClaudeInbox
         nil
       end
     end
-    private_class_method :prune
+    private_class_method :arrival_path, :prune
   end
 end
