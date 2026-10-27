@@ -146,12 +146,12 @@ module ClaudeInbox
     def set_alias(id, name) = edit(id) { |e| e.alias = name }
 
     # The local alias, if one is set; nil means the session's own name shows.
-    def alias_for(id) = @mutex.synchronize { @entries[id] && Entry.new(@entries[id]).alias_name }
+    def alias_for(id) = @mutex.synchronize { recorded(id)&.alias_name }
 
     def set_pr(id, url) = edit(id) { |e| e.pr = url }
 
     # The hand-set link, if any; nil means the scanned links are in force.
-    def pr_for(id) = @mutex.synchronize { @entries[id] && Entry.new(@entries[id]).pr }
+    def pr_for(id) = @mutex.synchronize { recorded(id)&.pr }
 
     def pr_overrides
       @mutex.synchronize { @entries.transform_values { |e| Entry.new(e).pr }.compact }
@@ -207,10 +207,12 @@ module ClaudeInbox
       @relay&.request(action, id, **detail) unless @writable
     end
 
+    def recorded(id) = @entries[id] && Entry.new(@entries[id])
+
     # Acknowledges the state the last poll found, and says whether it had to:
     # `Entry#observe` drops an acknowledgement once the state outruns it.
     def see(id)
-      entry = @entries[id] && Entry.new(@entries[id])
+      entry = recorded(id)
       return false if entry.nil? || entry.acknowledged_at
       entry.acknowledge(@clock.call)
       true
