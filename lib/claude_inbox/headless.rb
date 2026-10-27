@@ -6,6 +6,7 @@ require_relative "poller"
 require_relative "pull_requests"
 require_relative "reaper"
 require_relative "snapshot"
+require_relative "transcript"
 require_relative "updater"
 require_relative "writer_lock"
 
