@@ -20,6 +20,10 @@ module ClaudeInbox
       end
     end
 
+    # The read with every report taken out, acted on or not: a release or
+    # a right click is still a report, never keys to type.
+    def self.strip(raw) = raw.gsub(SEQUENCE, "")
+
     # Bit 6 (0x40) marks a wheel tick, direction in bit 0. Otherwise bits
     # 0-1 give the button (0 = left, 3 = none) and bit 5 (0x20) marks motion,
     # so 0x23 masks both at once. Only a left click, released of any drag,
