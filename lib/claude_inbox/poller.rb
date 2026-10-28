@@ -6,12 +6,10 @@ require_relative "sessions"
 module ClaudeInbox
   # Asks `claude agents` for the list off the main thread, every INTERVAL
   # seconds and on demand, puts what it finds in the store and the snapshot,
-  # and tells App over the shared queue: [:sessions] after each
-  # hand-over, [:error, msg] when a poll fails, [:notice, text] when the
-  # reaper took something or terminal-notifier is missing. Between polls it
-  # applies what another front end asked for. Nothing here touches App's
-  # state directly; the queue is the whole of the interface. One worker runs
-  # every poll, so two can never overlap and publish the list out of order.
+  # and tells App over the shared queue. Between polls it applies what
+  # another front end asked for. Nothing here touches App's state directly;
+  # the queue is the whole of the interface. One worker runs every poll, so
+  # two can never overlap and publish the list out of order.
   class Poller
     INTERVAL = 4
     ACTIONS_INTERVAL = 0.5
@@ -51,8 +49,7 @@ module ClaudeInbox
     # difference between the inbox appearing at once and five seconds later.
     # Every hand-over is the whole list; the store hides the rows the reaper
     # is about to take, so a list missing a key can only mean the daemon
-    # dropped it. The gh refresh comes last and publishes again only if a PR
-    # state moved.
+    # dropped it.
     def once
       now = @clock.call
       sessions = Sessions.load(client: @client, pull_requests: @pull_requests, transcripts: @transcripts, overrides: @store.pr_overrides)
@@ -73,7 +70,6 @@ module ClaudeInbox
       @queue << [:error, e.message]
     end
 
-    # Applies the requests another front end left.
     def apply
       write_snapshot if @actions.drain(@store) > 0
     end
