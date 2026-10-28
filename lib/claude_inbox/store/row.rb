@@ -43,8 +43,6 @@ module ClaudeInbox
       # but only Entry#observe sees that change happen.
       def woken?(now) = !wake_at.nil? && !parked? && wake_at.to_i <= now.to_i
 
-      def snoozed?(now) = wake_at && !woken?(now)
-
       # `x` holds through the session finishing; any other state change afterwards lifts it.
       def hand_settled?
         return false unless entry&.settled_at
@@ -118,6 +116,8 @@ module ClaudeInbox
       end
 
       private
+
+      def snoozed?(now) = wake_at && !woken?(now)
 
       # Only a session you can attach to carries a read or unread mark, since
       # nothing else ever clears it.
