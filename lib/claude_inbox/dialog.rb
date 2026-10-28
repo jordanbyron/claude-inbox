@@ -23,15 +23,17 @@ module ClaudeInbox
     end
 
     def frame(width, caret = nil)
-      box = [width - 4, fit].min
+      box = box_width(width)
       TTY::Box.frame(lines(box - 4, caret).join("\n"), title: {top_left: title}, padding: [0, 1], width: box)
         .split("\n")
     end
 
     private
 
-    # How wide the box wants to be; the frame caps it at the terminal.
+    # How wide the box wants to be; box_width caps it at the terminal.
     def fit = self.class::WIDTH
+
+    def box_width(width) = [width - 4, fit].min
 
     def bordered(rows, inner)
       top = Text.truncate(title, inner)
@@ -92,7 +94,7 @@ module ClaudeInbox
       # Drawn by hand: TTY::Box counts a link's hidden characters toward the
       # line's width, so it would clip every line that has a link.
       def frame(width, _caret = nil)
-        inner = [width - 4, fit].min - 2
+        inner = box_width(width) - 2
         bordered(lines(inner - 2, nil).map { |l| " #{Text.pad(l, inner - 2)} " }, inner)
       end
 
@@ -189,7 +191,7 @@ module ClaudeInbox
       # Drawn by hand: TTY::Box measures an emoji as one column, which
       # pushes the right border out on every line that has one.
       def frame(width, _caret = nil)
-        inner = [width - 4, fit].min - 2
+        inner = box_width(width) - 2
         bordered(lines(inner, nil).map { |l| Text.pad(l, inner) }, inner)
       end
 
