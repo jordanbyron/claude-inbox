@@ -79,7 +79,11 @@ RSpec.describe ClaudeInbox::Codex::ThreadsClient do
     let(:dir) { Dir.mktmpdir("codex") }
     let(:thread) { session(harness: :codex, id: "t1", cwd: dir) }
     let(:turns) { {"data" => [{"id" => "turn9", "status" => "inProgress"}]} }
-    let(:fake) { FakeCodexDaemon.new(dir, "thread/turns/list" => ->(_) { turns }, "turn/interrupt" => {}, "thread/delete" => {}) }
+    let(:fake) do
+      FakeCodexDaemon.new(dir, "thread/turns/list" => ->(_) { turns }, "turn/interrupt" => {}, "thread/delete" => {},
+        "thread/start" => {"thread" => {"id" => "t2"}}, "turn/start" => {"turn" => {"id" => "turn1", "status" => "inProgress"}},
+        "model/list" => {"data" => [{"id" => "gpt-6.1-sol"}, {"id" => "secret", "hidden" => true}, {"id" => "gpt-6-luna"}]})
+    end
     let(:client) { described_class.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: fake.path, timeout: 1)) }
     let(:sent) { -> { drain(fake.requests).drop(1).map { |r| [r["method"], r["params"]] } } }
 
@@ -107,6 +111,25 @@ RSpec.describe ClaudeInbox::Codex::ThreadsClient do
       expect { described_class.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: refusing.path, timeout: 1)).rm(thread) }
         .to raise_error(ClaudeInbox::Codex::Daemon::Error, /no rollout found/)
       refusing.stop
+    end
+
+    it "starts a thread, then its first turn, with the permissions as a policy and a sandbox" do
+      expect(client.spawn(prompt: "fix it", cwd: dir, effort: "low", permission_mode: "full-access", images: ["/tmp/a.png"])).to eq("t2")
+      expect(sent.call).to eq([
+        ["thread/start", {"cwd" => dir, "approvalPolicy" => "never", "sandbox" => "danger-full-access"}],
+        ["turn/start", {"threadId" => "t2", "input" => [{"type" => "text", "text" => "fix it"}, {"type" => "localImage", "path" => "/tmp/a.png"}], "effort" => "low"}]
+      ])
+    end
+
+    it "leaves the model, effort and permissions to Codex's config by default" do
+      client.spawn(prompt: "fix it", cwd: dir)
+      expect(sent.call.map(&:last)).to eq([{"cwd" => dir}, {"threadId" => "t2", "input" => [{"type" => "text", "text" => "fix it"}]}])
+    end
+
+    it "offers the daemon's models, default first and the hidden ones left out, asking once" do
+      2.times { expect(client.models).to eq(%w[default gpt-6.1-sol gpt-6-luna]) }
+      expect(sent.call.map(&:first)).to eq(["model/list"])
+      expect(described_class.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: File.join(dir, "none.sock"))).models).to eq([])
     end
 
     it "resumes the thread in its own directory, so codex asks no question first" do
