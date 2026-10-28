@@ -11,7 +11,7 @@ module Drivers
 
   def session(**attrs)
     ClaudeInbox::Session.new(
-      id: "abc12345", cwd: "/tmp/proj", kind: "background",
+      harness: :claude, actions: ClaudeInbox::Claude::AgentsClient::ACTIONS, id: "abc12345", cwd: "/tmp/proj", kind: "background",
       started_at: Time.at(1_789_400_000), state: "working", name: "thing", **attrs
     )
   end

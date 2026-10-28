@@ -96,7 +96,7 @@ module ClaudeInbox
       # Settled never reaches. A session with no entry waits a poll, so its
       # idle time is seeded from `started_at` rather than guessed.
       def reapable?(now)
-        return false unless session.actionable?
+        return false unless session.actionable? && session.can?(:delete)
         return false if session.alive?
         return false if UNREAPABLE.include?(session.effective_state)
         return false if entry.nil? || pinned? || snoozed?(now)
