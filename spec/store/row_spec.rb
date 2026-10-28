@@ -117,6 +117,9 @@ RSpec.describe ClaudeInbox::Store::Row do
       shell = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9")
       expect(described_class.new(shell, ClaudeInbox::Store::Entry.new(finished))).not_to be_unread
       expect(described_class.new(shell, ClaudeInbox::Store::Entry.new(finished))).not_to be_read
+      codex = session(id: "t", state: "done", harness: :codex, actions: [])
+      expect(described_class.new(codex, ClaudeInbox::Store::Entry.new(finished))).not_to be_unread
+      expect(described_class.new(codex, ClaudeInbox::Store::Entry.new(finished))).not_to be_read
     end
   end
 

@@ -38,6 +38,8 @@ module ClaudeInbox
     # Only background sessions carry an id, and every action needs one.
     def actionable? = background? && !id.nil?
 
+    def attachable? = actionable? && can?(:attach)
+
     def effective_state = state || INTERACTIVE_STATE[status] || "done"
 
     # A person drives a remote session, just from elsewhere; the adapter

@@ -121,7 +121,7 @@ module ClaudeInbox
 
       # Only a session you can attach to carries a read or unread mark, since
       # nothing else ever clears it.
-      def markable? = session.actionable? && (session.finished? || session.needs_you?)
+      def markable? = session.attachable? && (session.finished? || session.needs_you?)
 
       def unchanged_since?(at) = at && entry.state_since.to_i <= at.to_i
     end

@@ -3,6 +3,8 @@
 require "optparse"
 require "tmpdir"
 require_relative "app"
+require_relative "codex/threads_client"
+require_relative "harnesses"
 require_relative "config"
 require_relative "headless"
 require_relative "mod"
@@ -113,7 +115,7 @@ module ClaudeInbox
 
     def headless
       abort "claude-inbox: --headless takes no --fixture" if options[:fixture]
-      Headless.new(client: Claude::AgentsClient.new, store: Store.new(sort: options[:sort]), updater: updater, notifier: notifier).run
+      Headless.new(client: live_client, store: Store.new(sort: options[:sort]), updater: updater, notifier: notifier).run
     end
 
     # Only what a check within the day already found: a cold launch never waits
@@ -131,7 +133,7 @@ module ClaudeInbox
       # Its own token, lock and images, so a test inbox can neither rotate the
       # token phones are paired with nor hold the real inbox's lock.
       dir = File.join(Dir.tmpdir, "claude-inbox-fixture")
-      {client: Claude::FixtureClient.new(options[:fixture]),
+      {client: Harnesses.new(Claude::FixtureClient.new(options[:fixture]), [Codex::FixtureClient.new(File.join(fixtures, "codex-threads.json"))]),
        store: Store.new(path: nil, sort: options[:sort]),
        pull_requests: PullRequests.new(cache_path: File.join(fixtures, "gh-pr-status-cache.json"), resolved_path: nil, gh: nil),
        listen: options[:listen]&.merge(fixture: true, pairing: Remote::Pairing.new(path: File.join(dir, "listen.json")),
@@ -143,7 +145,7 @@ module ClaudeInbox
     # embedding App — gets one that deletes nothing. The listener, likewise,
     # comes only from here, and only when asked for.
     def live_options
-      client = Claude::AgentsClient.new
+      client = live_client
       store = Store.new(sort: options[:sort])
       {client: client, store: store, reaper: options[:reap] ? Reaper.new(client, store) : Reaper.disabled,
        snapshot: Snapshot.new, switch: Switch.new, actions: Actions.new, pane_offer: Mod::Offer.new,
@@ -151,6 +153,8 @@ module ClaudeInbox
        # The typed arguments, not the config's: a relaunch reads the config again.
        argv: @argv}
     end
+
+    def live_client = Harnesses.new(Claude::AgentsClient.new, [Codex::ThreadsClient.new])
 
     def updater
       @updater ||= Updater.new if options[:update_check] && !options[:fixture]

@@ -12,6 +12,7 @@ export const SNAPSHOT = `{
       {
         "id": "a1",
         "session": "u-a1",
+        "harness": "claude",
         "label": "needs an answer",
         "state": "blocked",
         "actionable": true,
@@ -22,6 +23,7 @@ export const SNAPSHOT = `{
       {
         "id": "b2",
         "session": "u-b2",
+        "harness": "claude",
         "label": "still going",
         "state": "working",
         "actionable": true,
@@ -38,6 +40,7 @@ export const SNAPSHOT = `{
       {
         "id": "c3",
         "session": "u-c3",
+        "harness": "claude",
         "label": "put away",
         "state": "done",
         "actionable": true,

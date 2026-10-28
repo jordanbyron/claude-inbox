@@ -38,7 +38,7 @@ module ClaudeInbox
             end
           end
           @poller.soon
-          id = @switch.take(@store.sessions.select { |s| s.actionable? && s.can?(:attach) }.map(&:key))
+          id = @switch.take(@store.sessions.select(&:attachable?).map(&:key))
         end
       end
 

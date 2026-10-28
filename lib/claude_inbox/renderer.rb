@@ -309,8 +309,8 @@ module ClaudeInbox
       sel = row.selectable? && selected == row.key
       quiet = section == :settled || (live && row.read?)
       unread = live && row.unread?
-      # A terminal cannot be attached to, so it is never read: while it waits on you it keeps its dot.
-      dotted = unread || (live && s.needs_you? && !s.actionable?)
+      # A row you cannot attach to is never read: while it waits on you it keeps its dot.
+      dotted = unread || (live && s.needs_you? && !s.attachable?)
       marker = marker_for(sel, dotted)
       glyph = glyph_for(s, section, tick)
       meta = meta_for(row, section, now)
@@ -385,19 +385,22 @@ module ClaudeInbox
           wake = row.parked? ? @theme.purple("parked") : @theme.purple("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
           row.pinned? ? wake + @theme.cyan(" ★") : wake
         when :settled
-          @p.dim("#{word(s.state)} · #{age}")
+          @p.dim("#{word(s.state)}#{harness_tag(s)} · #{age}")
         else
           if s.interactive?
             where = s.remote? ? "remote" : "your terminal"
             state_badge(s) + @p.dim(" · #{where} · #{age}")
           else
             remote = s.remote_control? ? @theme.blue(" ⇅") : ""
-            state_badge(s) + remote + @p.dim(" · #{age}")
+            state_badge(s) + remote + @p.dim("#{harness_tag(s)} · #{age}")
           end
         end
       pr = pr_badge(s, section)
       pr ? base + @p.dim(" · ") + pr : base
     end
+
+    # Claude is the default; any other harness names itself.
+    def harness_tag(s) = (s.harness == :claude) ? "" : " · #{s.harness}"
 
     # The headline PR, with a count of the rest. A settled row dims it.
     def pr_badge(s, section)

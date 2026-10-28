@@ -43,7 +43,7 @@ module ClaudeInbox
       s = row.session
       pr = s.pr
       {
-        "id" => row.key, "session" => s.session_id, "label" => row.label, "state" => STATE_WORDS.fetch(s.effective_state, s.effective_state), "actionable" => s.actionable?,
+        "id" => row.key, "harness" => s.harness.to_s, "session" => s.session_id, "label" => row.label, "state" => STATE_WORDS.fetch(s.effective_state, s.effective_state), "actionable" => s.actionable?,
         "waiting" => s.waiting_on_work? || nil, "unread" => row.unread? || nil, "line" => s.line, "wake_at" => row.wake_at, "remote" => s.remote_url, "color" => s.color,
         "last_message_at" => s.last_message_at&.to_i,
         "pr" => pr && {"short" => pr.short, "state" => pr.state&.downcase, "url" => pr.url}
