@@ -186,6 +186,11 @@ RSpec.describe ClaudeInbox::Store::Row do
       expect(described_class.new(s, ClaudeInbox::Store::Entry.new(quiet))).to be_reapable(now.to_i)
     end
 
+    it "never reaps a session its harness cannot delete" do
+      s = session(id: "a", state: "done", actions: %i[attach stop])
+      expect(described_class.new(s, ClaudeInbox::Store::Entry.new(quiet))).not_to be_reapable(now.to_i)
+    end
+
     it "never reaps a working session" do
       expect(described_class.new(session(id: "a", state: "working"), ClaudeInbox::Store::Entry.new(quiet))).not_to be_reapable(now.to_i)
     end

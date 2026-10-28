@@ -13,9 +13,10 @@ module ClaudeInbox
   # `with`, so a list already given to another thread cannot move under it.
   # `line` is the session's own account of where it is, `in_flight` the work
   # it started that is still open, `remote` a session driven from another
-  # device and `remote_control` one that can be.
+  # device and `remote_control` one that can be. `actions` are what its
+  # harness can do to it from here.
   Session = Data.define(
-    :harness, :id, :cwd, :kind, :started_at, :created_at, :session_id, :name,
+    :harness, :actions, :id, :cwd, :kind, :started_at, :created_at, :session_id, :name,
     :state, :blocked_kind, :pid, :status, :waiting_for, :line, :in_flight, :waiting_on_work,
     :remote, :remote_control, :remote_url, :color, :intent, :transcript_path, :pr_urls, :prs, :last_message_at
   ) do
@@ -23,10 +24,12 @@ module ClaudeInbox
     # they have; prs is [] rather than nil so nobody asks whether
     # PullRequests has run. Without a record of when the session began, its
     # process start stands in.
-    def initialize(prs: nil, pr_urls: nil, created_at: nil, **given)
+    def initialize(prs: nil, pr_urls: nil, actions: nil, created_at: nil, **given)
       super(**self.class.members.to_h { |m| [m, nil] }, **given,
-        prs: prs || [], pr_urls: pr_urls || [], created_at: created_at || given[:started_at])
+        prs: prs || [], pr_urls: pr_urls || [], actions: actions || [], created_at: created_at || given[:started_at])
     end
+
+    def can?(action) = actions.include?(action)
 
     def background? = kind == "background"
 
