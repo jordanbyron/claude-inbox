@@ -97,8 +97,8 @@ module ClaudeInbox
       # child once it does. The block, polled alongside, ends the attach early
       # when it answers true. That is how a switch request from another front
       # end is honoured.
-      def attach(id, &stop)
-        pid = Process.spawn(*Subprocess.command(@bin, "attach", id))
+      def attach(session, &stop)
+        pid = Process.spawn(*Subprocess.command(@bin, "attach", session.id))
         watchdog = Thread.new { kill_when_agents_view(pid, &stop) }
         _, status = Process.wait2(pid)
         status.success? || !status.exited?
@@ -106,9 +106,10 @@ module ClaudeInbox
         watchdog&.kill
       end
 
-      def stop(id) = run("stop", id)
+      # True: the daemon stops whatever the session is doing.
+      def stop(session) = run("stop", session.id)
 
-      def rm(id) = run("rm", id)
+      def rm(session) = run("rm", session.id)
 
       MODELS = %w[default fable opus sonnet haiku].freeze
       EFFORTS = %w[default low medium high xhigh max].freeze
@@ -281,6 +282,7 @@ module ClaudeInbox
       def run(verb, id)
         r = Subprocess.capture(@bin, verb, id)
         raise Error, "#{verb} failed: #{r.err.strip}" unless r.success?
+        true
       end
 
       def start_bg(argv, cwd, what)
@@ -304,9 +306,9 @@ module ClaudeInbox
 
       # Stand-in child: prints, waits for a line, exits — enough to prove the
       # terminal round-trips through cooked mode and back.
-      def attach(id) = system("sh", "-c", "printf 'fake attach to %s\\npress enter to detach: ' \"$1\"; read -r _", "attach", id)
+      def attach(session) = system("sh", "-c", "printf 'fake attach to %s\\npress enter to detach: ' \"$1\"; read -r _", "attach", session.id)
 
-      def stop(_id) = nil
+      def stop(_session) = true
 
       def spawn(prompt:, cwd:, **)
         sleep 0.5
@@ -315,7 +317,7 @@ module ClaudeInbox
 
       def adopt(session_id:, cwd:, pid:) = "adop7ed0"
 
-      def rm(_id) = nil
+      def rm(_session) = nil
     end
   end
 end

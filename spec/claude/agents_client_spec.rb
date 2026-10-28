@@ -287,7 +287,7 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
       File.write(bin, "#!/bin/sh\nsleep 5\n")
       File.chmod(0o755, bin)
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      described_class.new(bin: bin).attach("abc12345") { true }
+      described_class.new(bin: bin).attach(session) { true }
       expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 3
     end
   end
@@ -298,8 +298,8 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
       File.write(bin, "#!/bin/sh\n[ \"$2\" = bad ] && exit 1\nsleep 5\n")
       File.chmod(0o755, bin)
       client = described_class.new(bin: bin)
-      expect(client.attach("bad") { false }).to be(false)
-      expect(client.attach("abc12345") { true }).to be(true)
+      expect(client.attach(session(id: "bad")) { false }).to be(false)
+      expect(client.attach(session) { true }).to be(true)
     end
   end
 end

@@ -94,9 +94,10 @@ module ClaudeInbox
       # Idle time is the only clock, not the Settled section: the PR rule holds
       # an abandoned draft in Active for ever, so the deadest rows are the ones
       # Settled never reaches. A session with no entry waits a poll, so its
-      # idle time is seeded from `started_at` rather than guessed.
+      # idle time is seeded from `started_at` rather than guessed. Only
+      # `claude rm` refuses unpushed work, so nothing else is reaped.
       def reapable?(now)
-        return false unless session.actionable? && session.can?(:delete)
+        return false unless session.harness == :claude && session.actionable? && session.can?(:delete)
         return false if session.alive?
         return false if UNREAPABLE.include?(session.effective_state)
         return false if entry.nil? || pinned? || snoozed?(now)

@@ -194,6 +194,11 @@ RSpec.describe ClaudeInbox::Store::Row do
       expect(described_class.new(s, ClaudeInbox::Store::Entry.new(quiet))).not_to be_reapable(now.to_i)
     end
 
+    it "never reaps a Codex thread, which nothing stops deleting with unpushed work" do
+      s = session(id: "a", state: "done", harness: :codex, actions: ClaudeInbox::Codex::ThreadsClient::ACTIONS)
+      expect(described_class.new(s, ClaudeInbox::Store::Entry.new(quiet))).not_to be_reapable(now.to_i)
+    end
+
     it "never reaps a working session" do
       expect(described_class.new(session(id: "a", state: "working"), ClaudeInbox::Store::Entry.new(quiet))).not_to be_reapable(now.to_i)
     end

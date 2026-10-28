@@ -26,18 +26,19 @@ class RecordingClient < ClaudeInbox::Claude::FixtureClient
 
   def fail_attach = @attach_fails = true
 
-  def rm(id)
+  def rm(session)
     @gate&.pop
-    raise ClaudeInbox::Claude::AgentsClient::Error, "rm failed: worktree has unpushed commits" if @refuse.include?(id)
-    removed << id
+    raise ClaudeInbox::Claude::AgentsClient::Error, "rm failed: worktree has unpushed commits" if @refuse.include?(session.id)
+    removed << session.id
   end
 
-  def stop(id)
-    stopped << id
+  def stop(session)
+    stopped << session.id
+    true
   end
 
-  def attach(id)
-    attached << id
+  def attach(session)
+    attached << session.id
     !@attach_fails
   end
 

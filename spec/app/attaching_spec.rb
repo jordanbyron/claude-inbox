@@ -119,4 +119,45 @@ RSpec.describe ClaudeInbox::App do
       expect(wait_for { screen(app).first.include?("deleted comma3x not booting") }).to be(true)
     end
   end
+
+  describe "a Codex thread" do
+    let(:dir) { Dir.mktmpdir("codex") }
+    let(:turns) { {"data" => [{"id" => "turn9", "status" => "inProgress"}]} }
+    let(:fake) do
+      FakeCodexDaemon.new(dir, "thread/list" => JSON.parse(File.read(fixture_path("codex-threads.json"))),
+        "thread/turns/list" => ->(_) { turns }, "turn/interrupt" => {}, "thread/delete" => {})
+    end
+    let(:codex) { ClaudeInbox::Codex::ThreadsClient.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: fake.path, timeout: 1)) }
+    let(:harnesses) { ClaudeInbox::Harnesses.new(claude: client, codex: codex) }
+    let(:app) { build_app(client: harnesses, store:, pull_requests:, queue:, terminal:) }
+    let(:sent) { [] }
+    let(:methods) { -> { sent.concat(drain(fake.requests).map { |r| r["method"] }) } }
+
+    after do
+      fake.stop
+      FileUtils.remove_entry(dir)
+    end
+
+    before { press(app, "/", *"Staging".chars, "\r") }
+
+    it "interrupts its turn on X, through Codex rather than Claude" do
+      press(app, "X", "y")
+      expect(wait_for { methods.call.include?("turn/interrupt") }).to be(true)
+      expect(client.stopped).to be_empty
+    end
+
+    it "says there is nothing to stop between turns" do
+      turns["data"][0]["status"] = "completed"
+      press(app, "X", "y")
+      expect(wait_for { screen(app).first.include?("Staging migration dry run has no turn running") }).to be(true)
+    end
+
+    it "deletes it on ctrl-x without promising a worktree" do
+      press(app, ctrl_x)
+      expect(app).to paint("Its conversation goes with it.")
+      press(app, "y")
+      expect(wait_for { methods.call.include?("thread/delete") }).to be(true)
+      expect(client.removed).to be_empty
+    end
+  end
 end

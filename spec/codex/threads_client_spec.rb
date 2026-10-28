@@ -6,14 +6,14 @@ RSpec.describe ClaudeInbox::Codex::ThreadsClient do
   let(:sessions) { ClaudeInbox::Codex::FixtureClient.new(fixture_path("codex-threads.json")).list }
   let(:state) { ->(status, unread: false) { described_class.state(status, unread: unread) } }
 
-  it "reads each thread as a background session Codex can do nothing to from here" do
+  it "reads each thread as a background session to attach to, stop or delete" do
     blocked, working, done = sessions
     expect(sessions.map(&:harness).uniq).to eq([:codex])
     expect(blocked).to have_attributes(id: "01a18430-c021-7682-b3f0-d8474a3eb287", kind: "background", cwd: "/Users/byron/code/parks_genie",
       name: "Staging migration dry run", started_at: Time.at(1_789_500_100), created_at: Time.at(1_789_500_100),
-      last_message_at: Time.at(1_789_500_400), pid: nil, actions: [], pr_urls: [])
+      last_message_at: Time.at(1_789_500_400), pid: nil, actions: %i[attach stop delete], pr_urls: [])
     expect(blocked).to be_actionable
-    expect(blocked).not_to be_attachable
+    expect(blocked).to be_attachable
     expect(blocked.intent).to start_with("Run the migration")
     expect(working.name).to eq("Explain why the flaky spec in spec/poller_spec.rb times out on CI")
     expect([blocked, working, done].map(&:state)).to eq(%w[blocked working done])
@@ -57,5 +57,48 @@ RSpec.describe ClaudeInbox::Codex::ThreadsClient do
   it "lists nothing without a daemon or a fixture" do
     expect(described_class.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: "/nonexistent.sock")).list).to eq([])
     expect(ClaudeInbox::Codex::FixtureClient.new("/nonexistent/codex-threads.json").list).to eq([])
+  end
+
+  describe "acting on a thread" do
+    let(:dir) { Dir.mktmpdir("codex") }
+    let(:thread) { session(harness: :codex, id: "t1", cwd: dir) }
+    let(:turns) { {"data" => [{"id" => "turn9", "status" => "inProgress"}]} }
+    let(:fake) { FakeCodexDaemon.new(dir, "thread/turns/list" => ->(_) { turns }, "turn/interrupt" => {}, "thread/delete" => {}) }
+    let(:client) { described_class.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: fake.path, timeout: 1)) }
+    let(:sent) { -> { drain(fake.requests).drop(1).map { |r| [r["method"], r["params"]] } } }
+
+    after do
+      fake.stop
+      FileUtils.remove_entry(dir)
+    end
+
+    it "interrupts the turn under way, found from the newest turn" do
+      expect(client.stop(thread)).to be(true)
+      expect(sent.call).to eq([["thread/turns/list", {"threadId" => "t1", "sortDirection" => "desc", "limit" => 1}],
+        ["turn/interrupt", {"threadId" => "t1", "turnId" => "turn9"}]])
+    end
+
+    it "has nothing to stop between turns" do
+      turns["data"][0]["status"] = "completed"
+      expect(client.stop(thread)).to be(false)
+      expect(sent.call.map(&:first)).to eq(["thread/turns/list"])
+    end
+
+    it "deletes the thread, and says why when the daemon refuses" do
+      client.rm(thread)
+      expect(sent.call).to eq([["thread/delete", {"threadId" => "t1"}]])
+      refusing = FakeCodexDaemon.new(FileUtils.mkdir_p(File.join(dir, "refusing")).first, "thread/delete" => {"error" => {"code" => -32600, "message" => "no rollout found for thread id t1"}})
+      expect { described_class.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: refusing.path, timeout: 1)).rm(thread) }
+        .to raise_error(ClaudeInbox::Codex::Daemon::Error, /no rollout found/)
+      refusing.stop
+    end
+
+    it "resumes the thread in its own directory, so codex asks no question first" do
+      bin = File.join(dir, "codex")
+      File.write(bin, "#!/bin/sh\necho \"$PWD $*\" > \"$0.log\"\n")
+      File.chmod(0o755, bin)
+      expect(described_class.new(bin: bin).attach(thread)).to be(true)
+      expect(File.read("#{bin}.log")).to eq("#{File.realpath(dir)} resume t1\n")
+    end
   end
 end
