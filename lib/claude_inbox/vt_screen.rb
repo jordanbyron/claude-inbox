@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "strscan"
-require "unicode/display_width"
 require_relative "text"
 
 module ClaudeInbox
@@ -72,7 +71,7 @@ module ClaudeInbox
     def put(ch)
       o = ch.ord
       return if o < 32
-      w = (o < 127) ? 1 : Unicode::DisplayWidth.of(ch)
+      w = (o < 127) ? 1 : Text.width(ch)
       return if w <= 0
       if @col + w > @cols
         @col = 0
