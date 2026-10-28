@@ -331,8 +331,8 @@ module ClaudeInbox
       return [Text.pad(first, width)] unless live
 
       # The session's own line when it has one; the path is what is left to
-      # say about a terminal, which has no job file.
-      detail = @p.dim("       ↳ " + Text.truncate(s.summary || short_path(s.cwd), [width - 10, 0].max))
+      # say about a terminal, which has none.
+      detail = @p.dim("       ↳ " + Text.truncate(s.line || short_path(s.cwd), [width - 10, 0].max))
       [Text.pad(first, width), Text.pad(detail, width)]
     end
 
@@ -428,7 +428,7 @@ module ClaudeInbox
     # named, since "working · 2 agents" answers "working on what?".
     def working_badge(s)
       return @theme.yellow("waiting#{": #{s.waiting_for}" if s.waiting_for}") if s.status == "waiting"
-      label = s.job_state&.in_flight_label
+      label = s.in_flight
       @theme.yellow(s.waiting_on_work? ? "idle" : "working") + (label ? @p.dim(" · #{label}") : "")
     end
 

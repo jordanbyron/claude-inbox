@@ -1,18 +1,15 @@
 # frozen_string_literal: true
 
-require_relative "job_state"
-
 module ClaudeInbox
-  # Puts the list together. JobState goes before PullRequests because the PR
-  # links it wants are read off the job file. Nothing here asks gh: that is
-  # `PullRequests#refresh`, which the poller runs once this list has gone up.
+  # Puts the list together: the adapter hands back finished sessions, with
+  # the PR links its harness scanned, and PullRequests puts what is known
+  # about each on top. Nothing here asks gh: that is `PullRequests#refresh`,
+  # which the poller runs once this list has gone up.
   module Sessions
     module_function
 
-    def load(client:, pull_requests:, transcripts:, overrides:)
-      sessions = JobState.enrich(client.list, jobs_dir: client.jobs_dir)
-      sessions = transcripts.enrich(sessions)
-      pull_requests.enrich(sessions, overrides)
+    def load(client:, pull_requests:, overrides:)
+      pull_requests.enrich(client.list, overrides)
     end
   end
 end

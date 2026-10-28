@@ -4,8 +4,7 @@ require "json"
 require "openssl"
 require_relative "../agents_client"
 require_relative "../images"
-require_relative "../job_state"
-require_relative "../session"
+
 require_relative "../session_request"
 require_relative "../settings"
 require_relative "../text"
@@ -187,7 +186,7 @@ module ClaudeInbox
       def remote_url(id, wait:)
         deadline = Http.monotonic + wait
         loop do
-          url = Session.new(id: id, job_state: JobState.read(id, jobs_dir: @client.jobs_dir)).remote_url
+          url = @client.remote_url(id)
           return url if url || Http.monotonic >= deadline
           sleep 0.2
         end

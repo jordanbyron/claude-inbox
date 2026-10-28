@@ -118,19 +118,4 @@ RSpec.describe ClaudeInbox::JobState do
     expect(js.intent).to eq("Look into the TIAA gateway 403s")
     expect(described_class.new({}).intent).to be_nil
   end
-
-  it "enriches background sessions only" do
-    Dir.mktmpdir do |dir|
-      FileUtils.mkdir_p(File.join(dir, "aaa11111"))
-      File.write(File.join(dir, "aaa11111", "state.json"),
-        JSON.generate("tempo" => "idle", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}]))
-      bg, term = described_class.enrich([
-        session(id: "aaa11111"),
-        session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "u1")
-      ], jobs_dir: dir)
-      expect(bg.job_state.in_flight_label).to eq("1 shell")
-      expect(bg).to be_waiting_on_work
-      expect(term.job_state).to be_nil
-    end
-  end
 end

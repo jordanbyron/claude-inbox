@@ -30,7 +30,7 @@ module ClaudeInbox
       was = alerts(before)
       rows(after).filter_map do |row|
         kind = alert(row)
-        Notification.new(key: row.key, kind: kind, label: row.label, line: row.session.summary) if kind && was[row.key] != kind
+        Notification.new(key: row.key, kind: kind, label: row.label, line: row.session.line) if kind && was[row.key] != kind
       end
     end
 

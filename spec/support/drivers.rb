@@ -40,7 +40,7 @@ module Drivers
       rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),
       input: StringIO.new, color: false, **options
     )
-    store.update(ClaudeInbox::Sessions.load(client: client, pull_requests: pull_requests, transcripts: ClaudeInbox::Transcript.new, overrides: {}))
+    store.update(ClaudeInbox::Sessions.load(client: client, pull_requests: pull_requests, overrides: {}))
     app.step
     app
   end

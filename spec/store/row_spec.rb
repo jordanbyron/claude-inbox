@@ -20,7 +20,7 @@ RSpec.describe ClaudeInbox::Store::Row do
   describe "searching a session you cannot name" do
     it "searches the prompt the session was started with" do
       r = described_class.new(session(id: "a", name: "SEAR-1594", cwd: "/srv/app",
-        job_state: ClaudeInbox::JobState.new("intent" => "Restore the OpenSearch indexes in Sagemaker")), nil)
+        intent: "Restore the OpenSearch indexes in Sagemaker"), nil)
       expect(r.matches?("opensearch")).to be(true)
       expect(r.matches?("sagemaker")).to be(true)
       expect(r.matches?("kubernetes")).to be(false)
@@ -28,7 +28,7 @@ RSpec.describe ClaudeInbox::Store::Row do
 
     it "searches the line the session is showing about itself" do
       r = described_class.new(session(id: "a", name: "SEAR-1594", state: "working",
-        job_state: ClaudeInbox::JobState.new("detail" => "Reading the synonym-mode application")), nil)
+        line: "Reading the synonym-mode application"), nil)
       expect(r.matches?("synonym")).to be(true)
     end
 
@@ -50,7 +50,7 @@ RSpec.describe ClaudeInbox::Store::Row do
 
     it "leaves an interactive session searchable by name and cwd alone" do
       r = described_class.new(session(id: nil, session_id: "u1", kind: "interactive", name: "shell",
-        cwd: "/srv/app", job_state: nil), nil)
+        cwd: "/srv/app"), nil)
       expect(r.matches?("shell")).to be(true)
       expect(r.matches?("app")).to be(true)
       expect(r.matches?("opensearch")).to be(false)

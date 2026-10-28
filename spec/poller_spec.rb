@@ -14,8 +14,7 @@ RSpec.describe ClaudeInbox::Poller do
     {client: client, store: store, reaper: ClaudeInbox::Reaper.disabled, queue: queue,
      snapshot: ClaudeInbox::Snapshot.disabled, actions: ClaudeInbox::Actions.disabled,
      interval: described_class::INTERVAL, clock: clock,
-     pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil),
-     transcripts: ClaudeInbox::Transcript.new}
+     pull_requests: ClaudeInbox::PullRequests.new(cache_path: nil, resolved_path: nil, gh: nil)}
   end
   let(:poller) { described_class.new(**poller_args) }
 

@@ -14,13 +14,13 @@ module ClaudeInbox
     INTERVAL = 4
     ACTIONS_INTERVAL = 0.5
 
-    def initialize(client:, store:, pull_requests:, transcripts:, reaper:, queue:, snapshot:, actions:,
+    def initialize(client:, store:, pull_requests:, reaper:, queue:, snapshot:, actions:,
       notifier: Notifier.disabled, interval: INTERVAL, clock: -> { Time.now })
       @client = client
       @clock = clock
       @store = store
       @pull_requests = pull_requests
-      @transcripts = transcripts
+
       @reaper = reaper
       @queue = queue
       @snapshot = snapshot
@@ -52,7 +52,7 @@ module ClaudeInbox
     # dropped it.
     def once
       now = @clock.call
-      sessions = Sessions.load(client: @client, pull_requests: @pull_requests, transcripts: @transcripts, overrides: @store.pr_overrides)
+      sessions = Sessions.load(client: @client, pull_requests: @pull_requests, overrides: @store.pr_overrides)
       doomed = @reaper.due(sessions, now)
       @store.hide(doomed)
       publish(sessions, now)
