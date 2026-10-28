@@ -2,7 +2,7 @@
 
 require "json"
 require "openssl"
-require_relative "../agents_client"
+require_relative "../claude/agents_client"
 require_relative "../images"
 
 require_relative "../session_request"
@@ -54,10 +54,10 @@ module ClaudeInbox
       def choices
         paths = dir_paths
         {
-          models: AgentsClient::MODELS,
-          efforts: AgentsClient::EFFORTS,
-          permission_modes: AgentsClient::PERMISSION_MODES & @allowed_modes,
-          colors: AgentsClient::COLORS,
+          models: Claude::AgentsClient::MODELS,
+          efforts: Claude::AgentsClient::EFFORTS,
+          permission_modes: Claude::AgentsClient::PERMISSION_MODES & @allowed_modes,
+          colors: Claude::AgentsClient::COLORS,
           dirs: paths.map { |path| {path: path, label: SessionRequest.label(path, paths), defaults: @settings.call(path).to_h} }
         }
       end
@@ -83,7 +83,7 @@ module ClaudeInbox
         ensure
           settle(key, digest, started) if key
         end
-      rescue AgentsClient::Error => e
+      rescue Claude::AgentsClient::Error => e
         reason = Text.printable(e.message.lines.first.to_s.strip)
         @queue << [:notice, "remote start failed: #{reason}"]
         raise Http::Error.new(500, e.message, source: "claude", note: reason)

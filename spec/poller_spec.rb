@@ -100,7 +100,7 @@ RSpec.describe ClaudeInbox::Poller do
       refused = nil
       allow(client).to receive(:rm).and_wrap_original do |rm, id|
         refused ||= id
-        raise ClaudeInbox::AgentsClient::Error, "rm failed: unpushed commits" if id == refused
+        raise ClaudeInbox::Claude::AgentsClient::Error, "rm failed: unpushed commits" if id == refused
         rm.call(id)
       end
       reaper = ClaudeInbox::Reaper.new(client, store, log_path: File::NULL, enabled: true)

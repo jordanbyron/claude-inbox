@@ -61,7 +61,7 @@ RSpec.describe ClaudeInbox::CLI do
   describe "#app_options" do
     it "reads a fixture's sessions and keeps its listener apart from the real one" do
       opts = cli["--fixture", agents, "--listen=0"].app_options
-      expect(opts[:client]).to be_a(ClaudeInbox::FixtureClient)
+      expect(opts[:client]).to be_a(ClaudeInbox::Claude::FixtureClient)
       expect(opts[:listen]).to include(fixture: true, port: 0, lock_path: File.join(Dir.tmpdir, "claude-inbox-fixture", "listen.lock"))
       expect(opts).not_to include(:reaper, :updater, :argv)
     end
