@@ -175,6 +175,33 @@ RSpec.describe ClaudeInbox::PullRequests do
 
   # gh is a network round trip per PR, so enrich must never be the thing
   # that asks: the first frame waits on it.
+  it "finds a session's PRs from its branch, with gh asked once per refresh window" do
+    listed = []
+    later = now
+    client = described_class.new(cache_path: nil, resolved_path: nil, gh: "gh", clock: -> { later })
+    allow(client).to receive(:fetch) { raise "a listed PR needs no gh pr view" }
+    allow(client).to receive(:fetch_branch) do |repo, branch|
+      listed << [repo, branch]
+      [ClaudeInbox::PullRequest.new(number: 12, url: "https://github.com/o/r/pull/12", state: "OPEN", health: "FAILING")]
+    end
+    s = session(id: "t", branch: "fix-it", origin_url: "git@github.com:o/r.git")
+    expect(client.enrich([s], {}).first.prs).to eq([])
+    client.refresh([s, s.with(id: "u")])
+    expect(client.enrich([s], {}).first.prs.map { |pr| [pr.number, pr.health] }).to eq([[12, "FAILING"]])
+    expect(client.enrich([s], {"t" => "https://github.com/o/r/pull/9"}).first.prs.map(&:number)).to eq([9])
+    client.refresh([s])
+    later = now + described_class::REFRESH_AFTER
+    client.refresh([s])
+    expect(listed).to eq([["o/r", "fix-it"]] * 2)
+  end
+
+  it "reads owner/repo from a GitHub remote in any form git takes, and nothing from another host" do
+    repos = %w[git@github.com:o/r.git https://github.com/o/r.git https://github.com/o/r ssh://git@github.com/o/r.git].map { |u| described_class.github_repo(u) }
+    expect(repos).to eq(["o/r"] * 4)
+    expect(described_class.github_repo("git@gitlab.com:o/r.git")).to be_nil
+    expect(described_class.github_repo(nil)).to be_nil
+  end
+
   it "enriches without asking gh, and refresh is the slow half" do
     calls = []
     client = described_class.new(**cached, gh: "gh")
