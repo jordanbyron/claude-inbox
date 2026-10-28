@@ -142,6 +142,15 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(text).to match(/● \? shell2\s+needs you: permission prompt · your terminal/)
   end
 
+  it "tags a Codex row, which keeps its dot while blocked and has none once done, there being no attaching to it" do
+    codex = {harness: :codex, actions: []}
+    rows = [session(id: "c1", name: "stuck", state: "blocked", **codex), session(id: "c2", name: "finished", state: "done", **codex)]
+    sec = ClaudeInbox::Store.sectionize(rows, ClaudeInbox::Store.merge_entries({}, rows, now), now)
+    text = renderer.frame(sec, view.with(width: 90, height: 12)).plain.lines.join("\n")
+    expect(text).to match(/^ ● \? stuck\s+needs you · codex · /)
+    expect(text).to match(/^   ✓ finished\s+done · codex · /)
+  end
+
   it "lists settled rows when expanded" do
     f = renderer.frame(sections, view.with(width: 80, height: 30, expanded: {settled: true})).plain
     expect(f.items.compact.map(&:key)).to eq(["f23c8673", "4a93393d-1c06-57da-9fb8-12f5b1535d95", "823b882f", "dcbc1d98", "b0b18338", "fbf5253a", "b03695b1"])

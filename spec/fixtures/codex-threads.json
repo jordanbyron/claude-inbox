@@ -1,0 +1,65 @@
+{
+  "data": [
+    {
+      "id": "01a18430-c021-7682-b3f0-d8474a3eb287",
+      "sessionId": "01a18430-c021-7682-b3f0-d8474a3eb287",
+      "preview": "Run the migration against a copy of the staging dump and report any lock waits",
+      "ephemeral": false,
+      "modelProvider": "openai",
+      "createdAt": 1789500100,
+      "updatedAt": 1789500400,
+      "status": {"type": "active", "activeFlags": ["waitingOnApproval"]},
+      "cwd": "/Users/byron/code/parks_genie",
+      "cliVersion": "0.165.0",
+      "originator": "codex-tui",
+      "source": "vscode",
+      "threadSource": "user",
+      "gitInfo": {"sha": "dc70a05d4fbb2fba2a7352566e989b189c9d9241", "branch": "staging-migration", "originUrl": "git@github.com:jordanbyron/parks_genie.git"},
+      "name": "Staging migration dry run",
+      "turns": []
+    },
+    {
+      "id": "01a18431-0b7e-7d40-9a51-2f6c1e0d4a10",
+      "sessionId": "01a18431-0b7e-7d40-9a51-2f6c1e0d4a10",
+      "preview": "Explain why the flaky\n  spec in spec/poller_spec.rb times out on CI",
+      "ephemeral": false,
+      "modelProvider": "openai",
+      "createdAt": 1789500200,
+      "updatedAt": 1789500500,
+      "status": {"type": "active", "activeFlags": []},
+      "cwd": "/Users/byron/code/claude-inbox",
+      "cliVersion": "0.165.0",
+      "originator": "codex-tui",
+      "source": "vscode",
+      "threadSource": "user",
+      "gitInfo": {"sha": "6cf4d1f000000000000000000000000000000000", "branch": "main", "originUrl": "https://github.com/jordanbyron/claude-inbox.git"},
+      "name": null,
+      "turns": []
+    },
+    {
+      "id": "01a18432-5f3a-7b11-8c0e-7a9d2b4e6f21",
+      "sessionId": "01a18432-5f3a-7b11-8c0e-7a9d2b4e6f21",
+      "preview": "Summarise last week's trail reports",
+      "ephemeral": false,
+      "modelProvider": "openai",
+      "createdAt": 1789490000,
+      "updatedAt": 1789490900,
+      "status": {"type": "notLoaded"},
+      "cwd": "/Users/byron/code/trailforks",
+      "cliVersion": "0.165.0",
+      "originator": "codex_exec",
+      "source": "exec",
+      "threadSource": "user",
+      "gitInfo": null,
+      "name": "Weekly trail report",
+      "turns": []
+    }
+  ],
+  "nextCursor": null,
+  "backwardsCursor": "2026-09-15T16:41:40Z",
+  "readStates": {
+    "01a18430-c021-7682-b3f0-d8474a3eb287": {"firstUnread": null, "revision": "initial:01a18430-c021-7682-b3f0-d8474a3eb287"},
+    "01a18431-0b7e-7d40-9a51-2f6c1e0d4a10": {"firstUnread": null, "revision": "initial:01a18431-0b7e-7d40-9a51-2f6c1e0d4a10"},
+    "01a18432-5f3a-7b11-8c0e-7a9d2b4e6f21": {"firstUnread": {"type": "turn", "turnId": "01a18432-6a00-7c22-9d1f-8b0e3c5f7a32"}, "revision": "b3a25216-3805-4300-939a-a40c66ff8704"}
+  }
+}
