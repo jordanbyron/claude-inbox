@@ -74,9 +74,11 @@ module ClaudeInbox
 
       def read_frame(deadline)
         b0, b1 = take(2, deadline).unpack("CC")
-        len = b1 & 0x7f
-        len = take(2, deadline).unpack1("n") if len == 126
-        len = take(8, deadline).unpack1("Q>") if len == 127
+        len = case b1 & 0x7f
+        when 126 then take(2, deadline).unpack1("n")
+        when 127 then take(8, deadline).unpack1("Q>")
+        else b1 & 0x7f
+        end
         raise Error, "a frame is over #{MAX_MESSAGE} bytes" if len > MAX_MESSAGE
         mask = take(4, deadline) if b1 & 0x80 != 0
         payload = take(len, deadline)
