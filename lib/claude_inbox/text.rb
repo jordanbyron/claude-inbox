@@ -43,7 +43,6 @@ module ClaudeInbox
       found
     end
 
-    # Bytes that aren't UTF-8 become U+FFFD.
     def utf8(s) = String.new(s.to_s, encoding: Encoding::UTF_8).scrub("\uFFFD")
 
     # Control characters as \xNN, so quoted text can't reach the terminal
@@ -53,7 +52,6 @@ module ClaudeInbox
     def width(s) = Unicode::DisplayWidth.of(strip_ansi(s))
 
     # Truncate to `w` columns, appending an ellipsis when anything was cut.
-    # Handles wide glyphs by stepping grapheme by grapheme.
     def truncate(s, w)
       return "" if w <= 0
       return s if width(s) <= w
@@ -90,7 +88,6 @@ module ClaudeInbox
       out
     end
 
-    # Right-pad to exactly `w` columns. Truncates if too long.
     def pad(s, w)
       s = truncate(s, w)
       s + (" " * [w - width(s), 0].max)
