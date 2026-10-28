@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "pastel"
-require_relative "agents_client"
+require_relative "claude/agents_client"
 require_relative "images"
 require_relative "palette"
 require_relative "session_request"
@@ -49,12 +49,12 @@ module ClaudeInbox
         Field.new(:prompt, "Prompt", :multiline, TextBuffer.new),
         Field.new(:name, "Name", :text, TextBuffer.new),
         Field.new(:cwd, "Directory", :text, TextBuffer.new(cwd)),
-        Field.new(:model, "Model", :choice, DEFAULT, AgentsClient::MODELS),
-        Field.new(:effort, "Effort", :choice, DEFAULT, AgentsClient::EFFORTS),
-        Field.new(:permission_mode, "Permissions", :choice, DEFAULT, AgentsClient::PERMISSION_MODES),
+        Field.new(:model, "Model", :choice, DEFAULT, Claude::AgentsClient::MODELS),
+        Field.new(:effort, "Effort", :choice, DEFAULT, Claude::AgentsClient::EFFORTS),
+        Field.new(:permission_mode, "Permissions", :choice, DEFAULT, Claude::AgentsClient::PERMISSION_MODES),
         Field.new(:worktree, "Worktree", :choice, "no", %w[no yes]),
         Field.new(:remote, "Remote Control", :choice, DEFAULT, [DEFAULT, "no", "yes"]),
-        Field.new(:color, "Color", :choice, DEFAULT, AgentsClient::COLORS)
+        Field.new(:color, "Color", :choice, DEFAULT, Claude::AgentsClient::COLORS)
       ]
       @focus = 0
       @error = nil
@@ -129,7 +129,7 @@ module ClaudeInbox
 
     def values
       v = @fields.to_h { |f| [f.key, (f.kind == :choice && f.value == DEFAULT) ? nil : f.value.to_s] }
-      v[:prompt] = field(:prompt).value.expand { |chip| AgentsClient.mention(chip.path) }.strip
+      v[:prompt] = field(:prompt).value.expand { |chip| Claude::AgentsClient.mention(chip.path) }.strip
       v[:worktree] = v[:worktree] == "yes"
       v[:name] = nil if v[:name].strip.empty?
       v[:cwd] = directory

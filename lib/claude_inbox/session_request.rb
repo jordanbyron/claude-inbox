@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "pathname"
-require_relative "agents_client"
+require_relative "claude/agents_client"
 
 module ClaudeInbox
   # The rules a new session's settings follow, whichever way it is asked
@@ -18,10 +18,10 @@ module ClaudeInbox
 
     KEYS = %w[prompt name cwd model effort permission_mode worktree remote color].freeze
     CHOICES = {
-      model: AgentsClient::MODELS,
-      effort: AgentsClient::EFFORTS,
-      permission_mode: AgentsClient::PERMISSION_MODES,
-      color: AgentsClient::COLORS
+      model: Claude::AgentsClient::MODELS,
+      effort: Claude::AgentsClient::EFFORTS,
+      permission_mode: Claude::AgentsClient::PERMISSION_MODES,
+      color: Claude::AgentsClient::COLORS
     }.freeze
     FLAGS = {true => true, false => false, "yes" => true, "no" => false}.freeze
     MAX_PROMPT = 100_000
@@ -73,9 +73,9 @@ module ClaudeInbox
         n = token[/\d+/].to_i
         next token unless n.between?(1, paths.size)
         used << n
-        AgentsClient.mention(paths[n - 1])
+        Claude::AgentsClient.mention(paths[n - 1])
       end
-      rest = paths.reject.with_index(1) { |_, n| used.include?(n) }.map { |path| AgentsClient.mention(path) }
+      rest = paths.reject.with_index(1) { |_, n| used.include?(n) }.map { |path| Claude::AgentsClient.mention(path) }
       [text, rest.join("\n")].reject(&:empty?).join("\n\n")
     end
 

@@ -3,7 +3,7 @@
 require "fileutils"
 require "json"
 require "socket"
-require_relative "../agents_client"
+require_relative "../claude/agents_client"
 require_relative "http"
 require_relative "pairing"
 require_relative "pairing_dialog"
@@ -93,8 +93,8 @@ module ClaudeInbox
       def self.modes_option(value)
         return DEFAULT_MODES if value.nil? || value.strip.empty?
         modes = value.split(",").map(&:strip).reject(&:empty?)
-        unknown = modes - AgentsClient::PERMISSION_MODES
-        raise ArgumentError, "unknown permission mode #{unknown.first}: one of #{AgentsClient::PERMISSION_MODES.join(", ")}" if unknown.any?
+        unknown = modes - Claude::AgentsClient::PERMISSION_MODES
+        raise ArgumentError, "unknown permission mode #{unknown.first}: one of #{Claude::AgentsClient::PERMISSION_MODES.join(", ")}" if unknown.any?
         modes.uniq.freeze
       end
       private_class_method :port_option, :modes_option

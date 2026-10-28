@@ -2,7 +2,7 @@
 
 require "tmpdir"
 
-RSpec.describe ClaudeInbox::JobState do
+RSpec.describe ClaudeInbox::Claude::JobState do
   it "reads the detail line, the pulse, the open work and the PR links" do
     Dir.mktmpdir do |dir|
       FileUtils.mkdir_p(File.join(dir, "aaa11111"))
