@@ -25,6 +25,7 @@ module ClaudeInbox
     Link = Data.define(:columns, :url, :text)
 
     def links(s)
+      return [] unless s.include?("\e]8;")
       found = []
       col = 0
       start = url = text = nil

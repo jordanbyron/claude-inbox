@@ -13,6 +13,9 @@ module ClaudeInbox
     # is taken as Option held with it.
     ALT = /\A\e([a-z])\z/
 
+    # A nonblocking read can end partway through a mouse report.
+    UNFINISHED_REPORT = /\e\[<[\d;]*\z/
+
     def self.alt?(name) = name.to_s.start_with?("alt_")
 
     # An Option chord as the quick Esc-then-letter it may also have been.
@@ -22,6 +25,7 @@ module ClaudeInbox
       @input = input
       @reader = TTY::Reader.new(input: input, output: out, interrupt: :noop)
       @paste = Paste.new
+      @held = +""
     end
 
     def pasting? = @paste.pasting?
@@ -32,14 +36,18 @@ module ClaudeInbox
     end
 
     # `[:paste, text]`, `[:mouse, event]` and `[:key, name, raw]`, in the
-    # order they arrived, mouse before keys within one read; `name` is the
-    # reader's symbol for a key it knows, else the raw string.
+    # order they arrived; `name` is the reader's symbol for a key it knows,
+    # else the raw string. The head of a report cut off at the end of a read
+    # waits for the rest instead of being typed.
     def events(raw)
       @paste.feed(raw).flat_map do |kind, text|
         next [[:paste, text]] if kind == :paste
-        mouse = Mouse.events(text).map { |e| [:mouse, e] }
-        keys = Mouse.strip(text)
-        mouse + (keys.empty? ? [] : split_keys(keys).map { |k| [:key, key_name(k), k] })
+        text = @held + text
+        @held = text[UNFINISHED_REPORT] || +""
+        Mouse.split(text.delete_suffix(@held)).flat_map do |piece|
+          next [[:mouse, piece]] if piece.is_a?(Mouse::Event)
+          split_keys(piece).map { |k| [:key, key_name(k), k] }
+        end
       end
     end
 
