@@ -136,9 +136,11 @@ module ClaudeInbox
       TITLES = {stop: " Stop ", delete: " Delete ", adopt: " Adopt "}.freeze
 
       # `label` is the name the list shows; the id is what App acts on.
-      def initialize(kind, id, label = id)
+      # Only a Claude session has a worktree to lose.
+      def initialize(kind, id, label = id, harness: :claude)
         super(kind, id)
         @label = label
+        @harness = harness
       end
 
       def title = TITLES.fetch(kind)
@@ -147,8 +149,8 @@ module ClaudeInbox
         case kind
         when :stop then [ask("Stop", width), *answers("stop it", "cancel")]
         when :delete
-          [ask("Delete", width), "  Its worktree and conversation", "  go with it.",
-            *answers("delete it", "keep it")]
+          gone = (@harness == :claude) ? ["  Its worktree and conversation", "  go with it."] : ["  Its conversation goes with it."]
+          [ask("Delete", width), *gone, *answers("delete it", "keep it")]
         when :adopt
           ["  Pull this session into the daemon?", "  Its phone session ends and a",
             "  new one takes its place.", *answers("adopt it", "cancel")]

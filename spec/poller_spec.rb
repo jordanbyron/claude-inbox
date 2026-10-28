@@ -98,10 +98,10 @@ RSpec.describe ClaudeInbox::Poller do
     # it is what tells the store the daemon dropped it.
     it "keeps a reaped row hidden on later polls while the daemon still lists it" do
       refused = nil
-      allow(client).to receive(:rm).and_wrap_original do |rm, id|
-        refused ||= id
-        raise ClaudeInbox::Claude::AgentsClient::Error, "rm failed: unpushed commits" if id == refused
-        rm.call(id)
+      allow(client).to receive(:rm).and_wrap_original do |rm, session|
+        refused ||= session.id
+        raise ClaudeInbox::Claude::AgentsClient::Error, "rm failed: unpushed commits" if session.id == refused
+        rm.call(session)
       end
       reaper = ClaudeInbox::Reaper.new(client, store, log_path: File::NULL, enabled: true)
 
@@ -142,7 +142,7 @@ RSpec.describe ClaudeInbox::Poller do
       poller.once
       expect(store.sections.all.map(&:key)).to include("f23c8673")
 
-      client.rm("f23c8673")
+      client.rm(session(id: "f23c8673"))
       store.forget("f23c8673")
       poller.once
       expect(store.sections.all.map(&:key)).not_to include("f23c8673")

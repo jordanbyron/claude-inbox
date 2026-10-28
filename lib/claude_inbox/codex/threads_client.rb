@@ -3,13 +3,19 @@
 require "json"
 require_relative "../session"
 require_relative "../store"
+require_relative "../subprocess"
 require_relative "daemon"
 
 module ClaudeInbox
   module Codex
-    # The Codex adapter: lists the daemon's threads as Sessions. Read-only,
-    # so its sessions carry no actions. Swap in FixtureClient for tests.
+    # The Codex adapter: lists the daemon's threads as Sessions and acts on
+    # them through it. Swap in FixtureClient for tests.
     class ThreadsClient
+      # What the inbox can do to a thread: open it in `codex resume`,
+      # interrupt its turn, delete it. Never reap it: `thread/delete` takes
+      # unpushed work with it, where `claude rm` refuses.
+      ACTIONS = %i[attach stop delete].freeze
+
       # Without sourceKinds the daemon leaves out `codex exec` threads. The
       # daemon never forgets a thread, so the list stops where the reaper
       # would: at one quiet for longer than Store::REAP_AFTER.
@@ -23,8 +29,9 @@ module ClaudeInbox
 
       LINES = {"permission" => "waiting on approval", "question" => "waiting on input"}.freeze
 
-      def initialize(daemon: Daemon.new, clock: -> { Time.now })
+      def initialize(daemon: Daemon.new, bin: "codex", clock: -> { Time.now })
         @daemon = daemon
+        @bin = bin
         @clock = clock
       end
 
@@ -43,6 +50,28 @@ module ClaudeInbox
         sessions
       end
 
+      # Hands the terminal to `codex resume`, which joins the daemon's live
+      # copy of the thread, and returns when it exits. False when it failed.
+      # Run anywhere but the thread's directory, it first asks which to use.
+      def attach(session)
+        here = (session.cwd && File.directory?(session.cwd)) ? {chdir: session.cwd} : {}
+        pid = Process.spawn(*Subprocess.command(@bin, "resume", session.id, **here))
+        _, status = Process.wait2(pid)
+        status.success? || !status.exited?
+      end
+
+      # Interrupts the turn under way. False when there is none. The thread
+      # does not say which turn is running, so the newest is looked up.
+      def stop(session)
+        turn = @daemon.call!("thread/turns/list", threadId: session.id, sortDirection: "desc", limit: 1)["data"]&.first
+        return false unless turn&.dig("status") == "inProgress"
+        @daemon.call!("turn/interrupt", threadId: session.id, turnId: turn["id"])
+        true
+      end
+
+      # The thread's rollout and its row in Codex's state go; there is no worktree to remove.
+      def rm(session) = @daemon.call!("thread/delete", threadId: session.id)
+
       # A `thread/list` result as Sessions.
       def self.sessions(result)
         read_states = result["readStates"] || {}
@@ -56,6 +85,7 @@ module ClaudeInbox
         preview = squish(thread["preview"])
         Session.new(
           harness: :codex,
+          actions: ACTIONS,
           id: thread["id"],
           kind: "background",
           cwd: thread["cwd"],
@@ -94,6 +124,13 @@ module ClaudeInbox
       end
 
       def list = File.exist?(@path) ? self.class.sessions(JSON.parse(File.read(@path))) : []
+
+      # Stand-in child, as the Claude fixture's attach is.
+      def attach(session) = system("sh", "-c", "printf 'fake codex resume %s\\npress enter to detach: ' \"$1\"; read -r _", "resume", session.id)
+
+      def stop(_session) = true
+
+      def rm(_session) = nil
     end
   end
 end

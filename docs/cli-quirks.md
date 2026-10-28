@@ -185,3 +185,14 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
 - A daemon thread's `source` is `"vscode"` and its `originator`
   `"codex-tui"` whatever started it, a TUI or another client on the socket,
   so `source` cannot tell them apart (checked on 0.165.0).
+- `turn/interrupt` needs the `turnId` as well as the `threadId`, and a
+  Thread does not carry the running turn's id. `thread/turns/list
+  {threadId, sortDirection: "desc", limit: 1}` has it, `inProgress`. Any
+  connection may interrupt, not only the one that started the turn
+  (checked on 0.165.0).
+- `thread/delete` removes the rollout under `~/.codex/sessions` and the
+  thread's row in Codex's state, and broadcasts `thread/deleted`; there is
+  nothing else to clean up (checked on 0.165.0).
+- `codex resume <id>` on a thread the daemon has loaded joins that live
+  copy rather than starting a second one. Run outside the thread's `cwd`,
+  it first asks which directory to use (checked on 0.165.0).

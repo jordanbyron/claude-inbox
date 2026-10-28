@@ -65,7 +65,7 @@ module ClaudeInbox
     end
 
     def reap(row, log, now_i)
-      @client.rm(row.session.id)
+      @client.rm(row.session)
       write(log, row, now_i, "reaped")
       @store.forget(row.key)
       row.key

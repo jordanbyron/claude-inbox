@@ -121,6 +121,13 @@ RSpec.describe ClaudeInbox::Dialog do
       expect(delete.press(:escape, "\e")).to eq(:cancel)
     end
 
+    it "promises a Codex thread's delete takes only its conversation" do
+      expect(described_class::Confirm.new(:delete, "t", "auth fix").frame(60).join("\n")).to include "worktree"
+      codex = described_class::Confirm.new(:delete, "t", "auth fix", harness: :codex).frame(60).join("\n")
+      expect(codex).to include "Its conversation goes with it."
+      expect(codex).not_to include "worktree"
+    end
+
     it "cuts a long name to one line rather than wrapping it" do
       stop = described_class::Confirm.new(:stop, "abc12345", "fix the extremely flaky spec in the remote listener")
       expect(stop.frame(60)[1]).to include "Stop fix the extremely flaky spec in…?"

@@ -35,7 +35,7 @@ module ClaudeInbox
           @queue << [:notice, ["started #{id}", note].compact.join(" — ")]
           @queue << [:form_started, form]
           @queue << [:select, id]
-          attach ? @queue << [:attach, id] : @poller.soon
+          attach ? @queue << [:attach, started(id)] : @poller.soon
         rescue Claude::AgentsClient::Error => e
           @queue << [:form_failed, form, e.message]
         end
