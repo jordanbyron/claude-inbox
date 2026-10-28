@@ -32,14 +32,14 @@ module ClaudeInbox
     end
 
     # `[:paste, text]`, `[:mouse, event]` and `[:key, name, raw]`, in the
-    # order they arrived; `name` is the reader's symbol for a key it knows,
-    # else the raw string.
+    # order they arrived, mouse before keys within one read; `name` is the
+    # reader's symbol for a key it knows, else the raw string.
     def events(raw)
       @paste.feed(raw).flat_map do |kind, text|
         next [[:paste, text]] if kind == :paste
-        mouse = Mouse.events(text)
-        next mouse.map { |e| [:mouse, e] } if mouse.any?
-        split_keys(text).map { |k| [:key, key_name(k), k] }
+        mouse = Mouse.events(text).map { |e| [:mouse, e] }
+        keys = Mouse.strip(text)
+        mouse + (keys.empty? ? [] : split_keys(keys).map { |k| [:key, key_name(k), k] })
       end
     end
 

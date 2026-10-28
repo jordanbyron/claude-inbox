@@ -14,9 +14,14 @@ module ClaudeInbox
       # The same frame for a terminal drawn without color.
       def plain = self.class.new(lines.map { |l| l.gsub(Text::CSI, "") }, items, top)
 
+      # Only the row under the pointer is scanned: every keystroke paints a
+      # frame, and scanning the whole screen for links each time cost more
+      # than the key repeat interval.
       def link_at(row, col)
-        @links ||= lines.map { |l| Text.links(l) }
-        @links.fetch(row - 1, []).find { |link| link.columns.cover?(col - 1) }
+        line = lines[row - 1] if row >= 1
+        return nil unless line
+        @links ||= {}
+        (@links[row] ||= Text.links(line)).find { |link| link.columns.cover?(col - 1) }
       end
     end
 

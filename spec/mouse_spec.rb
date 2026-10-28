@@ -44,4 +44,10 @@ RSpec.describe ClaudeInbox::Mouse do
   it "returns nothing for an ordinary keypress" do
     expect(described_class.events("j")).to eq([])
   end
+
+  it "strips every report out of a read, acted on or not" do
+    expect(described_class.strip("\e[<0;5;3m")).to eq("")
+    expect(described_class.strip("\e[<2;5;3M")).to eq("")
+    expect(described_class.strip("j\e[<0;5;3M")).to eq("j")
+  end
 end

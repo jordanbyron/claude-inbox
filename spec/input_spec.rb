@@ -31,6 +31,15 @@ RSpec.describe ClaudeInbox::Input do
     expect(input.events("\e[<0;5;3M")).to eq([[:mouse, ClaudeInbox::Mouse::Event.new(:click, 3, 5)]])
   end
 
+  it "swallows a release and a right click rather than typing them" do
+    expect(input.events("\e[<0;53;7m")).to eq([])
+    expect(input.events("\e[<2;53;7M")).to eq([])
+  end
+
+  it "keeps a key a report was glued onto" do
+    expect(input.events("j\e[<0;5;3m")).to eq([[:key, "j", "j"]])
+  end
+
   it "names the characters of a paste typed out" do
     expect(input.typed("a\r")).to eq([["a", "a"], [:return, "\r"]])
   end
