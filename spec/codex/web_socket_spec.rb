@@ -43,6 +43,14 @@ RSpec.describe ClaudeInbox::Codex::WebSocket do
     expect(sent.call).to eq([0x8A, 0x80, "hi"])
   end
 
+  it "reads a 126 or 127 byte message, whose two-byte length is itself 126 or 127" do
+    upgraded
+    [126, 127].each do |n|
+      theirs.write([0x81, 126, n].pack("CCn") + "a" * n)
+      expect(ws.read_text).to eq("a" * n)
+    end
+  end
+
   it "gives up on a daemon that closes or goes quiet" do
     upgraded
     theirs.write(frame.call(0x8, ""))
