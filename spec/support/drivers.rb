@@ -32,9 +32,11 @@ module Drivers
     }
   end
 
-  # An App over the fakes a spec hands it, with the client's sessions in the
-  # store and one frame painted, so the first key lands on a drawn screen.
-  def build_app(client:, store:, pull_requests:, queue:, terminal:, **options)
+  # An App over the fakes a spec hands it, `client` as its Claude adapter and
+  # `codex` as its Codex one if given, with their sessions in the store and
+  # one frame painted, so the first key lands on a drawn screen.
+  def build_app(client:, store:, pull_requests:, queue:, terminal:, codex: nil, **options)
+    client = ClaudeInbox::Harnesses.new(claude: client, **{codex: codex}.compact)
     app = ClaudeInbox::App.new(
       client: client, store: store, pull_requests: pull_requests, queue: queue, terminal: terminal,
       rate_limits: ClaudeInbox::RateLimits.new(path: fixture_path("rate_limits.json")),

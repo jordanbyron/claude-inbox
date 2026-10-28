@@ -2,8 +2,8 @@
 
 module ClaudeInbox
   # Every harness's adapter behind one client: the list is all of theirs,
-  # and an action on a session goes to the adapter that made it. Starting
-  # and adopting are Claude's alone.
+  # and an action on a session goes to the adapter that made it. Adopting
+  # is Claude's alone, and so is a start that names no harness.
   class Harnesses
     def initialize(**adapters)
       @adapters = adapters
@@ -17,7 +17,10 @@ module ClaudeInbox
 
     def rm(session) = adapter(session).rm(session)
 
-    def spawn(**) = claude.spawn(**)
+    def spawn(harness: :claude, **) = @adapters.fetch(harness).spawn(**)
+
+    # Each harness that could start a session now, with the models it offers.
+    def models = @adapters.transform_values(&:models).reject { |_, models| models.empty? }
 
     def adopt(**) = claude.adopt(**)
 

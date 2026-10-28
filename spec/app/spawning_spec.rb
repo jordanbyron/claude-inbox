@@ -135,4 +135,27 @@ RSpec.describe ClaudeInbox::App do
       end
     end
   end
+
+  describe "starting a Codex thread" do
+    let(:codex) { ClaudeInbox::Codex::FixtureClient.new(fixture_path("codex-threads.json")) }
+    let(:app) { build_app(client:, codex:, store:, pull_requests:, queue:, terminal:, trust: -> { trusted }) }
+
+    let(:attached) { [] }
+
+    before do
+      allow(codex).to receive(:spawn).and_return("t9")
+      allow(codex).to receive(:attach) { |s| attached << s }
+    end
+
+    it "starts it through Codex and attaches in its directory on ctrl-o" do
+      press(app, "n", "h", "i", "\t", "l", "\t", ctrl_u, *Dir.pwd.chars, "\x0f")
+      expect(wait_for {
+        app.step
+        attached.any?
+      }).to be(true)
+      expect(codex).to have_received(:spawn).with(prompt: "hi", cwd: Dir.pwd, model: nil, effort: nil, permission_mode: nil, images: [])
+      expect(attached).to contain_exactly(have_attributes(harness: :codex, id: "t9", cwd: Dir.pwd))
+      expect(client.spawns).to be_empty
+    end
+  end
 end

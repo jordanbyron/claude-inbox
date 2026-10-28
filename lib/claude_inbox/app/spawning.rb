@@ -9,7 +9,7 @@ module ClaudeInbox
       def open_new_session
         cwd = selected_session&.cwd || Dir.pwd
         dirs = SessionRequest.directories(@store.sessions, @trust.call)
-        @modal = NewSessionForm.new(cwd: SessionRequest.strip_worktree(cwd), dirs: dirs)
+        @modal = NewSessionForm.new(cwd: SessionRequest.strip_worktree(cwd), dirs: dirs, models: @client.models)
       end
 
       # `:start`/`:start_and_attach` leave the form as `@modal`, now busy: it
@@ -35,8 +35,8 @@ module ClaudeInbox
           @queue << [:notice, ["started #{id}", note].compact.join(" — ")]
           @queue << [:form_started, form]
           @queue << [:select, id]
-          attach ? @queue << [:attach, started(id)] : @poller.soon
-        rescue Claude::AgentsClient::Error => e
+          attach ? @queue << [:attach, started(id, harness: v[:harness], cwd: v[:cwd])] : @poller.soon
+        rescue Claude::AgentsClient::Error, Codex::Daemon::Error => e
           @queue << [:form_failed, form, e.message]
         end
       end
