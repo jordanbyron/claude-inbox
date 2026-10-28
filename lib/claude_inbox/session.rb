@@ -13,12 +13,14 @@ module ClaudeInbox
   # `with`, so a list already given to another thread cannot move under it.
   # `line` is the session's own account of where it is, `in_flight` the work
   # it started that is still open, `remote` a session driven from another
-  # device and `remote_control` one that can be. `actions` are what its
+  # device and `remote_control` one that can be. `branch` and `origin_url`
+  # are the git branch and remote it works on, when its harness says. `actions` are what its
   # harness can do to it from here.
   Session = Data.define(
     :harness, :actions, :id, :cwd, :kind, :started_at, :created_at, :session_id, :name,
     :state, :blocked_kind, :pid, :status, :waiting_for, :line, :in_flight, :waiting_on_work,
-    :remote, :remote_control, :remote_url, :color, :intent, :transcript_path, :pr_urls, :prs, :last_message_at
+    :remote, :remote_control, :remote_url, :color, :intent, :transcript_path, :pr_urls, :prs, :last_message_at,
+    :branch, :origin_url
   ) do
     # Every member is optional so the adapter and the specs name only what
     # they have; prs is [] rather than nil so nobody asks whether

@@ -17,6 +17,8 @@ RSpec.describe ClaudeInbox::Codex::ThreadsClient do
     expect(blocked.intent).to start_with("Run the migration")
     expect(working.name).to eq("Explain why the flaky spec in spec/poller_spec.rb times out on CI")
     expect([blocked, working, done].map(&:state)).to eq(%w[blocked working done])
+    expect(blocked).to have_attributes(branch: "staging-migration", origin_url: "git@github.com:jordanbyron/parks_genie.git")
+    expect(done).to have_attributes(branch: nil, origin_url: nil)
   end
 
   it "reads a status in OSC 7501's words, an unread turn making an idle thread done" do
