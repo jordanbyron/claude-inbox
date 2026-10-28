@@ -40,6 +40,23 @@ RSpec.describe ClaudeInbox::Input do
     expect(input.events("j\e[<0;5;3m")).to eq([[:key, "j", "j"]])
   end
 
+  it "keeps keys and clicks in the order they arrived" do
+    expect(input.events("j\e[<0;5;3Mk")).to eq([
+      [:key, "j", "j"], [:mouse, ClaudeInbox::Mouse::Event.new(:click, 3, 5)], [:key, "k", "k"]
+    ])
+  end
+
+  it "never joins the keys either side of a swallowed report into one" do
+    expect(input.events("\e\e[<0;5;3mg")).to eq([[:key, :escape, "\e"], [:key, "g", "g"]])
+  end
+
+  it "holds a report cut off at the end of a read until the rest arrives" do
+    expect(input.events("j\e[<0;5")).to eq([[:key, "j", "j"]])
+    expect(input.events(";3M")).to eq([[:mouse, ClaudeInbox::Mouse::Event.new(:click, 3, 5)]])
+    expect(input.events("\e[<0;53;")).to eq([])
+    expect(input.events("7m")).to eq([])
+  end
+
   it "names the characters of a paste typed out" do
     expect(input.typed("a\r")).to eq([["a", "a"], [:return, "\r"]])
   end

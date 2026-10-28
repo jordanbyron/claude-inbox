@@ -10,19 +10,22 @@ module ClaudeInbox
 
     Event = Struct.new(:kind, :row, :col)
 
-    # A raw keypress can glue several reports together the same way a fast
-    # "esc gg" glues onto one read (see Input#split_keys), so this scans
-    # rather than matching once.
-    def self.events(raw)
-      raw.scan(SEQUENCE).filter_map do |cb, col, row, type|
+    # The read cut at its reports, in order: an Event per report acted on,
+    # the keys between as strings. An ignored report still cuts, so the keys
+    # either side of it never join into one.
+    def self.split(raw)
+      out = []
+      rest = raw
+      while (m = SEQUENCE.match(rest))
+        out << m.pre_match unless m.pre_match.empty?
+        cb, col, row, type = m.captures
         kind = kind_for(cb.to_i, type)
-        Event.new(kind, row.to_i, col.to_i) if kind
+        out << Event.new(kind, row.to_i, col.to_i) if kind
+        rest = m.post_match
       end
+      out << rest unless rest.empty?
+      out
     end
-
-    # The read with every report taken out, acted on or not: a release or
-    # a right click is still a report, never keys to type.
-    def self.strip(raw) = raw.gsub(SEQUENCE, "")
 
     # Bit 6 (0x40) marks a wheel tick, direction in bit 0. Otherwise bits
     # 0-1 give the button (0 = left, 3 = none) and bit 5 (0x20) marks motion,

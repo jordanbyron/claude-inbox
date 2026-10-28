@@ -19,9 +19,7 @@ module ClaudeInbox
       # than the key repeat interval.
       def link_at(row, col)
         line = lines[row - 1] if row >= 1
-        return nil unless line
-        @links ||= {}
-        (@links[row] ||= Text.links(line)).find { |link| link.columns.cover?(col - 1) }
+        Text.links(line).find { |link| link.columns.cover?(col - 1) } if line
       end
     end
 
