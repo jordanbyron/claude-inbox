@@ -321,7 +321,7 @@ module ClaudeInbox
       # so the row can never exceed `width` and fall into Text.pad's blind
       # tail-chop.
       project_text = Text.truncate(s.project, [width - chrome, 0].max)
-      project = quiet ? @p.dim(project_text) : @theme.cyan(project_text)
+      project = @theme.tint((:cyan unless quiet), project_text)
 
       label_w = [width - chrome - Text.width(project_text), 0].max
       label = Text.truncate(row.label, label_w)
