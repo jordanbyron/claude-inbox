@@ -75,6 +75,12 @@ RSpec.describe ClaudeInbox::Session do
     expect { original.instance_variable_set(:@state, "x") }.to raise_error(FrozenError)
   end
 
+  it "reads the daemon's states in OSC 7501's words" do
+    states = %w[working blocked done failed stopped].map { |state| described_class.from_hash("state" => state).state }
+    expect(states).to eq(%w[working blocked done error idle])
+    expect(described_class.from_hash("kind" => "interactive", "status" => "busy").state).to be_nil
+  end
+
   it "folds an interactive status into the background vocabulary" do
     s = session(id: nil, kind: "interactive", state: nil, status: "waiting", session_id: "u1")
     expect(s.effective_state).to eq("blocked")

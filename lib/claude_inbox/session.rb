@@ -5,12 +5,18 @@ module ClaudeInbox
   # vocabulary, an idle terminal is a finished turn and a waiting one needs you.
   INTERACTIVE_STATE = {"busy" => "working", "waiting" => "blocked", "idle" => "done"}.freeze
 
+  # The daemon's states in OSC 7501's words: a stopped session is idle, a failed one an error.
+  CLAUDE_STATE = {"working" => "working", "blocked" => "blocked", "done" => "done", "failed" => "error", "stopped" => "idle"}.freeze
+
+  # What the screen and the pane have always called the two states OSC 7501 renamed.
+  STATE_WORDS = {"error" => "failed", "idle" => "stopped"}.freeze
+
   # One entry from `claude agents --json`. Immutable, and the enrichers hand
   # back copies via `with`, so a list already given to another thread cannot
   # move under it.
   Session = Data.define(
     :id, :cwd, :kind, :started_at, :session_id, :name,
-    :state, :pid, :status, :waiting_for, :origin, :prs, :job_state, :bridge_id, :last_message_at
+    :state, :blocked_kind, :pid, :status, :waiting_for, :origin, :prs, :job_state, :bridge_id, :last_message_at
   ) do
     # Every member is optional so the parser and the specs name only what they
     # have; prs is [] rather than nil so nobody asks whether PullRequests has run.
@@ -18,6 +24,9 @@ module ClaudeInbox
       super(**self.class.members.to_h { |m| [m, nil] }, **given, prs: prs || [])
     end
 
+    # `blocked_kind` (permission, question or auth) stays nil: a blocked row
+    # in the JSON carries no `waitingFor`, and an interactive one's is free
+    # text such as "permission prompt".
     def self.from_hash(h)
       new(
         id: h["id"],
@@ -26,7 +35,7 @@ module ClaudeInbox
         started_at: h["startedAt"] && Time.at(h["startedAt"] / 1000.0),
         session_id: h["sessionId"],
         name: h["name"],
-        state: h["state"],
+        state: h["state"] && CLAUDE_STATE.fetch(h["state"], h["state"]),
         pid: h["pid"],
         status: h["status"],
         waiting_for: h["waitingFor"]
@@ -89,9 +98,9 @@ module ClaudeInbox
     # `claude agents` prints under a row. Nil without a job file.
     def summary = job_state&.summary(effective_state)
 
-    def needs_you? = %w[blocked failed].include?(effective_state)
+    def needs_you? = %w[blocked error].include?(effective_state)
 
-    def finished? = %w[done stopped].include?(effective_state)
+    def finished? = %w[done idle].include?(effective_state)
 
     def alive? = !pid.nil?
 

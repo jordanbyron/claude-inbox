@@ -343,6 +343,11 @@ RSpec.describe "renderer session colors" do
     }
   end
 
+  it "still calls an error failed and an idle session stopped" do
+    expect(ClaudeInbox::Text.strip_ansi(line_of.call(session(name: "broke", state: "error"), "broke"))).to include("✗ broke", "failed · ")
+    expect(ClaudeInbox::Text.strip_ansi(line_of.call(session(name: "halted", state: "idle"), "halted"))).to include("■ halted", "stopped · ")
+  end
+
   it "paints the label of a session /color gave a color" do
     s = session(id: "z", name: "tinted", job_state: ClaudeInbox::JobState.new("color" => "orange"))
     line = line_of.call(s, "tinted")

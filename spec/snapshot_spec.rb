@@ -62,6 +62,15 @@ RSpec.describe ClaudeInbox::Snapshot do
     end
   end
 
+  it "gives the pane the words it has always read for an error and an idle session" do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "snapshot.json")
+      described_class.new(path: path).write(ClaudeInbox::Store.sectionize([session(id: "e", state: "error"), session(id: "i", state: "idle")], {}, now), now)
+      rows = JSON.parse(File.read(path))["sections"].values.flatten
+      expect(rows.to_h { |r| [r["id"], r["state"]] }).to eq("e" => "failed", "i" => "stopped")
+    end
+  end
+
   it "writes nothing when disabled" do
     expect { described_class.disabled.write(sections, now) }.not_to raise_error
   end

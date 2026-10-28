@@ -368,10 +368,10 @@ module ClaudeInbox
       return @p.dim("◦") if section == :settled
       case s.effective_state
       when "blocked" then @theme.red_bold("?")
-      when "failed" then @theme.red_bold("✗")
+      when "error" then @theme.red_bold("✗")
       when "working" then s.waiting_on_work? ? @theme.yellow("◌") : @theme.yellow(spinner(tick))
       when "done" then @theme.green("✓")
-      when "stopped" then @p.dim("■")
+      when "idle" then @p.dim("■")
       else @p.dim("·")
       end
     end
@@ -385,7 +385,7 @@ module ClaudeInbox
           wake = row.parked? ? @theme.purple("parked") : @theme.purple("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
           row.pinned? ? wake + @theme.cyan(" ★") : wake
         when :settled
-          @p.dim("#{s.state} · #{age}")
+          @p.dim("#{word(s.state)} · #{age}")
         else
           if s.interactive?
             where = s.remote? ? "remote" : "your terminal"
@@ -413,13 +413,15 @@ module ClaudeInbox
       when "blocked"
         detail = s.waiting_for ? ": #{s.waiting_for}" : ""
         @theme.red_bold("needs you#{detail}")
-      when "failed" then @theme.red_bold("failed")
+      when "error" then @theme.red_bold(word("error"))
       when "working" then working_badge(s)
       when "done" then @theme.green("done") + ((s.alive? && !s.interactive?) ? @p.dim(" · #{s.status}") : "")
-      when "stopped" then @p.dim("stopped")
+      when "idle" then @p.dim(word("idle"))
       else @p.dim(s.state.to_s)
       end
     end
+
+    def word(state) = STATE_WORDS.fetch(state, state)
 
     # "working" while the agent is thinking, "idle" once it has stopped and
     # only the work it kicked off is still open. Either way the work is
