@@ -166,6 +166,10 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
 - `initialize` fails with `missing field clientInfo` unless it names a
   `clientInfo` with `name` and `version`, and every other call before it
   is `Not initialized` (checked on 0.165.0).
+- `thread/list` sorts by its `sortKey` newest first and pages with
+  `cursor`, the previous page's `nextCursor`, an ISO time; the daemon
+  keeps every thread ever started, so without a cut the list is history
+  (checked on 0.165.0).
 - `thread/list` without `sourceKinds` returns only interactive threads, so
   `codex exec` runs are missing until `exec` is named (checked on 0.165.0).
 - `codex exec` and `codex --no-daemon` run their own server in-process, so

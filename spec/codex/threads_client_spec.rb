@@ -41,12 +41,29 @@ RSpec.describe ClaudeInbox::Codex::ThreadsClient do
     expect(s.display_name).to eq("t")
   end
 
-  it "lists one page of every kind of thread, newest first, from the daemon" do
+  it "lists every kind of thread from the daemon, newest first" do
     Dir.mktmpdir("codex") do |dir|
       fake = FakeCodexDaemon.new(dir, "thread/list" => JSON.parse(File.read(fixture_path("codex-threads.json"))))
-      client = described_class.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: fake.path, timeout: 1))
+      client = described_class.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: fake.path, timeout: 1), clock: -> { Time.at(1_789_600_000) })
       expect(client.list.map(&:state)).to eq(%w[blocked working done])
-      expect(drain(fake.requests).last["params"]).to eq("sourceKinds" => %w[cli vscode exec appServer], "sortKey" => "updated_at", "limit" => 50)
+      expect(drain(fake.requests).last["params"]).to eq("sourceKinds" => %w[cli vscode exec appServer], "sortKey" => "updated_at", "limit" => 100)
+      fake.stop
+    end
+  end
+
+  it "pages on until a thread has been quiet for as long as a reaped Claude session, and leaves those out" do
+    Dir.mktmpdir("codex") do |dir|
+      now = Time.at(1_789_600_000)
+      thread = ->(id, quiet) { {"id" => id, "status" => {"type" => "idle"}, "updatedAt" => now.to_i - quiet} }
+      pages = {
+        nil => {"data" => [thread.call("t1", 60), thread.call("t2", 3600)], "nextCursor" => "c1"},
+        "c1" => {"data" => [thread.call("t3", 86_400), thread.call("t4", ClaudeInbox::Store::REAP_AFTER + 1)], "nextCursor" => "c2"},
+        "c2" => {"data" => [thread.call("t5", ClaudeInbox::Store::REAP_AFTER + 2)], "nextCursor" => nil}
+      }
+      fake = FakeCodexDaemon.new(dir, "thread/list" => ->(params) { pages.fetch(params["cursor"]) })
+      client = described_class.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: fake.path, timeout: 1), clock: -> { now })
+      expect(client.list.map(&:id)).to eq(%w[t1 t2 t3])
+      expect(drain(fake.requests).drop(1).map { |r| r["params"]["cursor"] }).to eq([nil, "c1"])
       fake.stop
     end
   end
