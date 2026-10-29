@@ -39,6 +39,9 @@ end
 
 def yes?(question) = ask("#{question} [y/N]").downcase.start_with?("y")
 
+# Each commit's full message; release/next_version.rb relies on the NUL split.
+def commit_messages(range) = capture("git", "log", range, "--format=%B%x00").split("\0")
+
 # Reads the RubyGems OTP from 1Password (item RUBYGEMS_OP_ITEM, default
 # "RubyGems"). Without op, or if it fails, gem push prompts as before.
 def rubygems_otp_env
@@ -73,7 +76,7 @@ last_tag = last_tag.strip
 if NOTES_TAG
   tag = NOTES_TAG
   abort "#{tag}: no such release" unless system("gh", "release", "view", tag, out: File::NULL, err: File::NULL)
-  messages = capture("git", "log", "#{"#{last_tag}.." unless last_tag.empty?}#{tag}", "--format=%B%x00").split("\0")
+  messages = commit_messages("#{"#{last_tag}.." unless last_tag.empty?}#{tag}")
   plan = "rewrite the notes of #{tag}"
 else
   if last_tag.empty?
@@ -81,7 +84,7 @@ else
     messages = []
     reason = "the first release, VERSION as-is"
   else
-    messages = capture("git", "log", "#{last_tag}..HEAD", "--format=%B%x00").split("\0")
+    messages = commit_messages("#{last_tag}..HEAD")
     next_version = Release::NextVersion.new(current, messages)
     version = next_version.version
     reason = "#{next_version.bump} bump over #{last_tag}"
