@@ -35,8 +35,7 @@ module ClaudeInbox
 
     def interactive? = kind == "interactive"
 
-    # Only background sessions carry an id, and every action needs one.
-    def actionable? = background? && !id.nil?
+    def attachable? = can?(:attach)
 
     def effective_state = state || INTERACTIVE_STATE[status] || "done"
 

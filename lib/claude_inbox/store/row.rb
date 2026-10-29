@@ -96,7 +96,7 @@ module ClaudeInbox
       # Settled never reaches. A session with no entry waits a poll, so its
       # idle time is seeded from `started_at` rather than guessed.
       def reapable?(now)
-        return false unless session.actionable? && session.can?(:delete)
+        return false unless session.can?(:reap)
         return false if session.alive?
         return false if UNREAPABLE.include?(session.effective_state)
         return false if entry.nil? || pinned? || snoozed?(now)
@@ -121,7 +121,7 @@ module ClaudeInbox
 
       # Only a session you can attach to carries a read or unread mark, since
       # nothing else ever clears it.
-      def markable? = session.actionable? && (session.finished? || session.needs_you?)
+      def markable? = session.attachable? && (session.finished? || session.needs_you?)
 
       def unchanged_since?(at) = at && entry.state_since.to_i <= at.to_i
     end

@@ -114,7 +114,7 @@ RSpec.describe ClaudeInbox::Store::Row do
     it "leaves a working session, and one there is no way to attach to, alone" do
       expect(described_class.new(session(id: "a", state: "working"), nil)).not_to be_unread
       expect(described_class.new(session(id: "a", state: "working"), nil)).not_to be_read
-      shell = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9")
+      shell = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9", actions: [])
       expect(described_class.new(shell, ClaudeInbox::Store::Entry.new(finished))).not_to be_unread
       expect(described_class.new(shell, ClaudeInbox::Store::Entry.new(finished))).not_to be_read
     end
@@ -186,8 +186,8 @@ RSpec.describe ClaudeInbox::Store::Row do
       expect(described_class.new(s, ClaudeInbox::Store::Entry.new(quiet))).to be_reapable(now.to_i)
     end
 
-    it "never reaps a session its harness cannot delete" do
-      s = session(id: "a", state: "done", actions: %i[attach stop])
+    it "never reaps a session its harness does not offer up, even one it can delete" do
+      s = session(id: "a", state: "done", actions: %i[attach stop delete])
       expect(described_class.new(s, ClaudeInbox::Store::Entry.new(quiet))).not_to be_reapable(now.to_i)
     end
 
@@ -209,8 +209,8 @@ RSpec.describe ClaudeInbox::Store::Row do
       expect(described_class.new(session(id: "a", state: "done"), ClaudeInbox::Store::Entry.new(woken))).to be_reapable(now.to_i)
     end
 
-    it "never reaps a session there is no id to reap with" do
-      s = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9")
+    it "never reaps a terminal, which no harness offers up" do
+      s = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9", actions: [])
       expect(described_class.new(s, ClaudeInbox::Store::Entry.new(quiet))).not_to be_reapable(now.to_i)
     end
 

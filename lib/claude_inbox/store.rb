@@ -127,7 +127,7 @@ module ClaudeInbox
 
     def sessions = @mutex.synchronize { @sessions.dup }
 
-    def actionable_keys = sessions.select(&:actionable?).map(&:key)
+    def attachable_keys = sessions.select(&:attachable?).map(&:key)
 
     def writable? = @writable
 
