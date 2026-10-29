@@ -36,7 +36,7 @@ module ClaudeInbox
           @queue << [:form_started, form]
           @queue << [:select, id]
           attach ? @queue << [:attach, started(id)] : @poller.soon
-        rescue Claude::AgentsClient::Error => e
+        rescue Harnesses::Error => e
           @queue << [:form_failed, form, e.message]
         end
       end

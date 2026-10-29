@@ -2,6 +2,7 @@
 
 require "json"
 require_relative "../debug"
+require_relative "../harnesses"
 require_relative "job_state"
 require_relative "../session"
 require_relative "../subprocess"
@@ -13,7 +14,7 @@ module ClaudeInbox
     # what it keeps under ~/.claude, and it hands back finished Sessions.
     # Swap in FixtureClient for tests.
     class AgentsClient
-      class Error < StandardError; end
+      class Error < Harnesses::Error; end
 
       # The daemon's states in OSC 7501's words: a stopped session is idle, a failed one an error.
       STATES = {"working" => "working", "blocked" => "blocked", "done" => "done", "failed" => "error", "stopped" => "idle"}.freeze
@@ -73,6 +74,7 @@ module ClaudeInbox
           color: job&.color,
           intent: job&.intent,
           transcript_path: job&.transcript_path,
+          worktree_path: job&.worktree_path,
           pr_urls: job&.pr_urls
         )
         job ? s.with(line: job.summary(s.effective_state)) : s

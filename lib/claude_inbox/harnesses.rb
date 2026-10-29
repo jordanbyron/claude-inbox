@@ -5,6 +5,9 @@ module ClaudeInbox
   # and an action on a session goes to the adapter that made it. Starting
   # and adopting are Claude's alone.
   class Harnesses
+    # What an adapter raises when its harness refuses, or is not there to ask.
+    class Error < StandardError; end
+
     def initialize(**adapters)
       @adapters = adapters
     end

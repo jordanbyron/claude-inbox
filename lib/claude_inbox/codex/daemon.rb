@@ -4,6 +4,7 @@ require "json"
 require "socket"
 require_relative "../../claude_inbox"
 require_relative "../debug"
+require_relative "../harnesses"
 require_relative "../subprocess"
 require_relative "web_socket"
 
@@ -15,7 +16,7 @@ module ClaudeInbox
     # once it drops. With no codex or no daemon, every call answers nil.
     class Daemon
       # The daemon answered, with an error.
-      class Error < StandardError; end
+      class Error < Harnesses::Error; end
 
       TIMEOUT = 2
 

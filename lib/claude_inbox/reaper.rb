@@ -2,7 +2,7 @@
 
 require "fileutils"
 require_relative "store"
-require_relative "claude/agents_client"
+require_relative "harnesses"
 
 module ClaudeInbox
   # Reaps sessions that have sat idle past Store::REAP_AFTER.
@@ -69,7 +69,7 @@ module ClaudeInbox
       write(log, row, now_i, "reaped")
       @store.forget(row.key)
       row.key
-    rescue Claude::AgentsClient::Error => e
+    rescue Harnesses::Error => e
       reason = e.message.lines.first.to_s.strip
       @store.mark_reap_failed(row.key)
       write(log, row, now_i, "kept — #{reason}")
