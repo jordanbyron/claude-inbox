@@ -127,7 +127,7 @@ RSpec.describe ClaudeInbox::App do
       FakeCodexDaemon.new(dir, "thread/list" => JSON.parse(File.read(fixture_path("codex-threads.json"))),
         "thread/turns/list" => ->(_) { turns }, "turn/interrupt" => {}, "thread/delete" => {})
     end
-    let(:codex) { ClaudeInbox::Codex::ThreadsClient.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: fake.path, timeout: 1)) }
+    let(:codex) { ClaudeInbox::Codex::ThreadsClient.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: fake.path, timeout: 1), clock: -> { Time.at(1_789_600_000) }) }
     let(:harnesses) { ClaudeInbox::Harnesses.new(claude: client, codex: codex) }
     let(:app) { build_app(client: harnesses, store:, pull_requests:, queue:, terminal:) }
     let(:sent) { [] }

@@ -57,7 +57,7 @@ module ClaudeInbox
       def self.job_file(id, jobs_dir) = File.join(jobs_dir, id, "state.json")
       private_class_method :job_file
 
-      attr_reader :pr_urls, :transcript_path, :color, :intent, :bridge_id, :created_at
+      attr_reader :pr_urls, :transcript_path, :worktree_path, :color, :intent, :bridge_id, :created_at
 
       def initialize(hash)
         @detail = hash["detail"]
@@ -68,6 +68,7 @@ module ClaudeInbox
         @tasks = (hash["inFlight"] || {})["tasks"].to_i
         @pr_urls = (hash["children"] || []).filter_map { |c| c["href"] if c["kind"] == "pr" }
         @transcript_path = hash["linkScanPath"]
+        @worktree_path = hash["worktreePath"]
         @color = hash["color"]
         @intent = hash["intent"]
         @bridge_id = hash["bridgeSessionId"]

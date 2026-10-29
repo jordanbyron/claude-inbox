@@ -121,11 +121,11 @@ RSpec.describe ClaudeInbox::Dialog do
       expect(delete.press(:escape, "\e")).to eq(:cancel)
     end
 
-    it "promises a Codex thread's delete takes only its conversation" do
-      expect(described_class::Confirm.new(:delete, "t", "auth fix").frame(60).join("\n")).to include "worktree"
-      codex = described_class::Confirm.new(:delete, "t", "auth fix", harness: :codex).frame(60).join("\n")
-      expect(codex).to include "Its conversation goes with it."
-      expect(codex).not_to include "worktree"
+    it "promises the worktree only to a session that has one" do
+      expect(described_class::Confirm.new(:delete, "t", "auth fix", worktree: true).frame(60).join("\n")).to include "worktree"
+      without = described_class::Confirm.new(:delete, "t", "auth fix").frame(60).join("\n")
+      expect(without).to include "Its conversation goes with it."
+      expect(without).not_to include "worktree"
     end
 
     it "cuts a long name to one line rather than wrapping it" do

@@ -43,7 +43,7 @@ module ClaudeInbox
       end
 
       # A session just started or adopted, which no poll has listed yet.
-      def started(id, harness: :claude, cwd: nil) = Session.new(harness: harness, id: id, cwd: cwd, kind: "background")
+      def started(id, harness: :claude, cwd: nil) = Session.new(harness: harness, id: id, cwd: cwd)
 
       def adopt_session(key)
         s = session_for(key)
@@ -59,7 +59,7 @@ module ClaudeInbox
 
       def open_confirm(kind)
         return unless allowed?(kind)
-        @modal = Dialog::Confirm.new(kind, @selected.key, label_for(@selected.key), harness: selected_session.harness)
+        @modal = Dialog::Confirm.new(kind, @selected.key, label_for(@selected.key), worktree: !selected_session.worktree_path.nil?)
       end
 
       # A Codex thread between turns has nothing to stop, which is no failure.

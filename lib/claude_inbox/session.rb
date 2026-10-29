@@ -19,7 +19,7 @@ module ClaudeInbox
   Session = Data.define(
     :harness, :actions, :id, :cwd, :kind, :started_at, :created_at, :session_id, :name,
     :state, :blocked_kind, :pid, :status, :waiting_for, :line, :in_flight, :waiting_on_work,
-    :remote, :remote_control, :remote_url, :color, :intent, :transcript_path, :pr_urls, :prs, :last_message_at,
+    :remote, :remote_control, :remote_url, :color, :intent, :transcript_path, :worktree_path, :pr_urls, :prs, :last_message_at,
     :branch, :origin_url
   ) do
     # Every member is optional so the adapter and the specs name only what
