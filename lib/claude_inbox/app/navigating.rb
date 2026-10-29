@@ -63,7 +63,6 @@ module ClaudeInbox
         select(heads[(idx + dir) % heads.size].last)
       end
 
-      # The foldable section the cursor is currently on or inside, if any.
       def current_fold_section
         name = filtered.section_of(@selected)
         name if Store::FOLDABLE_SECTIONS.include?(name)
@@ -80,9 +79,8 @@ module ClaudeInbox
 
       def toggle_expanded = set_expanded(!@expanded[current_fold_section])
 
-      # Clicking a row selects it and attaches, same as landing on it with
-      # j/k and pressing Enter — activate already knows how to expand a fold
-      # or refuse a terminal/remote row, so this doesn't repeat that.
+      # Left to activate, as Enter is, to expand a fold or refuse a
+      # terminal or remote row.
       def click_row(row)
         item = row_item_at(row)
         return unless item
