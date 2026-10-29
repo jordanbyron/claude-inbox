@@ -29,9 +29,9 @@ RSpec.describe ClaudeInbox::Harnesses do
     expect(claude.spawns).to be_empty
   end
 
-  it "offers only the harnesses that have models to start with" do
-    expect(harnesses.models.keys).to eq(%i[claude codex])
-    allow(codex).to receive(:models).and_return([])
-    expect(harnesses.models).to eq(claude: ClaudeInbox::Claude::AgentsClient::MODELS)
+  it "offers only the harnesses with choices to start with" do
+    expect(harnesses.choices.keys).to eq(%i[claude codex])
+    allow(codex).to receive(:choices).and_return({})
+    expect(harnesses.choices).to eq(claude: ClaudeInbox::Claude::AgentsClient::CHOICES)
   end
 end

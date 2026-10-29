@@ -48,7 +48,7 @@ RSpec.describe ClaudeInbox::Codex::ThreadsClient do
       fake = FakeCodexDaemon.new(dir, "thread/list" => JSON.parse(File.read(fixture_path("codex-threads.json"))))
       client = described_class.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: fake.path, timeout: 1), clock: -> { Time.at(1_789_600_000) })
       expect(client.list.map(&:state)).to eq(%w[blocked working done])
-      expect(drain(fake.requests).last["params"]).to eq("sourceKinds" => %w[cli vscode exec appServer], "sortKey" => "updated_at", "limit" => 100)
+      expect(drain(fake.requests).find { |r| r["method"] == "thread/list" }["params"]).to eq("sourceKinds" => %w[cli vscode exec appServer], "sortKey" => "updated_at", "limit" => 100)
       fake.stop
     end
   end
@@ -65,7 +65,7 @@ RSpec.describe ClaudeInbox::Codex::ThreadsClient do
       fake = FakeCodexDaemon.new(dir, "thread/list" => ->(params) { pages.fetch(params["cursor"]) })
       client = described_class.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: fake.path, timeout: 1), clock: -> { now })
       expect(client.list.map(&:id)).to eq(%w[t1 t2 t3])
-      expect(drain(fake.requests).drop(1).map { |r| r["params"]["cursor"] }).to eq([nil, "c1"])
+      expect(drain(fake.requests).select { |r| r["method"] == "thread/list" }.map { |r| r["params"]["cursor"] }).to eq([nil, "c1"])
       fake.stop
     end
   end
@@ -82,7 +82,12 @@ RSpec.describe ClaudeInbox::Codex::ThreadsClient do
     let(:fake) do
       FakeCodexDaemon.new(dir, "thread/turns/list" => ->(_) { turns }, "turn/interrupt" => {}, "thread/delete" => {},
         "thread/start" => {"thread" => {"id" => "t2"}}, "turn/start" => {"turn" => {"id" => "turn1", "status" => "inProgress"}},
-        "model/list" => {"data" => [{"id" => "gpt-6.1-sol"}, {"id" => "secret", "hidden" => true}, {"id" => "gpt-6-luna"}]})
+        "thread/list" => {"data" => []},
+        "model/list" => {"data" => [
+          {"id" => "gpt-6.1-sol", "supportedReasoningEfforts" => [{"reasoningEffort" => "low"}, {"reasoningEffort" => "high"}]},
+          {"id" => "secret", "hidden" => true, "supportedReasoningEfforts" => [{"reasoningEffort" => "ultra"}]},
+          {"id" => "gpt-6-luna", "supportedReasoningEfforts" => [{"reasoningEffort" => "high"}, {"reasoningEffort" => "max"}]}
+        ]})
     end
     let(:client) { described_class.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: fake.path, timeout: 1)) }
     let(:sent) { -> { drain(fake.requests).drop(1).map { |r| [r["method"], r["params"]] } } }
@@ -126,10 +131,13 @@ RSpec.describe ClaudeInbox::Codex::ThreadsClient do
       expect(sent.call.map(&:last)).to eq([{"cwd" => dir}, {"threadId" => "t2", "input" => [{"type" => "text", "text" => "fix it"}]}])
     end
 
-    it "offers the daemon's models, default first and the hidden ones left out, asking once" do
-      2.times { expect(client.models).to eq(%w[default gpt-6.1-sol gpt-6-luna]) }
-      expect(sent.call.map(&:first)).to eq(["model/list"])
-      expect(described_class.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: File.join(dir, "none.sock"))).models).to eq([])
+    it "offers the daemon's models and their efforts once a list has asked, default first and the hidden ones left out" do
+      expect(client.choices).to eq({})
+      2.times { client.list }
+      expect(client.choices).to eq(model: %w[default gpt-6.1-sol gpt-6-luna], effort: %w[default low high max],
+        permission_mode: described_class::PERMISSION_MODES)
+      expect(sent.call.map(&:first)).to eq(%w[thread/list model/list thread/list])
+      expect(described_class.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: File.join(dir, "none.sock"))).choices).to eq({})
     end
 
     it "resumes the thread in its own directory, so codex asks no question first" do

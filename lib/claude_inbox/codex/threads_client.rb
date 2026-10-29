@@ -50,12 +50,13 @@ module ClaudeInbox
         sessions = []
         cursor = nil
         loop do
-          result = @daemon.call("thread/list", {**LIST, cursor: cursor}.compact) or break
+          result = @daemon.call("thread/list", {**LIST, cursor: cursor}.compact) or return sessions
           page = self.class.sessions(result)
           sessions.concat(page.reject { |s| s.last_message_at && s.last_message_at < horizon })
           cursor = result["nextCursor"]
           break if cursor.nil? || page.empty? || page.last.last_message_at.to_i < horizon.to_i
         end
+        @choices ||= read_choices
         sessions
       end
 
@@ -81,12 +82,9 @@ module ClaudeInbox
       # The thread's rollout and its row in Codex's state go; there is no worktree to remove.
       def rm(session) = @daemon.call!("thread/delete", threadId: session.id)
 
-      # The daemon's models, "default" first, asked once it answers; none
-      # without a daemon, which is also no way to start a thread.
-      def models
-        @models ||= @daemon.call("model/list")&.dig("data")&.then { |data| ["default", *data.reject { |m| m["hidden"] }.map { |m| m["id"] }] }
-        @models || []
-      end
+      # Filled by `list`, on the poll thread, so `n` never waits on the
+      # socket; empty without a daemon, which is also no way to start a thread.
+      def choices = @choices || {}
 
       # Starts a thread and its first turn and returns the thread's id. A
       # thread with no turn is not listed, so the row shows once the turn
@@ -141,6 +139,14 @@ module ClaudeInbox
       def self.time(seconds) = seconds && Time.at(seconds)
 
       private_class_method :squish, :time
+
+      private
+
+      def read_choices
+        shown = @daemon.call("model/list")&.dig("data")&.reject { |m| m["hidden"] } or return
+        efforts = shown.flat_map { |m| (m["supportedReasoningEfforts"] || []).map { |e| e["reasoningEffort"] } }.uniq
+        {model: ["default", *shown.map { |m| m["id"] }], effort: ["default", *efforts], permission_mode: PERMISSION_MODES}
+      end
     end
 
     # Serves a committed `thread/list` result instead of the daemon; no file, no threads.
@@ -158,7 +164,7 @@ module ClaudeInbox
 
       def rm(_session) = nil
 
-      def models = %w[default gpt-6.1-sol]
+      def choices = {model: %w[default gpt-6.1-sol], effort: %w[default low medium high xhigh max], permission_mode: PERMISSION_MODES}
 
       def spawn(**)
         sleep 0.5

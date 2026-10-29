@@ -480,7 +480,8 @@ RSpec.describe ClaudeInbox::NewSessionForm do
     let(:clip) { ClaudeInbox::Images::Clipboard.new("/tmp/shot.png", nil) }
     let(:form) do
       described_class.new(cwd: Dir.pwd, home: home, clipboard: -> { clip },
-        models: {claude: ClaudeInbox::Claude::AgentsClient::MODELS, codex: %w[default gpt-6.1-sol]})
+        choices: {claude: ClaudeInbox::Claude::AgentsClient::CHOICES,
+                  codex: {model: %w[default gpt-6.1-sol], effort: %w[default low high], permission_mode: ClaudeInbox::Codex::ThreadsClient::PERMISSION_MODES}})
     end
     let(:rows) { -> { form.screen(100, 30).map { |r| ClaudeInbox::Text.strip_ansi(r) } } }
     let(:labels) { -> { rows.call.filter_map { |r| r[/\A  (?:▶ |  )(\S.{13})/, 1]&.strip } } }

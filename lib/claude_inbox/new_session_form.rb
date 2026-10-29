@@ -42,26 +42,25 @@ module ClaudeInbox
     # thread/start has no name, worktree, Remote Control or color.
     CLAUDE_ONLY = %i[name worktree remote color].freeze
 
-    PERMISSION_MODES = {claude: Claude::AgentsClient::PERMISSION_MODES, codex: Codex::ThreadsClient::PERMISSION_MODES}.freeze
-
-    # `models` holds each harness that can start a session, with its models;
-    # the Harness field shows only when there is more than one.
-    def initialize(cwd:, dirs: [], models: {claude: Claude::AgentsClient::MODELS}, home: Dir.home, clipboard: Images.method(:from_clipboard))
+    # `choices` holds each harness that can start a session, with what it
+    # offers for the model, effort and permissions fields; the Harness field
+    # shows only when there is more than one.
+    def initialize(cwd:, dirs: [], choices: {claude: Claude::AgentsClient::CHOICES}, home: Dir.home, clipboard: Images.method(:from_clipboard))
       @p = Pastel.new(enabled: true)
       @theme = Theme.new
       @home = home
       @clipboard = clipboard
       @places = dirs.map { |path| Place.new(path, SessionRequest.label(path, dirs), path.sub(/\A#{Regexp.escape(home)}(?=\/|\z)/, "~")) }
       @dir_settled = cwd
-      @models = models
+      @choices = choices
       @fields = [
         Field.new(:prompt, "Prompt", :multiline, TextBuffer.new),
-        (Field.new(:harness, "Harness", :choice, models.keys.first.to_s, models.keys.map(&:to_s)) if models.size > 1),
+        (Field.new(:harness, "Harness", :choice, choices.keys.first.to_s, choices.keys.map(&:to_s)) if choices.size > 1),
         Field.new(:name, "Name", :text, TextBuffer.new),
         Field.new(:cwd, "Directory", :text, TextBuffer.new(cwd)),
-        Field.new(:model, "Model", :choice, DEFAULT, Claude::AgentsClient::MODELS),
-        Field.new(:effort, "Effort", :choice, DEFAULT, Claude::AgentsClient::EFFORTS),
-        Field.new(:permission_mode, "Permissions", :choice, DEFAULT, Claude::AgentsClient::PERMISSION_MODES),
+        Field.new(:model, "Model", :choice, DEFAULT, []),
+        Field.new(:effort, "Effort", :choice, DEFAULT, []),
+        Field.new(:permission_mode, "Permissions", :choice, DEFAULT, []),
         Field.new(:worktree, "Worktree", :choice, "no", %w[no yes]),
         Field.new(:remote, "Remote Control", :choice, DEFAULT, [DEFAULT, "no", "yes"]),
         Field.new(:color, "Color", :choice, DEFAULT, Claude::AgentsClient::COLORS)
@@ -219,12 +218,12 @@ module ClaudeInbox
       v.merge(prompt: text, images: images)
     end
 
-    # Each harness has its own models and permissions; a switch starts both over at default.
+    # Each harness has its own choices; a switch starts every one over at default.
     def choose_harness
-      model, permissions = field(:model), field(:permission_mode)
-      model.choices = @models.fetch(harness)
-      permissions.choices = PERMISSION_MODES.fetch(harness)
-      model.value = permissions.value = DEFAULT
+      @choices.fetch(harness).each do |key, choices|
+        field(key).choices = choices
+        field(key).value = DEFAULT
+      end
     end
 
     def menu_query

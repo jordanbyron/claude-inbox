@@ -22,8 +22,8 @@ module ClaudeInbox
 
     def spawn(harness: :claude, **) = @adapters.fetch(harness).spawn(**)
 
-    # Each harness that could start a session now, with the models it offers.
-    def models = @adapters.transform_values(&:models).reject { |_, models| models.empty? }
+    # Each harness that could start a session now, with what its form offers.
+    def choices = @adapters.transform_values(&:choices).reject { |_, choices| choices.empty? }
 
     def adopt(**) = claude.adopt(**)
 

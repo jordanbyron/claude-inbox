@@ -124,7 +124,8 @@ module ClaudeInbox
       MODELS = %w[default fable opus sonnet haiku].freeze
       EFFORTS = %w[default low medium high xhigh max].freeze
       PERMISSION_MODES = %w[default acceptEdits auto plan bypassPermissions].freeze
-      def models = MODELS
+      CHOICES = {model: MODELS, effort: EFFORTS, permission_mode: PERMISSION_MODES}.freeze
+      def choices = CHOICES
 
       # The colors `/color` offers, in its order.
       COLORS = %w[default red blue green yellow purple orange pink cyan].freeze
