@@ -1,0 +1,111 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Prototype: runs codex behind a pseudo-terminal and leaves when ← is
+# pressed with the cursor at the start of the prompt, the way ← leaves
+# `claude attach`. Not wired into the inbox; try it by hand:
+#
+#   script/codex-relay resume <thread-id>
+#   CODEX_RELAY_LOG=/tmp/relay.log script/codex-relay   # logs keys and cursor
+#
+# Codex ends every frame by moving the cursor to the composer and showing
+# it (`ESC[row;colH ESC[?25h`), and the composer's text starts in column 3
+# after "› " (both seen on 0.165.0). That shown cursor is the only state
+# the relay reads.
+
+require "io/console"
+require "pty"
+
+PROMPT_COL = 3
+
+# ← as a terminal sends it: normal mode, application cursor mode, and the
+# kitty keyboard protocol's press (bare or with an explicit event type).
+LEFT = ["\e[D", "\eOD", "\e[1;1D", "\e[1;1:1D"].freeze
+
+# Codex asks for the kitty protocol with key releases (`ESC[>7u`), so a
+# press can arrive with its release in the same read; releases are dropped
+# before matching.
+RELEASE = /\e\[[\d;:]*:3[A-Za-z~]/
+
+CURSOR_SHOWN = /\e\[(\d+);(\d+)H\e\[\?25h/
+CURSOR_HIDDEN = "\e[?25l"
+
+# Modes codex switches on in the real terminal, switched off again in case
+# it dies without doing so: kitty keys, bracketed paste, mouse, focus
+# events, application cursor and keypad, the alternate screen; then show
+# the cursor.
+RESET = "\e[<u\e[?2004l\e[?1000l\e[?1002l\e[?1003l\e[?1006l\e[?1004l\e[?1l\e>\e[?1049l\e[?25h"
+
+log = ENV["CODEX_RELAY_LOG"]&.then { |path| File.open(path, "a").tap { |f| f.sync = true } }
+cursor = nil # [row, col] while codex shows its cursor
+cursor_lock = Mutex.new
+tty = $stdin
+
+master, input, pid = PTY.spawn("codex", *ARGV)
+master.winsize = tty.winsize
+trap("WINCH") { master.winsize = tty.winsize }
+
+tty.raw!
+
+# Codex 0.165.0 does not suspend on ⌃z, so the child only ever exits.
+waiter = Thread.new { Process.wait2(pid).last }
+
+output = Thread.new do
+  tail = +""
+  loop do
+    chunk = master.readpartial(16_384)
+    $stdout.write(chunk)
+    $stdout.flush
+    # A sequence can straddle two reads, so the end of the last one rides along.
+    scan = tail + chunk
+    shown_at = scan.rindex(CURSOR_SHOWN)
+    shown = shown_at && [Regexp.last_match(1).to_i, Regexp.last_match(2).to_i]
+    hidden_at = scan.rindex(CURSOR_HIDDEN)
+    if shown_at && (!hidden_at || shown_at > hidden_at)
+      cursor_lock.synchronize { cursor = shown }
+    elsif hidden_at
+      cursor_lock.synchronize { cursor = nil }
+    end
+    tail = scan[-32..] || scan
+  end
+rescue EOFError, Errno::EIO
+  nil
+end
+
+detached = false
+begin
+  while waiter.alive?
+    next unless tty.wait_readable(0.1)
+
+    keys = tty.readpartial(4096)
+    at = cursor_lock.synchronize { cursor }
+    log&.puts("keys=#{keys.inspect} cursor=#{at.inspect}")
+    if LEFT.include?(keys.gsub(RELEASE, "")) && at && at[1] == PROMPT_COL
+      detached = true
+      # The ← release is still to come; it would otherwise land in the shell.
+      tty.readpartial(4096) while tty.wait_readable(0.1)
+      break
+    end
+    input.write(keys)
+  end
+rescue EOFError, Errno::EIO
+  nil
+ensure
+  if waiter.alive?
+    begin
+      Process.kill("TERM", pid)
+      20.times { waiter.alive? ? sleep(0.05) : break }
+      Process.kill("KILL", pid) if waiter.alive?
+    rescue Errno::ESRCH
+      nil
+    end
+  end
+  output.join(1)
+  tty.cooked!
+  $stdout.write(RESET)
+  $stdout.flush
+end
+
+status = waiter.value
+log&.puts("detached=#{detached} status=#{status.inspect}")
+exit((detached || status&.success?) ? 0 : 1)
