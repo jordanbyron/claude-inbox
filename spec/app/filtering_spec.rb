@@ -26,7 +26,7 @@ RSpec.describe ClaudeInbox::App do
   it "finds the session behind a pull request linked by hand" do
     app # built first, so this store update is not the one build_app overwrites
     store.set_pr("f23c8673", "https://github.com/o/r/pull/4242")
-    store.update(ClaudeInbox::Sessions.load(client:, pull_requests:, overrides: store.pr_overrides))
+    store.update(pull_requests.enrich(client.list, store.pr_overrides))
     press(app, "/", "#", "4", "2", "4", "2")
     expect(app).to paint("comma3x not booting")
     expect(app).not_to paint("sensor token resilience test")

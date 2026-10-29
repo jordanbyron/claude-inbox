@@ -1,10 +1,9 @@
 # frozen_string_literal: true
 
 require_relative "notifier"
-require_relative "sessions"
 
 module ClaudeInbox
-  # Asks `claude agents` for the list off the main thread, every INTERVAL
+  # Asks the client for the list off the main thread, every INTERVAL
   # seconds and on demand, puts what it finds in the store and the snapshot,
   # and tells App over the shared queue. Between polls it applies what
   # another front end asked for. Nothing here touches App's state directly;
@@ -52,7 +51,7 @@ module ClaudeInbox
     # dropped it.
     def once
       now = @clock.call
-      sessions = Sessions.load(client: @client, pull_requests: @pull_requests, overrides: @store.pr_overrides)
+      sessions = @pull_requests.enrich(@client.list, @store.pr_overrides)
       doomed = @reaper.due(sessions, now)
       @store.hide(doomed)
       publish(sessions, now)

@@ -28,6 +28,14 @@ RSpec.describe ClaudeInbox::AgentsClient do
     expect(s.key).to eq("4a93393d-1c06-57da-9fb8-12f5b1535d95")
     expect(s.effective_state).to eq("working")
     expect(s.display_name).to eq("claude-inbox-38")
+    expect(s.pr_urls).to eq([])
+  end
+
+  it "fills in a session's color and links from its job file" do
+    by_id = sessions.to_h { |s| [s.id, s] }
+    expect(by_id["b0b18338"].color).to eq("orange")
+    expect(by_id["b03695b1"].color).to be_nil
+    expect(by_id["b03695b1"].pr_urls.map { |u| u[/\d+\z/] }).to eq(%w[856 866])
   end
 
   it "names the default permission mode when given it, as a remote start does" do
