@@ -17,10 +17,11 @@ module ClaudeInbox
       # unpushed work with it, where `claude rm` refuses.
       ACTIONS = %i[attach stop delete].freeze
 
-      # Without sourceKinds the daemon leaves out `codex exec` threads. The
+      # `codex exec` threads are left out, as `claude -p` sessions are: another
+      # program drives them, and one still running cannot be resumed. The
       # daemon never forgets a thread, so the list stops where the reaper
       # would: at one quiet for longer than Store::REAP_AFTER.
-      LIST = {sourceKinds: %w[cli vscode exec appServer], sortKey: "updated_at", limit: 100}.freeze
+      LIST = {sourceKinds: %w[cli vscode appServer], sortKey: "updated_at", limit: 100}.freeze
 
       # A thread's status, or the flag an active one waits on, in OSC 7501's words with the kind of block.
       STATES = {

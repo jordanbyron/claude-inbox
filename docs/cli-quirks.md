@@ -170,8 +170,12 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   `cursor`, the previous page's `nextCursor`, an ISO time; the daemon
   keeps every thread ever started, so without a cut the list is history
   (checked on 0.165.0).
-- `thread/list` without `sourceKinds` returns only interactive threads, so
-  `codex exec` runs are missing until `exec` is named (checked on 0.165.0).
+- `thread/list` without `sourceKinds` returns only interactive threads;
+  `codex exec` runs come back only when `exec` is named. Their threads
+  carry `source: "exec"` and `originator: "codex_exec"`, which is how
+  agents driving Codex (coagent and the like) show up. `codex resume` on
+  one still running says "This conversation is open in another app" and
+  sends nothing, so the inbox leaves `exec` out (checked on 0.165.0).
 - `codex exec` and `codex --no-daemon` run their own server in-process, so
   the daemon reports their thread `notLoaded` the whole time it runs. Only
   `updatedAt` and the unread marker move (checked on 0.165.0).
