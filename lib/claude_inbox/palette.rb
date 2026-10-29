@@ -1,14 +1,8 @@
 # frozen_string_literal: true
 
 module ClaudeInbox
-  # The eight colors `/color` offers, mapped to the terminal the same way
-  # Claude Code's own tmux code maps them when it tints a teammate pane:
-  # six are plain ansi, and orange and pink have no ansi name so they go
-  # through a 256-color index.
-  #
-  # Closing with 39 (default foreground) rather than 0 (reset everything)
-  # matters: the label is often already bold or italic and a full reset
-  # would strip that back off.
+  # The eight colors `/color` offers, as the CLI maps them to a terminal
+  # (docs/cli-quirks.md).
   module Palette
     ANSI = {
       "red" => 31, "green" => 32, "yellow" => 33,
@@ -20,6 +14,8 @@ module ClaudeInbox
     SEQUENCES = ANSI.transform_values { |n| "\e[#{n}m" }
       .merge(INDEXED.transform_values { |n| "\e[38;5;#{n}m" }).freeze
 
+    # Default foreground, not a full reset: the label is often bold or
+    # italic already, and \e[0m would strip that.
     RESET = "\e[39m"
 
     def self.paint(text, name)
