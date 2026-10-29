@@ -2,6 +2,7 @@
 
 require "fileutils"
 require "json"
+require_relative "../claude_inbox"
 
 module ClaudeInbox
   # Where the Claude Code pane ships, and a path to it that holds still: the
@@ -12,7 +13,6 @@ module ClaudeInbox
     LINK = File.join(Dir.home, ".config", "claude-inbox", "mod")
     NAME = "inbox-pane"
     SETTINGS = File.join(Dir.home, ".claude", "settings.json")
-    CHECKOUT = File.exist?(File.expand_path("../../.git", __dir__))
     # What the pane runs headless: a checkout's own, or the gem's from PATH.
     COMMAND = CHECKOUT ? File.expand_path("../../bin/claude-inbox", __dir__) : nil
 
