@@ -5,7 +5,6 @@ require "json"
 require "net/http"
 require "rbconfig"
 require_relative "../claude_inbox"
-require_relative "mod"
 require_relative "records"
 require_relative "subprocess"
 
@@ -50,7 +49,7 @@ module ClaudeInbox
       raise Error, "#{uri.host} is unreachable: #{e.message}"
     end
 
-    def initialize(checkout: Mod::CHECKOUT, root: ROOT, version: VERSION, cache_path: CACHE_PATH,
+    def initialize(checkout: CHECKOUT, root: ROOT, version: VERSION, cache_path: CACHE_PATH,
       run: Subprocess.method(:capture), fetch: Updater.method(:fetch_url),
       exec: ->(*argv) { Kernel.exec(*Subprocess.command(*argv)) }, clock: -> { Time.now })
       @checkout = checkout
