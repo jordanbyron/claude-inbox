@@ -159,3 +159,66 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   the pane's buttons once it cannot scroll (2.1.288). So the pane turns a
   person's one-row scroll into a cursor move itself, in a `ui.scroll` hook,
   rather than relying on the ring.
+
+## Codex
+
+- Only the shared daemon knows which threads are live. A `codex app-server`
+  of your own reports every other thread `notLoaded`, a running one
+  included. `codex app-server daemon version` prints JSON with `status` and
+  `socketPath` (`~/.codex/app-server-control/app-server-control.sock`, a
+  symlink into `/private/tmp`). The socket speaks the stdio server's
+  JSON-RPC, one message per WebSocket text frame: plain JSON gets an EOF,
+  so the client upgrades first, masks what it sends and answers the
+  daemon's pings (checked on 0.165.0).
+- `initialize` fails with `missing field clientInfo` unless it names a
+  `clientInfo` with `name` and `version`, and every other call before it
+  is `Not initialized` (checked on 0.165.0).
+- `thread/list` sorts by its `sortKey` newest first and pages with
+  `cursor`, the previous page's `nextCursor`, an ISO time; the daemon
+  keeps every thread ever started, so without a cut the list is history
+  (checked on 0.165.0).
+- `thread/list` without `sourceKinds` returns only interactive threads, so
+  `codex exec` runs are missing until `exec` is named (checked on 0.165.0).
+- `codex exec` and `codex --no-daemon` run their own server in-process, so
+  the daemon reports their thread `notLoaded` the whole time it runs. Only
+  `updatedAt` and the unread marker move (checked on 0.165.0).
+- `readStates[id].firstUnread` is set once a turn completes, and the TUI
+  never clears it, not even with the turn on screen. Only
+  `thread/readState/update` does, so a TUI thread stays done until
+  something marks it read (checked on 0.165.0).
+- Every new TUI thread brings an ephemeral title thread that shows up in
+  `thread/started` and `thread/status/changed` but never in `thread/list`,
+  and cannot be deleted (checked on 0.165.0).
+- A daemon thread's `source` is `"vscode"` and its `originator`
+  `"codex-tui"` whatever started it, a TUI or another client on the socket,
+  so `source` cannot tell them apart (checked on 0.165.0).
+- `turn/interrupt` needs the `turnId` as well as the `threadId`, and a
+  Thread does not carry the running turn's id. `thread/turns/list
+  {threadId, sortDirection: "desc", limit: 1}` has it, `inProgress`. Any
+  connection may interrupt, not only the one that started the turn
+  (checked on 0.165.0).
+- `thread/delete` removes the rollout under `~/.codex/sessions` and the
+  thread's row in Codex's state, and broadcasts `thread/deleted`; there is
+  nothing else to clean up (checked on 0.165.0).
+- `codex resume <id>` on a thread the daemon has loaded joins that live
+  copy rather than starting a second one. Run outside the thread's `cwd`,
+  it first asks which directory to use (checked on 0.165.0).
+- `model/list` names each model's `supportedReasoningEfforts`, and they
+  differ by model: one offers `ultra` where another stops at `max`
+  (checked on 0.166.0).
+- The TUI has no key that hands back to its caller: `←` only moves the
+  cursor, `⌃z` does not suspend, and `⌃c`/`⌃d` quit are fixed. Its
+  keymap (`tui.keymap.*`) refuses to start with `←` bound to anything
+  else: `Ambiguous tui.keymap.main bindings: open_external_editor
+  shadows editor.move_left`. So the inbox runs `codex resume` behind a
+  pty of its own and leaves on `←` itself, reading where Codex put the
+  cursor: every frame ends `ESC[row;colH ESC[?25h` with the cursor in the
+  composer, whose text starts in column 3 after `› `. `←` there leaves
+  even with text after the cursor (checked on 0.165.0).
+- The TUI asks for the kitty keyboard protocol with key releases
+  (`ESC[>7u`), plus focus events, all-motion mouse and the alternate
+  screen, and answers a resize with a cursor-position query (`ESC[6n`)
+  before it redraws (checked on 0.165.0).
+- A thread from `thread/start` is not in `thread/list` until it has a
+  turn, so a start is `thread/start` then `turn/start`. The turn carries
+  on after the connection that started it closes (checked on 0.165.0).

@@ -139,7 +139,7 @@ RSpec.describe ClaudeInbox::App do
     end
 
     it "copies the claude.ai/code address when there is no pull request" do
-      store.update(store.sessions.map { |s| (s.id == "f23c8673") ? s.with(bridge_id: "cse_abc") : s })
+      store.update(store.sessions.map { |s| (s.id == "f23c8673") ? s.with(remote_url: "https://claude.ai/code/session_abc") : s })
       press(app, "y")
       expect(wait_for { screen(app).first.include?("copied https://claude.ai/code/session_abc") }).to be(true)
       expect(copied).to eq(["https://claude.ai/code/session_abc"])

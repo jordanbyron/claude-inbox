@@ -20,7 +20,7 @@ RSpec.describe ClaudeInbox::Store::Row do
   describe "searching a session you cannot name" do
     it "searches the prompt the session was started with" do
       r = described_class.new(session(id: "a", name: "SEAR-1594", cwd: "/srv/app",
-        job_state: ClaudeInbox::JobState.new("intent" => "Restore the OpenSearch indexes in Sagemaker")), nil)
+        intent: "Restore the OpenSearch indexes in Sagemaker"), nil)
       expect(r.matches?("opensearch")).to be(true)
       expect(r.matches?("sagemaker")).to be(true)
       expect(r.matches?("kubernetes")).to be(false)
@@ -28,7 +28,7 @@ RSpec.describe ClaudeInbox::Store::Row do
 
     it "searches the line the session is showing about itself" do
       r = described_class.new(session(id: "a", name: "SEAR-1594", state: "working",
-        job_state: ClaudeInbox::JobState.new("detail" => "Reading the synonym-mode application")), nil)
+        line: "Reading the synonym-mode application"), nil)
       expect(r.matches?("synonym")).to be(true)
     end
 
@@ -50,7 +50,7 @@ RSpec.describe ClaudeInbox::Store::Row do
 
     it "leaves an interactive session searchable by name and cwd alone" do
       r = described_class.new(session(id: nil, session_id: "u1", kind: "interactive", name: "shell",
-        cwd: "/srv/app", job_state: nil), nil)
+        cwd: "/srv/app"), nil)
       expect(r.matches?("shell")).to be(true)
       expect(r.matches?("app")).to be(true)
       expect(r.matches?("opensearch")).to be(false)
@@ -96,7 +96,7 @@ RSpec.describe ClaudeInbox::Store::Row do
 
     it "marks a finished or blocked session nobody has attached to since it got there" do
       expect(described_class.new(session(id: "a", state: "done"), ClaudeInbox::Store::Entry.new(finished))).to be_unread
-      expect(described_class.new(session(id: "a", state: "stopped"), ClaudeInbox::Store::Entry.new(finished))).to be_unread
+      expect(described_class.new(session(id: "a", state: "idle"), ClaudeInbox::Store::Entry.new(finished))).to be_unread
       expect(described_class.new(session(id: "a", state: "blocked"), ClaudeInbox::Store::Entry.new(finished))).to be_unread
       expect(described_class.new(session(id: "a", state: "done"), nil)).to be_unread
     end
@@ -114,9 +114,12 @@ RSpec.describe ClaudeInbox::Store::Row do
     it "leaves a working session, and one there is no way to attach to, alone" do
       expect(described_class.new(session(id: "a", state: "working"), nil)).not_to be_unread
       expect(described_class.new(session(id: "a", state: "working"), nil)).not_to be_read
-      shell = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9")
+      shell = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9", actions: [])
       expect(described_class.new(shell, ClaudeInbox::Store::Entry.new(finished))).not_to be_unread
       expect(described_class.new(shell, ClaudeInbox::Store::Entry.new(finished))).not_to be_read
+      codex = session(id: "t", state: "done", harness: :codex, actions: [])
+      expect(described_class.new(codex, ClaudeInbox::Store::Entry.new(finished))).not_to be_unread
+      expect(described_class.new(codex, ClaudeInbox::Store::Entry.new(finished))).not_to be_read
     end
   end
 
@@ -128,7 +131,7 @@ RSpec.describe ClaudeInbox::Store::Row do
       failing = described_class.new(session(id: "a", state: "done", prs: open.call("FAILING")), entry)
       expect(failing).to be_pr_needs_you
       expect(failing.section(now)).to eq(:needs_you)
-      changes = described_class.new(session(id: "a", state: "stopped", prs: open.call("CHANGES_REQUESTED")), entry)
+      changes = described_class.new(session(id: "a", state: "idle", prs: open.call("CHANGES_REQUESTED")), entry)
       expect(changes.section(now)).to eq(:needs_you)
     end
 
@@ -181,9 +184,19 @@ RSpec.describe ClaudeInbox::Store::Row do
     end
 
     it "reaps a long-dead failure, which never settles" do
-      s = session(id: "a", state: "failed")
+      s = session(id: "a", state: "error")
       expect(described_class.new(s, ClaudeInbox::Store::Entry.new(quiet)).settled?).to be(false)
       expect(described_class.new(s, ClaudeInbox::Store::Entry.new(quiet))).to be_reapable(now.to_i)
+    end
+
+    it "never reaps a session its harness does not offer up, even one it can delete" do
+      s = session(id: "a", state: "done", actions: %i[attach stop delete])
+      expect(described_class.new(s, ClaudeInbox::Store::Entry.new(quiet))).not_to be_reapable(now.to_i)
+    end
+
+    it "never reaps a Codex thread, which nothing stops deleting with unpushed work" do
+      s = session(id: "a", state: "done", harness: :codex, actions: ClaudeInbox::Codex::ThreadsClient::ACTIONS)
+      expect(described_class.new(s, ClaudeInbox::Store::Entry.new(quiet))).not_to be_reapable(now.to_i)
     end
 
     it "never reaps a working session" do
@@ -204,8 +217,8 @@ RSpec.describe ClaudeInbox::Store::Row do
       expect(described_class.new(session(id: "a", state: "done"), ClaudeInbox::Store::Entry.new(woken))).to be_reapable(now.to_i)
     end
 
-    it "never reaps a session there is no id to reap with" do
-      s = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9")
+    it "never reaps a terminal, which no harness offers up" do
+      s = session(id: nil, kind: "interactive", state: nil, status: "idle", session_id: "u9", actions: [])
       expect(described_class.new(s, ClaudeInbox::Store::Entry.new(quiet))).not_to be_reapable(now.to_i)
     end
 

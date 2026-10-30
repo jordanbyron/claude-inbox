@@ -309,8 +309,8 @@ module ClaudeInbox
       sel = row.selectable? && selected == row.key
       quiet = section == :settled || (live && row.read?)
       unread = live && row.unread?
-      # A terminal cannot be attached to, so it is never read: while it waits on you it keeps its dot.
-      dotted = unread || (live && s.needs_you? && !s.actionable?)
+      # A row you cannot attach to is never read: while it waits on you it keeps its dot.
+      dotted = unread || (live && s.needs_you? && !s.attachable?)
       marker = marker_for(sel, dotted)
       glyph = glyph_for(s, section, tick)
       meta = meta_for(row, section, now)
@@ -331,8 +331,8 @@ module ClaudeInbox
       return [Text.pad(first, width)] unless live
 
       # The session's own line when it has one; the path is what is left to
-      # say about a terminal, which has no job file.
-      detail = @p.dim("       ↳ " + Text.truncate(s.summary || short_path(s.cwd), [width - 10, 0].max))
+      # say about a terminal, which has none.
+      detail = @p.dim("       ↳ " + Text.truncate(s.line || short_path(s.cwd), [width - 10, 0].max))
       [Text.pad(first, width), Text.pad(detail, width)]
     end
 
@@ -368,10 +368,10 @@ module ClaudeInbox
       return @p.dim("◦") if section == :settled
       case s.effective_state
       when "blocked" then @theme.red_bold("?")
-      when "failed" then @theme.red_bold("✗")
+      when "error" then @theme.red_bold("✗")
       when "working" then s.waiting_on_work? ? @theme.yellow("◌") : @theme.yellow(spinner(tick))
       when "done" then @theme.green("✓")
-      when "stopped" then @p.dim("■")
+      when "idle" then @p.dim("■")
       else @p.dim("·")
       end
     end
@@ -385,19 +385,22 @@ module ClaudeInbox
           wake = row.parked? ? @theme.purple("parked") : @theme.purple("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
           row.pinned? ? wake + @theme.cyan(" ★") : wake
         when :settled
-          @p.dim("#{s.state} · #{age}")
+          @p.dim("#{word(s.state)}#{harness_tag(s)} · #{age}")
         else
           if s.interactive?
             where = s.remote? ? "remote" : "your terminal"
             state_badge(s) + @p.dim(" · #{where} · #{age}")
           else
             remote = s.remote_control? ? @theme.blue(" ⇅") : ""
-            state_badge(s) + remote + @p.dim(" · #{age}")
+            state_badge(s) + remote + @p.dim("#{harness_tag(s)} · #{age}")
           end
         end
       pr = pr_badge(s, section)
       pr ? base + @p.dim(" · ") + pr : base
     end
+
+    # Claude is the default; any other harness names itself.
+    def harness_tag(s) = (s.harness == :claude) ? "" : " · #{s.harness}"
 
     # The headline PR, with a count of the rest. A settled row dims it.
     def pr_badge(s, section)
@@ -413,20 +416,22 @@ module ClaudeInbox
       when "blocked"
         detail = s.waiting_for ? ": #{s.waiting_for}" : ""
         @theme.red_bold("needs you#{detail}")
-      when "failed" then @theme.red_bold("failed")
+      when "error" then @theme.red_bold(word("error"))
       when "working" then working_badge(s)
       when "done" then @theme.green("done") + ((s.alive? && !s.interactive?) ? @p.dim(" · #{s.status}") : "")
-      when "stopped" then @p.dim("stopped")
+      when "idle" then @p.dim(word("idle"))
       else @p.dim(s.state.to_s)
       end
     end
+
+    def word(state) = STATE_WORDS.fetch(state, state)
 
     # "working" while the agent is thinking, "idle" once it has stopped and
     # only the work it kicked off is still open. Either way the work is
     # named, since "working · 2 agents" answers "working on what?".
     def working_badge(s)
       return @theme.yellow("waiting#{": #{s.waiting_for}" if s.waiting_for}") if s.status == "waiting"
-      label = s.job_state&.in_flight_label
+      label = s.in_flight
       @theme.yellow(s.waiting_on_work? ? "idle" : "working") + (label ? @p.dim(" · #{label}") : "")
     end
 

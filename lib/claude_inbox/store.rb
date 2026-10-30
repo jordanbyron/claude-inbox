@@ -15,9 +15,9 @@ module ClaudeInbox
     REAP_AFTER = 14 * 24 * 3600 # seconds idle before a session is deleted outright
     UNTIL_WOKEN = "until_woken"
     # States that hold a row open no matter what its pull requests did.
-    UNSETTLEABLE = %w[working failed].freeze
+    UNSETTLEABLE = %w[working error].freeze
     # States never reaped, however long they have been quiet. Shorter than
-    # UNSETTLEABLE on purpose: `failed` earns a permanent row because you
+    # UNSETTLEABLE on purpose: `error` earns a permanent row because you
     # should see it, but after REAP_AFTER of not seeing it, you never will.
     UNREAPABLE = %w[working].freeze
     NotWritable = Class.new(StandardError)
@@ -127,7 +127,7 @@ module ClaudeInbox
 
     def sessions = @mutex.synchronize { @sessions.dup }
 
-    def actionable_keys = sessions.select(&:actionable?).map(&:key)
+    def attachable_keys = sessions.select(&:attachable?).map(&:key)
 
     def writable? = @writable
 

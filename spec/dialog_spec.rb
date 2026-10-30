@@ -121,6 +121,13 @@ RSpec.describe ClaudeInbox::Dialog do
       expect(delete.press(:escape, "\e")).to eq(:cancel)
     end
 
+    it "promises the worktree only to a session that has one" do
+      expect(described_class::Confirm.new(:delete, "t", "auth fix", worktree: true).frame(60).join("\n")).to include "worktree"
+      without = described_class::Confirm.new(:delete, "t", "auth fix").frame(60).join("\n")
+      expect(without).to include "Its conversation goes with it."
+      expect(without).not_to include "worktree"
+    end
+
     it "cuts a long name to one line rather than wrapping it" do
       stop = described_class::Confirm.new(:stop, "abc12345", "fix the extremely flaky spec in the remote listener")
       expect(stop.frame(60)[1]).to include "Stop fix the extremely flaky spec in…?"

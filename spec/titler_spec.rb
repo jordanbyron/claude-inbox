@@ -10,9 +10,8 @@ RSpec.describe ClaudeInbox::Titler do
     }
   end
   let(:said) { [["user", "why won't it boot"], ["assistant", "the panda firmware   was stale, reflashing"]] }
-  let(:transcript) { instance_double(ClaudeInbox::Transcript, last_messages: said) }
-  let(:job) { ClaudeInbox::JobState.new("state" => "done", "intent" => "why won't   my comma3x boot", "output" => {"result" => "the panda firmware was stale"}) }
-  let(:row) { session(name: "comma3x not booting", state: "done", job_state: job) }
+  let(:transcript) { instance_double(ClaudeInbox::Claude::Transcript, last_messages: said) }
+  let(:row) { session(name: "comma3x not booting", state: "done", intent: "why won't   my comma3x boot", line: "the panda firmware was stale") }
 
   subject(:titler) { described_class.new(run: run, transcript: transcript) }
 
@@ -56,7 +55,7 @@ RSpec.describe ClaudeInbox::Titler do
 
   it "has nothing to ask about a session with no prompt, outcome or messages on record" do
     said.clear
-    expect { titler.title(session(job_state: nil), current: "x") }.to raise_error(described_class::Error, "nothing on record to title it from")
+    expect { titler.title(session, current: "x") }.to raise_error(described_class::Error, "nothing on record to title it from")
     expect(calls).to be_empty
   end
 end

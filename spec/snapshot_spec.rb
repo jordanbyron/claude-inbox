@@ -7,8 +7,7 @@ RSpec.describe ClaudeInbox::Snapshot do
   let(:merged) { ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: "MERGED", resolved_at: now.to_i - 60) }
   let(:sections) do
     entries = {"b" => {"last_state" => "done", "state_since" => now.to_i - 90, "last_visited_at" => now.to_i - 30, "alias" => "renamed", "wake_at" => "until_woken"}}
-    pink = ClaudeInbox::JobState.new("color" => "pink")
-    ClaudeInbox::Store.sectionize([session(id: "a", state: "blocked", session_id: "u-a", job_state: pink, last_message_at: now - 600), session(id: "b", state: "done", prs: [merged])], entries, now)
+    ClaudeInbox::Store.sectionize([session(id: "a", state: "blocked", session_id: "u-a", color: "pink", last_message_at: now - 600), session(id: "b", state: "done", prs: [merged])], entries, now)
   end
 
   it "writes each section's rows as the screen shows them" do
@@ -59,6 +58,15 @@ RSpec.describe ClaudeInbox::Snapshot do
       File.write(path, "stale")
       snapshot.write(sections, now + 2)
       expect(File.read(path)).to eq("stale")
+    end
+  end
+
+  it "gives the pane the words it has always read for an error and an idle session" do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "snapshot.json")
+      described_class.new(path: path).write(ClaudeInbox::Store.sectionize([session(id: "e", state: "error"), session(id: "i", state: "idle")], {}, now), now)
+      rows = JSON.parse(File.read(path))["sections"].values.flatten
+      expect(rows.to_h { |r| [r["id"], r["state"]] }).to eq("e" => "failed", "i" => "stopped")
     end
   end
 

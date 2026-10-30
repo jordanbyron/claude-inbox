@@ -6,12 +6,12 @@ RSpec.describe ClaudeInbox::SessionRequest do
   let(:base) { {"prompt" => "go", "cwd" => "/tmp"} }
 
   describe "from_params" do
-    it "builds the same hash the form's values do, once resolved against the same settings" do
+    it "builds the same hash the form's values do for Claude, once resolved against the same settings" do
       # An empty home, so the developer's own ~/.claude settings stay out of the form's defaults.
       Dir.mktmpdir do |home|
         form = ClaudeInbox::NewSessionForm.new(cwd: Dir.pwd, home: home)
         values = described_class.from_params({"prompt" => "", "cwd" => Dir.pwd})
-        expect(described_class.resolve(values, form.defaults)).to eq(form.values)
+        expect(described_class.resolve(values, form.defaults)).to eq(form.values.except(:harness))
       end
     end
 
@@ -122,7 +122,7 @@ RSpec.describe ClaudeInbox::SessionRequest do
     end
 
     it "takes model, effort and permissions from the choices the form offers" do
-      (ClaudeInbox::AgentsClient::PERMISSION_MODES - ["default"]).each do |mode|
+      (ClaudeInbox::Claude::AgentsClient::PERMISSION_MODES - ["default"]).each do |mode|
         expect(described_class.from_params(base.merge("permission_mode" => mode))[:permission_mode]).to eq(mode)
       end
       expect(described_class.from_params(base.merge("model" => "haiku", "effort" => "max"))).to eq(

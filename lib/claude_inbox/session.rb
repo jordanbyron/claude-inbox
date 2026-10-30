@@ -5,93 +5,59 @@ module ClaudeInbox
   # vocabulary, an idle terminal is a finished turn and a waiting one needs you.
   INTERACTIVE_STATE = {"busy" => "working", "waiting" => "blocked", "idle" => "done"}.freeze
 
-  # One entry from `claude agents --json`. Immutable, and the enrichers hand
-  # back copies via `with`, so a list already given to another thread cannot
-  # move under it.
+  # What the screen and the pane have always called the two states OSC 7501 renamed.
+  STATE_WORDS = {"error" => "failed", "idle" => "stopped"}.freeze
+
+  # One session in the words any harness can say, filled in by that
+  # harness's adapter. Immutable, and the enrichers hand back copies via
+  # `with`, so a list already given to another thread cannot move under it.
+  # `line` is the session's own account of where it is, `in_flight` the work
+  # it started that is still open, `remote` a session driven from another
+  # device and `remote_control` one that can be. `branch` and `origin_url`
+  # are the git branch and remote it works on, when its harness says. `actions` are what its
+  # harness can do to it from here.
   Session = Data.define(
-    :id, :cwd, :kind, :started_at, :session_id, :name,
-    :state, :pid, :status, :waiting_for, :origin, :prs, :job_state, :bridge_id, :last_message_at
+    :harness, :actions, :id, :cwd, :kind, :started_at, :created_at, :session_id, :name,
+    :state, :blocked_kind, :pid, :status, :waiting_for, :line, :in_flight, :waiting_on_work,
+    :remote, :remote_control, :remote_url, :color, :intent, :transcript_path, :worktree_path, :pr_urls, :prs, :last_message_at,
+    :branch, :origin_url
   ) do
-    # Every member is optional so the parser and the specs name only what they
-    # have; prs is [] rather than nil so nobody asks whether PullRequests has run.
-    def initialize(prs: nil, **given)
-      super(**self.class.members.to_h { |m| [m, nil] }, **given, prs: prs || [])
+    # Every member is optional so the adapter and the specs name only what
+    # they have; prs is [] rather than nil so nobody asks whether
+    # PullRequests has run. Without a record of when the session began, its
+    # process start stands in.
+    def initialize(prs: nil, pr_urls: nil, actions: nil, created_at: nil, **given)
+      super(**self.class.members.to_h { |m| [m, nil] }, **given,
+        prs: prs || [], pr_urls: pr_urls || [], actions: actions || [], created_at: created_at || given[:started_at])
     end
 
-    def self.from_hash(h)
-      new(
-        id: h["id"],
-        cwd: h["cwd"],
-        kind: h["kind"],
-        started_at: h["startedAt"] && Time.at(h["startedAt"] / 1000.0),
-        session_id: h["sessionId"],
-        name: h["name"],
-        state: h["state"],
-        pid: h["pid"],
-        status: h["status"],
-        waiting_for: h["waitingFor"]
-      )
-    end
+    def can?(action) = actions.include?(action)
 
     def background? = kind == "background"
 
     def interactive? = kind == "interactive"
 
-    # Only background sessions carry an id, and every action needs one.
-    def actionable? = background? && !id.nil?
+    def attachable? = can?(:attach)
 
     def effective_state = state || INTERACTIVE_STATE[status] || "done"
 
-    # The JSON does not say where an interactive session is driven from;
-    # AgentsClient reads it off the process tree: :terminal, :remote (a
-    # claude.ai/code worker), :subagent or :headless (`claude -p` or an SDK
-    # run); the last two are dropped before anyone downstream sees them.
-    def remote? = origin == :remote
+    # A person drives a remote session, just from elsewhere; the adapter
+    # drops the sessions nobody drives before anyone sees them.
+    def remote? = remote == true
 
-    def subagent? = origin == :subagent
+    def terminal? = interactive? && !remote?
 
-    def headless? = origin == :headless
-
-    # A remote worker is not unattended: a person drives it, just from claude.ai/code.
-    def unattended? = subagent? || headless?
-
-    def terminal? = interactive? && !remote? && !unattended?
-
-    # Where claude.ai/code shows this session. A background session with
-    # Remote Control on records its bridge in the job file; a worker a
-    # `claude remote-control` server spawned carries it on its command line.
-    def remote_url
-      bridge = bridge_id || job_state&.bridge_id
-      bridge && "https://claude.ai/code/session_#{bridge.delete_prefix("cse_")}"
-    end
-
-    # Driven from claude.ai/code as well as from here, not only followed there.
-    def remote_control? = remote? || job_state&.remote_control? == true
+    def remote_control? = remote_control == true
 
     # Selection handle: short id for background sessions, the UUID otherwise.
     def key = id || session_id
 
-    # "working" from the daemon means either the agent is thinking or it has
-    # stopped and is waiting on work it started. JobState tells them apart.
-    def waiting_on_work? = effective_state == "working" && job_state&.waiting_on_work? == true
+    # "working" covers an agent thinking and one gone quiet on work it started.
+    def waiting_on_work? = effective_state == "working" && waiting_on_work == true
 
-    # From `/color`; interactive sessions have no job file, so never one.
-    def color = job_state&.color
+    def needs_you? = %w[blocked error].include?(effective_state)
 
-    # A respawn moves `started_at` to the new process; the job file keeps
-    # when the session itself began.
-    def created_at = job_state&.created_at || started_at
-
-    # The prompt this session was started with.
-    def intent = job_state&.intent
-
-    # The session's own one-line account of where it is, the same line
-    # `claude agents` prints under a row. Nil without a job file.
-    def summary = job_state&.summary(effective_state)
-
-    def needs_you? = %w[blocked failed].include?(effective_state)
-
-    def finished? = %w[done stopped].include?(effective_state)
+    def finished? = %w[done idle].include?(effective_state)
 
     def alive? = !pid.nil?
 

@@ -2,11 +2,11 @@
 
 require "tmpdir"
 
-RSpec.describe ClaudeInbox::Transcript do
+RSpec.describe ClaudeInbox::Claude::Transcript do
   subject(:transcript) { described_class.new }
 
   let(:home) { Dir.mktmpdir }
-  let(:path) { ClaudeInbox::AgentsClient.transcript_path("/Users/x/code/app", "u1", home: home) }
+  let(:path) { ClaudeInbox::Claude::AgentsClient.transcript_path("/Users/x/code/app", "u1", home: home) }
   let(:user) do
     {"type" => "user", "timestamp" => "2026-10-21T15:00:00.000Z",
      "message" => {"role" => "user", "content" => "hi"}}
@@ -88,8 +88,7 @@ RSpec.describe ClaudeInbox::Transcript do
     write.call([user])
     named = File.join(home, "elsewhere.jsonl")
     File.write(named, JSON.generate(assistant) + "\n")
-    bg = session(id: "abc12345", cwd: "/moved", session_id: "u1",
-      job_state: ClaudeInbox::JobState.new("linkScanPath" => named))
+    bg = session(id: "abc12345", cwd: "/moved", session_id: "u1", transcript_path: named)
     term = session(id: nil, kind: "interactive", cwd: "/Users/x/code/app", session_id: "u1", status: "busy")
     lost = session(id: nil, kind: "interactive", cwd: "/Users/x/other", session_id: "u2", status: "busy")
     at = transcript.enrich([bg, term, lost], home: home).map(&:last_message_at)

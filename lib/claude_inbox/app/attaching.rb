@@ -9,14 +9,15 @@ module ClaudeInbox
 
       def activate
         return set_expanded(true) if @selected&.fold?
-        return @modal = Dialog::Confirm.new(:adopt, @selected.key) if selected_session&.remote?
-        attach(@selected.key) if require_actionable
+        return @modal = Dialog::Confirm.new(:adopt, @selected.key) if selected_session&.can?(:adopt)
+        attach(selected_session) if allowed?(:attach)
       end
 
-      # Guard for attach/stop: refuse politely on a terminal or remote row.
-      def require_actionable
+      # Guard for attach/stop/delete: refuse politely on a terminal or remote
+      # row, and say nothing for an action the row's harness has not got.
+      def allowed?(action)
         s = selected_session
-        return true if s&.actionable?
+        return true if s&.can?(action)
         if s&.interactive?
           notice(s.remote? ? "that's a remote session — Enter adopts it, w opens it at claude.ai/code" : "that's your own terminal — switch to that window")
         end
@@ -27,49 +28,56 @@ module ClaudeInbox
       # attach ends and the next starts without passing through the list. The
       # poller keeps running meanwhile, so the pane's snapshot stays fresh. A
       # failed attach leaves its reason on screen until a key is pressed.
-      def attach(id)
-        while id
+      def attach(session)
+        while session
           @switch.clear
-          from = session_for(id)&.session_id
-          @store.visit(id) do
+          from = session.session_id
+          @store.visit(session.key) do
             @terminal.release do
-              @terminal.pause unless @client.attach(id) { @switch.requested_for?(from) }
+              @terminal.pause unless @client.attach(session) { @switch.requested_for?(from) }
             end
           end
           @poller.soon
-          id = @switch.take(@store.actionable_keys)
+          session = session_for(@switch.take(@store.attachable_keys))
         end
       end
 
+      # A session just started or adopted, which no poll has listed yet.
+      def started(id, harness: :claude, cwd: nil) = Session.new(harness: harness, id: id, cwd: cwd)
+
       def adopt_session(key)
         s = session_for(key)
-        return unless s&.remote?
+        return unless s&.can?(:adopt)
         notice("adopting #{s.display_name}…")
         in_background do
           id = @client.adopt(session_id: s.session_id, cwd: s.cwd, pid: s.pid)
           @queue << [:notice, "adopted as #{id}"]
           @queue << [:select, id]
-          @queue << [:attach, id]
+          @queue << [:attach, started(id)]
         end
       end
 
       def open_confirm(kind)
-        return unless require_actionable
-        @modal = Dialog::Confirm.new(kind, @selected.key, label_for(@selected.key))
+        return unless allowed?(kind)
+        @modal = Dialog::Confirm.new(kind, @selected.key, label_for(@selected.key), worktree: !selected_session.worktree_path.nil?)
       end
 
+      # A Codex thread between turns has nothing to stop, which is no failure.
       def stop_session(id)
+        return unless (s = session_for(id))
+        label = label_for(id)
         in_background do
-          @client.stop(id)
+          @queue << [:notice, "#{label} has no turn running"] unless @client.stop(s)
           @poller.soon
         end
       end
 
       def delete_session(id)
+        return unless (s = session_for(id))
         label = label_for(id)
         notice("deleting #{label}…")
         in_background do
-          @client.rm(id)
+          @client.rm(s)
           @store.forget(id)
           @queue << [:notice, "deleted #{label}"]
           @poller.soon

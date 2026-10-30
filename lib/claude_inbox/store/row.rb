@@ -36,10 +36,10 @@ module ClaudeInbox
       def matches?(query)
         q = query.downcase
         prs = session.prs.flat_map { |pr| [pr.qualified, pr.url, pr.title] }
-        [label, session.cwd, session.intent, session.summary, *prs].any? { |field| field.to_s.downcase.include?(q) }
+        [label, session.cwd, session.intent, session.line, *prs].any? { |field| field.to_s.downcase.include?(q) }
       end
 
-      # Its timer has run out. Becoming blocked or failed wakes it sooner,
+      # Its timer has run out. Becoming blocked or an error wakes it sooner,
       # but only Entry#observe sees that change happen.
       def woken?(now) = !wake_at.nil? && !parked? && wake_at.to_i <= now.to_i
 
@@ -77,7 +77,7 @@ module ClaudeInbox
       end
 
       # Resolved PRs settle a `blocked` row too: asking "anything need
-      # changing?" leaves it blocked, and merging answers it. `failed` stays
+      # changing?" leaves it blocked, and merging answers it. `error` stays
       # in view even if its PR landed; a PR nobody knows the state of yet
       # (no gh, offline) is ignored. So is one resolved before the session
       # started: reviewing an old PR, or the CLI resolving a bare PR number
@@ -96,7 +96,7 @@ module ClaudeInbox
       # Settled never reaches. A session with no entry waits a poll, so its
       # idle time is seeded from `started_at` rather than guessed.
       def reapable?(now)
-        return false unless session.actionable?
+        return false unless session.can?(:reap)
         return false if session.alive?
         return false if UNREAPABLE.include?(session.effective_state)
         return false if entry.nil? || pinned? || snoozed?(now)
@@ -121,7 +121,7 @@ module ClaudeInbox
 
       # Only a session you can attach to carries a read or unread mark, since
       # nothing else ever clears it.
-      def markable? = session.actionable? && (session.finished? || session.needs_you?)
+      def markable? = session.attachable? && (session.finished? || session.needs_you?)
 
       def unchanged_since?(at) = at && entry.state_since.to_i <= at.to_i
     end

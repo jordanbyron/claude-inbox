@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 require "pastel"
-require_relative "agents_client"
+require_relative "claude/agents_client"
+require_relative "codex/threads_client"
 require_relative "images"
 require_relative "palette"
 require_relative "session_request"
@@ -38,24 +39,33 @@ module ClaudeInbox
     # then s, and that Esc asked to discard the prompt.
     SLIPS = {alt_s: "that's option-s — ctrl-s starts it", alt_o: "that's option-o — ctrl-o starts and attaches"}.freeze
 
-    def initialize(cwd:, dirs: [], home: Dir.home, clipboard: Images.method(:from_clipboard))
+    # thread/start has no name, worktree, Remote Control or color.
+    CLAUDE_ONLY = %i[name worktree remote color].freeze
+
+    # `choices` holds each harness that can start a session, with what it
+    # offers for the model, effort and permissions fields; the Harness field
+    # shows only when there is more than one.
+    def initialize(cwd:, dirs: [], choices: {claude: Claude::AgentsClient::CHOICES}, home: Dir.home, clipboard: Images.method(:from_clipboard))
       @p = Pastel.new(enabled: true)
       @theme = Theme.new
       @home = home
       @clipboard = clipboard
       @places = dirs.map { |path| Place.new(path, SessionRequest.label(path, dirs), path.sub(/\A#{Regexp.escape(home)}(?=\/|\z)/, "~")) }
       @dir_settled = cwd
+      @choices = choices
       @fields = [
         Field.new(:prompt, "Prompt", :multiline, TextBuffer.new),
+        (Field.new(:harness, "Harness", :choice, choices.keys.first.to_s, choices.keys.map(&:to_s)) if choices.size > 1),
         Field.new(:name, "Name", :text, TextBuffer.new),
         Field.new(:cwd, "Directory", :text, TextBuffer.new(cwd)),
-        Field.new(:model, "Model", :choice, DEFAULT, AgentsClient::MODELS),
-        Field.new(:effort, "Effort", :choice, DEFAULT, AgentsClient::EFFORTS),
-        Field.new(:permission_mode, "Permissions", :choice, DEFAULT, AgentsClient::PERMISSION_MODES),
+        Field.new(:model, "Model", :choice, DEFAULT, []),
+        Field.new(:effort, "Effort", :choice, DEFAULT, []),
+        Field.new(:permission_mode, "Permissions", :choice, DEFAULT, []),
         Field.new(:worktree, "Worktree", :choice, "no", %w[no yes]),
         Field.new(:remote, "Remote Control", :choice, DEFAULT, [DEFAULT, "no", "yes"]),
-        Field.new(:color, "Color", :choice, DEFAULT, AgentsClient::COLORS)
-      ]
+        Field.new(:color, "Color", :choice, DEFAULT, Claude::AgentsClient::COLORS)
+      ].compact
+      choose_harness
       @focus = 0
       @error = nil
       @defaults_for = nil
@@ -66,7 +76,7 @@ module ClaudeInbox
       @busy = false
     end
 
-    def focused = @fields[@focus]
+    def focused = fields[@focus]
 
     # => :cancel | :start | :start_and_attach | :changed
     def press(name, raw)
@@ -128,11 +138,13 @@ module ClaudeInbox
     def picked = menu&.fetch(@pick.clamp(0, menu.size - 1))
 
     def values
-      v = @fields.to_h { |f| [f.key, (f.kind == :choice && f.value == DEFAULT) ? nil : f.value.to_s] }
-      v[:prompt] = field(:prompt).value.expand { |chip| AgentsClient.mention(chip.path) }.strip
+      v = fields.to_h { |f| [f.key, (f.kind == :choice && f.value == DEFAULT) ? nil : f.value.to_s] }
+      v[:harness] = harness
+      v[:cwd] = directory
+      return codex_values(v) if harness == :codex
+      v[:prompt] = field(:prompt).value.expand { |chip| Claude::AgentsClient.mention(chip.path) }.strip
       v[:worktree] = v[:worktree] == "yes"
       v[:name] = nil if v[:name].strip.empty?
-      v[:cwd] = directory
       v[:remote] = SessionRequest::FLAGS[v[:remote]]
       SessionRequest.resolve(v, defaults)
     end
@@ -149,7 +161,7 @@ module ClaudeInbox
     # The whole body, exactly `height` lines.
     def screen(width, height)
       inner_w = width - 4
-      fixed = 3 + 2 + 1 + (@fields.size - 1) + 1
+      fixed = 3 + 2 + 1 + (fields.size - 1) + 1
       menu_rows = menu_lines(inner_w, [height - fixed - 3, MENU_ROWS].min)
       prompt_h = [height - fixed - menu_rows.size, 3].max
       out = [""]
@@ -160,7 +172,7 @@ module ClaudeInbox
       out += prompt_box(field(:prompt), inner_w, prompt_h)
       out += menu_rows if focused.key == :prompt
       out << ""
-      @fields[1..].each do |f|
+      fields[1..].each do |f|
         out << "  " + field_label(f) + field_value(f, inner_w - 16)
         out += menu_rows if f.key == :cwd && focused.key == :cwd
       end
@@ -193,6 +205,26 @@ module ClaudeInbox
     end
 
     private
+
+    def harness = field(:harness)&.value&.to_sym || :claude
+
+    def fields = @fields.reject { |f| harness == :codex && CLAUDE_ONLY.include?(f.key) }
+
+    # An image goes to Codex as a file of its own, its chip left in the text.
+    def codex_values(v)
+      prompt = field(:prompt).value
+      images = []
+      text = prompt.expand { |chip| chip.to_s.tap { images << chip.path } }.strip
+      v.merge(prompt: text, images: images)
+    end
+
+    # Each harness has its own choices; a switch starts every one over at default.
+    def choose_harness
+      @choices.fetch(harness).each do |key, choices|
+        field(key).choices = choices
+        field(key).value = DEFAULT
+      end
+    end
 
     def menu_query
       case focused.key
@@ -327,6 +359,7 @@ module ClaudeInbox
 
     def default_text(f)
       return "none" if f.key == :color
+      return "codex config" if harness == :codex
       resolved = defaults[f.key]
       resolved ? "#{resolved} (settings)" : "auto (cli default)"
     end
@@ -379,7 +412,7 @@ module ClaudeInbox
 
     def editable? = %i[text multiline].include?(focused.kind)
 
-    def move(d) = @focus = (@focus + d) % @fields.size
+    def move(d) = @focus = (@focus + d) % fields.size
 
     def field(key) = @fields.find { |f| f.key == key }
 
@@ -388,13 +421,14 @@ module ClaudeInbox
       File.expand_path(path.empty? ? "." : path)
     end
 
-    def focus_on(key) = @focus = @fields.index { |f| f.key == key }
+    def focus_on(key) = @focus = fields.index { |f| f.key == key }
 
     def choose(name, raw)
       d = CYCLE[name] || CYCLE[raw]
       return unless d
       f = focused
       f.value = f.choices[(f.choices.index(f.value) + d) % f.choices.size]
+      choose_harness if f.key == :harness
     end
 
     def submit(attach:)

@@ -3,7 +3,7 @@
 require "tmpdir"
 
 RSpec.describe ClaudeInbox::Headless do
-  let(:client) { instance_double(ClaudeInbox::AgentsClient) }
+  let(:client) { instance_double(ClaudeInbox::Claude::AgentsClient) }
 
   it "exits at once while an inbox or another headless process holds the writer lock" do
     Dir.mktmpdir do |dir|
