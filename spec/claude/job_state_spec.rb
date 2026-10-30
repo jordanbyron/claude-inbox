@@ -103,6 +103,28 @@ RSpec.describe ClaudeInbox::Claude::JobState do
     end
   end
 
+  it "reads a last record longer than its first tail, with or without a final newline, and not one half written" do
+    Dir.mktmpdir do |dir|
+      FileUtils.mkdir_p(File.join(dir, "aaa11111"))
+      File.write(File.join(dir, "aaa11111", "state.json"), "{}")
+      timeline = File.join(dir, "aaa11111", "timeline.jsonl")
+      long = JSON.generate("state" => "done", "text" => "y" * (described_class::TAIL * 3))
+      short = JSON.generate("state" => "working", "text" => "")
+      File.write(timeline, "#{short}\n#{long}\n")
+      expect(described_class.read("aaa11111", jobs_dir: dir)).to be_turn_over
+      File.write(timeline, "#{short}\n#{long}")
+      expect(described_class.read("aaa11111", jobs_dir: dir)).to be_turn_over
+      File.write(timeline, long)
+      expect(described_class.read("aaa11111", jobs_dir: dir)).to be_turn_over
+
+      # The daemon appending: the cut-off record is no reply yet.
+      File.write(timeline, "#{short}\n#{long[0, 100]}")
+      expect(described_class.read("aaa11111", jobs_dir: dir)).not_to be_turn_over
+      File.write(timeline, "")
+      expect(described_class.read("aaa11111", jobs_dir: dir)).not_to be_turn_over
+    end
+  end
+
   it "settles on the state the session filed with its reply when it is blocked or done" do
     expect(described_class.new("state" => "blocked").settled_state).to eq("blocked")
     expect(described_class.new("state" => "done").settled_state).to eq("done")

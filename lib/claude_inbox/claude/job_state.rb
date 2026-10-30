@@ -46,16 +46,32 @@ module ClaudeInbox
 
       TAIL = 16 * 1024
 
-      # The timeline's last record, or nil without one. A record can run to
-      # several KB of reply text, so the tail is read rather than the file.
+      # The timeline's last record, or nil without one, or while the daemon
+      # is still writing it.
       def self.last_record(path)
-        size = File.size(path)
-        tail = File.open(path, "rb") { |f| f.seek([size - TAIL, 0].max) && f.read }
-        line = tail.split("\n").reject(&:empty?).last
+        line = last_line(path)
         line && JSON.parse(line)
       rescue JSON::ParserError, SystemCallError
         nil
       end
+
+      # The last line, read from the end in a growing tail rather than the
+      # whole file: a record holds the reply, several KB, and the file is
+      # read on every poll.
+      def self.last_line(path)
+        File.open(path, "rb") do |f|
+          tail = TAIL
+          loop do
+            f.seek([f.size - tail, 0].max)
+            text = f.read.sub(/\n+\z/, "")
+            cut = text.rindex("\n")
+            return text[(cut + 1)..] if cut
+            return text if tail >= f.size
+            tail *= 2
+          end
+        end
+      end
+      private_class_method :last_line
 
       # The job file is there by the time `claude --bg` returns, and the daemon
       # updates it read-modify-write, so the color stays through work, stop and
