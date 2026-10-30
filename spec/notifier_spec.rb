@@ -31,14 +31,14 @@ RSpec.describe ClaudeInbox::Notifier do
 
     it "says only the kind when the session has no line" do
       poll[working]
-      expect(described_class.diff(*poll[session(state: "failed")]).map(&:message)).to eq(["🔴 needs you"])
+      expect(described_class.diff(*poll[session(state: "error")]).map(&:message)).to eq(["🔴 needs you"])
     end
 
     it "says nothing for a row that already needed you, or one that was stopped" do
-      poll[session(state: "failed")]
+      poll[session(state: "error")]
       expect(described_class.diff(*poll[blocked])).to be_empty
       poll[working]
-      expect(described_class.diff(*poll[session(state: "stopped")])).to be_empty
+      expect(described_class.diff(*poll[session(state: "idle")])).to be_empty
     end
 
     it "keeps quiet about the terminal you are sitting in" do

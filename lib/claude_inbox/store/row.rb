@@ -39,7 +39,7 @@ module ClaudeInbox
         [label, session.cwd, session.intent, session.summary, *prs].any? { |field| field.to_s.downcase.include?(q) }
       end
 
-      # Its timer has run out. Becoming blocked or failed wakes it sooner,
+      # Its timer has run out. Becoming blocked or an error wakes it sooner,
       # but only Entry#observe sees that change happen.
       def woken?(now) = !wake_at.nil? && !parked? && wake_at.to_i <= now.to_i
 
@@ -77,7 +77,7 @@ module ClaudeInbox
       end
 
       # Resolved PRs settle a `blocked` row too: asking "anything need
-      # changing?" leaves it blocked, and merging answers it. `failed` stays
+      # changing?" leaves it blocked, and merging answers it. `error` stays
       # in view even if its PR landed; a PR nobody knows the state of yet
       # (no gh, offline) is ignored. So is one resolved before the session
       # started: reviewing an old PR, or the CLI resolving a bare PR number

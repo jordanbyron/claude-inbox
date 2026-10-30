@@ -96,7 +96,7 @@ RSpec.describe ClaudeInbox::Store::Row do
 
     it "marks a finished or blocked session nobody has attached to since it got there" do
       expect(described_class.new(session(id: "a", state: "done"), ClaudeInbox::Store::Entry.new(finished))).to be_unread
-      expect(described_class.new(session(id: "a", state: "stopped"), ClaudeInbox::Store::Entry.new(finished))).to be_unread
+      expect(described_class.new(session(id: "a", state: "idle"), ClaudeInbox::Store::Entry.new(finished))).to be_unread
       expect(described_class.new(session(id: "a", state: "blocked"), ClaudeInbox::Store::Entry.new(finished))).to be_unread
       expect(described_class.new(session(id: "a", state: "done"), nil)).to be_unread
     end
@@ -128,7 +128,7 @@ RSpec.describe ClaudeInbox::Store::Row do
       failing = described_class.new(session(id: "a", state: "done", prs: open.call("FAILING")), entry)
       expect(failing).to be_pr_needs_you
       expect(failing.section(now)).to eq(:needs_you)
-      changes = described_class.new(session(id: "a", state: "stopped", prs: open.call("CHANGES_REQUESTED")), entry)
+      changes = described_class.new(session(id: "a", state: "idle", prs: open.call("CHANGES_REQUESTED")), entry)
       expect(changes.section(now)).to eq(:needs_you)
     end
 
@@ -181,7 +181,7 @@ RSpec.describe ClaudeInbox::Store::Row do
     end
 
     it "reaps a long-dead failure, which never settles" do
-      s = session(id: "a", state: "failed")
+      s = session(id: "a", state: "error")
       expect(described_class.new(s, ClaudeInbox::Store::Entry.new(quiet)).settled?).to be(false)
       expect(described_class.new(s, ClaudeInbox::Store::Entry.new(quiet))).to be_reapable(now.to_i)
     end

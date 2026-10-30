@@ -6,6 +6,8 @@ module ClaudeInbox
     # state.json holds; the key names appear nowhere else. Mutators edit that
     # hash in place, since `Store#edit` yields it from the table and saves.
     class Entry
+      LEGACY_STATES = {"failed" => "error", "stopped" => "idle"}.freeze
+
       # For a key edited before any poll has seen it (`s` on a row that only just appeared).
       def self.blank(now) = new("state_since" => now.to_i)
 
@@ -46,7 +48,8 @@ module ClaudeInbox
 
       def parked? = wake_at == UNTIL_WOKEN
 
-      def last_state = @h["last_state"]
+      # state.json written before the OSC 7501 names holds the daemon's.
+      def last_state = LEGACY_STATES.fetch(@h["last_state"], @h["last_state"])
 
       def state_since = @h["state_since"]
 

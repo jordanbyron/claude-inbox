@@ -79,6 +79,15 @@ RSpec.describe ClaudeInbox::Store::Entry do
       expect(e.last_state).to eq("done")
     end
 
+    it "takes a failed or stopped state.json wrote before the rename for the same state, so a parked row stays parked" do
+      failed = described_class.new("last_state" => "failed", "state_since" => now.to_i - 60, "wake_at" => ClaudeInbox::Store::UNTIL_WOKEN)
+      failed.observe(session(id: "a", state: "error"), now)
+      expect(failed.state_since).to eq(now.to_i - 60)
+      expect(failed.wake_at).to eq(ClaudeInbox::Store::UNTIL_WOKEN)
+      stopped = described_class.new("last_state" => "stopped", "state_since" => now.to_i - 60)
+      expect(stopped.observe(session(id: "a", state: "idle"), now).state_since).to eq(now.to_i - 60)
+    end
+
     it "clears an elapsed snooze" do
       e = described_class.new(
         "wake_at" => now.to_i - 1,
