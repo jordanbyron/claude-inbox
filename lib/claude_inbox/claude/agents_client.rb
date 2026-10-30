@@ -62,7 +62,7 @@ module ClaudeInbox
           created_at: job&.created_at,
           session_id: h["sessionId"],
           name: h["name"],
-          state: h["state"] && STATES.fetch(h["state"], h["state"]),
+          state: state_of(h, job),
           pid: h["pid"],
           status: h["status"],
           waiting_for: h["waitingFor"],
@@ -78,6 +78,17 @@ module ClaudeInbox
           pr_urls: job&.pr_urls
         )
         job ? s.with(line: job.summary(s.effective_state)) : s
+      end
+
+      # The daemon's word, except that its "working" yields to the job file
+      # once the agent's turn is over and the file says blocked or done: the
+      # daemon keeps calling a session busy while a finished teammate sits
+      # in its in-flight count (docs/cli-quirks.md).
+      def self.state_of(h, job)
+        return nil unless h["state"]
+        state = STATES.fetch(h["state"], h["state"])
+        settled = (state == "working") ? job&.settled_state : nil
+        settled ? STATES.fetch(settled) : state
       end
 
       def self.actions_for(kind, remote)

@@ -97,6 +97,17 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
       expect(described_class.session(row).harness).to eq(:claude)
     end
 
+    it "lets the job file's blocked or done stand in for the daemon's working once the turn is over" do
+      over = ->(state) { ClaudeInbox::Claude::JobState.new("state" => state, "tempo" => "active", "output" => {"result" => "PR #355 up"}, "inFlight" => {"tasks" => 1}) }
+      expect(described_class.session(row, job: over.call("blocked")).state).to eq("blocked")
+      expect(described_class.session(row, job: over.call("done")).state).to eq("done")
+      expect(described_class.session(row, job: over.call("done")).line).to eq("PR #355 up")
+      expect(described_class.session(row, job: over.call("working")).state).to eq("working")
+      # The daemon's own blocked or done is never second-guessed.
+      expect(described_class.session(row.merge("state" => "blocked"), job: over.call("done")).state).to eq("blocked")
+      expect(described_class.session(row, job: nil).state).to eq("working")
+    end
+
     it "knows where claude.ai/code shows it, from the job file or the worker's own bridge id" do
       expect(described_class.session(row).remote_url).to be_nil
       bg = described_class.session(row, job: ClaudeInbox::Claude::JobState.new("bridgeSessionId" => "cse_01AB"))

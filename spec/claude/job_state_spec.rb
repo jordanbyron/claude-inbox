@@ -78,6 +78,35 @@ RSpec.describe ClaudeInbox::Claude::JobState do
     expect(stalled.in_flight_label).to be_nil
   end
 
+  it "knows the turn is over by its closing summary when a lingering teammate keeps the pulse active" do
+    # Seen on 2.1.312 and 2.1.314: the teammate had reported, inFlight stayed
+    # at 1 and tempo at "active", and the daemon called the session working.
+    lingering = described_class.new("state" => "blocked", "tempo" => "active",
+      "output" => {"result" => "PR #355 verified; awaiting your review"},
+      "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}])
+    expect(lingering).to be_waiting_on_work
+    expect(lingering.settled_state).to eq("blocked")
+
+    done = described_class.new("state" => "done", "tempo" => "active", "output" => {"result" => "no repo changes"},
+      "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}])
+    expect(done.settled_state).to eq("done")
+  end
+
+  it "leaves the daemon's working alone while the agent thinks, or when the file says working too" do
+    # The daemon clears the summary when a turn starts, so an empty one with
+    # an active pulse is an agent mid-turn, whatever it reported last time.
+    thinking = described_class.new("state" => "blocked", "tempo" => "active", "output" => {"result" => ""},
+      "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}])
+    expect(thinking).not_to be_waiting_on_work
+    expect(thinking.settled_state).to be_nil
+
+    stuck = described_class.new("state" => "working", "tempo" => "active", "output" => {"result" => "tier 1 works"},
+      "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}])
+    expect(stuck).to be_waiting_on_work
+    expect(stuck.settled_state).to be_nil
+    expect(described_class.new({}).settled_state).to be_nil
+  end
+
   it "falls back to the detail line when the file has no needs or result" do
     js = described_class.new("detail" => "thinking")
     expect(js.summary("blocked")).to eq("thinking")

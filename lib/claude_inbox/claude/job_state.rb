@@ -10,8 +10,9 @@ module ClaudeInbox
     # only writer: a new session's color.
     #
     # `claude agents --json` says "working" both while the agent thinks and
-    # while it sits idle on a shell or sub-agent it started. This file tells
-    # the two apart, and holds what the JSON drops (docs/cli-quirks.md).
+    # while it sits idle on a shell or sub-agent it started, a teammate that
+    # has long since reported included. This file tells the two apart, and
+    # holds what the JSON drops (docs/cli-quirks.md).
     #
     # Never cached. A color changes the moment you type `/color`, so every poll
     # asks the file again.
@@ -60,6 +61,7 @@ module ClaudeInbox
       attr_reader :pr_urls, :transcript_path, :worktree_path, :color, :intent, :bridge_id, :created_at
 
       def initialize(hash)
+        @state = hash["state"]
         @detail = hash["detail"]
         @needs = hash["needs"]
         @result = (hash["output"] || {})["result"]
@@ -80,7 +82,13 @@ module ClaudeInbox
       # a wake, are the only record of Remote Control being on it.
       def remote_control? = flags.include?("--remote-control")
 
-      def waiting_on_work? = agent_idle? && in_flight?
+      def waiting_on_work? = turn_over? && in_flight?
+
+      # The state the session itself last reported, for the daemon's "working"
+      # to yield to once the turn is over: "blocked" or "done", since those
+      # are what a finished turn leaves behind. Nil while the agent thinks,
+      # or when the file itself still says "working".
+      def settled_state = (turn_over? && %w[blocked done].include?(state)) ? state : nil
 
       # What the session needs while blocked, what it produced once done,
       # otherwise its status line; nil before it has said anything.
@@ -105,12 +113,16 @@ module ClaudeInbox
 
       private
 
-      attr_reader :detail, :needs, :result, :tempo, :kinds, :tasks, :flags
+      attr_reader :state, :detail, :needs, :result, :tempo, :kinds, :tasks, :flags
 
-      # The agent itself is not thinking. On its own this means little — a
-      # session whose process died leaves the same reading behind — so it only
-      # says something paired with work still in flight.
-      def agent_idle? = tempo == "idle"
+      # The agent's own turn has ended: its pulse went idle, or the daemon
+      # wrote the turn's closing summary, which it clears when the next turn
+      # starts. A lingering teammate keeps the pulse "active" after the turn,
+      # so the summary is the reading that survives it (docs/cli-quirks.md).
+      # On its own an idle pulse means little — a session whose process died
+      # leaves the same reading behind — so `waiting_on_work?` pairs it with
+      # work still in flight.
+      def turn_over? = tempo == "idle" || !result.to_s.strip.empty?
 
       def in_flight? = tasks.positive?
 

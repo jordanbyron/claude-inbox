@@ -31,6 +31,15 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   into it holds through work, stop and respawn (checked on 2.1.296). The
   session's own prompt bar reads its color from an `agent-color` record in
   the transcript instead (read from the 2.1.296 bundle), so it stays plain.
+- A session that started an in-process teammate with the Agent tool can
+  keep it in `inFlight.tasks` after the teammate has reported and the
+  session's own turn has ended, with `tempo: active`; the JSON then calls
+  the session `working` and `busy` for as long as it sits (seen on
+  2.1.312 and 2.1.314, one session whose job file said `blocked`, one
+  `working`). The daemon writes a turn's closing summary to
+  `output.result` when the turn ends and clears it when the next starts,
+  so a present `result` says the agent's own turn is over whatever
+  `tempo` says. The inbox reads it that way.
 - A `--bg` session with Remote Control on registers a bridge and records it
   in `state.json` as `bridgeSessionId: cse_<id>`; claude.ai/code shows the
   session at `https://claude.ai/code/session_<id>`. On 2.1.282 a plain
