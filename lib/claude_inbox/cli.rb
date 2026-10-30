@@ -61,7 +61,7 @@ module ClaudeInbox
       opts[:color] = options[:color]
       opts[:notifier] = notifier
       return opts if options[:fixture] || writer_lock.take(role: "inbox")
-      opts.merge(store: Store.new(writable: false, relay: Actions.new, sort: options[:sort]), reaper: Reaper.disabled,
+      opts.merge(store: new_store(writable: false, relay: Actions.new), reaper: Reaper.disabled,
         snapshot: Snapshot.disabled, actions: Actions.disabled, pane_offer: Mod::Offer.disabled, notifier: Notifier.disabled)
     end
 
@@ -115,7 +115,7 @@ module ClaudeInbox
 
     def headless
       abort "claude-inbox: --headless takes no --fixture" if options[:fixture]
-      Headless.new(client: live_client, store: Store.new(sort: options[:sort]), updater: updater, notifier: notifier).run
+      Headless.new(client: live_client, store: new_store, updater: updater, notifier: notifier).run
     end
 
     # Only what a check within the day already found: a cold launch never waits
@@ -134,7 +134,7 @@ module ClaudeInbox
       # token phones are paired with nor hold the real inbox's lock.
       dir = File.join(Dir.tmpdir, "claude-inbox-fixture")
       {client: Harnesses.new(claude: Claude::FixtureClient.new(options[:fixture]), codex: Codex::FixtureClient.new(File.join(fixtures, "codex-threads.json"))),
-       store: Store.new(path: nil, sort: options[:sort]),
+       store: new_store(path: nil),
        pull_requests: PullRequests.new(cache_path: File.join(fixtures, "gh-pr-status-cache.json"), resolved_path: nil, gh: nil),
        listen: options[:listen]&.merge(fixture: true, pairing: Remote::Pairing.new(path: File.join(dir, "listen.json")),
          lock_path: File.join(dir, "listen.lock"), images_dir: File.join(dir, "images"))}
@@ -146,7 +146,7 @@ module ClaudeInbox
     # comes only from here, and only when asked for.
     def live_options
       client = live_client
-      store = Store.new(sort: options[:sort])
+      store = new_store
       {client: client, store: store, reaper: options[:reap] ? Reaper.new(client, store) : Reaper.disabled,
        snapshot: Snapshot.new, switch: Switch.new, actions: Actions.new, pane_offer: Mod::Offer.new,
        listen: options[:listen], updater: updater,
@@ -160,13 +160,16 @@ module ClaudeInbox
       @updater ||= Updater.new if options[:update_check] && !options[:fixture]
     end
 
+    # The sectioning flags apply to every store a launch builds.
+    def new_store(**opts) = Store.new(sort: options[:sort], fold_working: options[:fold_working], **opts)
+
     def notifier = options[:notify] ? Notifier.new : Notifier.disabled
 
     # Held for the life of this process by this reference.
     def writer_lock = (@lock ||= WriterLock.new)
 
     def parse(argv)
-      opts = {color: true, update_check: true, sort: "default"}
+      opts = {color: true, update_check: true, sort: "default", fold_working: false}
       parser = OptionParser.new(USAGE) do |p|
         p.on("--version", "Print the version") {
           @out.puts VERSION
@@ -181,6 +184,7 @@ module ClaudeInbox
         p.on("--reap", "Delete background sessions idle 14 days") { opts[:reap] = true }
         p.on("--no-color", "Draw without color") { opts[:color] = false }
         p.on("--sort=ORDER", Store::SORTS, "Order every section by activity, newest message first") { |order| opts[:sort] = order }
+        p.on("--fold-working", "Fold sessions still at work into a Working section") { opts[:fold_working] = true }
         p.on("--notify", "Send a desktop notification when a session needs you or finishes") { opts[:notify] = true }
         p.on("--auto-update", "Install a release found today before launching") { opts[:auto_update] = true }
         p.on("--no-update-check", "Never look for a newer release") { opts[:update_check] = false }

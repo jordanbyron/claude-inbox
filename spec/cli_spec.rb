@@ -46,6 +46,11 @@ RSpec.describe ClaudeInbox::CLI do
       expect { cli["--sort=name"].options }.to raise_error(SystemExit).and output(/\Aclaude-inbox: /).to_stderr
     end
 
+    it "folds working sessions only with --fold-working" do
+      expect(cli[].options[:fold_working]).to be(false)
+      expect(cli["--fold-working"].options[:fold_working]).to be(true)
+    end
+
     it "refuses an unknown flag, an abbreviation, a stray argument and a bad port" do
       [["--bogus"], ["--no-col"], ["inbox"], ["--listen=http"], ["--fixture"]].each do |argv|
         expect { cli[*argv].options }.to raise_error(SystemExit).and output(/\Aclaude-inbox: /).to_stderr

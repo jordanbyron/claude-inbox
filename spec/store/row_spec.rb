@@ -165,6 +165,27 @@ RSpec.describe ClaudeInbox::Store::Row do
     end
   end
 
+  describe "working fold" do
+    let(:entry) { ClaudeInbox::Store::Entry.new("last_state" => "working", "state_since" => now.to_i - 60) }
+
+    it "folds a session still at work only when asked, and lets it out when it stops" do
+      r = described_class.new(session(id: "a", state: "working"), entry)
+      expect(r.section(now)).to eq(:active)
+      expect(r.section(now, fold_working: true)).to eq(:working)
+      done = described_class.new(session(id: "a", state: "done"), entry)
+      expect(done.section(now, fold_working: true)).to eq(:active)
+    end
+
+    it "keeps a pinned, snoozed or terminal session out of the fold" do
+      pinned = ClaudeInbox::Store::Entry.new("pinned" => true, "pinned_at" => now.to_i)
+      expect(described_class.new(session(id: "a", state: "working"), pinned).section(now, fold_working: true)).to eq(:pinned)
+      snoozed = ClaudeInbox::Store::Entry.new("wake_at" => now.to_i + 900)
+      expect(described_class.new(session(id: "a", state: "working"), snoozed).section(now, fold_working: true)).to eq(:snoozed)
+      term = described_class.new(session(id: nil, kind: "interactive", state: nil, status: "busy", session_id: "uuid"), nil)
+      expect(term.section(now, fold_working: true)).to eq(:active)
+    end
+  end
+
   describe "reap rule" do
     let(:quiet) { {"last_state" => "done", "state_since" => now.to_i - ClaudeInbox::Store::REAP_AFTER - 1} }
     let(:recent) { {"last_state" => "done", "state_since" => now.to_i - ClaudeInbox::Store::REAP_AFTER + 60} }

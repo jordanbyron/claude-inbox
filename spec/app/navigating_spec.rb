@@ -12,6 +12,20 @@ RSpec.describe ClaudeInbox::App do
 
   after { client.release }
 
+  describe "a selection requested for a row behind a fold" do
+    let(:store) { ClaudeInbox::Store.new(path: nil, fold_working: true) }
+
+    it "opens the fold and lands there now, rather than once the row surfaces on its own" do
+      app.step
+      store.update(store.sessions + [session(id: "deadbeef", name: "just started")])
+      queue << [:select, "deadbeef"]
+      expect(app).to paint("just started").on_selected_row
+      press(app, "k")
+      store.update(store.sessions.map { |s| (s.id == "deadbeef") ? s.with(state: "done") : s })
+      expect(app).not_to paint("just started").on_selected_row
+    end
+  end
+
   describe "clicking a row" do
     it "selects it and attaches, same as landing on it and pressing Enter" do
       row = screen(app).index { |l| l.include?("comma3x led flashing") } + 1

@@ -105,12 +105,15 @@ module ClaudeInbox
 
       # The terminal outranks everything: never settle or hide a session you are in.
       # A snooze outranks the pin, which stays put and returns when it wakes.
-      def section(now)
+      # With `fold_working`, a session still at work goes under the Working
+      # fold instead of Active, and comes back out when it stops or is pinned.
+      def section(now, fold_working: false)
         if session.terminal? then session.needs_you? ? :needs_you : :active
         elsif snoozed?(now) then :snoozed
         elsif pinned? then :pinned
         elsif !revived? && settled? then :settled # a resolved PR outranks Needs You
         elsif session.needs_you? || pr_needs_you? then acknowledged? ? :active : :needs_you
+        elsif fold_working && session.effective_state == "working" then :working
         else :active
         end
       end

@@ -3,7 +3,7 @@
 module ClaudeInbox
   class Store
     # The Rows of one poll, grouped and ordered, and where the cursor may land among them.
-    Sections = Struct.new(:pinned, :needs_you, :active, :snoozed, :settled) do
+    Sections = Struct.new(:pinned, :needs_you, :active, :working, :snoozed, :settled) do
       def all = values.flatten(1)
 
       def matching(query)

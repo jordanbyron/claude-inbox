@@ -12,14 +12,18 @@ module ClaudeInbox
         @pending_select = id
       end
 
+      # A requested row behind a fold opens it: left pending, the request
+      # would fire whenever the row next surfaced, taking the cursor from
+      # wherever you had moved it since.
       def ensure_selection(sections)
-        stops = sections.selections(@expanded)
         pending = @pending_select && Store::Selection.row(@pending_select)
-        if pending && stops.include?(pending)
+        if pending && (name = sections.section_of(pending))
+          @expanded[name] = true if Store.folded?(name, @expanded)
           select(pending)
           @pending_select = nil
           return
         end
+        stops = sections.selections(@expanded)
         return if stops.include?(@selected)
         select(stops.first)
       end
