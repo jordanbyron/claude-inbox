@@ -97,15 +97,46 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
       expect(described_class.session(row).harness).to eq(:claude)
     end
 
-    it "lets the job file's blocked or done stand in for the daemon's working once the turn is over" do
-      over = ->(state) { ClaudeInbox::Claude::JobState.new("state" => state, "tempo" => "active", "output" => {"result" => "PR #355 up"}, "inFlight" => {"tasks" => 1}) }
-      expect(described_class.session(row, job: over.call("blocked")).state).to eq("blocked")
-      expect(described_class.session(row, job: over.call("done")).state).to eq("done")
-      expect(described_class.session(row, job: over.call("done")).line).to eq("PR #355 up")
-      expect(described_class.session(row, job: over.call("working")).state).to eq("working")
-      # The daemon's own blocked or done is never second-guessed.
-      expect(described_class.session(row.merge("state" => "blocked"), job: over.call("done")).state).to eq("blocked")
-      expect(described_class.session(row, job: nil).state).to eq("working")
+    describe "settling the daemon's working" do
+      let(:job) { ->(h) { ClaudeInbox::Claude::JobState.new(h) } }
+      let(:busy) { row.merge("status" => "busy") }
+      let(:idle) { row.merge("status" => "idle") }
+
+      it "takes the blocked or done the session filed, even while a teammate keeps the process busy" do
+        lingering = {"tempo" => "active", "output" => {"result" => "PR #355 up"}, "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}]}
+        blocked = described_class.session(busy, job: job.call(lingering.merge("state" => "blocked", "needs" => "merge #355?")))
+        expect(blocked.state).to eq("blocked")
+        expect(blocked.line).to eq("merge #355?")
+        expect(described_class.session(busy, job: job.call(lingering.merge("state" => "done"))).state).to eq("done")
+        # The daemon's own blocked or done is never second-guessed.
+        expect(described_class.session(busy.merge("state" => "blocked"), job: job.call("state" => "done")).state).to eq("blocked")
+      end
+
+      it "is done for a session the daemon calls idle with nothing open, whatever turn it filed" do
+        # Seen on 2.1.314: a turn filed as working ends, the daemon's status
+        # goes idle, and its state stays working with no closing summary.
+        over = described_class.session(idle, job: job.call("state" => "working", "tempo" => "idle", "detail" => "review done; awaiting reply"))
+        expect(over.state).to eq("done")
+        expect(over.line).to eq("review done; awaiting reply")
+        expect(over).not_to be_waiting_on_work
+      end
+
+      it "stays working, idle on its open work, when the daemon or the file says the agent is quiet" do
+        open_agent = {"state" => "working", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}]}
+        by_status = described_class.session(idle, job: job.call(open_agent.merge("tempo" => "active")))
+        expect(by_status.state).to eq("working")
+        expect(by_status).to be_waiting_on_work
+        by_file = described_class.session(busy, job: job.call(open_agent.merge("tempo" => "active", "output" => {"result" => "tier 1 works"})))
+        expect(by_file).to be_waiting_on_work
+        thinking = described_class.session(busy, job: job.call(open_agent.merge("tempo" => "active")))
+        expect(thinking.state).to eq("working")
+        expect(thinking).not_to be_waiting_on_work
+      end
+
+      it "leaves a session without a job file to the daemon" do
+        expect(described_class.session(idle, job: nil).state).to eq("working")
+        expect(described_class.session(idle, job: nil)).not_to be_waiting_on_work
+      end
     end
 
     it "knows where claude.ai/code shows it, from the job file or the worker's own bridge id" do

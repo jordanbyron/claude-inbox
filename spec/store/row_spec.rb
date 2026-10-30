@@ -174,6 +174,8 @@ RSpec.describe ClaudeInbox::Store::Row do
       expect(r.section(now, fold_working: true)).to eq(:working)
       done = described_class.new(session(id: "a", state: "done"), entry)
       expect(done.section(now, fold_working: true)).to eq(:active)
+      quiet = described_class.new(session(id: "a", state: "working", in_flight: "1 agent", waiting_on_work: true), entry)
+      expect(quiet.section(now, fold_working: true)).to eq(:active)
     end
 
     it "keeps a pinned, snoozed or terminal session out of the fold" do

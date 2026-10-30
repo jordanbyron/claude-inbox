@@ -34,7 +34,8 @@ RSpec.describe ClaudeInbox::Claude::JobState do
       expect(described_class.new("createdAt" => "soon").created_at).to be_nil
       expect(js).to be_remote_control
       expect(described_class.new({})).not_to be_remote_control
-      expect(js).to be_waiting_on_work
+      expect(js).to be_agent_idle
+      expect(js).to be_in_flight
       expect(js.in_flight_label).to eq("1 shell")
     end
   end
@@ -63,47 +64,37 @@ RSpec.describe ClaudeInbox::Claude::JobState do
   it "falls back to a bare count when the file does not name the work" do
     js = described_class.new("tempo" => "idle", "inFlight" => {"tasks" => 2})
     expect(js.in_flight_label).to eq("2 tasks")
-    expect(js).to be_waiting_on_work
+    expect(js).to be_agent_idle
+    expect(js).to be_in_flight
   end
 
-  it "says nothing about work when the agent is thinking or nothing is open" do
-    thinking = described_class.new("tempo" => "active", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}])
-    expect(thinking).not_to be_waiting_on_work
+  it "knows a thinking agent from one gone quiet, and what is open either way" do
+    thinking = described_class.new("tempo" => "active", "output" => {"result" => ""},
+      "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}])
+    expect(thinking).not_to be_agent_idle
+    expect(thinking).to be_in_flight
     expect(thinking.in_flight_label).to eq("1 shell")
 
-    # A session whose process died leaves an idle pulse behind with nothing in
-    # flight; that is not the same as waiting, so it claims nothing.
     stalled = described_class.new("tempo" => "idle", "inFlight" => {"tasks" => 0})
-    expect(stalled).not_to be_waiting_on_work
+    expect(stalled).to be_agent_idle
+    expect(stalled).not_to be_in_flight
     expect(stalled.in_flight_label).to be_nil
+    expect(described_class.new({})).not_to be_in_flight
   end
 
-  it "knows the turn is over by its closing summary when a lingering teammate keeps the pulse active" do
+  it "reads a closing summary as the agent gone quiet, since a lingering teammate keeps the pulse active" do
     # Seen on 2.1.312 and 2.1.314: the teammate had reported, inFlight stayed
     # at 1 and tempo at "active", and the daemon called the session working.
-    lingering = described_class.new("state" => "blocked", "tempo" => "active",
-      "output" => {"result" => "PR #355 verified; awaiting your review"},
+    lingering = described_class.new("tempo" => "active", "output" => {"result" => "PR #355 verified"},
       "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}])
-    expect(lingering).to be_waiting_on_work
-    expect(lingering.settled_state).to eq("blocked")
-
-    done = described_class.new("state" => "done", "tempo" => "active", "output" => {"result" => "no repo changes"},
-      "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}])
-    expect(done.settled_state).to eq("done")
+    expect(lingering).to be_agent_idle
+    expect(lingering).to be_in_flight
   end
 
-  it "leaves the daemon's working alone while the agent thinks, or when the file says working too" do
-    # The daemon clears the summary when a turn starts, so an empty one with
-    # an active pulse is an agent mid-turn, whatever it reported last time.
-    thinking = described_class.new("state" => "blocked", "tempo" => "active", "output" => {"result" => ""},
-      "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}])
-    expect(thinking).not_to be_waiting_on_work
-    expect(thinking.settled_state).to be_nil
-
-    stuck = described_class.new("state" => "working", "tempo" => "active", "output" => {"result" => "tier 1 works"},
-      "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}])
-    expect(stuck).to be_waiting_on_work
-    expect(stuck.settled_state).to be_nil
+  it "settles on the state the session filed when it is blocked or done" do
+    expect(described_class.new("state" => "blocked").settled_state).to eq("blocked")
+    expect(described_class.new("state" => "done").settled_state).to eq("done")
+    expect(described_class.new("state" => "working").settled_state).to be_nil
     expect(described_class.new({}).settled_state).to be_nil
   end
 

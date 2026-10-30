@@ -52,6 +52,12 @@ module ClaudeInbox
       def self.session(h, job: nil, origin: nil, bridge: nil)
         remote = origin == :remote
         bridge ||= job&.bridge_id
+        # The daemon's `status` is the process's own word (busy, idle,
+        # waiting); its `state` is what the session filed, held at "working"
+        # while anything it started stays open. "idle" says the agent's turn
+        # is over whatever the state says; the job file says it for a
+        # teammate that keeps the process busy (docs/cli-quirks.md).
+        quiet = h["status"] == "idle" || job&.agent_idle? == true
         s = Session.new(
           harness: :claude,
           actions: actions_for(h["kind"], remote),
@@ -62,12 +68,12 @@ module ClaudeInbox
           created_at: job&.created_at,
           session_id: h["sessionId"],
           name: h["name"],
-          state: state_of(h, job),
+          state: state_of(h, job, quiet),
           pid: h["pid"],
           status: h["status"],
           waiting_for: h["waitingFor"],
           in_flight: job&.in_flight_label,
-          waiting_on_work: job&.waiting_on_work? == true,
+          waiting_on_work: quiet && job&.in_flight? == true,
           remote: remote,
           remote_control: remote || job&.remote_control? == true,
           remote_url: remote_url(bridge),
@@ -80,15 +86,20 @@ module ClaudeInbox
         job ? s.with(line: job.summary(s.effective_state)) : s
       end
 
-      # The daemon's word, except that its "working" yields to the job file
-      # once the agent's turn is over and the file says blocked or done: the
-      # daemon keeps calling a session busy while a finished teammate sits
-      # in its in-flight count (docs/cli-quirks.md).
-      def self.state_of(h, job)
+      # The daemon's word, except that its "working" yields to what the
+      # session filed, blocked or done, and is "done" for a quiet session
+      # with nothing open: the daemon keeps calling a session working while a
+      # finished teammate sits in its in-flight count, and after a turn it
+      # filed as working (docs/cli-quirks.md). A quiet session with work
+      # still open stays "working", which `waiting_on_work` then qualifies.
+      def self.state_of(h, job, quiet)
         return nil unless h["state"]
         state = STATES.fetch(h["state"], h["state"])
-        settled = (state == "working") ? job&.settled_state : nil
-        settled ? STATES.fetch(settled) : state
+        return state unless state == "working" && job
+        if job.settled_state then STATES.fetch(job.settled_state)
+        elsif h["status"] == "idle" && !job.in_flight? then "done"
+        else state
+        end
       end
 
       def self.actions_for(kind, remote)
