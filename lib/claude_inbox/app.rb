@@ -26,6 +26,7 @@ require_relative "switch"
 require_relative "trust"
 require_relative "mod"
 require_relative "updater"
+require_relative "titler"
 require_relative "app/updating"
 require_relative "app/filtering"
 require_relative "app/triaging"
@@ -52,9 +53,10 @@ module ClaudeInbox
       rate_limits: RateLimits.new, reaper: Reaper.disabled, snapshot: Snapshot.disabled, switch: Switch.disabled,
       actions: Actions.disabled, notifier: Notifier.disabled, listen: nil, updater: nil, argv: [], out: $stdout, input: $stdin, color: true,
       trust: Trust.method(:projects), terminal: Terminal.new(out, input), queue: Queue.new, pane_offer: Mod::Offer.disabled,
-      clipboard: Clipboard.method(:copy))
+      clipboard: Clipboard.method(:copy), titler: Titler.new)
       @client = client
       @clipboard = clipboard
+      @titler = titler
       @store = store
       @snapshot = snapshot
       @switch = switch
@@ -254,6 +256,7 @@ module ClaudeInbox
       when :toggle_pin then toggle_pin_selected
       when :settle then settle_selected
       when :alias then open_alias_editor
+      when :retitle then retitle_selected
       when :link_pr then open_pr_editor
       when :open_pr then open_pr
       when :open_remote then open_remote

@@ -74,4 +74,32 @@ RSpec.describe ClaudeInbox::App do
       expect(app).to paint("> https://github.com/o/r/pull/7")
     end
   end
+
+  describe "a title from claude" do
+    let(:titler) { instance_double(ClaudeInbox::Titler, title: "comma3x boot loop") }
+    let(:app) { build_app(client:, store:, pull_requests:, queue:, terminal:, titler: titler) }
+
+    it "asks for the selected row by its prompt and current label, and keeps the answer as the alias" do
+      press(app, "r")
+      expect(wait_for { store.alias_for("f23c8673") == "comma3x boot loop" }).to be(true)
+      expect(titler).to have_received(:title).with(having_attributes(id: "f23c8673"), current: "comma3x not booting")
+      expect(app).to paint("comma3x boot loop").on_selected_row
+      expect(app).to paint("titled “comma3x boot loop” — a edits it").in_status_line
+    end
+
+    it "asks with the alias as the current label once one is set" do
+      store.set_alias("f23c8673", "auth spike")
+      press(app, "r")
+      expect(wait_for { store.alias_for("f23c8673") == "comma3x boot loop" }).to be(true)
+      expect(titler).to have_received(:title).with(anything, current: "auth spike")
+    end
+
+    it "says why when claude gives no title, and leaves the label alone" do
+      allow(titler).to receive(:title).and_raise(ClaudeInbox::Titler::Error, "claude -p failed: Not logged in")
+      press(app, "r")
+      expect(wait_for { screen(app).any? { |l| l.include?("Not logged in") } }).to be(true)
+      expect(app).to paint("claude -p failed: Not logged in").in_status_line
+      expect(store.alias_for("f23c8673")).to be_nil
+    end
+  end
 end

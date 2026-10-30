@@ -40,7 +40,7 @@ a fullscreen terminal.
 
 `/inbox` opens it, `ctrl+x tab` focuses it and `esc` leaves. The keys are the
 ones below, with `ge` for `G`, `n` `p` for `Tab` `Shift+Tab`, and no `a`,
-`P`, `X`, `Ctrl-x`, `/`, `R` or `U`, and `s` has no `5`. `Enter`, or a click on a row, switches to the
+`r`, `P`, `X`, `Ctrl-x`, `/`, `R` or `U`, and `s` has no `5`. `Enter`, or a click on a row, switches to the
 session when you attached through `claude-inbox`.
 
 It opens when a session starts. To stop that, set
@@ -94,6 +94,7 @@ Vim bindings. Arrows and the mouse work too.
 | `u` | wake a snoozed session, or bring back a settled one |
 | `x` | settle by hand |
 | `a` | set a local alias |
+| `r` | ask Claude for a new title, kept as the alias |
 | `o` | open the pull request in the browser; with several, `o` again opens the one that matters, `1`… another |
 | `w` | open the session at claude.ai/code |
 | `y` | copy the pull request url, or the session's address; with several, `y` again copies the one that matters, `1`… another |

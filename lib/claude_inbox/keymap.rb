@@ -22,7 +22,7 @@ module ClaudeInbox
       # actions
       :return => :activate, :enter => :activate, "l" => :activate,
       "h" => :fold_close,
-      "s" => :snooze, "u" => :wake, "a" => :alias, "x" => :settle, "X" => :stop,
+      "s" => :snooze, "u" => :wake, "a" => :alias, "r" => :retitle, "x" => :settle, "X" => :stop,
       :ctrl_x => :delete,
       "o" => :open_pr, "P" => :link_pr, "t" => :toggle_pin, "w" => :open_remote, "y" => :yank,
       "R" => :refresh, "U" => :update, "n" => :new_session, "N" => :remote_pairing,

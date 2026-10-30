@@ -45,6 +45,7 @@ RSpec.describe ClaudeInbox::Keymap do
     expect(km.press("s", "s")).to eq(:snooze)
     expect(km.press("u", "u")).to eq(:wake)
     expect(km.press("a", "a")).to eq(:alias)
+    expect(km.press("r", "r")).to eq(:retitle)
     expect(km.press("x", "x")).to eq(:settle)
     expect(km.press("X", "X")).to eq(:stop)
     expect(km.press(:ctrl_x, "\x18")).to eq(:delete)
