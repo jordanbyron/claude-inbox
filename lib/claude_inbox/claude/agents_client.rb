@@ -7,6 +7,7 @@ require_relative "job_state"
 require_relative "../session"
 require_relative "../subprocess"
 require_relative "transcript"
+require_relative "work"
 
 module ClaudeInbox
   module Claude
@@ -29,10 +30,11 @@ module ClaudeInbox
 
       attr_reader :jobs_dir
 
-      def initialize(bin: "claude", jobs_dir: JobState::DEFAULT_DIR, transcripts: Transcript.new)
+      def initialize(bin: "claude", jobs_dir: JobState::DEFAULT_DIR, transcripts: Transcript.new, work: Work.new)
         @bin = bin
         @jobs_dir = jobs_dir
         @transcripts = transcripts
+        @work = work
       end
 
       # => Array<Session>
@@ -46,17 +48,19 @@ module ClaudeInbox
       end
 
       # One row of the JSON as a Session, with its job file (nil when it has
-      # none) and the process tree's word on where it is driven from.
-      # `blocked_kind` stays nil: a blocked row carries no `waitingFor`, and an
-      # interactive one's is free text such as "permission prompt".
-      def self.session(h, job: nil, origin: nil, bridge: nil)
+      # none), whether the work it started is still `busy`, and the process
+      # tree's word on where it is driven from. `blocked_kind` stays nil: a
+      # blocked row carries no `waitingFor`, and an interactive one's is
+      # free text such as "permission prompt".
+      def self.session(h, job: nil, busy: false, origin: nil, bridge: nil)
         remote = origin == :remote
         bridge ||= job&.bridge_id
         # The daemon holds "working" while anything the session started
         # stays open, a teammate that has reported included, and after a
-        # turn the CLI filed as working; the job's timeline says whether the
-        # agent's own turn is over (docs/cli-quirks.md).
-        quiet = job&.turn_over? == true
+        # turn the CLI filed as working. The job's timeline says whether the
+        # agent's own turn is over, and its transcript whether what it
+        # started is still busy (docs/cli-quirks.md).
+        quiet = job&.turn_over? == true && !busy
         s = Session.new(
           harness: :claude,
           actions: actions_for(h["kind"], remote),
@@ -72,7 +76,7 @@ module ClaudeInbox
           status: h["status"],
           waiting_for: h["waitingFor"],
           in_flight: job&.in_flight_label,
-          waiting_on_work: (quiet || job&.agent_idle? == true) && job&.in_flight? == true,
+          waiting_on_work: quiet && job&.in_flight? == true,
           remote: remote,
           remote_control: remote || job&.remote_control? == true,
           remote_url: remote_url(bridge),
@@ -262,7 +266,8 @@ module ClaudeInbox
           origin = origins.fetch(h["pid"], :terminal) if interactive
           next if UNATTENDED.include?(origin)
           job = JobState.read(h["id"], jobs_dir: @jobs_dir) if h["kind"] == "background"
-          self.class.session(h, job: job, origin: origin, bridge: (bridges[h["pid"]] if interactive))
+          busy = job ? @work.busy?(job.fan, job.transcript_path) : false
+          self.class.session(h, job: job, busy: busy, origin: origin, bridge: (bridges[h["pid"]] if interactive))
         end
         @transcripts.enrich(found)
       end

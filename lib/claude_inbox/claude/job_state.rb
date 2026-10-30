@@ -25,6 +25,11 @@ module ClaudeInbox
     class JobState
       DEFAULT_DIR = File.join(Dir.home, ".claude", "jobs")
 
+      # One open piece of work the daemon lists: a background agent carries
+      # the id its launch answered with, a teammate an id of the daemon's
+      # own and the description it was spawned with as its label.
+      Piece = Data.define(:id, :label, :kind)
+
       # The daemon's names for the things a session waits on, in ours.
       KIND_WORDS = {
         "shell" => "shell",
@@ -89,7 +94,7 @@ module ClaudeInbox
       def self.job_file(id, jobs_dir) = File.join(jobs_dir, id, "state.json")
       private_class_method :job_file
 
-      attr_reader :pr_urls, :transcript_path, :worktree_path, :color, :intent, :bridge_id, :created_at
+      attr_reader :fan, :pr_urls, :transcript_path, :worktree_path, :color, :intent, :bridge_id, :created_at
 
       def initialize(hash, last_record = nil)
         @state = hash["state"]
@@ -97,8 +102,7 @@ module ClaudeInbox
         @detail = hash["detail"]
         @needs = hash["needs"]
         @result = (hash["output"] || {})["result"]
-        @tempo = hash["tempo"]
-        @kinds = (hash["fan"] || []).filter_map { |f| f["kind"] }
+        @fan = (hash["fan"] || []).map { |f| Piece.new(id: f["id"], label: f["label"], kind: f["kind"]) }
         @tasks = (hash["inFlight"] || {})["tasks"].to_i
         @pr_urls = (hash["children"] || []).filter_map { |c| c["href"] if c["kind"] == "pr" }
         @transcript_path = hash["linkScanPath"]
@@ -130,11 +134,6 @@ module ClaudeInbox
 
       def in_flight? = tasks.positive?
 
-      # The agent itself is not thinking. On its own this means little — a
-      # session whose process died leaves the same reading behind — so it
-      # only says something paired with `in_flight?`.
-      def agent_idle? = tempo == "idle"
-
       # What the session needs while blocked, what it produced once done,
       # otherwise its status line; nil before it has said anything.
       def summary(state)
@@ -152,13 +151,13 @@ module ClaudeInbox
       # file that counts the open tasks without naming them.
       def in_flight_label
         return nil unless in_flight?
-        return count_label if kinds.empty?
-        kinds.tally.map { |kind, n| "#{n} #{plural(KIND_WORDS.fetch(kind, kind), n)}" }.join(" · ")
+        return count_label if fan.empty?
+        fan.map(&:kind).tally.map { |kind, n| "#{n} #{plural(KIND_WORDS.fetch(kind, kind), n)}" }.join(" · ")
       end
 
       private
 
-      attr_reader :state, :last_text, :detail, :needs, :result, :tempo, :kinds, :tasks, :flags
+      attr_reader :state, :last_text, :detail, :needs, :result, :tasks, :flags
 
       def count_label = "#{tasks} #{plural("task", tasks)}"
 

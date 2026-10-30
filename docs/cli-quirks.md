@@ -50,6 +50,25 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   says `blocked` (seen on 2.1.312 and 2.1.314, three sessions). The inbox
   reads the timeline's last record for that, and only then believes a
   `blocked` or `done` in `state.json` over the JSON.
+- `state.json`'s `fan` lists what a session started and has not finished:
+  a background agent under the `agentId` its launch answered with, a
+  teammate under an id of the daemon's own with the `description` it was
+  spawned with as `label`. A teammate that has reported and sits idle
+  stays listed, so the list says open, not busy. The session's transcript
+  says busy: an `Agent` tool call with a `name` answers "Spawned
+  successfully" with the teammate's `name` in `toolUseResult`; one run in
+  the background answers "Async agent launched" with `status:
+  async_launched` and the `agentId`; a `Bash` run in the background
+  answers "Command running in background with ID: <id>", or "moved to the
+  background (ID: <id>)" when it outran its timeout. A teammate going
+  idle lands as a `user` record whose text is a `<teammate-message
+  teammate_id="…">` holding `{"type":"idle_notification", …}`, and a
+  successful `SendMessage` to it puts it back to work (a failed one
+  answers `success: false`). A background agent or shell finishing lands
+  as a `user` record holding `<task-notification>` with its `<task-id>`,
+  and `TaskStop` ends one by `task_id` (read from 2.1.312 and 2.1.314
+  transcripts). The inbox reads those, and only for a job whose fan is
+  not empty.
 - A `--bg` session with Remote Control on registers a bridge and records it
   in `state.json` as `bridgeSessionId: cse_<id>`; claude.ai/code shows the
   session at `https://claude.ai/code/session_<id>`. On 2.1.282 a plain

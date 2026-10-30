@@ -70,20 +70,32 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
     expect(c.list.any? { |s| s.pid == 57405 }).to be(false)
   end
 
-  it "reads the job file of a background session only" do
+  it "reads the job file of a background session only, and its transcript for whether its work is busy" do
     Dir.mktmpdir do |dir|
       FileUtils.mkdir_p(File.join(dir, "jobs", "aaa11111"))
+      transcript = File.join(dir, "lead.jsonl")
       File.write(File.join(dir, "jobs", "aaa11111", "state.json"),
-        JSON.generate("tempo" => "idle", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}]))
+        JSON.generate("inFlight" => {"tasks" => 1}, "fan" => [{"id" => "b1", "kind" => "local_bash", "label" => "sleep"}], "linkScanPath" => transcript))
+      File.write(File.join(dir, "jobs", "aaa11111", "timeline.jsonl"), JSON.generate("state" => "working", "text" => "Started the build; back when it reports.") + "\n")
       File.write(File.join(dir, "agents.json"), JSON.generate([
         {"id" => "aaa11111", "kind" => "background", "state" => "working"},
         {"kind" => "interactive", "status" => "busy", "sessionId" => "u1", "pid" => 1}
       ]))
-      bg, term = ClaudeInbox::Claude::FixtureClient.new(File.join(dir, "agents.json")).list
+      launched = {"type" => "user", "message" => {"content" => [{"type" => "tool_result", "tool_use_id" => "t1", "content" => "Command running in background with ID: b1."}]}}
+      File.write(transcript, JSON.generate(launched) + "\n")
+      client = ClaudeInbox::Claude::FixtureClient.new(File.join(dir, "agents.json"))
+
+      bg, term = client.list
       expect(bg.in_flight).to eq("1 shell")
-      expect(bg).to be_waiting_on_work
+      expect(bg.effective_state).to eq("working")
+      expect(bg).not_to be_waiting_on_work
       expect(term.in_flight).to be_nil
       expect(term).not_to be_waiting_on_work
+
+      done = {"type" => "user", "message" => {"content" => "<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n</task-notification>"}}
+      File.write(transcript, JSON.generate(done) + "\n", mode: "a")
+      bg, = client.list
+      expect(bg).to be_waiting_on_work
     end
   end
 
@@ -104,7 +116,7 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
       let(:busy) { row.merge("status" => "busy") }
 
       it "takes the blocked or done the session filed with its reply, even while a teammate keeps the process busy" do
-        lingering = {"tempo" => "active", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}]}
+        lingering = {"inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}]}
         blocked = described_class.session(busy, job: over.call(lingering.merge("state" => "blocked", "needs" => "merge #355?")))
         expect(blocked.state).to eq("blocked")
         expect(blocked.line).to eq("merge #355?")
@@ -116,19 +128,21 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
       it "is done for a reply the CLI read as work in progress, with nothing open" do
         # Seen on 2.1.314: the session's state stays working after such a
         # reply, and so does the daemon's.
-        done = described_class.session(busy, job: over.call("state" => "working", "tempo" => "idle", "detail" => "review done; awaiting reply"))
+        done = described_class.session(busy, job: over.call("state" => "working", "detail" => "review done; awaiting reply"))
         expect(done.state).to eq("done")
         expect(done.line).to eq("review done; awaiting reply")
         expect(done).not_to be_waiting_on_work
       end
 
-      it "stays working, idle on its open work, when the turn is over or the pulse idle" do
+      it "stays working once the turn is over while what it started is busy, and idle on it once that has gone quiet" do
         open_agent = {"state" => "working", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}]}
-        replied = described_class.session(busy, job: over.call(open_agent.merge("tempo" => "active")))
+        replied = described_class.session(busy, job: over.call(open_agent))
         expect(replied.state).to eq("working")
         expect(replied).to be_waiting_on_work
-        expect(described_class.session(busy, job: mid_turn.call(open_agent.merge("tempo" => "idle")))).to be_waiting_on_work
-        thinking = described_class.session(busy, job: mid_turn.call(open_agent.merge("tempo" => "active")))
+        agent_at_work = described_class.session(busy, job: over.call(open_agent), busy: true)
+        expect(agent_at_work.state).to eq("working")
+        expect(agent_at_work).not_to be_waiting_on_work
+        thinking = described_class.session(busy, job: mid_turn.call(open_agent))
         expect(thinking.state).to eq("working")
         expect(thinking).not_to be_waiting_on_work
       end
@@ -136,7 +150,7 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
       it "leaves the daemon's working alone mid-turn, when the state file still says what the last reply filed" do
         # The prompt that starts a turn lands in the timeline at once; the
         # state file says "done" until the first tool call (seen on 2.1.314).
-        starting = described_class.session(busy, job: mid_turn.call("state" => "done", "tempo" => "active", "output" => {"result" => "earlier reply"}))
+        starting = described_class.session(busy, job: mid_turn.call("state" => "done", "output" => {"result" => "earlier reply"}))
         expect(starting.state).to eq("working")
         expect(starting).not_to be_waiting_on_work
         expect(described_class.session(busy, job: nil).state).to eq("working")

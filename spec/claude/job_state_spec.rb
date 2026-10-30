@@ -34,7 +34,6 @@ RSpec.describe ClaudeInbox::Claude::JobState do
       expect(described_class.new("createdAt" => "soon").created_at).to be_nil
       expect(js).to be_remote_control
       expect(described_class.new({})).not_to be_remote_control
-      expect(js).to be_agent_idle
       expect(js).to be_in_flight
       expect(js.in_flight_label).to eq("1 shell")
     end
@@ -64,19 +63,20 @@ RSpec.describe ClaudeInbox::Claude::JobState do
   it "falls back to a bare count when the file does not name the work" do
     js = described_class.new("tempo" => "idle", "inFlight" => {"tasks" => 2})
     expect(js.in_flight_label).to eq("2 tasks")
-    expect(js).to be_agent_idle
     expect(js).to be_in_flight
   end
 
-  it "knows a thinking agent from one gone quiet, and what is open either way" do
-    thinking = described_class.new("tempo" => "active", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}])
-    expect(thinking).not_to be_agent_idle
-    expect(thinking).to be_in_flight
-    expect(thinking.in_flight_label).to eq("1 shell")
+  it "lists the open work as pieces, by id, label and kind" do
+    js = described_class.new("inFlight" => {"tasks" => 2},
+      "fan" => [{"id" => "t20tvjveq", "kind" => "agent", "label" => "Write staging demo script"}, {"id" => "a76a5e3b", "kind" => "agent", "label" => "Build tool sets"}])
+    expect(js).to be_in_flight
+    expect(js.fan.map(&:id)).to eq(%w[t20tvjveq a76a5e3b])
+    expect(js.fan.first).to eq(described_class::Piece.new(id: "t20tvjveq", label: "Write staging demo script", kind: "agent"))
+    expect(js.in_flight_label).to eq("2 agents")
 
-    stalled = described_class.new("tempo" => "idle", "inFlight" => {"tasks" => 0})
-    expect(stalled).to be_agent_idle
+    stalled = described_class.new("inFlight" => {"tasks" => 0})
     expect(stalled).not_to be_in_flight
+    expect(stalled.fan).to be_empty
     expect(stalled.in_flight_label).to be_nil
     expect(described_class.new({})).not_to be_in_flight
   end
