@@ -15,11 +15,19 @@ RSpec.describe ClaudeInbox::App do
   describe "a selection requested for a row behind a fold" do
     let(:store) { ClaudeInbox::Store.new(path: nil, fold_working: true) }
 
-    it "opens the fold and lands there now, rather than once the row surfaces on its own" do
+    it "lands on the fold line, naming the arrival, and leaves the fold shut" do
       app.step
       store.update(store.sessions + [session(id: "deadbeef", name: "just started")])
       queue << [:select, "deadbeef"]
-      expect(app).to paint("just started").on_selected_row
+      expect(app).to paint("+ just started").on_selected_row
+      expect(screen(app).join("\n")).to match(/… \d+ working/)
+    end
+
+    it "is settled at once, rather than once the row surfaces on its own" do
+      app.step
+      store.update(store.sessions + [session(id: "deadbeef", name: "just started")])
+      queue << [:select, "deadbeef"]
+      app.step
       press(app, "k")
       store.update(store.sessions.map { |s| (s.id == "deadbeef") ? s.with(state: "done") : s })
       expect(app).not_to paint("just started").on_selected_row

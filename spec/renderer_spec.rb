@@ -266,6 +266,14 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(expanded.lines.join("\n")).to include(ClaudeInbox::Renderer::SPINNER[0])
   end
 
+  it "names a session that just went behind a fold on the fold line" do
+    sec = ClaudeInbox::Store.sectionize([session(id: "w", state: "working", name: "fresh")], {}, now, fold_working: true)
+    arrival = ClaudeInbox::Renderer::Arrival.new(section: :working, label: "fresh")
+    lit = renderer.frame(sec, view.with(width: 60, height: 10, arrival: arrival)).plain
+    expect(lit.lines.join("\n")).to match(/… 1 working  \+ fresh/)
+    expect(lit.items.compact.map(&:key)).to eq([:working])
+  end
+
   it "spins the working glyph with the tick" do
     sec = ClaudeInbox::Store.sectionize([session(id: "w", state: "working")], {}, now)
     a = renderer.frame(sec, view.with(width: 60, height: 10, tick: 0)).plain.lines[3]

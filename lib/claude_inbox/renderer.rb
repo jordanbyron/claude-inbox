@@ -27,12 +27,16 @@ module ClaudeInbox
 
     def self.body_height(height) = height - CHROME_ROWS
 
+    # A session you just started that went straight behind a fold.
+    Arrival = Data.define(:section, :label)
+
     # What App hands Renderer for one frame. `listening` is a
     # Remote::Listener::Snapshot.
     View = Data.define(:width, :height, :now, :selected, :top, :expanded, :modal, :screen,
-      :status, :usage, :filter, :filter_editing, :tick, :loading, :listening) do
+      :status, :usage, :filter, :filter_editing, :tick, :loading, :listening, :arrival) do
       def initialize(width:, height:, now:, selected: nil, top: 0, expanded: {}, modal: nil, screen: nil,
-        status: nil, usage: nil, filter: nil, filter_editing: false, tick: 0, loading: nil, listening: nil) = super
+        status: nil, usage: nil, filter: nil, filter_editing: false, tick: 0, loading: nil, listening: nil,
+        arrival: nil) = super
     end
 
     SECTION_TITLES = {
@@ -237,7 +241,7 @@ module ClaudeInbox
         lines << "" << section_title(name, rows.size, width)
         items << nil << nil
         if Store.folded?(name, view.expanded)
-          lines << fold_toggle_line(name, rows.size, selected, width)
+          lines << fold_toggle_line(name, rows.size, selected, width, (view.arrival if view.arrival&.section == name))
           items << Store::Selection.fold(name)
           next
         end
@@ -298,10 +302,14 @@ module ClaudeInbox
       ]
     end
 
-    def fold_toggle_line(name, count, selected, width)
+    def fold_toggle_line(name, count, selected, width, arrival)
       sel = selected == name
       marker = sel ? @theme.yellow_bold("▶") : " "
-      text = @p.dim("… #{count} #{SECTION_TITLES[name].downcase}") + (sel ? @p.dim("   ⏎ or zo to expand") : "")
+      summary = "… #{count} #{SECTION_TITLES[name].downcase}"
+      text =
+        if arrival then section_color(name, @p.bold(summary)) + section_color(name, "  + #{arrival.label}")
+        else @p.dim(summary) + (sel ? @p.dim("   ⏎ or zo to expand") : "")
+        end
       Text.pad(" #{marker} " + text, width)
     end
 

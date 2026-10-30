@@ -57,7 +57,8 @@ It opens when a session starts. To stop that, set
 3. **Active.** Everything else that's running or not yet settled, including
    interactive terminals.
 4. **Working.** With `--fold-working`, sessions still at work, until they
-   stop or you pin them. Collapsed.
+   stop or you pin them. Collapsed; one you start with `n` lights the fold
+   line with its name instead of opening it.
 5. **Snoozed.** Sorted by wake time. Collapsed.
 6. **Settled.** Settled with `x`, or every pull request is merged or closed.
    Collapsed.
