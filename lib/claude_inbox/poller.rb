@@ -3,14 +3,16 @@
 require_relative "notifier"
 
 module ClaudeInbox
-  # Asks the client for the list off the main thread, every INTERVAL
-  # seconds and on demand, puts what it finds in the store and the snapshot,
-  # and tells App over the shared queue. Between polls it applies what
-  # another front end asked for. Nothing here touches App's state directly;
-  # the queue is the whole of the interface. One worker runs every poll, so
-  # two can never overlap and publish the list out of order.
+  # Asks the client for the list off the main thread, on demand, whenever
+  # the client's pulse says a session moved, and every INTERVAL seconds
+  # regardless, puts what it finds in the store and the snapshot, and tells
+  # App over the shared queue. Between polls it applies what another front
+  # end asked for. Nothing here touches App's state directly; the queue is
+  # the whole of the interface. One worker runs every poll, so two can never
+  # overlap and publish the list out of order.
   class Poller
     INTERVAL = 4
+    TICK = 0.5
     ACTIONS_INTERVAL = 0.5
 
     def initialize(client:, store:, pull_requests:, reaper:, queue:, snapshot:, actions:,
@@ -27,6 +29,7 @@ module ClaudeInbox
       @notifier = notifier
       @interval = interval
       @wake = Queue.new
+      @pulse = nil
     end
 
     def start
@@ -41,16 +44,22 @@ module ClaudeInbox
       @applier&.kill
     end
 
-    def soon = @wake << true
+    # A poll asked for, which the header says is coming until it lands.
+    def soon
+      @queue << [:polling]
+      @wake << true
+    end
 
     # The rows go up as soon as `claude agents` answers, and the slow calls
     # (`claude rm`, a dozen serial `gh pr view`s) follow: that is the
     # difference between the inbox appearing at once and five seconds later.
-    # Every hand-over is the whole list; the store hides the rows the reaper
-    # is about to take, so a list missing a key can only mean the daemon
-    # dropped it.
+    # A wake-up that arrives meanwhile ends the gh calls early, so a poll
+    # asked for waits on one of them at most. Every hand-over is the whole
+    # list; the store hides the rows the reaper is about to take, so a list
+    # missing a key can only mean the daemon dropped it.
     def once
       now = @clock.call
+      @pulse = @client.pulse
       sessions = @pull_requests.enrich(@client.list, @store.pr_overrides)
       doomed = @reaper.due(sessions, now)
       @store.hide(doomed)
@@ -63,7 +72,7 @@ module ClaudeInbox
       end
       publish(sessions, now) if reaped != doomed
       @queue << [:notice, @reaper.report(reaped)] if reaped.any?
-      fresh, moved = @pull_requests.refresh(sessions)
+      fresh, moved = @pull_requests.refresh(sessions) { @wake.empty? }
       publish(fresh, now) if moved
     rescue => e
       @queue << [:error, e.message]
@@ -96,13 +105,27 @@ module ClaudeInbox
     # polling with nothing on screen to say so.
     def worker
       loop do
-        @wake.pop(timeout: @interval)
+        wait
         @wake.clear
         once
       rescue SystemStackError, ScriptError, SecurityError => e
         @queue << [:error, e.message]
       end
     end
+
+    # Until a wake-up, the pulse moving, or the interval running out,
+    # whichever comes first. The wall clock the poller is given may stand
+    # still in a test, so the interval runs on the monotonic one.
+    def wait
+      deadline = monotonic + @interval
+      tick = [TICK, @interval].min
+      loop do
+        return if @wake.pop(timeout: tick)
+        return if monotonic >= deadline || @client.pulse != @pulse
+      end
+    end
+
+    def monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
     def applier
       loop do

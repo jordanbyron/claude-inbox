@@ -105,7 +105,7 @@ Vim bindings. Arrows and the mouse work too.
 | `X` | stop the session; `Enter` resumes it later |
 | `Ctrl-x` | delete the session, transcript and worktree for good |
 | `/` | filter by name, directory, prompt, status or pull request (`#885` or its title); `Enter` keeps it, `Esc` clears |
-| `R` | poll now |
+| `R` | poll now (the list also refreshes on its own as sessions move) |
 | `U` | update claude-inbox when the header says a newer one is out |
 | `q` | quit |
 

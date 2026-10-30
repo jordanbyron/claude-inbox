@@ -46,6 +46,16 @@ RSpec.describe ClaudeInbox::App do
     end
   end
 
+  it "says a refresh is coming from R until the poll lands" do
+    queue << [:sessions]
+    app.step
+    expect(app).not_to paint("refreshing…").in_status_line
+    press(app, "R")
+    expect(app).to paint("refreshing…").in_status_line
+    queue << [:sessions]
+    expect(app).not_to paint("refreshing…").in_status_line
+  end
+
   it "hands a paste to the new-session form whole, and types it into the filter" do
     press(app, "/", "\e[200~thi\e[201~")
     expect(app).to paint("/thi").in_footer

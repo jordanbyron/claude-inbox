@@ -87,6 +87,29 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
     end
   end
 
+  it "has a pulse that moves when a job file is written, added or removed" do
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "agents.json"), "[]")
+      client = ClaudeInbox::Claude::FixtureClient.new(File.join(dir, "agents.json"))
+      empty = client.pulse
+      expect(client.pulse).to eq(empty)
+
+      FileUtils.mkdir_p(File.join(dir, "jobs", "aaa11111"))
+      File.write(File.join(dir, "jobs", "aaa11111", "state.json"), "{}")
+      added = client.pulse
+      expect(added).not_to eq(empty)
+
+      sleep 0.01
+      File.write(File.join(dir, "jobs", "aaa11111", "timeline.jsonl"), "{}\n")
+      written = client.pulse
+      expect(written).not_to eq(added)
+      expect(client.pulse).to eq(written)
+
+      FileUtils.rm_rf(File.join(dir, "jobs", "aaa11111"))
+      expect(client.pulse).to eq(empty)
+    end
+  end
+
   describe "a row of the JSON as a session" do
     let(:row) { {"id" => "abc12345", "kind" => "background", "state" => "working"} }
 

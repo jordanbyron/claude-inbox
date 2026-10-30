@@ -99,14 +99,19 @@ module ClaudeInbox
       end
     end
 
-    # Asks gh about every PR on these sessions that is due. Returns the
-    # sessions with the answers on their `prs` and whether any PR changed, so
-    # the caller knows whether the list is worth publishing again. A merge
-    # date alone counts: it is what lets a PR the cache called merged settle.
-    # A branch's PRs join its session from the next `enrich`.
-    def refresh(sessions)
-      sessions.filter_map { |s| head(s) }.uniq.each { |repo, branch| list_branch(repo, branch) }
-      fresh = sessions.map { |s| s.with(prs: s.prs.map { |pr| status(pr.url) }) }
+    # Asks gh about every PR on these sessions that is due, for as long as
+    # the block, asked before each call, says to go on. Returns the sessions
+    # with the answers on their `prs` and whether any PR changed, so the
+    # caller knows whether the list is worth publishing again. A merge date
+    # alone counts: it is what lets a PR the cache called merged settle. A
+    # branch's PRs join its session from the next `enrich`.
+    def refresh(sessions, &go_on)
+      go_on ||= -> { true }
+      sessions.filter_map { |s| head(s) }.uniq.each do |repo, branch|
+        break unless go_on.call
+        list_branch(repo, branch)
+      end
+      fresh = sessions.map { |s| s.with(prs: s.prs.map { |pr| go_on.call ? status(pr.url) : known(pr.url) }) }
       [fresh, fresh.map(&:prs) != sessions.map(&:prs)]
     end
 

@@ -46,6 +46,23 @@ RSpec.describe ClaudeInbox::Poller do
     end
   end
 
+  it "says a poll is coming when one is asked for" do
+    poller.soon
+    expect(drain(queue)).to eq([[:polling]])
+  end
+
+  it "lets a wake-up that arrives during a poll end the gh calls early" do
+    asked = []
+    allow(poller_args[:pull_requests]).to receive(:refresh).and_wrap_original do |refresh, sessions, &go_on|
+      asked << go_on.call
+      refresh.call(sessions, &go_on)
+    end
+    poller.once
+    poller.soon
+    poller.once
+    expect(asked).to eq([true, false])
+  end
+
   it "reports a failed poll as an error instead of raising" do
     allow(client).to receive(:list).and_raise("daemon gone")
     poller.once
@@ -208,13 +225,37 @@ RSpec.describe ClaudeInbox::Poller do
       worker.start
       wait_for { client.polls.size >= 1 }
       expect(client.polls.size).to eq(1)
-      expect(queue.pop).to eq([:error, "stack level too deep"])
+      got = []
+      wait_for { got.concat(drain(queue)).include?([:error, "stack level too deep"]) }
+      expect(got).to include([:error, "stack level too deep"])
       allow(client).to receive(:list).and_call_original
 
       worker.soon
       wait_for { client.polls.size >= 2 }
       expect(client.polls.size).to eq(2)
-      expect(queue.pop.first).to eq(:sessions)
+      wait_for { got.concat(drain(queue)).assoc(:sessions) }
+      expect(got.map(&:first)).to include(:sessions)
+    end
+
+    # The daemon writes a job's timeline on every prompt, tool call and
+    # reply, and the inbox should not sit out its interval after one.
+    it "polls when a job file moves" do
+      Dir.mktmpdir do |dir|
+        FileUtils.cp(fixture_path("agents.json"), dir)
+        client = PollerCountingClient.new(File.join(dir, "agents.json"))
+        worker = described_class.new(**poller_args, client: client, interval: 60)
+        worker.start
+        wait_for { client.polls.size >= 1 }
+        sleep described_class::TICK * 2
+        expect(client.polls.size).to eq(1)
+
+        FileUtils.mkdir_p(File.join(dir, "jobs", "aaa11111"))
+        File.write(File.join(dir, "jobs", "aaa11111", "timeline.jsonl"), "{}\n")
+        wait_for { client.polls.size >= 2 }
+        expect(client.polls.size).to eq(2)
+      ensure
+        worker&.stop
+      end
     end
   end
 end

@@ -45,6 +45,15 @@ module ClaudeInbox
         sessions(rows, origins_from(ps), self.class.bridge_ids(ps))
       end
 
+      # A value that moves whenever the daemon writes a job file: a prompt,
+      # a tool call, a reply, a session started or removed. A poller watches
+      # it between polls instead of waiting out its interval. Interactive
+      # sessions have no job file, so the interval still covers them.
+      def pulse
+        files = Dir.glob(File.join(@jobs_dir, "*", "{state.json,timeline.jsonl}"))
+        [files.size, files.sum { |f| mtime(f) }]
+      end
+
       # One row of the JSON as a Session, with its job file (nil when it has
       # none) and the process tree's word on where it is driven from.
       # `blocked_kind` stays nil: a blocked row carries no `waitingFor`, and an
@@ -211,6 +220,13 @@ module ClaudeInbox
       end
 
       private
+
+      # A job the daemon removes between the glob and the stat has moved too.
+      def mtime(path)
+        File.mtime(path).to_f
+      rescue SystemCallError
+        0.0
+      end
 
       # A worker nobody has messaged yet has an empty file, and the daemon
       # reports "source session not found" on resuming it.

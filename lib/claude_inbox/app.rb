@@ -83,6 +83,7 @@ module ClaudeInbox
       @filter = nil
       @filter_editing = false
       @last_poll = nil
+      @refreshing = false
       @quit = false
       @resize = false
       @pane_offer = pane_offer
@@ -139,7 +140,9 @@ module ClaudeInbox
         case kind
         when :sessions
           @last_poll = Time.now
+          @refreshing = false
           @error = nil
+        when :polling then @refreshing = true
         when :error then @error = rest[0]
         when :notice then notice(rest[0])
         when :update then update_checked(*rest)
@@ -316,6 +319,7 @@ module ClaudeInbox
       return @notice[0] if @notice && now < @notice[1]
       return "⚠ #{@error}" if @error
       return "polling…" unless @last_poll
+      return "refreshing…" if @refreshing
       update_notice
     end
 

@@ -49,6 +49,10 @@ module ClaudeInbox
       end
 
       # => Array<Session>, newest first; empty when there is no daemon to ask.
+      # Only the daemon knows when a thread moves; nothing on disk says so
+      # before the next poll.
+      def pulse = nil
+
       def list
         horizon = @clock.call - Store::REAP_AFTER
         sessions = []

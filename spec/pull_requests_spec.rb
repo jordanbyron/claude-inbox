@@ -228,6 +228,26 @@ RSpec.describe ClaudeInbox::PullRequests do
     expect(moved).to be(false) # inside the refresh window: nothing moved
   end
 
+  it "stops asking gh once the block says so, and answers from what it knows" do
+    calls = []
+    client = described_class.new(cache_path: nil, resolved_path: nil, gh: "gh", clock: -> { now })
+    allow(client).to receive(:fetch) do |u|
+      calls << u
+      ClaudeInbox::PullRequest.new(number: u[/\d+\z/].to_i, url: u, state: "OPEN")
+    end
+    before = client.enrich([session(id: "x", pr_urls: %w[1 2 3].map { |n| "https://github.com/o/r/pull/#{n}" })], {}).first
+
+    budget = 1
+    (after,), moved = client.refresh([before]) { (budget -= 1) >= 0 }
+    expect(calls.size).to eq(1)
+    expect(moved).to be(true)
+    expect(after.prs.map(&:state)).to eq(["OPEN", nil, nil])
+
+    _, moved = client.refresh([after]) { false }
+    expect(calls.size).to eq(1)
+    expect(moved).to be(false)
+  end
+
   it "counts learning when a cached-merged PR was merged as a change" do
     client = described_class.new(**cached, gh: "gh")
     allow(client).to receive(:fetch) do |u|
