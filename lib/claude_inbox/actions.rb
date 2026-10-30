@@ -39,7 +39,7 @@ module ClaudeInbox
     # Applies every request on disk to `store` and returns how many it took.
     def drain(store)
       return 0 unless @dir && File.directory?(@dir)
-      keys = store.actionable_keys
+      keys = store.attachable_keys
       Dir.glob(File.join(@dir, "*.json")).sort.count { |path| take(path, store, keys) }
     end
 

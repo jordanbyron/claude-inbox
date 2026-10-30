@@ -25,6 +25,19 @@ RSpec.describe ClaudeInbox::App do
     end
   end
 
+  describe "a row whose harness can't do what the key asks" do
+    before do
+      app
+      store.update(store.sessions.map { |s| s.with(actions: []) })
+    end
+
+    it "does nothing on Enter, X or ctrl-x" do
+      press(app, "\r", "X", ctrl_x)
+      expect(app).not_to paint(/(Stop|Delete) .*\?/)
+      expect(client.attached).to be_empty
+    end
+  end
+
   describe "adopting a remote session" do
     let(:client) { RecordingClient.new(origins: {57405 => :remote}) }
 

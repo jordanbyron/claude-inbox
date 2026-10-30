@@ -309,8 +309,8 @@ module ClaudeInbox
       sel = row.selectable? && selected == row.key
       quiet = section == :settled || (live && row.read?)
       unread = live && row.unread?
-      # A terminal cannot be attached to, so it is never read: while it waits on you it keeps its dot.
-      dotted = unread || (live && s.needs_you? && !s.actionable?)
+      # A row you cannot attach to is never read: while it waits on you it keeps its dot.
+      dotted = unread || (live && s.needs_you? && !s.attachable?)
       marker = marker_for(sel, dotted)
       glyph = glyph_for(s, section, tick)
       meta = meta_for(row, section, now)

@@ -4,7 +4,7 @@ require "tmpdir"
 
 RSpec.describe ClaudeInbox::Store do
   let(:now) { Time.at(1_789_600_000) }
-  let(:interactive) { {id: nil, kind: "interactive", state: nil} }
+  let(:interactive) { {id: nil, kind: "interactive", state: nil, actions: []} }
   let(:merged) { {prs: [ClaudeInbox::PullRequest.new(state: "MERGED", resolved_at: now.to_i - 60)]} }
 
   describe "sectioning" do
@@ -15,11 +15,11 @@ RSpec.describe ClaudeInbox::Store do
       expect(sec.active.map(&:key)).to eq(%w[c])
     end
 
-    it "shows a busy terminal in Active, selectable but not actionable" do
+    it "shows a busy terminal in Active, selectable but not attachable" do
       sec = described_class.sectionize([session(**interactive, status: "busy", session_id: "uuid")], {}, now)
       expect(sec.active.size).to eq(1)
       expect(sec.active.first).to be_selectable
-      expect(sec.active.first.session).not_to be_actionable
+      expect(sec.active.first.session).not_to be_attachable
       expect(sec.active.first.session.effective_state).to eq("working")
     end
 
@@ -648,11 +648,11 @@ RSpec.describe ClaudeInbox::Store do
     end
   end
 
-  describe "#actionable_keys" do
-    it "names only background sessions with an id" do
+  describe "#attachable_keys" do
+    it "names only the sessions whose harness can attach to them" do
       store = described_class.new(path: nil, clock: -> { now })
       store.update([session(id: "a"), session(**interactive, session_id: "uuid")])
-      expect(store.actionable_keys).to eq(%w[a])
+      expect(store.attachable_keys).to eq(%w[a])
     end
   end
 

@@ -10,7 +10,7 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
     expect(sessions.size).to eq(7)
     bg = sessions.find { |s| s.id == "823b882f" }
     expect(bg).to be_background
-    expect(bg).to be_actionable
+    expect(bg.actions).to eq(%i[attach stop delete reap])
     expect(bg.state).to eq("done")
     expect(bg.status).to eq("idle")
     expect(bg.pid).to eq(98455)
@@ -20,11 +20,11 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
     expect(bg.project).to eq("comma3")
   end
 
-  it "treats interactive rows as present but not actionable" do
+  it "treats interactive rows as present but nothing to act on" do
     s = sessions.find(&:interactive?)
     expect(s.id).to be_nil
     expect(s.state).to be_nil
-    expect(s).not_to be_actionable
+    expect(s.actions).to eq([])
     expect(s.key).to eq("4a93393d-1c06-57da-9fb8-12f5b1535d95")
     expect(s.effective_state).to eq("working")
     expect(s.display_name).to eq("claude-inbox-38")
@@ -101,6 +101,7 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
       expect(bg.remote_url).to eq("https://claude.ai/code/session_01AB")
       worker = described_class.session({"kind" => "interactive"}, origin: :remote, bridge: "cse_01CD")
       expect(worker.remote_url).to eq("https://claude.ai/code/session_01CD")
+      expect(worker.actions).to eq([:adopt])
     end
 
     it "has Remote Control when started with the flag, or when a remote server spawned it" do

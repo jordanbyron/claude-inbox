@@ -18,6 +18,11 @@ module ClaudeInbox
       # The daemon's states in OSC 7501's words: a stopped session is idle, a failed one an error.
       STATES = {"working" => "working", "blocked" => "blocked", "done" => "done", "failed" => "error", "stopped" => "idle"}.freeze
 
+      # `reap` is `rm` unasked, once a session has sat idle past Store::REAP_AFTER;
+      # a harness whose delete can take unpushed work with it leaves it out.
+      ACTIONS = %i[attach stop delete reap].freeze
+      REMOTE_ACTIONS = %i[adopt].freeze
+
       # Process-tree origins of sessions nobody drives directly; see `origins`.
       UNATTENDED = %i[subagent headless].freeze
 
@@ -48,6 +53,7 @@ module ClaudeInbox
         bridge ||= job&.bridge_id
         s = Session.new(
           harness: :claude,
+          actions: actions_for(h["kind"], remote),
           id: h["id"],
           cwd: h["cwd"],
           kind: h["kind"],
@@ -70,6 +76,13 @@ module ClaudeInbox
           pr_urls: job&.pr_urls
         )
         job ? s.with(line: job.summary(s.effective_state)) : s
+      end
+
+      def self.actions_for(kind, remote)
+        if kind == "background" then ACTIONS
+        elsif remote then REMOTE_ACTIONS
+        else []
+        end
       end
 
       # Where claude.ai/code shows a session. A background session with Remote

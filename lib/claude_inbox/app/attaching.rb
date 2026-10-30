@@ -9,14 +9,15 @@ module ClaudeInbox
 
       def activate
         return set_expanded(true) if @selected&.fold?
-        return @modal = Dialog::Confirm.new(:adopt, @selected.key) if selected_session&.remote?
-        attach(@selected.key) if require_actionable
+        return @modal = Dialog::Confirm.new(:adopt, @selected.key) if selected_session&.can?(:adopt)
+        attach(@selected.key) if allowed?(:attach)
       end
 
-      # Guard for attach/stop: refuse politely on a terminal or remote row.
-      def require_actionable
+      # Guard for attach/stop/delete: refuse politely on a terminal or remote
+      # row, and say nothing for an action the row's harness has not got.
+      def allowed?(action)
         s = selected_session
-        return true if s&.actionable?
+        return true if s&.can?(action)
         if s&.interactive?
           notice(s.remote? ? "that's a remote session — Enter adopts it, w opens it at claude.ai/code" : "that's your own terminal — switch to that window")
         end
@@ -37,13 +38,13 @@ module ClaudeInbox
             end
           end
           @poller.soon
-          id = @switch.take(@store.actionable_keys)
+          id = @switch.take(@store.attachable_keys)
         end
       end
 
       def adopt_session(key)
         s = session_for(key)
-        return unless s&.remote?
+        return unless s&.can?(:adopt)
         notice("adopting #{s.display_name}…")
         in_background do
           id = @client.adopt(session_id: s.session_id, cwd: s.cwd, pid: s.pid)
@@ -54,7 +55,7 @@ module ClaudeInbox
       end
 
       def open_confirm(kind)
-        return unless require_actionable
+        return unless allowed?(kind)
         @modal = Dialog::Confirm.new(kind, @selected.key, label_for(@selected.key))
       end
 
