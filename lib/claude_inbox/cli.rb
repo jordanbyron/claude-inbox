@@ -133,7 +133,7 @@ module ClaudeInbox
       # Its own token, lock and images, so a test inbox can neither rotate the
       # token phones are paired with nor hold the real inbox's lock.
       dir = File.join(Dir.tmpdir, "claude-inbox-fixture")
-      {client: Harnesses.new(Claude::FixtureClient.new(options[:fixture]), [Codex::FixtureClient.new(File.join(fixtures, "codex-threads.json"))]),
+      {client: Harnesses.new(claude: Claude::FixtureClient.new(options[:fixture]), codex: Codex::FixtureClient.new(File.join(fixtures, "codex-threads.json"))),
        store: Store.new(path: nil, sort: options[:sort]),
        pull_requests: PullRequests.new(cache_path: File.join(fixtures, "gh-pr-status-cache.json"), resolved_path: nil, gh: nil),
        listen: options[:listen]&.merge(fixture: true, pairing: Remote::Pairing.new(path: File.join(dir, "listen.json")),
@@ -154,7 +154,7 @@ module ClaudeInbox
        argv: @argv}
     end
 
-    def live_client = Harnesses.new(Claude::AgentsClient.new, [Codex::ThreadsClient.new])
+    def live_client = Harnesses.new(claude: Claude::AgentsClient.new, codex: Codex::ThreadsClient.new)
 
     def updater
       @updater ||= Updater.new if options[:update_check] && !options[:fixture]

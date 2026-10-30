@@ -31,10 +31,12 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
     expect(s.pr_urls).to eq([])
   end
 
-  it "fills in a session's color and links from its job file" do
+  it "fills in a session's color, worktree and links from its job file" do
     by_id = sessions.to_h { |s| [s.id, s] }
     expect(by_id["b0b18338"].color).to eq("orange")
+    expect(by_id["b0b18338"].worktree_path).to end_with("/token-refresh")
     expect(by_id["b03695b1"].color).to be_nil
+    expect(by_id["b03695b1"].worktree_path).to be_nil
     expect(by_id["b03695b1"].pr_urls.map { |u| u[/\d+\z/] }).to eq(%w[856 866])
   end
 
@@ -296,7 +298,7 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
       File.write(bin, "#!/bin/sh\nsleep 5\n")
       File.chmod(0o755, bin)
       started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-      described_class.new(bin: bin).attach("abc12345") { true }
+      described_class.new(bin: bin).attach(session) { true }
       expect(Process.clock_gettime(Process::CLOCK_MONOTONIC) - started).to be < 3
     end
   end
@@ -307,8 +309,8 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
       File.write(bin, "#!/bin/sh\n[ \"$2\" = bad ] && exit 1\nsleep 5\n")
       File.chmod(0o755, bin)
       client = described_class.new(bin: bin)
-      expect(client.attach("bad") { false }).to be(false)
-      expect(client.attach("abc12345") { true }).to be(true)
+      expect(client.attach(session(id: "bad")) { false }).to be(false)
+      expect(client.attach(session) { true }).to be(true)
     end
   end
 end

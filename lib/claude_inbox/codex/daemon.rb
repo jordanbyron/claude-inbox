@@ -4,6 +4,7 @@ require "json"
 require "socket"
 require_relative "../../claude_inbox"
 require_relative "../debug"
+require_relative "../harnesses"
 require_relative "../subprocess"
 require_relative "web_socket"
 
@@ -15,7 +16,7 @@ module ClaudeInbox
     # once it drops. With no codex or no daemon, every call answers nil.
     class Daemon
       # The daemon answered, with an error.
-      class Error < StandardError; end
+      class Error < Harnesses::Error; end
 
       TIMEOUT = 2
 
@@ -25,23 +26,22 @@ module ClaudeInbox
         @timeout = timeout
         @ws = nil
         @id = 0
+        @lock = Mutex.new
       end
 
       # The result, or nil when there is no daemon or it would not answer.
-      # A connection the daemon dropped since the last call gets one retry
-      # on a fresh one.
       def call(method, params = {})
-        fresh = @ws.nil?
-        return unless (ws = @ws ||= connect)
-        request(ws, method, params)
+        call!(method, params)
       rescue Error => e
         Debug.log("codex #{method}: #{e.message}")
         nil
-      rescue WebSocket::Error, SystemCallError, IOError, JSON::ParserError => e
-        close
-        return call(method, params) unless fresh
-        Debug.log("codex #{method}: #{e.message}")
-        nil
+      end
+
+      # The result, or Error with the daemon's reason, or with none to ask.
+      # The poller and an action's thread share the one connection, so a
+      # call holds it until its answer is in.
+      def call!(method, params = {})
+        @lock.synchronize { attempt(method, params) }
       end
 
       def close
@@ -50,6 +50,18 @@ module ClaudeInbox
       end
 
       private
+
+      # A connection the daemon dropped since the last call gets one retry
+      # on a fresh one.
+      def attempt(method, params)
+        fresh = @ws.nil?
+        ws = (@ws ||= connect) or raise Error, "the Codex daemon is not running"
+        request(ws, method, params)
+      rescue WebSocket::Error, SystemCallError, IOError, JSON::ParserError => e
+        close
+        return attempt(method, params) unless fresh
+        raise Error, e.message
+      end
 
       def connect
         path = @socket || socket_path

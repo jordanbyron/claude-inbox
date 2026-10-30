@@ -2,6 +2,7 @@
 
 require "json"
 require_relative "../debug"
+require_relative "../harnesses"
 require_relative "job_state"
 require_relative "../session"
 require_relative "../subprocess"
@@ -13,7 +14,7 @@ module ClaudeInbox
     # what it keeps under ~/.claude, and it hands back finished Sessions.
     # Swap in FixtureClient for tests.
     class AgentsClient
-      class Error < StandardError; end
+      class Error < Harnesses::Error; end
 
       # The daemon's states in OSC 7501's words: a stopped session is idle, a failed one an error.
       STATES = {"working" => "working", "blocked" => "blocked", "done" => "done", "failed" => "error", "stopped" => "idle"}.freeze
@@ -73,6 +74,7 @@ module ClaudeInbox
           color: job&.color,
           intent: job&.intent,
           transcript_path: job&.transcript_path,
+          worktree_path: job&.worktree_path,
           pr_urls: job&.pr_urls
         )
         job ? s.with(line: job.summary(s.effective_state)) : s
@@ -105,8 +107,8 @@ module ClaudeInbox
       # child once it does. The block, polled alongside, ends the attach early
       # when it answers true. That is how a switch request from another front
       # end is honoured.
-      def attach(id, &stop)
-        pid = Process.spawn(*Subprocess.command(@bin, "attach", id))
+      def attach(session, &stop)
+        pid = Process.spawn(*Subprocess.command(@bin, "attach", session.id))
         watchdog = Thread.new { kill_when_agents_view(pid, &stop) }
         _, status = Process.wait2(pid)
         status.success? || !status.exited?
@@ -114,9 +116,10 @@ module ClaudeInbox
         watchdog&.kill
       end
 
-      def stop(id) = run("stop", id)
+      # True: the daemon stops whatever the session is doing.
+      def stop(session) = run("stop", session.id)
 
-      def rm(id) = run("rm", id)
+      def rm(session) = run("rm", session.id)
 
       MODELS = %w[default fable opus sonnet haiku].freeze
       EFFORTS = %w[default low medium high xhigh max].freeze
@@ -289,6 +292,7 @@ module ClaudeInbox
       def run(verb, id)
         r = Subprocess.capture(@bin, verb, id)
         raise Error, "#{verb} failed: #{r.err.strip}" unless r.success?
+        true
       end
 
       def start_bg(argv, cwd, what)
@@ -312,9 +316,9 @@ module ClaudeInbox
 
       # Stand-in child: prints, waits for a line, exits — enough to prove the
       # terminal round-trips through cooked mode and back.
-      def attach(id) = system("sh", "-c", "printf 'fake attach to %s\\npress enter to detach: ' \"$1\"; read -r _", "attach", id)
+      def attach(session) = system("sh", "-c", "printf 'fake attach to %s\\npress enter to detach: ' \"$1\"; read -r _", "attach", session.id)
 
-      def stop(_id) = nil
+      def stop(_session) = true
 
       def spawn(prompt:, cwd:, **)
         sleep 0.5
@@ -323,7 +327,7 @@ module ClaudeInbox
 
       def adopt(session_id:, cwd:, pid:) = "adop7ed0"
 
-      def rm(_id) = nil
+      def rm(_session) = nil
     end
   end
 end

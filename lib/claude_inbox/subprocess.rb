@@ -27,8 +27,9 @@ module ClaudeInbox
 
     module_function
 
-    # argv as exec and Process.spawn take it, with CHILD_ENV in place of ours.
-    def command(*argv) = [CHILD_ENV, *argv, {unsetenv_others: true}]
+    # argv as exec and Process.spawn take it, with CHILD_ENV in place of
+    # ours; `options` are Process.spawn's, such as chdir.
+    def command(*argv, **options) = [CHILD_ENV, *argv, {unsetenv_others: true, **options}]
 
     # `input` is written before any output is read, so it is for the few
     # bytes a clipboard takes, not a stream.

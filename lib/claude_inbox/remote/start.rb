@@ -3,8 +3,8 @@
 require "json"
 require "openssl"
 require_relative "../claude/agents_client"
+require_relative "../harnesses"
 require_relative "../images"
-
 require_relative "../session_request"
 require_relative "../settings"
 require_relative "../text"
@@ -83,7 +83,7 @@ module ClaudeInbox
         ensure
           settle(key, digest, started) if key
         end
-      rescue Claude::AgentsClient::Error => e
+      rescue Harnesses::Error => e
         reason = Text.printable(e.message.lines.first.to_s.strip)
         @queue << [:notice, "remote start failed: #{reason}"]
         raise Http::Error.new(500, e.message, source: "claude", note: reason)
