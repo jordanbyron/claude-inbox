@@ -256,6 +256,16 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(header).not_to match(/·\s+·/)
   end
 
+  it "folds the Working section by default and draws its rows live once expanded" do
+    sec = ClaudeInbox::Store.sectionize([session(id: "w", state: "working"), session(id: "d", state: "done")], {}, now, fold_working: true)
+    folded = renderer.frame(sec, view.with(width: 60, height: 12)).plain
+    expect(folded.items.compact.map(&:key)).to eq(["d", :working])
+    expect(folded.lines.join("\n")).to match(/▎ WORKING .*\n.*… 1 working/)
+    expanded = renderer.frame(sec, view.with(width: 60, height: 12, expanded: {working: true}, tick: 0)).plain
+    expect(expanded.items.compact.map(&:key)).to eq(%w[d w])
+    expect(expanded.lines.join("\n")).to include(ClaudeInbox::Renderer::SPINNER[0])
+  end
+
   it "spins the working glyph with the tick" do
     sec = ClaudeInbox::Store.sectionize([session(id: "w", state: "working")], {}, now)
     a = renderer.frame(sec, view.with(width: 60, height: 10, tick: 0)).plain.lines[3]

@@ -56,8 +56,10 @@ It opens when a session starts. To stop that, set
    failing checks or changes requested, that you haven't attached to yet.
 3. **Active.** Everything else that's running or not yet settled, including
    interactive terminals.
-4. **Snoozed.** Sorted by wake time. Collapsed.
-5. **Settled.** Settled with `x`, or every pull request is merged or closed.
+4. **Working.** With `--fold-working`, sessions still at work, until they
+   stop or you pin them. Collapsed.
+5. **Snoozed.** Sorted by wake time. Collapsed.
+6. **Settled.** Settled with `x`, or every pull request is merged or closed.
    Collapsed.
 
 `--sort=activity` puts the session that spoke most recently first in every

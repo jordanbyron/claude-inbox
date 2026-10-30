@@ -16,7 +16,7 @@ RSpec.describe ClaudeInbox::Snapshot do
       described_class.new(path: path).write(sections, now)
       data = JSON.parse(File.read(path))
       expect(data["written_at"]).to eq(now.to_i)
-      expect(data["sections"].keys).to eq(%w[pinned needs_you active snoozed settled])
+      expect(data["sections"].keys).to eq(%w[pinned needs_you active working snoozed settled])
       expect(data["sections"]["needs_you"].map { |r| r.slice("id", "session", "color", "unread") }).to eq([{"id" => "a", "session" => "u-a", "color" => "pink", "unread" => true}])
       row = data["sections"]["snoozed"].first
       expect(row).not_to have_key("color")

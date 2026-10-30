@@ -22,7 +22,7 @@ module ClaudeInbox
     UNREAPABLE = %w[working].freeze
     NotWritable = Class.new(StandardError)
     # Sections long enough to be worth hiding behind a fold toggle.
-    FOLDABLE_SECTIONS = %i[snoozed settled].freeze
+    FOLDABLE_SECTIONS = %i[working snoozed settled].freeze
 
     # App and Renderer must agree on this, or j/k lands on rows the frame never painted.
     def self.folded?(name, expanded) = FOLDABLE_SECTIONS.include?(name) && !expanded[name]
@@ -44,21 +44,24 @@ module ClaudeInbox
     # `activity` puts the session that spoke most recently first in every
     # section but Snoozed, which stays in wake order. The default keeps each
     # section's own order: Pinned by pin, Needs You and Settled by the state
-    # clock, Active by start with running sessions first.
+    # clock, Active and Working by start with running sessions first.
     SORTS = %w[default activity].freeze
 
-    def self.sectionize(sessions, entries, now, sort: "default")
-      sec = Sections.new(pinned: [], needs_you: [], active: [], snoozed: [], settled: [])
+    # Working is empty unless `fold_working` asks for it: `--fold-working`
+    # is opt-in, and the sections keep their shape either way.
+    def self.sectionize(sessions, entries, now, sort: "default", fold_working: false)
+      sec = Sections.new(pinned: [], needs_you: [], active: [], working: [], snoozed: [], settled: [])
       sessions.each do |s|
         row = row_for(s, entries)
-        sec[row.section(now)] << row
+        sec[row.section(now, fold_working: fold_working)] << row
       end
       sec.pinned.sort_by! { |r| -(r.pinned_at || 0) }
       sec.needs_you.sort_by! { |r| -(r.state_since || 0) }
       sec.active.sort_by! { |r| [r.session.finished? ? 1 : 0, -(r.session.started_at&.to_i || 0)] }
+      sec.working.sort_by! { |r| -(r.session.started_at&.to_i || 0) }
       sec.snoozed.sort_by! { |r| r.parked? ? [1, 0] : [0, r.wake_at.to_i] }
       sec.settled.sort_by! { |r| -(r.state_since || 0) }
-      %i[pinned needs_you active settled].each { |name| sec[name].sort_by! { |r| -r.spoke_at } } if sort == "activity"
+      %i[pinned needs_you active working settled].each { |name| sec[name].sort_by! { |r| -r.spoke_at } } if sort == "activity"
       sec
     end
 
@@ -68,10 +71,11 @@ module ClaudeInbox
     # second inbox open at once, which reads along with the first rather
     # than overwriting what it and the pane's requests settled, and sends
     # its own edits to the first through the `relay` as requests.
-    def initialize(path: DEFAULT_PATH, clock: -> { Time.now }, writable: true, relay: nil, sort: "default")
+    def initialize(path: DEFAULT_PATH, clock: -> { Time.now }, writable: true, relay: nil, sort: "default", fold_working: false)
       @path = path
       @clock = clock
       @sort = sort
+      @fold_working = fold_working
       @writable = writable
       @relay = relay
       @mutex = Mutex.new
@@ -122,7 +126,7 @@ module ClaudeInbox
     end
 
     def sections(now = @clock.call)
-      @mutex.synchronize { self.class.sectionize(@sessions, @entries, now, sort: @sort) }
+      @mutex.synchronize { self.class.sectionize(@sessions, @entries, now, sort: @sort, fold_working: @fold_working) }
     end
 
     def sessions = @mutex.synchronize { @sessions.dup }

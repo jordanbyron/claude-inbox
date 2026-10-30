@@ -1,4 +1,4 @@
-export type Section = 'pinned' | 'needs_you' | 'active' | 'snoozed' | 'settled'
+export type Section = 'pinned' | 'needs_you' | 'active' | 'working' | 'snoozed' | 'settled'
 
 // One row of the gem's snapshot.json, as its Snapshot class writes it.
 export type InboxRow = {
@@ -19,7 +19,7 @@ export type InboxRow = {
   pr?: { short: string; state: string; url: string }
 }
 
-export type Folds = { snoozed: boolean; settled: boolean }
+export type Folds = { working: boolean; snoozed: boolean; settled: boolean }
 
 // The first key of a chord (g, z, s) waiting for its second; null between chords.
 export type Pending = 'g' | 'z' | 's' | null

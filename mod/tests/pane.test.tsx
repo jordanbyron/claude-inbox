@@ -112,6 +112,31 @@ test('an unread row that needs you takes the same blue dot as one that only fini
   expect((await ui.findAll({ type: 'Text', text: '● ' })).filter(dot => dot.props.color === 'blue')).toHaveLength(1)
 })
 
+test('a Working section folds like Settled, and its rows read as live once open', async ($, on) => {
+  mock.env(on, { HOME: '/Users/me' })
+  mock.clock(on, { now: 1_700_000_000_000 })
+  const rows = [ROWS[0], { section: 'working', id: 'w5', label: 'still going', state: 'working', actionable: true }]
+  on('state.get', ($, e, next) => {
+    if (e.key === 'rows') return seeded(rows)
+    if (e.key === 'writtenAt') return seeded(1_700_000_000)
+    return next(e)
+  })
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  expect(await ui.find({ type: 'Text', text: /Working · 1/ })).toBeDefined()
+  expect(await ui.find({ text: /1 folded/ })).toBeDefined()
+  expect(await ui.find({ text: /still going/ })).toBeUndefined()
+  await ui.press({ key: 'g' })
+  await ui.press({ key: 'e' })
+  await ui.press({ key: 'z' })
+  await ui.press({ key: 'a' })
+  expect((await ui.find({ type: 'Text', text: 'still going' }))?.props.dimColor).toBeFalsy()
+  await ui.press({ key: 'z' })
+  await ui.press({ key: 'c' })
+  await ui.press({ key: 'g' })
+  await ui.press({ key: 'g' })
+  await ui.unmount()
+})
+
 test("rows sit under the gem's sections, Settled folded until za opens it", async ($, on) => {
   mock.env(on, { HOME: '/Users/me' })
   mock.clock(on, { now: 1_700_000_000_000 })

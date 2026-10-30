@@ -224,6 +224,20 @@ RSpec.describe ClaudeInbox::Store do
       expect(described_class.sectionize(sessions, entries, now).active.map(&:key)).to eq(%w[e f])
     end
 
+    it "folds working sessions into Working with --fold-working, newest first, by activity when asked" do
+      sessions = [
+        session(id: "a", state: "working", started_at: now - 600, last_message_at: now - 30),
+        session(id: "b", state: "working", started_at: now - 60, last_message_at: now - 300),
+        session(id: "c", state: "done")
+      ]
+      expect(described_class.sectionize(sessions, {}, now).working).to be_empty
+      sec = described_class.sectionize(sessions, {}, now, fold_working: true)
+      expect(sec.working.map(&:key)).to eq(%w[b a])
+      expect(sec.active.map(&:key)).to eq(%w[c])
+      expect(described_class.sectionize(sessions, {}, now, sort: "activity", fold_working: true).working.map(&:key)).to eq(%w[a b])
+      expect(described_class.new(path: nil, clock: -> { now }, fold_working: true).tap { |s| s.update(sessions) }.sections.working.size).to eq(2)
+    end
+
     it "falls back to the inbox's own clock, then the start, for a session with no transcript" do
       entries = {"a" => {"last_state" => "blocked", "state_since" => now.to_i - 60}, "b" => {"last_state" => "blocked", "state_since" => now.to_i - 600}}
       sessions = [session(id: "a", state: "blocked"), session(id: "b", state: "blocked")]

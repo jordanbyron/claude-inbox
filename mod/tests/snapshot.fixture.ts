@@ -35,6 +35,7 @@ export const SNAPSHOT = `{
         "last_message_at": 1789599700
       }
     ],
+    "working": [],
     "snoozed": [],
     "settled": [
       {

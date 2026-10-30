@@ -39,11 +39,12 @@ module ClaudeInbox
       pinned: "PINNED",
       needs_you: "NEEDS YOU",
       active: "ACTIVE",
+      working: "WORKING",
       snoozed: "SNOOZED",
       settled: "SETTLED"
     }.freeze
 
-    SECTION_HUES = {pinned: :cyan, needs_you: :red, active: :yellow, snoozed: :purple}.freeze
+    SECTION_HUES = {pinned: :cyan, needs_you: :red, active: :yellow, working: :yellow, snoozed: :purple}.freeze
 
     SPINNER = %w[⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏].freeze
 
@@ -162,8 +163,9 @@ module ClaudeInbox
     def header_chips(sections, compact:, listening:)
       pinned = sections.pinned.size
       needing = sections.needs_you.size
-      working = sections.active.count { |r| r.session.effective_state == "working" && !r.session.waiting_on_work? }
-      idle = sections.active.count { |r| r.session.waiting_on_work? }
+      running = sections.active + sections.working
+      working = running.count { |r| r.session.effective_state == "working" && !r.session.waiting_on_work? }
+      idle = running.count { |r| r.session.waiting_on_work? }
       terminals = sections.all.count { |r| r.session.terminal? }
       remotes = sections.all.count { |r| r.session.remote? }
       snoozed = sections.snoozed.size
@@ -305,7 +307,7 @@ module ClaudeInbox
 
     def row_lines(row, section, selected, width, now, tick)
       s = row.session
-      live = %i[pinned needs_you active].include?(section)
+      live = %i[pinned needs_you active working].include?(section)
       sel = row.selectable? && selected == row.key
       quiet = section == :settled || (live && row.read?)
       unread = live && row.unread?

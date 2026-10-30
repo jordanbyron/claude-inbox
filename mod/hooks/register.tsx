@@ -25,7 +25,7 @@ const current = atom({ plugin: 'inbox-pane', key: 'current' } as const, null)
 const writtenAt = atom({ plugin: 'inbox-pane', key: 'writtenAt' } as const, 0)
 const newer = atom({ plugin: 'inbox-pane', key: 'update' } as const, null)
 const cursor = atom({ plugin: 'inbox-pane', key: 'cursor' } as const, 0)
-const folds = atom({ plugin: 'inbox-pane', key: 'folds' } as const, { snoozed: true, settled: true })
+const folds = atom({ plugin: 'inbox-pane', key: 'folds' } as const, { working: true, snoozed: true, settled: true })
 const pending = atom({ plugin: 'inbox-pane', key: 'pending' } as const, null)
 
 export type SnapshotRow = {
@@ -51,8 +51,8 @@ type Item = { kind: 'row'; row: InboxRow } | { kind: 'fold'; section: Fold; coun
 type Snooze = 'm15' | 'h1' | 'tomorrow_9am' | 'until_woken'
 type Action = { action: 'settle' | 'wake' | 'pin'; id: string } | { action: 'snooze'; id: string; choice: Snooze }
 
-const ORDER: Section[] = ['pinned', 'needs_you', 'active', 'snoozed', 'settled']
-const TITLE: Record<Section, string> = { pinned: 'Pinned', needs_you: 'Needs you', active: 'Active', snoozed: 'Snoozed', settled: 'Settled' }
+const ORDER: Section[] = ['pinned', 'needs_you', 'active', 'working', 'snoozed', 'settled']
+const TITLE: Record<Section, string> = { pinned: 'Pinned', needs_you: 'Needs you', active: 'Active', working: 'Working', snoozed: 'Snoozed', settled: 'Settled' }
 const GLYPH: Record<string, string> = { blocked: '?', failed: '✗', working: '◐', idle: '◌', done: '✓', stopped: '✓' }
 const COLOR: Record<string, string> = { blocked: 'red', failed: 'red', working: 'green', idle: 'cyan' }
 const PR_COLOR: Record<string, string> = { open: 'green', draft: 'yellow', merged: 'magenta', closed: 'red' }
@@ -87,7 +87,7 @@ const MENU: Record<NonNullable<Pending>, [string, string][]> = {
 }
 
 function isFold(section: Section): section is Fold {
-  return section === 'snoozed' || section === 'settled'
+  return section === 'working' || section === 'snoozed' || section === 'settled'
 }
 
 // The Button drawn for an item, its label: the ring walks these with the arrows, a click presses one.
@@ -370,11 +370,12 @@ export const register: Register = (on, options) => {
 
     // The gem's header chips, compact: a glyph and a count per section that has rows.
     const count = (of: (one: InboxRow) => boolean) => list.filter(of).length
+    const running = (one: InboxRow) => one.section === 'active' || one.section === 'working'
     const chips: [number, string, string | undefined][] = [
       [count(one => one.section === 'pinned'), '★', 'cyan'],
       [count(one => one.section === 'needs_you'), '●', 'red'],
-      [count(one => one.section === 'active' && one.state === 'working' && !one.isWaiting), '✻', 'yellow'],
-      [count(one => one.section === 'active' && one.isWaiting), '◌', 'yellow'],
+      [count(one => running(one) && one.state === 'working' && !one.isWaiting), '✻', 'yellow'],
+      [count(one => running(one) && one.isWaiting), '◌', 'yellow'],
       [count(one => one.section === 'snoozed'), 'z', 'magenta'],
       [count(one => one.section === 'settled'), '◦', undefined],
     ]
@@ -477,7 +478,7 @@ export const register: Register = (on, options) => {
                 )
               }
               const one = item.row
-              const isQuiet = isFold(one.section)
+              const isQuiet = one.section === 'snoozed' || one.section === 'settled'
               // A finished or blocked row you have attached to since dims, as the gem's Active section draws it,
               // unless it is tinted: faint ink on a /color background is unreadable.
               const isRead = !isQuiet && one.actionable && ['done', 'stopped', 'blocked', 'failed'].includes(one.state) && !one.isUnread
