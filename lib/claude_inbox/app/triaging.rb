@@ -65,9 +65,11 @@ module ClaudeInbox
       def retitle_selected
         return unless require_storable && require_writable("retitle")
         key, session = @selected.key, selected_session
+        current = @store.alias_for(key) || session.display_name
         notice("asking claude for a title…")
         in_background do
-          title = @titler.title(session, current: @store.alias_for(key) || session.display_name)
+          title = @titler.title(session, current: current)
+          next @queue << [:notice, "“#{current}” still fits"] if title == current
           @store.set_alias(key, title)
           @queue << [:notice, "titled “#{title}” — a edits it"]
         rescue Titler::Error => e

@@ -94,6 +94,14 @@ RSpec.describe ClaudeInbox::App do
       expect(titler).to have_received(:title).with(anything, current: "auth spike")
     end
 
+    it "keeps a title claude hands back unchanged, and says so" do
+      allow(titler).to receive(:title).and_return("comma3x not booting")
+      press(app, "r")
+      expect(wait_for { screen(app).any? { |l| l.include?("still fits") } }).to be(true)
+      expect(app).to paint("“comma3x not booting” still fits").in_status_line
+      expect(store.alias_for("f23c8673")).to be_nil
+    end
+
     it "says why when claude gives no title, and leaves the label alone" do
       allow(titler).to receive(:title).and_raise(ClaudeInbox::Titler::Error, "claude -p failed: Not logged in")
       press(app, "r")
