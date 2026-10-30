@@ -475,4 +475,57 @@ RSpec.describe ClaudeInbox::NewSessionForm do
       end
     end
   end
+
+  describe "with Codex to start in too" do
+    let(:clip) { ClaudeInbox::Images::Clipboard.new("/tmp/shot.png", nil) }
+    let(:form) do
+      described_class.new(cwd: Dir.pwd, home: home, clipboard: -> { clip },
+        choices: {claude: ClaudeInbox::Claude::AgentsClient::CHOICES,
+                  codex: {model: %w[default gpt-6.1-sol], effort: %w[default low high], permission_mode: ClaudeInbox::Codex::ThreadsClient::PERMISSION_MODES}})
+    end
+    let(:rows) { -> { form.screen(100, 30).map { |r| ClaudeInbox::Text.strip_ansi(r) } } }
+    let(:labels) { -> { rows.call.filter_map { |r| r[/\A  (?:▶ |  )(\S.{13})/, 1]&.strip } } }
+
+    it "asks which harness under the prompt, and keeps only Codex's fields for Codex" do
+      form.press(:tab, "\t")
+      expect(form.focused.key).to eq(:harness)
+      expect(labels.call).to eq(["Prompt", "Harness", "Name", "Directory", "Model", "Effort", "Permissions", "Worktree", "Remote Control", "Color"])
+      form.press("l", "l")
+      expect(labels.call).to eq(%w[Prompt Harness Directory Model Effort Permissions])
+      expect(rows.call.find { |r| r.include?("Model") }).to include("codex config", "gpt-6.1-sol")
+      expect(rows.call.find { |r| r.include?("Permissions") }).to include("workspace-write", "full-access")
+    end
+
+    it "submits Codex's values, an image as a file beside the text" do
+      type(form, "look at ")
+      form.paste("")
+      form.press(:tab, "\t")
+      form.press("l", "l")
+      3.times { form.press(:tab, "\t") }
+      expect(form.focused.key).to eq(:effort)
+      form.press("l", "l")
+      form.press(:tab, "\t")
+      form.press("l", "l")
+      expect(form.values).to eq(harness: :codex, prompt: "look at [Image #1]", cwd: Dir.pwd, model: nil, effort: "low",
+        permission_mode: "read-only", images: ["/tmp/shot.png"])
+      expect(form.press(:ctrl_s, "\x13")).to eq(:start)
+    end
+
+    it "starts the model and permissions over when the harness changes" do
+      form.press(:tab, "\t")
+      form.press("l", "l")
+      2.times { form.press(:tab, "\t") }
+      form.press("l", "l")
+      expect(form.values[:model]).to eq("gpt-6.1-sol")
+      2.times { form.press(:back_tab, "\e[Z") }
+      form.press("l", "l")
+      expect(form.values).to include(harness: :claude, model: nil)
+    end
+  end
+
+  it "asks no harness when only Claude can start one" do
+    form.press(:tab, "\t")
+    expect(form.focused.key).to eq(:name)
+    expect(form.values[:harness]).to eq(:claude)
+  end
 end

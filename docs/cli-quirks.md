@@ -196,3 +196,9 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
 - `codex resume <id>` on a thread the daemon has loaded joins that live
   copy rather than starting a second one. Run outside the thread's `cwd`,
   it first asks which directory to use (checked on 0.165.0).
+- `model/list` names each model's `supportedReasoningEfforts`, and they
+  differ by model: one offers `ultra` where another stops at `max`
+  (checked on 0.166.0).
+- A thread from `thread/start` is not in `thread/list` until it has a
+  turn, so a start is `thread/start` then `turn/start`. The turn carries
+  on after the connection that started it closes (checked on 0.165.0).

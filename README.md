@@ -110,8 +110,9 @@ Vim bindings. Arrows and the mouse work too.
 
 ### New session
 
-`n` opens a form for the prompt, name, directory, model, effort, permissions,
-worktree, Remote Control and color, which tints the row as `/color` would.
+`n` opens a form for the prompt, Claude or Codex, name, directory, model,
+effort, permissions, worktree, Remote Control and color, which tints the row
+as `/color` would.
 `Tab` moves between fields, `Ctrl-S` starts the session and `Ctrl-O` starts
 it and attaches. `Option-S` or `Option-O` by mistake only says which key you
 meant; it no longer reads as `Esc` and asks to discard the prompt.

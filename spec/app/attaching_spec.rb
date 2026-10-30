@@ -128,8 +128,7 @@ RSpec.describe ClaudeInbox::App do
         "thread/turns/list" => ->(_) { turns }, "turn/interrupt" => {}, "thread/delete" => {})
     end
     let(:codex) { ClaudeInbox::Codex::ThreadsClient.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: fake.path, timeout: 1), clock: -> { Time.at(1_789_600_000) }) }
-    let(:harnesses) { ClaudeInbox::Harnesses.new(claude: client, codex: codex) }
-    let(:app) { build_app(client: harnesses, store:, pull_requests:, queue:, terminal:) }
+    let(:app) { build_app(client:, codex:, store:, pull_requests:, queue:, terminal:) }
     let(:sent) { [] }
     let(:methods) { -> { sent.concat(drain(fake.requests).map { |r| r["method"] }) } }
 

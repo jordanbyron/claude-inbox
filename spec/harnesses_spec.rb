@@ -21,4 +21,17 @@ RSpec.describe ClaudeInbox::Harnesses do
     expect(harnesses.spawn(prompt: "hi", cwd: "/tmp")).to eq("deadbeef")
     expect(claude.spawns).to eq([{prompt: "hi", cwd: "/tmp"}])
   end
+
+  it "starts a session in the harness it names" do
+    allow(codex).to receive(:spawn).and_return("t9")
+    expect(harnesses.spawn(harness: :codex, prompt: "hi", cwd: "/tmp")).to eq("t9")
+    expect(codex).to have_received(:spawn).with(prompt: "hi", cwd: "/tmp")
+    expect(claude.spawns).to be_empty
+  end
+
+  it "offers only the harnesses with choices to start with" do
+    expect(harnesses.choices.keys).to eq(%i[claude codex])
+    allow(codex).to receive(:choices).and_return({})
+    expect(harnesses.choices).to eq(claude: ClaudeInbox::Claude::AgentsClient::CHOICES)
+  end
 end

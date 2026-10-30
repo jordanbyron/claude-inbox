@@ -29,6 +29,15 @@ module ClaudeInbox
 
       LINES = {"permission" => "waiting on approval", "question" => "waiting on input"}.freeze
 
+      # The form's Permissions as thread/start's approval policy and sandbox.
+      # "default" sends neither, so Codex's own config decides, as in its TUI.
+      PERMISSIONS = {
+        "read-only" => {approvalPolicy: "on-request", sandbox: "read-only"},
+        "workspace-write" => {approvalPolicy: "on-request", sandbox: "workspace-write"},
+        "full-access" => {approvalPolicy: "never", sandbox: "danger-full-access"}
+      }.freeze
+      PERMISSION_MODES = ["default", *PERMISSIONS.keys].freeze
+
       def initialize(daemon: Daemon.new, bin: "codex", clock: -> { Time.now })
         @daemon = daemon
         @bin = bin
@@ -41,12 +50,13 @@ module ClaudeInbox
         sessions = []
         cursor = nil
         loop do
-          result = @daemon.call("thread/list", {**LIST, cursor: cursor}.compact) or break
+          result = @daemon.call("thread/list", {**LIST, cursor: cursor}.compact) or return sessions
           page = self.class.sessions(result)
           sessions.concat(page.reject { |s| s.last_message_at && s.last_message_at < horizon })
           cursor = result["nextCursor"]
           break if cursor.nil? || page.empty? || page.last.last_message_at.to_i < horizon.to_i
         end
+        @choices ||= read_choices
         sessions
       end
 
@@ -71,6 +81,20 @@ module ClaudeInbox
 
       # The thread's rollout and its row in Codex's state go; there is no worktree to remove.
       def rm(session) = @daemon.call!("thread/delete", threadId: session.id)
+
+      # Filled by `list`, on the poll thread, so `n` never waits on the
+      # socket; empty without a daemon, which is also no way to start a thread.
+      def choices = @choices || {}
+
+      # Starts a thread and its first turn and returns the thread's id. A
+      # thread with no turn is not listed, so the row shows once the turn
+      # has started; the turn carries on after this connection closes.
+      def spawn(prompt:, cwd:, model: nil, effort: nil, permission_mode: nil, images: [])
+        thread = @daemon.call!("thread/start", {cwd: cwd, model: model, **PERMISSIONS.fetch(permission_mode, {})}.compact)["thread"]
+        input = [{type: "text", text: prompt}, *images.map { |path| {type: "localImage", path: path} }]
+        @daemon.call!("turn/start", {threadId: thread["id"], input: input, effort: effort}.compact)
+        thread["id"]
+      end
 
       # A `thread/list` result as Sessions.
       def self.sessions(result)
@@ -115,6 +139,14 @@ module ClaudeInbox
       def self.time(seconds) = seconds && Time.at(seconds)
 
       private_class_method :squish, :time
+
+      private
+
+      def read_choices
+        shown = @daemon.call("model/list")&.dig("data")&.reject { |m| m["hidden"] } or return
+        efforts = shown.flat_map { |m| (m["supportedReasoningEfforts"] || []).map { |e| e["reasoningEffort"] } }.uniq
+        {model: ["default", *shown.map { |m| m["id"] }], effort: ["default", *efforts], permission_mode: PERMISSION_MODES}
+      end
     end
 
     # Serves a committed `thread/list` result instead of the daemon; no file, no threads.
@@ -131,6 +163,13 @@ module ClaudeInbox
       def stop(_session) = true
 
       def rm(_session) = nil
+
+      def choices = {model: %w[default gpt-6.1-sol], effort: %w[default low medium high xhigh max], permission_mode: PERMISSION_MODES}
+
+      def spawn(**)
+        sleep 0.5
+        "01a18431-0b7e-7d40-9a51-2f6c1e0d4a10"
+      end
     end
   end
 end
