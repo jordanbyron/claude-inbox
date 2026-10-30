@@ -286,7 +286,7 @@ module ClaudeInbox
       sections = filtered(all)
       width, height = @terminal.size
       body_h = Renderer.body_height(height)
-      ensure_selection(sections)
+      ensure_selection(all)
       @tick += 1
       view = Renderer::View.new(
         width: width, height: height, now: now, selected: @selected&.key, top: @frame.top, expanded: @expanded,

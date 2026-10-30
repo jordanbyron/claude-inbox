@@ -16,22 +16,23 @@ module ClaudeInbox
         @pending_select = id
       end
 
-      # A requested row behind a fold lands on the fold line, which lights
-      # up for a few seconds naming the arrival; the fold stays shut, since
-      # a folded session is one you chose not to watch. Left pending, the
-      # request would fire whenever the row next surfaced, taking the cursor
-      # from wherever you had moved it since.
-      def ensure_selection(sections)
+      # A requested row is settled the poll it first appears in, filtered
+      # out or not: left pending, it would fire whenever the row next
+      # surfaced, taking the cursor from wherever you had moved it since.
+      # Behind a fold it lights the fold line for a few seconds and leaves
+      # both the fold and the cursor alone, since a folded session is one
+      # you chose not to watch.
+      def ensure_selection(all)
+        sections = filtered(all)
         pending = @pending_select && Store::Selection.row(@pending_select)
-        if pending && (name = sections.section_of(pending))
-          if Store.folded?(name, @expanded)
-            @arrival = [Renderer::Arrival.new(section: name, label: label_for(pending.key)), Time.now + ARRIVAL_SECONDS]
-            select(Store::Selection.fold(name))
-          else
-            select(pending)
-          end
+        if pending && all.section_of(pending)
           @pending_select = nil
-          return
+          name = sections.section_of(pending)
+          if name && Store.folded?(name, @expanded)
+            @arrival = [Renderer::Arrival.new(section: name, label: label_for(pending.key)), Time.now + ARRIVAL_SECONDS]
+          elsif name
+            return select(pending)
+          end
         end
         stops = sections.selections(@expanded)
         return if stops.include?(@selected)
