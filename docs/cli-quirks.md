@@ -31,19 +31,25 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   into it holds through work, stop and respawn (checked on 2.1.296). The
   session's own prompt bar reads its color from an `agent-color` record in
   the transcript instead (read from the 2.1.296 bundle), so it stays plain.
-- The JSON's `state` is what the session filed, and its `status` is the
-  process's own word: `busy`, `idle` or `waiting`. The two drift apart.
-  A turn the CLI files as `working` (its closing summary read as work in
-  progress) leaves `state: working` after it ends, with `status: idle`,
-  nothing in `inFlight` and no `output.result` (seen on 2.1.314, and on a
-  session from a month earlier). A session that started an in-process
+- `~/.claude/jobs/<id>/timeline.jsonl` gets a record per event: `at`,
+  `state`, `detail` and `text`. A turn ends with a record whose `text` is
+  the reply (cut at 4000 characters); the prompt that starts the next
+  turn and every tool call after it are records with an empty `text`. A
+  turn a monitor or teammate notification starts writes nothing until its
+  first tool call, so two replies can sit back to back. The prompt's
+  record copies the previous `state`, and `state.json` keeps that state
+  too, so a session that has just been sent a message says `done` in
+  both for as long as its first tool call takes (28s seen on 2.1.314).
+  That is the only reading of whether the agent's own turn is over: the
+  JSON's `state` stays `working` after a reply the CLI read as work in
+  progress (its `status` goes `idle`, `inFlight` empties, no
+  `output.result` is written), and a session that started an in-process
   teammate with the Agent tool can keep it in `inFlight.tasks` after the
-  teammate has reported, with `tempo: active`; the JSON then calls the
-  session `working` and `busy` for as long as it sits, even when the job
-  file says `blocked` (seen on 2.1.312 and 2.1.314, three sessions). A
-  new turn files `working` as it starts, so a job file saying `blocked`
-  or `done` is a finished turn whatever the JSON says. The inbox reads it
-  all that way.
+  teammate has reported, with `tempo: active` and the JSON saying
+  `working` and `busy` for as long as it sits, even when `state.json`
+  says `blocked` (seen on 2.1.312 and 2.1.314, three sessions). The inbox
+  reads the timeline's last record for that, and only then believes a
+  `blocked` or `done` in `state.json` over the JSON.
 - A `--bg` session with Remote Control on registers a bridge and records it
   in `state.json` as `bridgeSessionId: cse_<id>`; claude.ai/code shows the
   session at `https://claude.ai/code/session_<id>`. On 2.1.282 a plain

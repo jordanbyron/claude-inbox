@@ -6,13 +6,15 @@ require "time"
 module ClaudeInbox
   module Claude
     # What the daemon writes about a background session in
-    # ~/.claude/jobs/<id>/state.json. The only reader of that file, and the
-    # only writer: a new session's color.
+    # ~/.claude/jobs/<id>: state.json, and the last record of timeline.jsonl.
+    # The only reader of those files, and the only writer: a new session's
+    # color.
     #
     # `claude agents --json` says "working" both while the agent thinks and
     # while it sits idle on a shell or sub-agent it started, a teammate that
-    # has long since reported included. This file tells the two apart, and
-    # holds what the JSON drops (docs/cli-quirks.md).
+    # has long since reported included, and after a turn the CLI filed as
+    # working. The timeline says whether the agent's own turn is over, the
+    # state file what it is waiting on and what it left (docs/cli-quirks.md).
     #
     # Never cached. A color changes the moment you type `/color`, so every poll
     # asks the file again.
@@ -37,7 +39,20 @@ module ClaudeInbox
       # has already forgotten.
       def self.read(id, jobs_dir:)
         return nil unless id
-        new(JSON.parse(File.read(job_file(id, jobs_dir))))
+        new(JSON.parse(File.read(job_file(id, jobs_dir))), last_record(File.join(jobs_dir, id, "timeline.jsonl")))
+      rescue JSON::ParserError, SystemCallError
+        nil
+      end
+
+      TAIL = 16 * 1024
+
+      # The timeline's last record, or nil without one. A record can run to
+      # several KB of reply text, so the tail is read rather than the file.
+      def self.last_record(path)
+        size = File.size(path)
+        tail = File.open(path, "rb") { |f| f.seek([size - TAIL, 0].max) && f.read }
+        line = tail.split("\n").reject(&:empty?).last
+        line && JSON.parse(line)
       rescue JSON::ParserError, SystemCallError
         nil
       end
@@ -60,8 +75,9 @@ module ClaudeInbox
 
       attr_reader :pr_urls, :transcript_path, :worktree_path, :color, :intent, :bridge_id, :created_at
 
-      def initialize(hash)
+      def initialize(hash, last_record = nil)
         @state = hash["state"]
+        @last_text = (last_record || {})["text"].to_s
         @detail = hash["detail"]
         @needs = hash["needs"]
         @result = (hash["output"] || {})["result"]
@@ -82,21 +98,26 @@ module ClaudeInbox
       # a wake, are the only record of Remote Control being on it.
       def remote_control? = flags.include?("--remote-control")
 
-      # The state the session itself last filed, when it is one a finished
-      # turn leaves behind: "blocked" or "done". A new turn files "working"
-      # as it starts, so either of those outlives the daemon's "working".
-      # Nil while the file says "working" too.
+      # The agent's own turn has ended. A turn ends with a timeline record
+      # carrying the reply, and everything until the next reply is a record
+      # without one: the prompt that starts a turn, each tool call. A turn a
+      # notification starts shows nothing until its first tool call, so this
+      # runs a few seconds late for one (docs/cli-quirks.md).
+      def turn_over? = !last_text.strip.empty?
+
+      # The state the session filed with its last reply, when it is one a
+      # reply leaves behind: "blocked" or "done". Nil for "working", which a
+      # reply read as work in progress files too. Only meaningful once the
+      # turn is over: the state file lags the prompt that starts a turn until
+      # the first tool call.
       def settled_state = %w[blocked done].include?(state) ? state : nil
 
       def in_flight? = tasks.positive?
 
-      # The agent itself is not thinking: its pulse went idle, or the daemon
-      # wrote a turn's closing summary. A teammate that has reported and sits
-      # on keeps the pulse "active" and the daemon saying busy, so the
-      # summary is the reading that survives it (docs/cli-quirks.md). On its
-      # own this means little — a session whose process died leaves the same
-      # readings behind — so it only says something paired with `in_flight?`.
-      def agent_idle? = tempo == "idle" || !result.to_s.strip.empty?
+      # The agent itself is not thinking. On its own this means little — a
+      # session whose process died leaves the same reading behind — so it
+      # only says something paired with `in_flight?`.
+      def agent_idle? = tempo == "idle"
 
       # What the session needs while blocked, what it produced once done,
       # otherwise its status line; nil before it has said anything.
@@ -121,7 +142,7 @@ module ClaudeInbox
 
       private
 
-      attr_reader :state, :detail, :needs, :result, :tempo, :kinds, :tasks, :flags
+      attr_reader :state, :last_text, :detail, :needs, :result, :tempo, :kinds, :tasks, :flags
 
       def count_label = "#{tasks} #{plural("task", tasks)}"
 

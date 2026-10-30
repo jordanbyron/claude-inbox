@@ -69,8 +69,7 @@ RSpec.describe ClaudeInbox::Claude::JobState do
   end
 
   it "knows a thinking agent from one gone quiet, and what is open either way" do
-    thinking = described_class.new("tempo" => "active", "output" => {"result" => ""},
-      "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}])
+    thinking = described_class.new("tempo" => "active", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}])
     expect(thinking).not_to be_agent_idle
     expect(thinking).to be_in_flight
     expect(thinking.in_flight_label).to eq("1 shell")
@@ -82,16 +81,29 @@ RSpec.describe ClaudeInbox::Claude::JobState do
     expect(described_class.new({})).not_to be_in_flight
   end
 
-  it "reads a closing summary as the agent gone quiet, since a lingering teammate keeps the pulse active" do
-    # Seen on 2.1.312 and 2.1.314: the teammate had reported, inFlight stayed
-    # at 1 and tempo at "active", and the daemon called the session working.
-    lingering = described_class.new("tempo" => "active", "output" => {"result" => "PR #355 verified"},
-      "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}])
-    expect(lingering).to be_agent_idle
-    expect(lingering).to be_in_flight
+  it "reads the turn as over from the timeline's last record carrying the reply" do
+    Dir.mktmpdir do |dir|
+      FileUtils.mkdir_p(File.join(dir, "aaa11111"))
+      File.write(File.join(dir, "aaa11111", "state.json"), JSON.generate("state" => "working"))
+      timeline = File.join(dir, "aaa11111", "timeline.jsonl")
+      File.write(timeline, [
+        {"at" => "2026-10-30T13:19:10.604Z", "state" => "working", "detail" => "Finding files", "text" => ""},
+        {"at" => "2026-10-30T13:26:00.646Z", "state" => "working", "detail" => "tier 1 works", "text" => "Recap: " + ("x" * 4000)}
+      ].map { |r| JSON.generate(r) }.join("\n") + "\n")
+      expect(described_class.read("aaa11111", jobs_dir: dir)).to be_turn_over
+
+      # The prompt that starts the next turn, and every tool call after it,
+      # is a record without a reply.
+      File.write(timeline, JSON.generate("at" => "2026-10-30T14:25:40.804Z", "state" => "working", "detail" => "go on", "text" => "") + "\n", mode: "a")
+      expect(described_class.read("aaa11111", jobs_dir: dir)).not_to be_turn_over
+
+      File.delete(timeline)
+      expect(described_class.read("aaa11111", jobs_dir: dir)).not_to be_turn_over
+      expect(described_class.new({})).not_to be_turn_over
+    end
   end
 
-  it "settles on the state the session filed when it is blocked or done" do
+  it "settles on the state the session filed with its reply when it is blocked or done" do
     expect(described_class.new("state" => "blocked").settled_state).to eq("blocked")
     expect(described_class.new("state" => "done").settled_state).to eq("done")
     expect(described_class.new("state" => "working").settled_state).to be_nil

@@ -52,12 +52,11 @@ module ClaudeInbox
       def self.session(h, job: nil, origin: nil, bridge: nil)
         remote = origin == :remote
         bridge ||= job&.bridge_id
-        # The daemon's `status` is the process's own word (busy, idle,
-        # waiting); its `state` is what the session filed, held at "working"
-        # while anything it started stays open. "idle" says the agent's turn
-        # is over whatever the state says; the job file says it for a
-        # teammate that keeps the process busy (docs/cli-quirks.md).
-        quiet = h["status"] == "idle" || job&.agent_idle? == true
+        # The daemon holds "working" while anything the session started
+        # stays open, a teammate that has reported included, and after a
+        # turn the CLI filed as working; the job's timeline says whether the
+        # agent's own turn is over (docs/cli-quirks.md).
+        quiet = job&.turn_over? == true
         s = Session.new(
           harness: :claude,
           actions: actions_for(h["kind"], remote),
@@ -73,7 +72,7 @@ module ClaudeInbox
           status: h["status"],
           waiting_for: h["waitingFor"],
           in_flight: job&.in_flight_label,
-          waiting_on_work: quiet && job&.in_flight? == true,
+          waiting_on_work: (quiet || job&.agent_idle? == true) && job&.in_flight? == true,
           remote: remote,
           remote_control: remote || job&.remote_control? == true,
           remote_url: remote_url(bridge),
@@ -86,19 +85,17 @@ module ClaudeInbox
         job ? s.with(line: job.summary(s.effective_state)) : s
       end
 
-      # The daemon's word, except that its "working" yields to what the
-      # session filed, blocked or done, and is "done" for a quiet session
-      # with nothing open: the daemon keeps calling a session working while a
-      # finished teammate sits in its in-flight count, and after a turn it
-      # filed as working (docs/cli-quirks.md). A quiet session with work
-      # still open stays "working", which `waiting_on_work` then qualifies.
+      # The daemon's word, except that its "working" once the turn is over
+      # is what the session filed with its reply, blocked or done, or "done"
+      # for a reply the CLI read as work in progress; with work still open
+      # it stays "working", which `waiting_on_work` then qualifies.
       def self.state_of(h, job, quiet)
         return nil unless h["state"]
         state = STATES.fetch(h["state"], h["state"])
-        return state unless state == "working" && job
+        return state unless state == "working" && quiet
         if job.settled_state then STATES.fetch(job.settled_state)
-        elsif h["status"] == "idle" && !job.in_flight? then "done"
-        else state
+        elsif job.in_flight? then state
+        else "done"
         end
       end
 

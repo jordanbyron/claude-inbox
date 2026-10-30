@@ -97,45 +97,49 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
       expect(described_class.session(row).harness).to eq(:claude)
     end
 
-    describe "settling the daemon's working" do
-      let(:job) { ->(h) { ClaudeInbox::Claude::JobState.new(h) } }
+    describe "settling the daemon's working once the turn is over" do
+      let(:reply) { {"text" => "Done. PR #355 is up."} }
+      let(:over) { ->(h) { ClaudeInbox::Claude::JobState.new(h, reply) } }
+      let(:mid_turn) { ->(h) { ClaudeInbox::Claude::JobState.new(h, {"text" => ""}) } }
       let(:busy) { row.merge("status" => "busy") }
-      let(:idle) { row.merge("status" => "idle") }
 
-      it "takes the blocked or done the session filed, even while a teammate keeps the process busy" do
-        lingering = {"tempo" => "active", "output" => {"result" => "PR #355 up"}, "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}]}
-        blocked = described_class.session(busy, job: job.call(lingering.merge("state" => "blocked", "needs" => "merge #355?")))
+      it "takes the blocked or done the session filed with its reply, even while a teammate keeps the process busy" do
+        lingering = {"tempo" => "active", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}]}
+        blocked = described_class.session(busy, job: over.call(lingering.merge("state" => "blocked", "needs" => "merge #355?")))
         expect(blocked.state).to eq("blocked")
         expect(blocked.line).to eq("merge #355?")
-        expect(described_class.session(busy, job: job.call(lingering.merge("state" => "done"))).state).to eq("done")
+        expect(described_class.session(busy, job: over.call(lingering.merge("state" => "done"))).state).to eq("done")
         # The daemon's own blocked or done is never second-guessed.
-        expect(described_class.session(busy.merge("state" => "blocked"), job: job.call("state" => "done")).state).to eq("blocked")
+        expect(described_class.session(busy.merge("state" => "blocked"), job: over.call("state" => "done")).state).to eq("blocked")
       end
 
-      it "is done for a session the daemon calls idle with nothing open, whatever turn it filed" do
-        # Seen on 2.1.314: a turn filed as working ends, the daemon's status
-        # goes idle, and its state stays working with no closing summary.
-        over = described_class.session(idle, job: job.call("state" => "working", "tempo" => "idle", "detail" => "review done; awaiting reply"))
-        expect(over.state).to eq("done")
-        expect(over.line).to eq("review done; awaiting reply")
-        expect(over).not_to be_waiting_on_work
+      it "is done for a reply the CLI read as work in progress, with nothing open" do
+        # Seen on 2.1.314: the session's state stays working after such a
+        # reply, and so does the daemon's.
+        done = described_class.session(busy, job: over.call("state" => "working", "tempo" => "idle", "detail" => "review done; awaiting reply"))
+        expect(done.state).to eq("done")
+        expect(done.line).to eq("review done; awaiting reply")
+        expect(done).not_to be_waiting_on_work
       end
 
-      it "stays working, idle on its open work, when the daemon or the file says the agent is quiet" do
+      it "stays working, idle on its open work, when the turn is over or the pulse idle" do
         open_agent = {"state" => "working", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate"}]}
-        by_status = described_class.session(idle, job: job.call(open_agent.merge("tempo" => "active")))
-        expect(by_status.state).to eq("working")
-        expect(by_status).to be_waiting_on_work
-        by_file = described_class.session(busy, job: job.call(open_agent.merge("tempo" => "active", "output" => {"result" => "tier 1 works"})))
-        expect(by_file).to be_waiting_on_work
-        thinking = described_class.session(busy, job: job.call(open_agent.merge("tempo" => "active")))
+        replied = described_class.session(busy, job: over.call(open_agent.merge("tempo" => "active")))
+        expect(replied.state).to eq("working")
+        expect(replied).to be_waiting_on_work
+        expect(described_class.session(busy, job: mid_turn.call(open_agent.merge("tempo" => "idle")))).to be_waiting_on_work
+        thinking = described_class.session(busy, job: mid_turn.call(open_agent.merge("tempo" => "active")))
         expect(thinking.state).to eq("working")
         expect(thinking).not_to be_waiting_on_work
       end
 
-      it "leaves a session without a job file to the daemon" do
-        expect(described_class.session(idle, job: nil).state).to eq("working")
-        expect(described_class.session(idle, job: nil)).not_to be_waiting_on_work
+      it "leaves the daemon's working alone mid-turn, when the state file still says what the last reply filed" do
+        # The prompt that starts a turn lands in the timeline at once; the
+        # state file says "done" until the first tool call (seen on 2.1.314).
+        starting = described_class.session(busy, job: mid_turn.call("state" => "done", "tempo" => "active", "output" => {"result" => "earlier reply"}))
+        expect(starting.state).to eq("working")
+        expect(starting).not_to be_waiting_on_work
+        expect(described_class.session(busy, job: nil).state).to eq("working")
       end
     end
 
