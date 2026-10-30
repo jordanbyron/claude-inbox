@@ -86,6 +86,7 @@ module ClaudeInbox
         else []
         end
       end
+      private_class_method :actions_for
 
       # Where claude.ai/code shows a session. A background session with Remote
       # Control on records its bridge in the job file; a worker a `claude
