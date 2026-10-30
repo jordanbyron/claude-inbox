@@ -7,8 +7,7 @@ RSpec.describe ClaudeInbox::Snapshot do
   let(:merged) { ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: "MERGED", resolved_at: now.to_i - 60) }
   let(:sections) do
     entries = {"b" => {"last_state" => "done", "state_since" => now.to_i - 90, "last_visited_at" => now.to_i - 30, "alias" => "renamed", "wake_at" => "until_woken"}}
-    pink = ClaudeInbox::JobState.new("color" => "pink")
-    ClaudeInbox::Store.sectionize([session(id: "a", state: "blocked", session_id: "u-a", job_state: pink, last_message_at: now - 600), session(id: "b", state: "done", prs: [merged])], entries, now)
+    ClaudeInbox::Store.sectionize([session(id: "a", state: "blocked", session_id: "u-a", color: "pink", last_message_at: now - 600), session(id: "b", state: "done", prs: [merged])], entries, now)
   end
 
   it "writes each section's rows as the screen shows them" do

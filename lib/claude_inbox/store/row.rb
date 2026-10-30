@@ -36,7 +36,7 @@ module ClaudeInbox
       def matches?(query)
         q = query.downcase
         prs = session.prs.flat_map { |pr| [pr.qualified, pr.url, pr.title] }
-        [label, session.cwd, session.intent, session.summary, *prs].any? { |field| field.to_s.downcase.include?(q) }
+        [label, session.cwd, session.intent, session.line, *prs].any? { |field| field.to_s.downcase.include?(q) }
       end
 
       # Its timer has run out. Becoming blocked or an error wakes it sooner,

@@ -107,10 +107,8 @@ RSpec.describe ClaudeInbox::PullRequests do
   end
 
   it "enriches sessions, letting an override replace the scanned list" do
-    sessions = ClaudeInbox::JobState.enrich(
-      [session(id: "b03695b1"), session(id: "b0b18338")],
-      jobs_dir: fixture_path("jobs")
-    )
+    scanned = %w[856 866].map { |n| "https://github.com/jordanbyron/parks_genie/pull/#{n}" }
+    sessions = [session(id: "b03695b1", pr_urls: scanned), session(id: "b0b18338", pr_urls: scanned)]
     a, b = prs.enrich(sessions, {"b0b18338" => "https://github.com/o/r/pull/1"})
     expect(a.prs.map(&:number)).to eq([856, 866])
     expect(b.prs.map(&:number)).to eq([1])
@@ -121,10 +119,7 @@ RSpec.describe ClaudeInbox::PullRequests do
       transcript = File.join(dir, "t.jsonl")
       stdout = (1..3).map { |n| "✓ Created PR ##{n} (https://github.com/o/r/pull/#{n}) for b#{n}" }.join("\n")
       File.write(transcript, JSON.generate("toolUseResult" => {"stdout" => stdout}) + "\n")
-      FileUtils.mkdir_p(File.join(dir, "aaa11111"))
-      File.write(File.join(dir, "aaa11111", "state.json"), JSON.generate("linkScanPath" => transcript,
-        "children" => [{"kind" => "pr", "href" => "https://github.com/o/r/pull/1"}]))
-      sessions = ClaudeInbox::JobState.enrich([session(id: "aaa11111")], jobs_dir: dir)
+      sessions = [session(id: "aaa11111", transcript_path: transcript, pr_urls: ["https://github.com/o/r/pull/1"])]
       expect(prs.enrich(sessions, {}).first.prs.map(&:number)).to eq([1, 2, 3])
     end
   end
@@ -189,10 +184,10 @@ RSpec.describe ClaudeInbox::PullRequests do
       state = {856 => "MERGED", 866 => "CLOSED"}.fetch(n, "OPEN")
       ClaudeInbox::PullRequest.new(number: n, url: url, state: state, resolved_at: (now.to_i - 60 unless state == "OPEN"))
     end
-    sessions = ClaudeInbox::JobState.enrich([
-      session(id: "b03695b1"), # 856 and 866, both resolved in the cache
-      session(id: "b0b18338")  # nothing scanned; linked by hand below
-    ], jobs_dir: fixture_path("jobs"))
+    sessions = [
+      session(id: "b03695b1", pr_urls: %w[856 866].map { |n| "https://github.com/jordanbyron/parks_genie/pull/#{n}" }), # both resolved in the cache
+      session(id: "b0b18338") # nothing scanned; linked by hand below
+    ]
     a, b = client.enrich(sessions, {"b0b18338" => "https://github.com/o/r/pull/1"})
     expect(calls).to be_empty
     expect(a.prs.map(&:state)).to eq(%w[MERGED CLOSED])

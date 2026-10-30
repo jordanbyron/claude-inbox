@@ -24,7 +24,7 @@ RSpec.describe ClaudeInbox::Store do
     end
 
     it "settles an idle remote session with a resolved PR, and lets it snooze" do
-      r = session(**interactive, status: "idle", session_id: "u9", origin: :remote, started_at: now - 3600, **merged)
+      r = session(**interactive, status: "idle", session_id: "u9", remote: true, started_at: now - 3600, **merged)
       entries = {"u9" => {"last_state" => "done", "state_since" => now.to_i - 5}}
       expect(described_class.sectionize([r], entries, now).settled.map(&:key)).to eq(%w[u9])
       snoozed = {"u9" => {"wake_at" => now.to_i + 900, "last_state" => "done", "state_since" => now.to_i - 3600}}
@@ -32,7 +32,7 @@ RSpec.describe ClaudeInbox::Store do
     end
 
     it "tracks remote sessions in merge_entries by session uuid" do
-      r = session(**interactive, status: "busy", session_id: "u9", origin: :remote)
+      r = session(**interactive, status: "busy", session_id: "u9", remote: true)
       e = described_class.merge_entries({}, [r], now)
       expect(e["u9"]["last_state"]).to eq("working")
       e = described_class.merge_entries(e, [r.with(status: "idle")], now + 60)
@@ -137,8 +137,7 @@ RSpec.describe ClaudeInbox::Store do
 
     it "settles a respawned session on a PR merged before the respawn" do
       entries = {"a" => {"last_state" => "done", "state_since" => now.to_i - 5}}
-      created = ClaudeInbox::JobState.new("createdAt" => Time.at(now.to_i - 7200).utc.iso8601)
-      s = session(id: "a", state: "done", started_at: now - 60, job_state: created,
+      s = session(id: "a", state: "done", started_at: now - 60, created_at: now - 7200,
         prs: [ClaudeInbox::PullRequest.new(state: "MERGED", resolved_at: now.to_i - 3600)])
       expect(described_class.sectionize([s], entries, now).settled.map(&:key)).to eq(%w[a])
     end

@@ -4,8 +4,8 @@ RSpec.describe ClaudeInbox::Notifier do
   let(:clock) { StillClock.new(Time.at(1_789_604_500)) }
   let(:store) { ClaudeInbox::Store.new(path: nil, clock: clock) }
   let(:working) { session(state: "working") }
-  let(:blocked) { session(state: "blocked", job_state: ClaudeInbox::JobState.new("needs" => "Approve rm -rf tmp/?")) }
-  let(:done) { session(state: "done", job_state: ClaudeInbox::JobState.new("output" => {"result" => "Opened #42."})) }
+  let(:blocked) { session(state: "blocked", line: "Approve rm -rf tmp/?") }
+  let(:done) { session(state: "done", line: "Opened #42.") }
   # The sections from before and after the store takes a poll, a few seconds on.
   let(:poll) do
     lambda do |*sessions|

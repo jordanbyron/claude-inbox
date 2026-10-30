@@ -12,7 +12,7 @@ require_relative "keymap"
 require_relative "remote/listener"
 require_relative "new_session_form"
 require_relative "pull_requests"
-require_relative "transcript"
+
 require_relative "reaper"
 require_relative "notifier"
 require_relative "poller"
@@ -48,7 +48,7 @@ module ClaudeInbox
 
     # The reaper deletes sessions and the listener lets other machines in,
     # so both are off unless `bin/claude-inbox` switches them on.
-    def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new, transcripts: Transcript.new,
+    def initialize(client: AgentsClient.new, store: Store.new, pull_requests: PullRequests.new,
       rate_limits: RateLimits.new, reaper: Reaper.disabled, snapshot: Snapshot.disabled, switch: Switch.disabled,
       actions: Actions.disabled, notifier: Notifier.disabled, listen: nil, updater: nil, argv: [], out: $stdout, input: $stdin, color: true,
       trust: Trust.method(:projects), terminal: Terminal.new(out, input), queue: Queue.new, pane_offer: Mod::Offer.disabled,
@@ -68,7 +68,7 @@ module ClaudeInbox
       @renderer = Renderer.new
       @input = Input.new(input, out)
       @queue = queue
-      @poller = Poller.new(client: client, store: store, pull_requests: pull_requests, transcripts: transcripts,
+      @poller = Poller.new(client: client, store: store, pull_requests: pull_requests,
         reaper: reaper, queue: @queue, snapshot: snapshot, actions: actions, notifier: notifier)
       @listener = listen ? Remote::Listener.new(client: client, store: store, queue: @queue, **listen) : Remote::Listener.disabled
       @selected = nil

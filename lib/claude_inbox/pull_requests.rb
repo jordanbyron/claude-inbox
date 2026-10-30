@@ -57,8 +57,8 @@ module ClaudeInbox
   # The links come from the daemon's scan of each background session's
   # transcript, so a session that merely mentions a PR gets it too. The
   # daemon keeps one PR per session, so StackLinks adds the rest of a stack
-  # the session opened. Interactive sessions have no job file; for those the
-  # store's `pr` override is the only source.
+  # the session opened. A session with no scanned links, such as an
+  # interactive one, has only the store's `pr` override.
   #
   # A merged or closed PR never changes again, so once gh has said so, and
   # when, it goes in RESOLVED_PATH and gh is never asked about it again.
@@ -86,13 +86,12 @@ module ClaudeInbox
       @stacks = StackLinks.new
     end
 
-    # Each session with its `prs` set from what is already known. The scanned
-    # links come off `job_state`, so Sessions.load reads that first.
+    # Each session with its `prs` set from what is already known.
     # `overrides` maps session key => url for links set by hand; an override
     # replaces the scanned list.
     def enrich(sessions, overrides)
       sessions.map do |s|
-        urls = overrides[s.key] ? [overrides[s.key]] : scanned(s.job_state)
+        urls = overrides[s.key] ? [overrides[s.key]] : scanned(s)
         s.with(prs: urls.map { |u| known(u) })
       end
     end
@@ -154,10 +153,7 @@ module ClaudeInbox
 
     private
 
-    def scanned(job_state)
-      return [] unless job_state
-      (job_state.pr_urls + @stacks.urls(job_state.transcript_path)).uniq
-    end
+    def scanned(session) = (session.pr_urls + @stacks.urls(session.transcript_path)).uniq
 
     # Best known state for a url without asking gh.
     def known(url)

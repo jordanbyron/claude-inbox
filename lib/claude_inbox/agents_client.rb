@@ -5,18 +5,27 @@ require_relative "debug"
 require_relative "job_state"
 require_relative "session"
 require_relative "subprocess"
+require_relative "transcript"
 
 module ClaudeInbox
-  # The only place that shells out to `claude`. Returns plain Ruby values.
+  # The Claude adapter: the only place that shells out to `claude` or reads
+  # what it keeps under ~/.claude, and it hands back finished Sessions.
   # Swap in FixtureClient for tests.
   class AgentsClient
     class Error < StandardError; end
 
+    # The daemon's states in OSC 7501's words: a stopped session is idle, a failed one an error.
+    STATES = {"working" => "working", "blocked" => "blocked", "done" => "done", "failed" => "error", "stopped" => "idle"}.freeze
+
+    # Process-tree origins of sessions nobody drives directly; see `origins`.
+    UNATTENDED = %i[subagent headless].freeze
+
     attr_reader :jobs_dir
 
-    def initialize(bin: "claude", jobs_dir: JobState::DEFAULT_DIR)
+    def initialize(bin: "claude", jobs_dir: JobState::DEFAULT_DIR, transcripts: Transcript.new)
       @bin = bin
       @jobs_dir = jobs_dir
+      @transcripts = transcripts
     end
 
     # => Array<Session>
@@ -24,8 +33,51 @@ module ClaudeInbox
       args = [@bin, "agents", "--json", "--all"]
       r = Subprocess.capture(*args)
       raise Error, "claude agents failed: #{r.err.strip}" unless r.success?
-      classify_origins(parse(r.out))
+      rows = JSON.parse(r.out)
+      ps = ps_rows(rows.filter_map { |h| h["pid"] if h["kind"] == "interactive" })
+      sessions(rows, origins_from(ps), self.class.bridge_ids(ps))
     end
+
+    # One row of the JSON as a Session, with its job file (nil when it has
+    # none) and the process tree's word on where it is driven from.
+    # `blocked_kind` stays nil: a blocked row carries no `waitingFor`, and an
+    # interactive one's is free text such as "permission prompt".
+    def self.session(h, job: nil, origin: nil, bridge: nil)
+      remote = origin == :remote
+      bridge ||= job&.bridge_id
+      s = Session.new(
+        harness: :claude,
+        id: h["id"],
+        cwd: h["cwd"],
+        kind: h["kind"],
+        started_at: h["startedAt"] && Time.at(h["startedAt"] / 1000.0),
+        created_at: job&.created_at,
+        session_id: h["sessionId"],
+        name: h["name"],
+        state: h["state"] && STATES.fetch(h["state"], h["state"]),
+        pid: h["pid"],
+        status: h["status"],
+        waiting_for: h["waitingFor"],
+        in_flight: job&.in_flight_label,
+        waiting_on_work: job&.waiting_on_work? == true,
+        remote: remote,
+        remote_control: remote || job&.remote_control? == true,
+        remote_url: remote_url(bridge),
+        color: job&.color,
+        intent: job&.intent,
+        transcript_path: job&.transcript_path,
+        pr_urls: job&.pr_urls
+      )
+      job ? s.with(line: job.summary(s.effective_state)) : s
+    end
+
+    # Where claude.ai/code shows a session. A background session with Remote
+    # Control on records its bridge in the job file; a worker a `claude
+    # remote-control` server spawned carries it on its command line.
+    def self.remote_url(bridge) = bridge && "https://claude.ai/code/session_#{bridge.delete_prefix("cse_")}"
+
+    # The page for a session just started, once its bridge is in the job file.
+    def remote_url(id) = self.class.remote_url(JobState.read(id, jobs_dir: jobs_dir)&.bridge_id)
 
     WATCH_INTERVAL = 0.05
 
@@ -158,27 +210,22 @@ module ClaudeInbox
       nil
     end
 
-    def parse(json)
-      JSON.parse(json).map { |h| Session.from_hash(h) }
-    end
-
     # The JSON reports Remote Control workers, local sub-agents and headless
     # runs as `interactive`, same as a terminal you opened yourself, each named
     # after its directory. The process tree tells them apart; see `origins`.
     # Everything but a terminal and a remote worker is dropped here rather than
     # merely flagged: attach lands on the session that asked for it, so there
-    # is nothing useful to show or act on directly.
-    def classify_origins(sessions)
-      pids = sessions.filter_map { |s| s.pid if s.interactive? }
-      return sessions if pids.empty?
-      rows = ps_rows(pids)
-      assign_origins(sessions, origins_from(rows), self.class.bridge_ids(rows))
-    end
-
-    def assign_origins(sessions, origins, bridges)
-      sessions
-        .map { |s| s.interactive? ? s.with(origin: origins.fetch(s.pid, :terminal), bridge_id: bridges[s.pid]) : s }
-        .reject(&:unattended?)
+    # is nothing useful to show or act on directly. Only a background session
+    # has a job file.
+    def sessions(rows, origins, bridges)
+      found = rows.filter_map do |h|
+        interactive = h["kind"] == "interactive"
+        origin = origins.fetch(h["pid"], :terminal) if interactive
+        next if UNATTENDED.include?(origin)
+        job = JobState.read(h["id"], jobs_dir: @jobs_dir) if h["kind"] == "background"
+        self.class.session(h, job: job, origin: origin, bridge: (bridges[h["pid"]] if interactive))
+      end
+      @transcripts.enrich(found)
     end
 
     def origins_from(rows)
@@ -186,6 +233,7 @@ module ClaudeInbox
     end
 
     def ps_rows(pids)
+      return [] if pids.empty?
       r = Subprocess.capture("ps", "-o", "pid=,ppid=,command=", "-p", pids.join(","))
       return [] unless r.success?
       r.out.lines.map { |l|
@@ -246,9 +294,7 @@ module ClaudeInbox
     end
 
     # Fixture rows carry no process tree.
-    def list
-      assign_origins(parse(File.read(@path)), @origins, @bridges)
-    end
+    def list = sessions(JSON.parse(File.read(@path)), @origins, @bridges)
 
     # Stand-in child: prints, waits for a line, exits — enough to prove the
     # terminal round-trips through cooked mode and back.

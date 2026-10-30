@@ -28,6 +28,14 @@ RSpec.describe ClaudeInbox::AgentsClient do
     expect(s.key).to eq("4a93393d-1c06-57da-9fb8-12f5b1535d95")
     expect(s.effective_state).to eq("working")
     expect(s.display_name).to eq("claude-inbox-38")
+    expect(s.pr_urls).to eq([])
+  end
+
+  it "fills in a session's color and links from its job file" do
+    by_id = sessions.to_h { |s| [s.id, s] }
+    expect(by_id["b0b18338"].color).to eq("orange")
+    expect(by_id["b03695b1"].color).to be_nil
+    expect(by_id["b03695b1"].pr_urls.map { |u| u[/\d+\z/] }).to eq(%w[856 866])
   end
 
   it "names the default permission mode when given it, as a remote start does" do
@@ -58,6 +66,90 @@ RSpec.describe ClaudeInbox::AgentsClient do
     c = ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), origins: {57405 => :headless})
     expect(c.list.size).to eq(sessions.size - 1)
     expect(c.list.any? { |s| s.pid == 57405 }).to be(false)
+  end
+
+  it "reads the job file of a background session only" do
+    Dir.mktmpdir do |dir|
+      FileUtils.mkdir_p(File.join(dir, "jobs", "aaa11111"))
+      File.write(File.join(dir, "jobs", "aaa11111", "state.json"),
+        JSON.generate("tempo" => "idle", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}]))
+      File.write(File.join(dir, "agents.json"), JSON.generate([
+        {"id" => "aaa11111", "kind" => "background", "state" => "working"},
+        {"kind" => "interactive", "status" => "busy", "sessionId" => "u1", "pid" => 1}
+      ]))
+      bg, term = ClaudeInbox::FixtureClient.new(File.join(dir, "agents.json")).list
+      expect(bg.in_flight).to eq("1 shell")
+      expect(bg).to be_waiting_on_work
+      expect(term.in_flight).to be_nil
+      expect(term).not_to be_waiting_on_work
+    end
+  end
+
+  describe "a row of the JSON as a session" do
+    let(:row) { {"id" => "abc12345", "kind" => "background", "state" => "working"} }
+
+    it "reads the daemon's states in OSC 7501's words" do
+      states = %w[working blocked done failed stopped].map { |state| described_class.session(row.merge("state" => state)).state }
+      expect(states).to eq(%w[working blocked done error idle])
+      expect(described_class.session({"kind" => "interactive", "status" => "busy"}).state).to be_nil
+      expect(described_class.session(row).harness).to eq(:claude)
+    end
+
+    it "knows where claude.ai/code shows it, from the job file or the worker's own bridge id" do
+      expect(described_class.session(row).remote_url).to be_nil
+      bg = described_class.session(row, job: ClaudeInbox::JobState.new("bridgeSessionId" => "cse_01AB"))
+      expect(bg.remote_url).to eq("https://claude.ai/code/session_01AB")
+      worker = described_class.session({"kind" => "interactive"}, origin: :remote, bridge: "cse_01CD")
+      expect(worker.remote_url).to eq("https://claude.ai/code/session_01CD")
+    end
+
+    it "has Remote Control when started with the flag, or when a remote server spawned it" do
+      expect(described_class.session(row, job: ClaudeInbox::JobState.new("bridgeSessionId" => "cse_01AB"))).not_to be_remote_control
+      expect(described_class.session(row, job: ClaudeInbox::JobState.new("respawnFlags" => ["--remote-control"]))).to be_remote_control
+      expect(described_class.session({"kind" => "interactive"}, origin: :remote)).to be_remote_control
+    end
+
+    describe "its line" do
+      let(:line) { ->(state, job) { described_class.session(row.merge("state" => state), job: job).line } }
+      let(:job) do
+        ClaudeInbox::JobState.new("detail" => "watching CI",
+          "needs" => "confirm: merge?", "output" => {"result" => "CI green, PR #7 up"})
+      end
+
+      it "is what the session needs while blocked, what it produced once done, else its status line" do
+        expect(line.call("blocked", job)).to eq("confirm: merge?")
+        expect(line.call("done", job)).to eq("CI green, PR #7 up")
+        expect(line.call("working", job)).to eq("watching CI")
+      end
+
+      it "falls back to the status line when the state-specific line is missing" do
+        job = ClaudeInbox::JobState.new("detail" => "watching CI")
+        expect(line.call("blocked", job)).to eq("watching CI")
+        expect(line.call("done", job)).to eq("watching CI")
+      end
+
+      it "is nil without a job file or before the session has said anything" do
+        expect(line.call("working", nil)).to be_nil
+        expect(line.call("working", ClaudeInbox::JobState.new({}))).to be_nil
+        expect(line.call("working", ClaudeInbox::JobState.new("detail" => "  "))).to be_nil
+      end
+
+      it "flattens the line onto one row" do
+        expect(line.call("working", ClaudeInbox::JobState.new("detail" => "step one\n  step two"))).to eq("step one step two")
+      end
+    end
+
+    describe "its intent" do
+      it "is the prompt the session was started with" do
+        job = ClaudeInbox::JobState.new("intent" => "Look into the TIAA gateway 403s")
+        expect(described_class.session(row, job: job).intent).to eq("Look into the TIAA gateway 403s")
+      end
+
+      it "is nil without a job file, as an interactive session has none" do
+        expect(described_class.session(row).intent).to be_nil
+        expect(described_class.session(row, job: ClaudeInbox::JobState.new({})).intent).to be_nil
+      end
+    end
   end
 
   describe "reading origins out of the process tree" do

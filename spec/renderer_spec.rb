@@ -38,7 +38,7 @@ RSpec.describe ClaudeInbox::Renderer do
  ● ✓ trailforks skill handoff                    done · 9d  parks_genie 
        ↳ ~/code/parks_genie
  ● ✓ sensor token resilience test               done · 10d  parks_genie 
-       ↳ ~/code/parks_genie
+       ↳ token refresh retried 3x with backoff; PR #885 ready for revi… 
  ● ✓ github milestone review                    done · 17d  parks_genie 
        ↳ ~/code/parks_genie
  ● ✓ app store release strategy                 done · 18d  parks_genie 
@@ -50,7 +50,7 @@ RSpec.describe ClaudeInbox::Renderer do
 
   it "dots a finished row and a blocked one blue until attached to, then quiets the finished one but keeps its color bright, and gives the selected one the yellow caret" do
     done = session(id: "aaa11111", name: "fresh", state: "done")
-    seen = session(id: "bbb22222", name: "seen", state: "done", job_state: ClaudeInbox::JobState.new("color" => "orange"))
+    seen = session(id: "bbb22222", name: "seen", state: "done", color: "orange")
     blocked = session(id: "ccc33333", name: "stuck", state: "blocked")
     entries = ClaudeInbox::Store.merge_entries({"bbb22222" => {"last_state" => "done", "state_since" => now.to_i - 60, "last_visited_at" => now.to_i - 30}}, [done, seen, blocked], now)
     sec = ClaudeInbox::Store.sectionize([done, seen, blocked], entries, now)
@@ -81,9 +81,8 @@ RSpec.describe ClaudeInbox::Renderer do
   end
 
   it "puts the session's own line under a row, and the path under one with nothing to say" do
-    job = ClaudeInbox::JobState.new("detail" => "watching CI", "needs" => "confirm: merge once green? " + "x" * 80)
-    blocked = session(id: "aaa11111", state: "blocked", job_state: job, cwd: "/Users/byron/code/x")
-    quiet = session(id: "bbb22222", state: "working", job_state: nil, cwd: "/Users/byron/code/y")
+    blocked = session(id: "aaa11111", state: "blocked", line: "confirm: merge once green? " + "x" * 80, cwd: "/Users/byron/code/x")
+    quiet = session(id: "bbb22222", state: "working", cwd: "/Users/byron/code/y")
     sec = ClaudeInbox::Store.sectionize([blocked, quiet], {}, now)
     lines = renderer.frame(sec, view.with(width: 60, height: 12)).plain.lines
     expect(lines).to include("       ↳ confirm: merge once green? xxxxxxxxxxxxxxxxxxxxxx…".ljust(60))
@@ -91,7 +90,7 @@ RSpec.describe ClaudeInbox::Renderer do
   end
 
   it "badges remote sessions and counts them in the header" do
-    r = session(**terminal, status: "idle", session_id: "u9", name: "web", origin: :remote)
+    r = session(**terminal, status: "idle", session_id: "u9", name: "web", remote: true)
     sec = ClaudeInbox::Store.sectionize([r], {}, now)
     text = renderer.frame(sec, view.with(width: 90, height: 12)).plain.lines.join("\n")
     expect(text).to match(/✓ web\s+done · remote/)
@@ -112,9 +111,8 @@ RSpec.describe ClaudeInbox::Renderer do
   end
 
   it "marks a background session with Remote Control on, and only that one" do
-    rc = session(state: "done", job_state: ClaudeInbox::JobState.new("respawnFlags" => ["--remote-control"]))
-    bridged = ClaudeInbox::JobState.new("bridgeSessionId" => "cse_01AB")
-    plain = session(id: "def45678", name: "other", state: "done", job_state: bridged)
+    rc = session(state: "done", remote_control: true)
+    plain = session(id: "def45678", name: "other", state: "done", remote_url: "https://claude.ai/code/session_01AB")
     sec = ClaudeInbox::Store.sectionize([rc, plain], {}, now)
     text = renderer.frame(sec, view.with(width: 90, height: 12)).plain.lines.join("\n")
     expect(text).to match(/✓ thing\s+done ⇅/)
@@ -122,13 +120,9 @@ RSpec.describe ClaudeInbox::Renderer do
   end
 
   it "separates an agent that is thinking from one waiting on what it started" do
-    thinking = ClaudeInbox::JobState.new("tempo" => "active", "inFlight" => {"tasks" => 2},
-      "fan" => [{"kind" => "in_process_teammate"}, {"kind" => "in_process_teammate"}])
-    waiting = ClaudeInbox::JobState.new("tempo" => "idle", "inFlight" => {"tasks" => 1},
-      "fan" => [{"kind" => "local_bash"}])
     rows = [
-      session(id: "t1", name: "thinking", job_state: thinking),
-      session(id: "t2", name: "watching", job_state: waiting)
+      session(id: "t1", name: "thinking", in_flight: "2 agents"),
+      session(id: "t2", name: "watching", in_flight: "1 shell", waiting_on_work: true)
     ]
     sec = ClaudeInbox::Store.sectionize(rows, ClaudeInbox::Store.merge_entries({}, rows, now), now)
     text = renderer.frame(sec, view.with(width: 90, height: 12, tick: 0)).plain.lines.join("\n")
@@ -349,7 +343,7 @@ RSpec.describe "renderer session colors" do
   end
 
   it "paints the label of a session /color gave a color" do
-    s = session(id: "z", name: "tinted", job_state: ClaudeInbox::JobState.new("color" => "orange"))
+    s = session(id: "z", name: "tinted", color: "orange")
     line = line_of.call(s, "tinted")
     expect(line).to include("#{orange}tinted")
   end
@@ -361,7 +355,7 @@ RSpec.describe "renderer session colors" do
   end
 
   it "keeps the glyph in the state's color while the label takes the session's" do
-    s = session(id: "z", name: "tinted", state: "blocked", job_state: ClaudeInbox::JobState.new("color" => "green"))
+    s = session(id: "z", name: "tinted", state: "blocked", color: "green")
     line = line_of.call(s, "tinted")
     expect(line).to include("\e[38;5;75m●")
     expect(line).to include("\e[38;5;203;1mneeds you")
@@ -369,7 +363,7 @@ RSpec.describe "renderer session colors" do
   end
 
   it "keeps a settled row's color at full strength, since a faint tint is unreadable" do
-    s = session(id: "z", name: "tinted", state: "done", job_state: ClaudeInbox::JobState.new("color" => "orange"))
+    s = session(id: "z", name: "tinted", state: "done", color: "orange")
     entries = ClaudeInbox::Store.merge_entries({"z" => {"settled_at" => now.to_i}}, [s], now)
     sec = ClaudeInbox::Store.sectionize([s], entries, now)
     line = renderer.frame(sec, view.with(expanded: {settled: true})).lines.find { |l| l.include?("tinted") }
@@ -413,7 +407,7 @@ RSpec.describe "renderer session colors" do
   end
 
   it "still pads a colored row to exactly the frame width" do
-    s = session(id: "z", name: "tinted", job_state: ClaudeInbox::JobState.new("color" => "pink"))
+    s = session(id: "z", name: "tinted", color: "pink")
     sec = ClaudeInbox::Store.sectionize([s], {}, now)
     renderer.frame(sec, view.with(width: 64, height: 12)).lines.each do |l|
       expect(ClaudeInbox::Text.width(l)).to eq(64)

@@ -2,7 +2,6 @@
 
 require "json"
 require "time"
-require_relative "agents_client"
 
 module ClaudeInbox
   # A session's transcript, read from the end for when its last message was
@@ -43,7 +42,7 @@ module ClaudeInbox
     private
 
     def path_for(session, home)
-      session.job_state&.transcript_path ||
+      session.transcript_path ||
         (session.cwd && session.session_id && AgentsClient.transcript_path(session.cwd, session.session_id, home: home))
     end
 
