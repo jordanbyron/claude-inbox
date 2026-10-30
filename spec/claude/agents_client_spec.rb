@@ -81,7 +81,7 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
         {"id" => "aaa11111", "kind" => "background", "state" => "working"},
         {"kind" => "interactive", "status" => "busy", "sessionId" => "u1", "pid" => 1}
       ]))
-      launched = {"type" => "user", "message" => {"content" => [{"type" => "tool_result", "tool_use_id" => "t1", "content" => "Command running in background with ID: b1."}]}}
+      launched = {"type" => "user", "timestamp" => "2026-10-30T18:15:09Z", "message" => {"content" => [{"type" => "tool_result", "tool_use_id" => "t1", "content" => "Command running in background with ID: b1."}]}}
       File.write(transcript, JSON.generate(launched) + "\n")
       client = ClaudeInbox::Claude::FixtureClient.new(File.join(dir, "agents.json"))
 
@@ -92,8 +92,14 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
       expect(term.in_flight).to be_nil
       expect(term).not_to be_waiting_on_work
 
-      done = {"type" => "user", "message" => {"content" => "<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n</task-notification>"}}
+      done = {"type" => "user", "timestamp" => "2026-10-30T18:16:10Z", "message" => {"content" => "<task-notification>\n<task-id>b1</task-id>\n<status>completed</status>\n</task-notification>"}}
       File.write(transcript, JSON.generate(done) + "\n", mode: "a")
+      bg, = client.list
+      expect(bg.effective_state).to eq("working")
+      expect(bg).not_to be_waiting_on_work
+
+      reply = {"type" => "assistant", "timestamp" => "2026-10-30T18:16:17Z", "message" => {"stop_reason" => "end_turn", "content" => [{"type" => "text", "text" => "The build is done."}]}}
+      File.write(transcript, JSON.generate(reply) + "\n", mode: "a")
       bg, = client.list
       expect(bg).to be_waiting_on_work
     end
@@ -145,6 +151,27 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
         thinking = described_class.session(busy, job: mid_turn.call(open_agent))
         expect(thinking.state).to eq("working")
         expect(thinking).not_to be_waiting_on_work
+      end
+
+      it "takes the transcript's word on the turn over the timeline's, and the daemon's idle over both" do
+        # A prompt typed into an attached terminal never reaches the daemon,
+        # so the timeline keeps the last reply until the session's first
+        # Bash call; the transcript has the prompt at once.
+        typed = described_class.session(busy, job: over.call("state" => "blocked", "needs" => "go?"), over: false)
+        expect(typed.state).to eq("working")
+        replied = described_class.session(busy, job: mid_turn.call("state" => "done"), over: true)
+        expect(replied.state).to eq("done")
+        abandoned = described_class.session(row.merge("status" => "idle"), job: mid_turn.call("state" => "done"), over: false)
+        expect(abandoned.state).to eq("done")
+      end
+
+      it "puts a question to you ahead of agents still at work" do
+        asked = described_class.session(busy, job: over.call("state" => "blocked", "needs" => "flag variant?", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "local_agent"}]), busy: true)
+        expect(asked.state).to eq("blocked")
+        expect(asked.line).to eq("flag variant?")
+        expect(asked).not_to be_waiting_on_work
+        building = described_class.session(busy, job: over.call("state" => "done", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "local_agent"}]), busy: true)
+        expect(building.state).to eq("working")
       end
 
       it "leaves the daemon's working alone mid-turn, when the state file still says what the last reply filed" do

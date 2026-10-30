@@ -40,16 +40,25 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   record copies the previous `state`, and `state.json` keeps that state
   too, so a session that has just been sent a message says `done` in
   both for as long as its first tool call takes (28s seen on 2.1.314).
-  That is the only reading of whether the agent's own turn is over: the
-  JSON's `state` stays `working` after a reply the CLI read as work in
-  progress (its `status` goes `idle`, `inFlight` empties, no
-  `output.result` is written), and a session that started an in-process
-  teammate with the Agent tool can keep it in `inFlight.tasks` after the
-  teammate has reported, with `tempo: active` and the JSON saying
-  `working` and `busy` for as long as it sits, even when `state.json`
-  says `blocked` (seen on 2.1.312 and 2.1.314, three sessions). The inbox
-  reads the timeline's last record for that, and only then believes a
-  `blocked` or `done` in `state.json` over the JSON.
+  The timeline only sees what passes through the daemon: a prompt typed
+  into an attached terminal, and every tool call but `Bash` (whose
+  description is the status line), leave no record, so after such a
+  prompt the timeline keeps the last reply until the session's first
+  Bash call or its next reply, two minutes on one turn seen on 2.1.314.
+  The transcript has the prompt at once, and a turn ends there with an
+  `assistant` record whose `stop_reason` is `end_turn`; a prompt, a tool
+  result or a tool call last means mid-turn. An interrupted turn leaves
+  tool results last and nothing after, so the JSON's `status: idle` has
+  to count as over too. The JSON's `state` stays `working` after a reply
+  the CLI read as work in progress (its `status` goes `idle`, `inFlight`
+  empties, no `output.result` is written), and a session that started an
+  in-process teammate with the Agent tool can keep it in `inFlight.tasks`
+  after the teammate has reported, with `tempo: active` and the JSON
+  saying `working` and `busy` for as long as it sits, even when
+  `state.json` says `blocked` (seen on 2.1.312 and 2.1.314, three
+  sessions). The inbox reads the transcript's last message for the end of
+  a turn, the timeline's last record when there is no transcript, and
+  only then believes a `blocked` or `done` in `state.json` over the JSON.
 - `state.json`'s `fan` lists what a session started and has not finished:
   a background agent under the `agentId` its launch answered with, a
   teammate under an id of the daemon's own with the `description` it was

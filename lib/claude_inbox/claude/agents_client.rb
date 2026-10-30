@@ -48,19 +48,22 @@ module ClaudeInbox
       end
 
       # One row of the JSON as a Session, with its job file (nil when it has
-      # none), whether the work it started is still `busy`, and the process
-      # tree's word on where it is driven from. `blocked_kind` stays nil: a
-      # blocked row carries no `waitingFor`, and an interactive one's is
-      # free text such as "permission prompt".
-      def self.session(h, job: nil, busy: false, origin: nil, bridge: nil)
+      # none), the transcript's word on whether its turn is `over` (nil
+      # without one), whether the work it started is still `busy`, and the
+      # process tree's word on where it is driven from. `blocked_kind` stays
+      # nil: a blocked row carries no `waitingFor`, and an interactive one's
+      # is free text such as "permission prompt".
+      def self.session(h, job: nil, over: nil, busy: false, origin: nil, bridge: nil)
         remote = origin == :remote
         bridge ||= job&.bridge_id
         # The daemon holds "working" while anything the session started
         # stays open, a teammate that has reported included, and after a
-        # turn the CLI filed as working. The job's timeline says whether the
-        # agent's own turn is over, and its transcript whether what it
-        # started is still busy (docs/cli-quirks.md).
-        quiet = job&.turn_over? == true && !busy
+        # turn the CLI filed as working. The transcript says whether the
+        # agent's own turn is over, the job's timeline when there is no
+        # transcript to read, and the daemon's own "idle" either way; the
+        # transcript also says whether what the session started is still
+        # busy (docs/cli-quirks.md).
+        over = (over.nil? ? job&.turn_over? == true : over) || h["status"] == "idle"
         s = Session.new(
           harness: :claude,
           actions: actions_for(h["kind"], remote),
@@ -71,12 +74,12 @@ module ClaudeInbox
           created_at: job&.created_at,
           session_id: h["sessionId"],
           name: h["name"],
-          state: state_of(h, job, quiet),
+          state: state_of(h, job, over, busy),
           pid: h["pid"],
           status: h["status"],
           waiting_for: h["waitingFor"],
           in_flight: job&.in_flight_label,
-          waiting_on_work: quiet && job&.in_flight? == true,
+          waiting_on_work: over && !busy && job&.in_flight? == true,
           remote: remote,
           remote_control: remote || job&.remote_control? == true,
           remote_url: remote_url(bridge),
@@ -90,14 +93,18 @@ module ClaudeInbox
       end
 
       # The daemon's word, except that its "working" once the turn is over
-      # is what the session filed with its reply, blocked or done, or "done"
-      # for a reply the CLI read as work in progress; with work still open
-      # it stays "working", which `waiting_on_work` then qualifies.
-      def self.state_of(h, job, quiet)
+      # is "blocked" when the session filed a question with its reply,
+      # whatever its agents are doing; "working" while any of them is busy;
+      # "done" when it filed done, or when the CLI read its reply as work in
+      # progress with nothing open. Open work gone quiet keeps "working",
+      # which `waiting_on_work` then qualifies.
+      def self.state_of(h, job, over, busy)
         return nil unless h["state"]
         state = STATES.fetch(h["state"], h["state"])
-        return state unless state == "working" && quiet
-        if job.settled_state then STATES.fetch(job.settled_state)
+        return state unless state == "working" && over && job
+        if job.settled_state == "blocked" then "blocked"
+        elsif busy then state
+        elsif job.settled_state then STATES.fetch(job.settled_state)
         elsif job.in_flight? then state
         else "done"
         end
@@ -267,7 +274,8 @@ module ClaudeInbox
           next if UNATTENDED.include?(origin)
           job = JobState.read(h["id"], jobs_dir: @jobs_dir) if h["kind"] == "background"
           busy = job ? @work.busy?(job.fan, job.transcript_path) : false
-          self.class.session(h, job: job, busy: busy, origin: origin, bridge: (bridges[h["pid"]] if interactive))
+          over = @transcripts.turn_over?(job&.transcript_path)
+          self.class.session(h, job: job, over: over, busy: busy, origin: origin, bridge: (bridges[h["pid"]] if interactive))
         end
         @transcripts.enrich(found)
       end

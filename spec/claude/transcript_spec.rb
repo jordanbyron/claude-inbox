@@ -40,6 +40,24 @@ RSpec.describe ClaudeInbox::Claude::Transcript do
     expect(transcript.last_message_at(path)).to eq(Time.utc(2026, 10, 21, 15, 0, 0))
   end
 
+  it "says whether the last message ended the turn" do
+    reply = assistant.merge("message" => {"role" => "assistant", "stop_reason" => "end_turn", "content" => [{"type" => "text", "text" => "done"}]})
+    write.call([user, reply, *bookkeeping])
+    expect(transcript.turn_over?(path)).to be(true)
+
+    append = ->(record) { File.write(path, JSON.generate(record) + "\n", mode: "a") }
+    append.call(user.merge("timestamp" => "2026-10-21T15:02:00.000Z"))
+    expect(transcript.turn_over?(path)).to be(false)
+    append.call(assistant.merge("timestamp" => "2026-10-21T15:02:05.000Z",
+      "message" => {"role" => "assistant", "stop_reason" => "tool_use", "content" => [{"type" => "tool_use", "name" => "Bash", "id" => "t1", "input" => {}}]}))
+    expect(transcript.turn_over?(path)).to be(false)
+    append.call(user.merge("timestamp" => "2026-10-21T15:02:06.000Z",
+      "message" => {"role" => "user", "content" => [{"type" => "tool_result", "tool_use_id" => "t1", "content" => "ok"}]}))
+    expect(transcript.turn_over?(path)).to be(false)
+    expect(transcript.turn_over?(File.join(home, "gone.jsonl"))).to be_nil
+    expect(transcript.turn_over?(nil)).to be_nil
+  end
+
   it "answers nil for a missing file, an empty one and one with no message yet" do
     expect(transcript.last_message_at(path)).to be_nil
     write.call([])
