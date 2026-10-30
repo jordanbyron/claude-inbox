@@ -658,7 +658,7 @@ RSpec.describe ClaudeInbox::Store do
 
   describe "fixture end to end" do
     it "sections the captured sessions" do
-      sessions = ClaudeInbox::FixtureClient.new(fixture_path("agents.json")).list
+      sessions = ClaudeInbox::Claude::FixtureClient.new(fixture_path("agents.json")).list
       at = Time.at(1_789_604_500)
       sec = described_class.sectionize(sessions, described_class.merge_entries({}, sessions, at), at)
       expect(sec.needs_you.map(&:key)).to eq(%w[f23c8673])

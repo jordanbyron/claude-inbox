@@ -2,11 +2,11 @@
 
 require "tmpdir"
 
-RSpec.describe ClaudeInbox::Transcript do
+RSpec.describe ClaudeInbox::Claude::Transcript do
   subject(:transcript) { described_class.new }
 
   let(:home) { Dir.mktmpdir }
-  let(:path) { ClaudeInbox::AgentsClient.transcript_path("/Users/x/code/app", "u1", home: home) }
+  let(:path) { ClaudeInbox::Claude::AgentsClient.transcript_path("/Users/x/code/app", "u1", home: home) }
   let(:user) do
     {"type" => "user", "timestamp" => "2026-10-21T15:00:00.000Z",
      "message" => {"role" => "user", "content" => "hi"}}

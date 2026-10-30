@@ -2,7 +2,7 @@
 
 RSpec.describe ClaudeInbox::Renderer do
   let(:now) { Time.at(1_789_604_500) }
-  let(:sessions) { ClaudeInbox::FixtureClient.new(fixture_path("agents.json")).list }
+  let(:sessions) { ClaudeInbox::Claude::FixtureClient.new(fixture_path("agents.json")).list }
   let(:sections) { ClaudeInbox::Store.sectionize(sessions, ClaudeInbox::Store.merge_entries({}, sessions, now), now) }
   let(:renderer) { described_class.new(home: "/Users/byron") }
   let(:view) { described_class::View.new(width: 80, height: 24, now: now) }

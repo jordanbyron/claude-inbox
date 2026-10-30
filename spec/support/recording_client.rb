@@ -6,7 +6,7 @@
 # refuses the ids in `refuse`, the way the CLI refuses a worktree holding
 # unpushed commits; `fail_attach` makes attaches fail the way a session that
 # cannot be woken does.
-class RecordingClient < ClaudeInbox::FixtureClient
+class RecordingClient < ClaudeInbox::Claude::FixtureClient
   attr_reader :removed, :stopped, :attached, :spawns
 
   def initialize(refuse: [], **opts)
@@ -28,7 +28,7 @@ class RecordingClient < ClaudeInbox::FixtureClient
 
   def rm(id)
     @gate&.pop
-    raise ClaudeInbox::AgentsClient::Error, "rm failed: worktree has unpushed commits" if @refuse.include?(id)
+    raise ClaudeInbox::Claude::AgentsClient::Error, "rm failed: worktree has unpushed commits" if @refuse.include?(id)
     removed << id
   end
 
@@ -44,7 +44,7 @@ class RecordingClient < ClaudeInbox::FixtureClient
   def spawn(**opts)
     spawns << opts
     @gate&.pop
-    raise ClaudeInbox::AgentsClient::Error, @spawn_error if @spawn_error
+    raise ClaudeInbox::Claude::AgentsClient::Error, @spawn_error if @spawn_error
     "deadbeef"
   end
 end

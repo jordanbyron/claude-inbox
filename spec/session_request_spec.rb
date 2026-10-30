@@ -122,7 +122,7 @@ RSpec.describe ClaudeInbox::SessionRequest do
     end
 
     it "takes model, effort and permissions from the choices the form offers" do
-      (ClaudeInbox::AgentsClient::PERMISSION_MODES - ["default"]).each do |mode|
+      (ClaudeInbox::Claude::AgentsClient::PERMISSION_MODES - ["default"]).each do |mode|
         expect(described_class.from_params(base.merge("permission_mode" => mode))[:permission_mode]).to eq(mode)
       end
       expect(described_class.from_params(base.merge("model" => "haiku", "effort" => "max"))).to eq(

@@ -3,8 +3,8 @@
 require "fileutils"
 require "tmpdir"
 
-RSpec.describe ClaudeInbox::AgentsClient do
-  let(:sessions) { ClaudeInbox::FixtureClient.new(fixture_path("agents.json")).list }
+RSpec.describe ClaudeInbox::Claude::AgentsClient do
+  let(:sessions) { ClaudeInbox::Claude::FixtureClient.new(fixture_path("agents.json")).list }
 
   it "parses every documented field from the fixture" do
     expect(sessions.size).to eq(7)
@@ -44,7 +44,7 @@ RSpec.describe ClaudeInbox::AgentsClient do
   end
 
   it "classifies fixture interactive rows as remote when told their pids" do
-    c = ClaudeInbox::FixtureClient.new(
+    c = ClaudeInbox::Claude::FixtureClient.new(
       fixture_path("agents.json"),
       origins: {57405 => :remote},
       bridges: {57405 => "cse_01AB"}
@@ -57,13 +57,13 @@ RSpec.describe ClaudeInbox::AgentsClient do
   end
 
   it "drops sub-agent rows entirely instead of listing them" do
-    c = ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), origins: {57405 => :subagent})
+    c = ClaudeInbox::Claude::FixtureClient.new(fixture_path("agents.json"), origins: {57405 => :subagent})
     expect(c.list.size).to eq(sessions.size - 1)
     expect(c.list.any? { |s| s.pid == 57405 }).to be(false)
   end
 
   it "drops headless rows too" do
-    c = ClaudeInbox::FixtureClient.new(fixture_path("agents.json"), origins: {57405 => :headless})
+    c = ClaudeInbox::Claude::FixtureClient.new(fixture_path("agents.json"), origins: {57405 => :headless})
     expect(c.list.size).to eq(sessions.size - 1)
     expect(c.list.any? { |s| s.pid == 57405 }).to be(false)
   end
@@ -77,7 +77,7 @@ RSpec.describe ClaudeInbox::AgentsClient do
         {"id" => "aaa11111", "kind" => "background", "state" => "working"},
         {"kind" => "interactive", "status" => "busy", "sessionId" => "u1", "pid" => 1}
       ]))
-      bg, term = ClaudeInbox::FixtureClient.new(File.join(dir, "agents.json")).list
+      bg, term = ClaudeInbox::Claude::FixtureClient.new(File.join(dir, "agents.json")).list
       expect(bg.in_flight).to eq("1 shell")
       expect(bg).to be_waiting_on_work
       expect(term.in_flight).to be_nil
@@ -97,22 +97,22 @@ RSpec.describe ClaudeInbox::AgentsClient do
 
     it "knows where claude.ai/code shows it, from the job file or the worker's own bridge id" do
       expect(described_class.session(row).remote_url).to be_nil
-      bg = described_class.session(row, job: ClaudeInbox::JobState.new("bridgeSessionId" => "cse_01AB"))
+      bg = described_class.session(row, job: ClaudeInbox::Claude::JobState.new("bridgeSessionId" => "cse_01AB"))
       expect(bg.remote_url).to eq("https://claude.ai/code/session_01AB")
       worker = described_class.session({"kind" => "interactive"}, origin: :remote, bridge: "cse_01CD")
       expect(worker.remote_url).to eq("https://claude.ai/code/session_01CD")
     end
 
     it "has Remote Control when started with the flag, or when a remote server spawned it" do
-      expect(described_class.session(row, job: ClaudeInbox::JobState.new("bridgeSessionId" => "cse_01AB"))).not_to be_remote_control
-      expect(described_class.session(row, job: ClaudeInbox::JobState.new("respawnFlags" => ["--remote-control"]))).to be_remote_control
+      expect(described_class.session(row, job: ClaudeInbox::Claude::JobState.new("bridgeSessionId" => "cse_01AB"))).not_to be_remote_control
+      expect(described_class.session(row, job: ClaudeInbox::Claude::JobState.new("respawnFlags" => ["--remote-control"]))).to be_remote_control
       expect(described_class.session({"kind" => "interactive"}, origin: :remote)).to be_remote_control
     end
 
     describe "its line" do
       let(:line) { ->(state, job) { described_class.session(row.merge("state" => state), job: job).line } }
       let(:job) do
-        ClaudeInbox::JobState.new("detail" => "watching CI",
+        ClaudeInbox::Claude::JobState.new("detail" => "watching CI",
           "needs" => "confirm: merge?", "output" => {"result" => "CI green, PR #7 up"})
       end
 
@@ -123,31 +123,31 @@ RSpec.describe ClaudeInbox::AgentsClient do
       end
 
       it "falls back to the status line when the state-specific line is missing" do
-        job = ClaudeInbox::JobState.new("detail" => "watching CI")
+        job = ClaudeInbox::Claude::JobState.new("detail" => "watching CI")
         expect(line.call("blocked", job)).to eq("watching CI")
         expect(line.call("done", job)).to eq("watching CI")
       end
 
       it "is nil without a job file or before the session has said anything" do
         expect(line.call("working", nil)).to be_nil
-        expect(line.call("working", ClaudeInbox::JobState.new({}))).to be_nil
-        expect(line.call("working", ClaudeInbox::JobState.new("detail" => "  "))).to be_nil
+        expect(line.call("working", ClaudeInbox::Claude::JobState.new({}))).to be_nil
+        expect(line.call("working", ClaudeInbox::Claude::JobState.new("detail" => "  "))).to be_nil
       end
 
       it "flattens the line onto one row" do
-        expect(line.call("working", ClaudeInbox::JobState.new("detail" => "step one\n  step two"))).to eq("step one step two")
+        expect(line.call("working", ClaudeInbox::Claude::JobState.new("detail" => "step one\n  step two"))).to eq("step one step two")
       end
     end
 
     describe "its intent" do
       it "is the prompt the session was started with" do
-        job = ClaudeInbox::JobState.new("intent" => "Look into the TIAA gateway 403s")
+        job = ClaudeInbox::Claude::JobState.new("intent" => "Look into the TIAA gateway 403s")
         expect(described_class.session(row, job: job).intent).to eq("Look into the TIAA gateway 403s")
       end
 
       it "is nil without a job file, as an interactive session has none" do
         expect(described_class.session(row).intent).to be_nil
-        expect(described_class.session(row, job: ClaudeInbox::JobState.new({})).intent).to be_nil
+        expect(described_class.session(row, job: ClaudeInbox::Claude::JobState.new({})).intent).to be_nil
       end
     end
   end
@@ -227,7 +227,7 @@ RSpec.describe ClaudeInbox::AgentsClient do
       FileUtils.mkdir_p(File.join(dir, "1a2b3c4d"))
       File.write(File.join(dir, "1a2b3c4d", "state.json"), "{}")
       described_class.new(bin: bin, jobs_dir: dir).spawn(prompt: "hi", cwd: dir, color: "cyan")
-      expect(ClaudeInbox::JobState.read("1a2b3c4d", jobs_dir: dir).color).to eq("cyan")
+      expect(ClaudeInbox::Claude::JobState.read("1a2b3c4d", jobs_dir: dir).color).to eq("cyan")
     end
 
     it "says what failed, with everything the CLI printed" do
