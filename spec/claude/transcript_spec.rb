@@ -58,6 +58,32 @@ RSpec.describe ClaudeInbox::Claude::Transcript do
     expect(transcript.last_message_at(path)).to eq(Time.utc(2026, 10, 21, 15, 1, 30))
   end
 
+  describe "the last messages" do
+    let(:term) { session(id: nil, kind: "interactive", cwd: "/Users/x/code/app", session_id: "u1", status: "busy") }
+    let(:reminder) { user.merge("message" => {"role" => "user", "content" => "<system-reminder>\nnew tools\n</system-reminder>"}) }
+    let(:tool_call) { assistant.merge("message" => {"role" => "assistant", "content" => [{"type" => "tool_use", "name" => "Bash"}]}) }
+    let(:tool_result) { user.merge("message" => {"role" => "user", "content" => [{"type" => "tool_result", "content" => "ok"}]}) }
+    let(:answer) do
+      assistant.merge("message" => {"role" => "assistant",
+                                    "content" => [{"type" => "thinking", "thinking" => "hm"}, {"type" => "text", "text" => "done: "}, {"type" => "text", "text" => "it boots"}]})
+    end
+
+    it "gives what the person and the agent said, oldest first, past tool calls, results and the CLI's reminders" do
+      write.call([user, reminder, tool_call, tool_result, answer, *bookkeeping])
+      expect(transcript.last_messages(term, count: 4, home: home)).to eq([["user", "hi"], ["assistant", "done: \nit boots"]])
+    end
+
+    it "stops at the count, keeping the newest" do
+      write.call([user, answer, user.merge("message" => {"role" => "user", "content" => "<system-reminder>x</system-reminder>again"}), answer])
+      expect(transcript.last_messages(term, count: 2, home: home)).to eq([["user", "again"], ["assistant", "done: \nit boots"]])
+    end
+
+    it "has none for a session with no transcript" do
+      expect(transcript.last_messages(term, count: 4, home: home)).to eq([])
+      expect(transcript.last_messages(session(id: nil, kind: "interactive", cwd: nil, session_id: nil), count: 4, home: home)).to eq([])
+    end
+  end
+
   it "finds a background session's transcript through its job file and an interactive one's through its directory" do
     write.call([user])
     named = File.join(home, "elsewhere.jsonl")

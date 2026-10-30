@@ -6,16 +6,20 @@ require "time"
 module ClaudeInbox
   module Claude
     # A session's transcript, read from the end for when its last message was
-    # sent. Only the `user` and `assistant` records are messages: the CLI
-    # appends undated bookkeeping records long after a session has finished,
-    # so the file's mtime says nothing.
+    # sent and for what its last few messages said. Only the `user` and
+    # `assistant` records are messages: the CLI appends undated bookkeeping
+    # records long after a session has finished, so the file's mtime says
+    # nothing.
     #
-    # Every poll asks, and a transcript that ends in a long run of other
-    # records costs a scan each time, so each file is read again only once
-    # it has grown.
+    # Every poll asks for the time, and a transcript that ends in a long run
+    # of other records costs a scan each time, so each file is read again only
+    # once it has grown.
     class Transcript
       MESSAGE_TYPES = %w[user assistant].freeze
       CHUNK = 64 * 1024
+      # The CLI's own notes to the model ride along as user records, which
+      # the person never typed (docs/cli-quirks.md).
+      REMINDER = %r{<system-reminder>.*?</system-reminder>}m
 
       def initialize
         @seen = {} # path => [size, time]
@@ -40,6 +44,22 @@ module ClaudeInbox
         nil
       end
 
+      def last_messages(session, count:, home: Dir.home)
+        path = path_for(session, home) or return []
+        said = []
+        File.open(path, "rb") do |f|
+          each_line_back(f) do |line|
+            record = message(line) or next
+            text = spoken(record)
+            said.unshift([record["type"], text]) unless text.empty?
+            break if said.size == count
+          end
+        end
+        said
+      rescue SystemCallError
+        []
+      end
+
       private
 
       def path_for(session, home)
@@ -48,6 +68,14 @@ module ClaudeInbox
       end
 
       def scan_back(file)
+        each_line_back(file) do |line|
+          at = message_time(line)
+          return at if at
+        end
+        nil
+      end
+
+      def each_line_back(file)
         pos = file.size
         carry = +""
         while pos > 0
@@ -56,21 +84,29 @@ module ClaudeInbox
           file.seek(pos)
           lines = (file.read(step) + carry).split("\n", -1)
           carry = pos.zero? ? +"" : lines.shift
-          lines.reverse_each do |line|
-            at = message_time(line)
-            return at if at
-          end
+          lines.reverse_each { |line| yield line }
         end
-        nil
       end
 
       def message_time(line)
+        record = message(line) or return nil
+        record["timestamp"] && Time.iso8601(record["timestamp"])
+      rescue ArgumentError
+        nil
+      end
+
+      def message(line)
         return nil unless MESSAGE_TYPES.any? { |type| line.include?("\"type\":\"#{type}\"") }
         record = JSON.parse(line.force_encoding(Encoding::UTF_8))
-        return nil unless MESSAGE_TYPES.include?(record["type"]) && record["timestamp"]
-        Time.iso8601(record["timestamp"])
-      rescue JSON::ParserError, ArgumentError
+        record if MESSAGE_TYPES.include?(record["type"])
+      rescue JSON::ParserError
         nil
+      end
+
+      def spoken(record)
+        content = record.dig("message", "content")
+        text = content.is_a?(String) ? content : Array(content).filter_map { |b| b["text"] if b.is_a?(Hash) && b["type"] == "text" }.join("\n")
+        text.gsub(REMINDER, "").strip
       end
     end
   end

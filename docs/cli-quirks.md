@@ -125,6 +125,13 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   synced skills sit in `~/.claude/skills/synced/<bucket>/<name>/SKILL.md`
   and show up as `anthropic-skills:<name>`. Built-ins such as `/init` live
   inside the CLI and aren't on disk.
+- The CLI's notes to the model (the environment, the model's name, newly
+  loaded tools, CLAUDE.md) land in the transcript as `user` records whose
+  content is a `<system-reminder>` block, between the records of what the
+  person typed, with no mark of their own (seen on 2.1.312). A `user` record
+  is also where a tool result lands, as a `tool_result` block. So "what the
+  person said" is a `user` record's text with the reminders cut out, and
+  one that is nothing else is not a message at all.
 - With bracketed paste on, an image paste arrives as an empty fence
   (`\e[200~\e[201~`), since an image has no text form. That empty fence is
   the signal to read the clipboard, which is how Claude Code does it too. A
