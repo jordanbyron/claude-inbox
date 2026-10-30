@@ -57,7 +57,8 @@ module ClaudeInbox
   # The links come from the daemon's scan of each background session's
   # transcript, so a session that merely mentions a PR gets it too. The
   # daemon keeps one PR per session, so StackLinks adds the rest of a stack
-  # the session opened. A session with no scanned links, such as an
+  # the session opened. A session that names its git branch and remote also
+  # gets the PRs gh lists for that branch. A session with neither, such as an
   # interactive one, has only the store's `pr` override.
   #
   # A merged or closed PR never changes again, so once gh has said so, and
@@ -82,6 +83,8 @@ module ClaudeInbox
       @clock = clock
       @known = {}      # url => PullRequest
       @checked_at = {} # url => epoch seconds of the last gh call
+      @branches = {}   # "owner/repo:branch" => urls gh listed for it
+      @branch_checked_at = {}
       @mutex = Mutex.new
       @stacks = StackLinks.new
     end
@@ -100,7 +103,9 @@ module ClaudeInbox
     # sessions with the answers on their `prs` and whether any PR changed, so
     # the caller knows whether the list is worth publishing again. A merge
     # date alone counts: it is what lets a PR the cache called merged settle.
+    # A branch's PRs join its session from the next `enrich`.
     def refresh(sessions)
+      sessions.filter_map { |s| head(s) }.uniq.each { |repo, branch| list_branch(repo, branch) }
       fresh = sessions.map { |s| s.with(prs: s.prs.map { |pr| status(pr.url) }) }
       [fresh, fresh.map(&:prs) != sessions.map(&:prs)]
     end
@@ -118,15 +123,28 @@ module ClaudeInbox
       end
     end
 
+    FIELDS = "number,state,isDraft,url,closedAt,statusCheckRollup,reviewDecision,mergeable,title"
+
     # Parse `gh pr view --json` output.
     def self.parse(url, json)
-      h = JSON.parse(json)
+      from_gh(url, JSON.parse(json))
+    rescue JSON::ParserError
+      nil
+    end
+
+    # One PR as `gh pr view` or `gh pr list` describes it.
+    def self.from_gh(url, h)
       state = (h["state"] == "OPEN" && h["isDraft"]) ? "DRAFT" : h["state"]
       resolved_at = h["closedAt"] && Time.iso8601(h["closedAt"]).to_i
       PullRequest.new(number: h["number"], url: h["url"] || url, state: state, resolved_at: resolved_at,
         health: (health(h) if h["state"] == "OPEN"), title: h["title"])
-    rescue JSON::ParserError, ArgumentError
+    rescue ArgumentError
       nil
+    end
+
+    # owner/repo, for a GitHub remote in any of the forms git accepts.
+    def self.github_repo(origin_url)
+      origin_url.to_s[%r{\A(?:https://|ssh://)?(?:[^@/]+@)?github\.com[:/]([^/\s]+/[^/\s]+?)(?:\.git)?/?\z}, 1]
     end
 
     # A check run reports a `conclusion`, a commit status a `state`; the
@@ -153,7 +171,34 @@ module ClaudeInbox
 
     private
 
-    def scanned(session) = (session.pr_urls + @stacks.urls(session.transcript_path)).uniq
+    def scanned(session) = (session.pr_urls + @stacks.urls(session.transcript_path) + branch_urls(session)).uniq
+
+    def head(session)
+      repo = self.class.github_repo(session.origin_url)
+      [repo, session.branch] if repo && session.branch
+    end
+
+    def branch_urls(session)
+      key = head(session)&.join(":")
+      @mutex.synchronize { @branches.fetch(key, []) }
+    end
+
+    # What gh lists comes with its state, so each PR also counts as checked.
+    def list_branch(repo, branch)
+      key = "#{repo}:#{branch}"
+      @mutex.synchronize do
+        return unless @gh && @clock.call.to_i - @branch_checked_at.fetch(key, 0) >= REFRESH_AFTER
+        @branch_checked_at[key] = now = @clock.call.to_i
+        found = fetch_branch(repo, branch) or return
+        found.each do |pr|
+          next if @known[pr.url]&.final?
+          @checked_at[pr.url] = now
+          remember(pr) if pr.final?
+          @known[pr.url] = pr
+        end
+        @branches[key] = found.map(&:url)
+      end
+    end
 
     # Best known state for a url without asking gh.
     def known(url)
@@ -189,10 +234,17 @@ module ClaudeInbox
     end
 
     def fetch(url)
-      r = Subprocess.capture(@gh, "pr", "view", url, "--json",
-        "number,state,isDraft,url,closedAt,statusCheckRollup,reviewDecision,mergeable,title")
+      r = Subprocess.capture(@gh, "pr", "view", url, "--json", FIELDS)
       r.success? ? self.class.parse(url, r.out) : nil
     rescue SystemCallError
+      nil
+    end
+
+    def fetch_branch(repo, branch)
+      r = Subprocess.capture(@gh, "pr", "list", "--repo", repo, "--head", branch, "--state", "all", "--limit", "5", "--json", FIELDS)
+      return unless r.success?
+      JSON.parse(r.out).filter_map { |h| self.class.from_gh(h["url"], h) }
+    rescue SystemCallError, JSON::ParserError
       nil
     end
   end

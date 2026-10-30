@@ -65,7 +65,9 @@ module ClaudeInbox
           blocked_kind: blocked_kind,
           line: LINES[blocked_kind],
           started_at: time(thread["createdAt"]),
-          last_message_at: time(thread["updatedAt"])
+          last_message_at: time(thread["updatedAt"]),
+          branch: thread.dig("gitInfo", "branch"),
+          origin_url: thread.dig("gitInfo", "originUrl")
         )
       end
 
