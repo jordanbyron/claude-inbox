@@ -152,3 +152,36 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   the pane's buttons once it cannot scroll (2.1.288). So the pane turns a
   person's one-row scroll into a cursor move itself, in a `ui.scroll` hook,
   rather than relying on the ring.
+
+## Codex
+
+- Only the shared daemon knows which threads are live. A `codex app-server`
+  of your own reports every other thread `notLoaded`, a running one
+  included. `codex app-server daemon version` prints JSON with `status` and
+  `socketPath` (`~/.codex/app-server-control/app-server-control.sock`, a
+  symlink into `/private/tmp`). The socket speaks the stdio server's
+  JSON-RPC, one message per WebSocket text frame: plain JSON gets an EOF,
+  so the client upgrades first, masks what it sends and answers the
+  daemon's pings (checked on 0.165.0).
+- `initialize` fails with `missing field clientInfo` unless it names a
+  `clientInfo` with `name` and `version`, and every other call before it
+  is `Not initialized` (checked on 0.165.0).
+- `thread/list` sorts by its `sortKey` newest first and pages with
+  `cursor`, the previous page's `nextCursor`, an ISO time; the daemon
+  keeps every thread ever started, so without a cut the list is history
+  (checked on 0.165.0).
+- `thread/list` without `sourceKinds` returns only interactive threads, so
+  `codex exec` runs are missing until `exec` is named (checked on 0.165.0).
+- `codex exec` and `codex --no-daemon` run their own server in-process, so
+  the daemon reports their thread `notLoaded` the whole time it runs. Only
+  `updatedAt` and the unread marker move (checked on 0.165.0).
+- `readStates[id].firstUnread` is set once a turn completes, and the TUI
+  never clears it, not even with the turn on screen. Only
+  `thread/readState/update` does, so a TUI thread stays done until
+  something marks it read (checked on 0.165.0).
+- Every new TUI thread brings an ephemeral title thread that shows up in
+  `thread/started` and `thread/status/changed` but never in `thread/list`,
+  and cannot be deleted (checked on 0.165.0).
+- A daemon thread's `source` is `"vscode"` and its `originator`
+  `"codex-tui"` whatever started it, a TUI or another client on the socket,
+  so `source` cannot tell them apart (checked on 0.165.0).
