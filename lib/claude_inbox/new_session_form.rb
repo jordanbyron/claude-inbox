@@ -2,7 +2,6 @@
 
 require "pastel"
 require_relative "claude/agents_client"
-require_relative "codex/threads_client"
 require_relative "images"
 require_relative "palette"
 require_relative "session_request"
