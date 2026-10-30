@@ -5,6 +5,7 @@ require_relative "../session"
 require_relative "../store"
 require_relative "../subprocess"
 require_relative "daemon"
+require_relative "relay"
 
 module ClaudeInbox
   module Codex
@@ -38,9 +39,11 @@ module ClaudeInbox
       }.freeze
       PERMISSION_MODES = ["default", *PERMISSIONS.keys].freeze
 
-      def initialize(daemon: Daemon.new, bin: "codex", clock: -> { Time.now })
+      def initialize(daemon: Daemon.new, bin: "codex", tty: $stdin, out: $stdout, clock: -> { Time.now })
         @daemon = daemon
         @bin = bin
+        @tty = tty
+        @out = out
         @clock = clock
       end
 
@@ -61,13 +64,13 @@ module ClaudeInbox
       end
 
       # Hands the terminal to `codex resume`, which joins the daemon's live
-      # copy of the thread, and returns when it exits. False when it failed.
-      # Run anywhere but the thread's directory, it first asks which to use.
-      def attach(session)
+      # copy of the thread, through a Relay, and returns when it exits or ←
+      # leaves it. False when it failed. Run anywhere but the thread's
+      # directory, it first asks which to use. The block, polled alongside,
+      # ends the attach early when it answers true.
+      def attach(session, &stop)
         here = (session.cwd && File.directory?(session.cwd)) ? {chdir: session.cwd} : {}
-        pid = Process.spawn(*Subprocess.command(@bin, "resume", session.id, **here))
-        _, status = Process.wait2(pid)
-        status.success? || !status.exited?
+        Relay.run(Subprocess.command(@bin, "resume", session.id, **here), tty: @tty, out: @out, &stop)
       end
 
       # Interrupts the turn under way. False when there is none. The thread

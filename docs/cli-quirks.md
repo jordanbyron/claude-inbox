@@ -199,6 +199,19 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
 - `model/list` names each model's `supportedReasoningEfforts`, and they
   differ by model: one offers `ultra` where another stops at `max`
   (checked on 0.166.0).
+- The TUI has no key that hands back to its caller: `←` only moves the
+  cursor, `⌃z` does not suspend, and `⌃c`/`⌃d` quit are fixed. Its
+  keymap (`tui.keymap.*`) refuses to start with `←` bound to anything
+  else: `Ambiguous tui.keymap.main bindings: open_external_editor
+  shadows editor.move_left`. So the inbox runs `codex resume` behind a
+  pty of its own and leaves on `←` itself, reading where Codex put the
+  cursor: every frame ends `ESC[row;colH ESC[?25h` with the cursor in the
+  composer, whose text starts in column 3 after `› `. `←` there leaves
+  even with text after the cursor (checked on 0.165.0).
+- The TUI asks for the kitty keyboard protocol with key releases
+  (`ESC[>7u`), plus focus events, all-motion mouse and the alternate
+  screen, and answers a resize with a cursor-position query (`ESC[6n`)
+  before it redraws (checked on 0.165.0).
 - A thread from `thread/start` is not in `thread/list` until it has a
   turn, so a start is `thread/start` then `turn/start`. The turn carries
   on after the connection that started it closes (checked on 0.165.0).

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "pty"
 require "tmpdir"
 
 RSpec.describe ClaudeInbox::Codex::ThreadsClient do
@@ -144,8 +145,17 @@ RSpec.describe ClaudeInbox::Codex::ThreadsClient do
       bin = File.join(dir, "codex")
       File.write(bin, "#!/bin/sh\necho \"$PWD $*\" > \"$0.log\"\n")
       File.chmod(0o755, bin)
-      expect(described_class.new(bin: bin).attach(thread)).to be(true)
+      master, tty = PTY.open
+      Thread.new {
+        begin
+          loop { master.readpartial(4096) }
+        rescue
+          nil
+        end
+      }
+      expect(described_class.new(bin: bin, tty: tty, out: tty).attach(thread)).to be(true)
       expect(File.read("#{bin}.log")).to eq("#{File.realpath(dir)} resume t1\n")
+      [master, tty].each(&:close)
     end
   end
 end
