@@ -2,12 +2,8 @@
 
 module ClaudeInbox
   # Splits bracketed pastes (what the terminal sends once App turns on
-  # \e[?2004h) out of the raw keypress stream. Pure: no terminal, no IO.
-  #
-  # A paste can straddle several non-blocking reads, so this keeps the open
-  # one between calls and only hands it over once its closing bracket has
-  # arrived. Everything outside the brackets comes back as keys to handle
-  # as before.
+  # \e[?2004h) out of the raw keypress stream. A paste can straddle several
+  # non-blocking reads, so an open one waits here for its closing bracket.
   #
   #   p = Paste.new
   #   p.feed("j\e[200~hel")     # => [[:key, "j"]]
