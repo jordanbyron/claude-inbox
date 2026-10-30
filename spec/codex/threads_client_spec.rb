@@ -49,7 +49,7 @@ RSpec.describe ClaudeInbox::Codex::ThreadsClient do
       fake = FakeCodexDaemon.new(dir, "thread/list" => JSON.parse(File.read(fixture_path("codex-threads.json"))))
       client = described_class.new(daemon: ClaudeInbox::Codex::Daemon.new(socket: fake.path, timeout: 1), clock: -> { Time.at(1_789_600_000) })
       expect(client.list.map(&:state)).to eq(%w[blocked working done])
-      expect(drain(fake.requests).find { |r| r["method"] == "thread/list" }["params"]).to eq("sourceKinds" => %w[cli vscode exec appServer], "sortKey" => "updated_at", "limit" => 100)
+      expect(drain(fake.requests).find { |r| r["method"] == "thread/list" }["params"]).to eq("sourceKinds" => %w[cli vscode appServer], "sortKey" => "updated_at", "limit" => 100)
       fake.stop
     end
   end
