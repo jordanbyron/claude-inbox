@@ -286,13 +286,13 @@ module ClaudeInbox
       sections = filtered(all)
       width, height = @terminal.size
       body_h = Renderer.body_height(height)
-      ensure_selection(sections)
+      ensure_selection(all)
       @tick += 1
       view = Renderer::View.new(
         width: width, height: height, now: now, selected: @selected&.key, top: @frame.top, expanded: @expanded,
         modal: modal_lines(width), screen: screen_lines(width, body_h),
         status: status_text(now), usage: @rate_limits.windows(now), filter: filter, filter_editing: filter_editing?,
-        tick: @tick / 2, loading: loading_for, listening: @listener.snapshot
+        tick: @tick / 2, loading: loading_for, listening: @listener.snapshot, arrival: arrival(now)
       )
       @frame = @renderer.frame(sections, view)
       @frame = @frame.plain unless @color # --no-color: decided here and nowhere else

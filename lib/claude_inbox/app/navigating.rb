@@ -5,23 +5,34 @@ module ClaudeInbox
     # Where the cursor is in the sectioned, foldable list and how it moves.
     # The only writer of the selection; the rest of App reads it.
     module Navigating
+      ARRIVAL_SECONDS = 4
+
       private
+
+      def arrival(now) = @arrival&.then { |a, until_at| a if now < until_at }
 
       # The row to land on once a poll lists it, as after a spawn.
       def select_later(id)
         @pending_select = id
       end
 
-      # A requested row behind a fold opens it: left pending, the request
-      # would fire whenever the row next surfaced, taking the cursor from
-      # wherever you had moved it since.
-      def ensure_selection(sections)
+      # A requested row is settled the poll it first appears in, filtered
+      # out or not: left pending, it would fire whenever the row next
+      # surfaced, taking the cursor from wherever you had moved it since.
+      # Behind a fold it lights the fold line for a few seconds and leaves
+      # both the fold and the cursor alone, since a folded session is one
+      # you chose not to watch.
+      def ensure_selection(all)
+        sections = filtered(all)
         pending = @pending_select && Store::Selection.row(@pending_select)
-        if pending && (name = sections.section_of(pending))
-          @expanded[name] = true if Store.folded?(name, @expanded)
-          select(pending)
+        if pending && all.section_of(pending)
           @pending_select = nil
-          return
+          name = sections.section_of(pending)
+          if name && Store.folded?(name, @expanded)
+            @arrival = [Renderer::Arrival.new(section: name, label: label_for(pending.key)), Time.now + ARRIVAL_SECONDS]
+          elsif name
+            return select(pending)
+          end
         end
         stops = sections.selections(@expanded)
         return if stops.include?(@selected)
