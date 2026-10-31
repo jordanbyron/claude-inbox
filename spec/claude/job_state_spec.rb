@@ -75,6 +75,11 @@ RSpec.describe ClaudeInbox::Claude::JobState do
     stalled = described_class.new("inFlight" => {"tasks" => 0}, "fan" => [{"kind" => "shell", "doneAt" => 1793409689178}])
     expect(stalled).not_to be_in_flight
     expect(stalled.in_flight_label).to be_nil
+
+    # A teammate gone idle stays counted in `tasks` for as long as it lives, with nothing open to name.
+    idle_teammate = described_class.new("inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate", "doneAt" => 0}])
+    expect(idle_teammate).to be_in_flight
+    expect(idle_teammate.in_flight_label).to be_nil
     expect(described_class.new({})).not_to be_in_flight
   end
 

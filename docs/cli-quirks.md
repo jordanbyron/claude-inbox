@@ -35,7 +35,11 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   stays in `fan` with a `doneAt` (0 for a teammate gone idle), and neither
   is updated while `tempo` is `active` or once the job is blocked or
   settled, so they say what was open, not what is busy (read from the
-  2.1.314 bundle).
+  2.1.314 bundle). A teammate gone idle stays in `inFlight.tasks` and
+  `kinds` for as long as it lives, with the job saying `working` and
+  `tempo` `idle`, so the job file alone never settles a session whose
+  teammate is waiting; its roster file says `idle` within 15 ms of the
+  lead's reply (seen on 2.1.314 with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`).
 - `~/.claude/sessions/<pid>.json` is what a session's own process says it
   is doing, rewritten the moment that changes: `status` is `busy` while
   its turn runs or a sub-agent, teammate or workflow it started is running

@@ -64,6 +64,7 @@ module ClaudeInbox
         @detail = hash["detail"]
         @needs = hash["needs"]
         @result = (hash["output"] || {})["result"]
+        @pieces = (hash["fan"] || []).size
         @kinds = (hash["fan"] || []).filter_map { |f| f["kind"] if f["doneAt"].nil? }
         @tasks = (hash["inFlight"] || {})["tasks"].to_i
         @pr_urls = (hash["children"] || []).filter_map { |c| c["href"] if c["kind"] == "pr" }
@@ -96,18 +97,20 @@ module ClaudeInbox
       end
 
       # "1 shell", "2 agents · 1 shell": the pieces of the fan still open. A
-      # finished one stays listed with `doneAt` (0 for a teammate gone idle).
-      # Falls back to a bare count for a state file that counts the open
-      # tasks without naming them.
+      # finished one stays listed with `doneAt` (0 for a teammate gone idle)
+      # and a teammate gone idle stays counted in `tasks`, so a fan with
+      # nothing open names nothing. Falls back to a bare count for a state
+      # file that counts the open tasks without naming them.
       def in_flight_label
         return nil unless in_flight?
-        return count_label if kinds.empty?
+        return count_label if pieces.zero?
+        return nil if kinds.empty?
         kinds.tally.map { |kind, n| "#{n} #{plural(KIND_WORDS.fetch(kind, kind), n)}" }.join(" · ")
       end
 
       private
 
-      attr_reader :detail, :needs, :result, :kinds, :tasks, :flags
+      attr_reader :detail, :needs, :result, :pieces, :kinds, :tasks, :flags
 
       def count_label = "#{tasks} #{plural("task", tasks)}"
 
