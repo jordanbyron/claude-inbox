@@ -25,7 +25,6 @@ module ClaudeInbox
 
     def dim(text) = "\e[2m#{text}\e[0m"
 
-    # The hue, or dim when there is none.
     def tint(hue, text) = hue ? public_send(hue, text) : dim(text)
 
     # "#885 open", or "#885 open · ✗ checks" when something is wrong.
@@ -40,8 +39,7 @@ module ClaudeInbox
 
     def underline(text) = "\e[4m#{text}\e[24m"
 
-    # A filled pill: editor-background text on the hue, for a selected row
-    # or choice — the inverse of `color`, which puts the hue on the text.
+    # The inverse of `color`, for a selected row or choice.
     def pill(text, hue) = "\e[38;5;#{BG};48;5;#{HUES.fetch(hue)}m#{text}\e[0m"
 
     # A footer's key hints: `n new  N pair`.
