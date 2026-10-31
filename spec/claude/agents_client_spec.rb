@@ -70,25 +70,45 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
     expect(c.list.any? { |s| s.pid == 57405 }).to be(false)
   end
 
-  it "reads the job file of a background session only" do
+  it "reads the job file of a background session, and the roster for whether its process is busy" do
     Dir.mktmpdir do |dir|
       FileUtils.mkdir_p(File.join(dir, "jobs", "aaa11111"))
+      FileUtils.mkdir_p(File.join(dir, "sessions"))
       File.write(File.join(dir, "jobs", "aaa11111", "state.json"),
-        JSON.generate("tempo" => "idle", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}]))
+        JSON.generate("inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}]))
+      # The JSON reports a session asleep on a background shell as working and busy; the roster says shell.
+      File.write(File.join(dir, "sessions", "7.json"), JSON.generate("pid" => 7, "jobId" => "aaa11111", "status" => "shell"))
       File.write(File.join(dir, "agents.json"), JSON.generate([
-        {"id" => "aaa11111", "kind" => "background", "state" => "working"},
+        {"id" => "aaa11111", "kind" => "background", "state" => "working", "status" => "busy", "pid" => 7},
         {"kind" => "interactive", "status" => "busy", "sessionId" => "u1", "pid" => 1}
       ]))
-      bg, term = ClaudeInbox::Claude::FixtureClient.new(File.join(dir, "agents.json")).list
+      client = ClaudeInbox::Claude::FixtureClient.new(File.join(dir, "agents.json"))
+      bg, term = client.list
       expect(bg.in_flight).to eq("1 shell")
+      expect(bg).not_to be_busy
       expect(bg).to be_waiting_on_work
       expect(term.in_flight).to be_nil
+      expect(term).to be_busy
       expect(term).not_to be_waiting_on_work
+
+      File.write(File.join(dir, "sessions", "7.json"), JSON.generate("pid" => 7, "jobId" => "aaa11111", "status" => "busy"))
+      bg, = client.list
+      expect(bg).to be_busy
+      expect(bg).not_to be_waiting_on_work
     end
   end
 
   describe "a row of the JSON as a session" do
     let(:row) { {"id" => "abc12345", "kind" => "background", "state" => "working"} }
+
+    it "takes busy from the row's status unless the roster has a word" do
+      expect(described_class.session(row).busy).to be_nil
+      expect(described_class.session(row)).not_to be_waiting_on_work
+      expect(described_class.session(row.merge("status" => "busy"))).to be_busy
+      expect(described_class.session(row.merge("status" => "busy"), busy: false)).to be_waiting_on_work
+      # Stopped after a reply the daemon read as work in progress: working, nothing open, not busy.
+      expect(described_class.session(row.merge("status" => "idle"))).to be_waiting_on_work
+    end
 
     it "reads the daemon's states in OSC 7501's words" do
       states = %w[working blocked done failed stopped].map { |state| described_class.session(row.merge("state" => state)).state }

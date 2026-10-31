@@ -31,6 +31,24 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   into it holds through work, stop and respawn (checked on 2.1.296). The
   session's own prompt bar reads its color from an `agent-color` record in
   the transcript instead (read from the 2.1.296 bundle), so it stays plain.
+  `inFlight` and `fan` list what the session started: a finished piece
+  stays in `fan` with a `doneAt` (0 for a teammate gone idle), and neither
+  is updated while `tempo` is `active` or once the job is blocked or
+  settled, so they say what was open, not what is busy (read from the
+  2.1.314 bundle).
+- `~/.claude/sessions/<pid>.json` is what a session's own process says it
+  is doing, rewritten the moment that changes: `status` is `busy` while
+  its turn runs or a sub-agent, teammate or workflow it started is running
+  (a teammate gone idle does not count), `shell` while only a background
+  shell runs, `waiting` with `waitingFor` at a prompt, else `idle`; `jobId`
+  names the job. The pid is the REPL's, not the daemon's worker for the
+  job. `claude agents --json` takes its `status` from that file but
+  reports `shell` as `busy`, and its `state` is `working` whenever the
+  status is busy, so a session asleep on `sleep 150` reads `working · busy`
+  there. Measured on 2.1.314 with a hooks module inside the session: the
+  file follows the turn's start or end by 7 to 25 ms, and a prompt sent
+  through the daemon or a task notification flips `tempo` to `active` in
+  `state.json` within about 15 ms.
 - A `--bg` session with Remote Control on registers a bridge and records it
   in `state.json` as `bridgeSessionId: cse_<id>`; claude.ai/code shows the
   session at `https://claude.ai/code/session_<id>`. On 2.1.282 a plain
