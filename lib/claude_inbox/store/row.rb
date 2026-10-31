@@ -107,13 +107,15 @@ module ClaudeInbox
       # A snooze outranks the pin, which stays put and returns when it wakes.
       # With `fold_working`, a session still at work goes under the Working
       # fold instead of Active, and comes back out when it stops or is pinned.
+      # One gone quiet on what it started has stopped as far as you are
+      # concerned, so it stays in view.
       def section(now, fold_working: false)
         if session.terminal? then session.needs_you? ? :needs_you : :active
         elsif snoozed?(now) then :snoozed
         elsif pinned? then :pinned
         elsif !revived? && settled? then :settled # a resolved PR outranks Needs You
         elsif session.needs_you? || pr_needs_you? then acknowledged? ? :active : :needs_you
-        elsif fold_working && session.effective_state == "working" then :working
+        elsif fold_working && session.effective_state == "working" && !session.waiting_on_work? then :working
         else :active
         end
       end

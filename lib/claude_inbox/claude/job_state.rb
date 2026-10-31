@@ -9,9 +9,10 @@ module ClaudeInbox
     # ~/.claude/jobs/<id>/state.json. The only reader of that file, and the
     # only writer: a new session's color.
     #
-    # `claude agents --json` says "working" both while the agent thinks and
-    # while it sits idle on a shell or sub-agent it started. This file tells
-    # the two apart, and holds what the JSON drops (docs/cli-quirks.md).
+    # Holds what the JSON drops (docs/cli-quirks.md), and lists the work the
+    # session started. Whether the session itself is busy is the Roster's
+    # word, not this file's: `tempo` and `inFlight` stop moving while a
+    # turn runs and once the job is blocked or settled.
     #
     # Never cached. A color changes the moment you type `/color`, so every poll
     # asks the file again.
@@ -63,8 +64,8 @@ module ClaudeInbox
         @detail = hash["detail"]
         @needs = hash["needs"]
         @result = (hash["output"] || {})["result"]
-        @tempo = hash["tempo"]
-        @kinds = (hash["fan"] || []).filter_map { |f| f["kind"] }
+        @pieces = (hash["fan"] || []).size
+        @kinds = (hash["fan"] || []).filter_map { |f| f["kind"] if f["doneAt"].nil? }
         @tasks = (hash["inFlight"] || {})["tasks"].to_i
         @pr_urls = (hash["children"] || []).filter_map { |c| c["href"] if c["kind"] == "pr" }
         @transcript_path = hash["linkScanPath"]
@@ -80,7 +81,7 @@ module ClaudeInbox
       # a wake, are the only record of Remote Control being on it.
       def remote_control? = flags.include?("--remote-control")
 
-      def waiting_on_work? = agent_idle? && in_flight?
+      def in_flight? = tasks.positive?
 
       # What the session needs while blocked, what it produced once done,
       # otherwise its status line; nil before it has said anything.
@@ -95,24 +96,21 @@ module ClaudeInbox
         line.empty? ? nil : line
       end
 
-      # "1 shell", "2 agents · 1 shell". Falls back to a bare count for a state
+      # "1 shell", "2 agents · 1 shell": the pieces of the fan still open. A
+      # finished one stays listed with `doneAt` (0 for a teammate gone idle)
+      # and a teammate gone idle stays counted in `tasks`, so a fan with
+      # nothing open names nothing. Falls back to a bare count for a state
       # file that counts the open tasks without naming them.
       def in_flight_label
         return nil unless in_flight?
-        return count_label if kinds.empty?
+        return count_label if pieces.zero?
+        return nil if kinds.empty?
         kinds.tally.map { |kind, n| "#{n} #{plural(KIND_WORDS.fetch(kind, kind), n)}" }.join(" · ")
       end
 
       private
 
-      attr_reader :detail, :needs, :result, :tempo, :kinds, :tasks, :flags
-
-      # The agent itself is not thinking. On its own this means little — a
-      # session whose process died leaves the same reading behind — so it only
-      # says something paired with work still in flight.
-      def agent_idle? = tempo == "idle"
-
-      def in_flight? = tasks.positive?
+      attr_reader :detail, :needs, :result, :pieces, :kinds, :tasks, :flags
 
       def count_label = "#{tasks} #{plural("task", tasks)}"
 
