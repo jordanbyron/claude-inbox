@@ -5,6 +5,11 @@ RSpec.describe ClaudeInbox::Harnesses do
   let(:codex) { ClaudeInbox::Codex::FixtureClient.new(fixture_path("codex-threads.json")) }
   let(:harnesses) { described_class.new(claude: claude, codex: codex) }
 
+  it "has each harness's pulse" do
+    expect(harnesses.pulse).to eq([claude.pulse, codex.pulse])
+    expect(codex.pulse).to be_nil
+  end
+
   it "lists Claude's sessions, then each other harness's" do
     expect(harnesses.list.map(&:key)).to eq(claude.list.map(&:key) + codex.list.map(&:key))
   end

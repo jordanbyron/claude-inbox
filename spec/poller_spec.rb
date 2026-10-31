@@ -46,6 +46,19 @@ RSpec.describe ClaudeInbox::Poller do
     end
   end
 
+  it "lets a poll asked for meanwhile go ahead of the gh calls" do
+    refreshes = 0
+    allow(poller_args[:pull_requests]).to receive(:refresh).and_wrap_original do |refresh, sessions|
+      refreshes += 1
+      refresh.call(sessions)
+    end
+    poller.once
+    expect(refreshes).to eq(1)
+    poller.soon
+    poller.once
+    expect(refreshes).to eq(1)
+  end
+
   it "reports a failed poll as an error instead of raising" do
     allow(client).to receive(:list).and_raise("daemon gone")
     poller.once
@@ -184,6 +197,25 @@ RSpec.describe ClaudeInbox::Poller do
         worker.start
         wait_for { client.polls.size >= 2 }
         expect(client.polls.size).to be >= 2
+      end
+    end
+
+    it "polls when a session's status moves, without waiting out the interval" do
+      Dir.mktmpdir do |dir|
+        FileUtils.cp(fixture_path("agents.json"), dir)
+        client = PollerCountingClient.new(File.join(dir, "agents.json"))
+        worker = described_class.new(**poller_args, client: client, interval: 60)
+        worker.start
+        wait_for { client.polls.size >= 1 }
+        sleep described_class::TICK * 2
+        expect(client.polls.size).to eq(1)
+
+        FileUtils.mkdir_p(File.join(dir, "sessions"))
+        File.write(File.join(dir, "sessions", "7.json"), JSON.generate("pid" => 7, "status" => "busy", "statusUpdatedAt" => 1))
+        wait_for { client.polls.size >= 2 }
+        expect(client.polls.size).to eq(2)
+      ensure
+        worker&.stop
       end
     end
 
