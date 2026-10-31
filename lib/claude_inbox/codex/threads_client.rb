@@ -48,6 +48,9 @@ module ClaudeInbox
         @clock = clock
       end
 
+      # Only the daemon knows when a thread moves; nothing on disk says so.
+      def pulse = nil
+
       # => Array<Session>, newest first; empty when there is no daemon to ask.
       def list
         horizon = @clock.call - Store::REAP_AFTER
