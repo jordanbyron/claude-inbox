@@ -20,8 +20,6 @@ module ClaudeInbox
       PING = 0x9
       PONG = 0xA
 
-      def self.monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-
       def initialize(io, timeout:)
         @io = io
         @timeout = timeout
@@ -32,7 +30,7 @@ module ClaudeInbox
         key = [SecureRandom.random_bytes(16)].pack("m0")
         @io.write("GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" \
           "Sec-WebSocket-Key: #{key}\r\nSec-WebSocket-Version: 13\r\n\r\n")
-        deadline = self.class.monotonic + @timeout
+        deadline = monotonic + @timeout
         until (i = @buf.index("\r\n\r\n"))
           raise Error, "the upgrade reply is over #{MAX_HEAD} bytes" if @buf.bytesize > MAX_HEAD
           fill(deadline)
@@ -46,7 +44,7 @@ module ClaudeInbox
 
       # The next whole text message, answering pings on the way.
       def read_text
-        deadline = self.class.monotonic + @timeout
+        deadline = monotonic + @timeout
         message = +"".b
         loop do
           fin, op, payload = read_frame(deadline)
@@ -107,12 +105,14 @@ module ClaudeInbox
         @buf.slice!(0, n)
       end
 
+      def monotonic = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
       def fill(deadline)
         loop do
           case (chunk = @io.read_nonblock(CHUNK, exception: false))
           when nil then raise Error, "the daemon closed the connection"
           when :wait_readable
-            left = deadline - self.class.monotonic
+            left = deadline - monotonic
             raise Error, "the daemon took too long" unless left > 0 && IO.select([@io], nil, nil, left)
           else return @buf << chunk
           end
