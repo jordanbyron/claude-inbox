@@ -379,7 +379,7 @@ module ClaudeInbox
       case s.effective_state
       when "blocked" then @theme.red_bold("?")
       when "error" then @theme.red_bold("✗")
-      when "working" then s.waiting_on_work? ? @theme.yellow("◌") : @theme.yellow(spinner(tick))
+      when "working" then @theme.yellow(s.waiting_on_work? ? "◌" : spinner(tick))
       when "done" then @theme.green("✓")
       when "idle" then @p.dim("■")
       else @p.dim("·")
@@ -392,7 +392,7 @@ module ClaudeInbox
       base =
         case section
         when :snoozed
-          wake = row.parked? ? @theme.purple("parked") : @theme.purple("wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
+          wake = @theme.purple(row.parked? ? "parked" : "wakes in #{Text.age(row.wake_at.to_i - now.to_i)}")
           row.pinned? ? wake + @theme.cyan(" ★") : wake
         when :settled
           @p.dim("#{word(s.state)}#{harness_tag(s)} · #{age}")
