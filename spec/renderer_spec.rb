@@ -122,7 +122,7 @@ RSpec.describe ClaudeInbox::Renderer do
   it "separates an agent that is thinking from one waiting on what it started" do
     rows = [
       session(id: "t1", name: "thinking", in_flight: "2 agents"),
-      session(id: "t2", name: "watching", in_flight: "1 shell", waiting_on_work: true)
+      session(id: "t2", name: "watching", in_flight: "1 shell", busy: false)
     ]
     sec = ClaudeInbox::Store.sectionize(rows, ClaudeInbox::Store.merge_entries({}, rows, now), now)
     text = renderer.frame(sec, view.with(width: 90, height: 12, tick: 0)).plain.lines.join("\n")

@@ -4,6 +4,7 @@ require "json"
 require_relative "../debug"
 require_relative "../harnesses"
 require_relative "job_state"
+require_relative "roster"
 require_relative "../session"
 require_relative "../subprocess"
 require_relative "transcript"
@@ -29,9 +30,10 @@ module ClaudeInbox
 
       attr_reader :jobs_dir
 
-      def initialize(bin: "claude", jobs_dir: JobState::DEFAULT_DIR, transcripts: Transcript.new)
+      def initialize(bin: "claude", jobs_dir: JobState::DEFAULT_DIR, sessions_dir: Roster::DEFAULT_DIR, transcripts: Transcript.new)
         @bin = bin
         @jobs_dir = jobs_dir
+        @sessions_dir = sessions_dir
         @transcripts = transcripts
       end
 
@@ -46,12 +48,15 @@ module ClaudeInbox
       end
 
       # One row of the JSON as a Session, with its job file (nil when it has
-      # none) and the process tree's word on where it is driven from.
-      # `blocked_kind` stays nil: a blocked row carries no `waitingFor`, and an
-      # interactive one's is free text such as "permission prompt".
-      def self.session(h, job: nil, origin: nil, bridge: nil)
+      # none), the roster's word on whether its process is `busy` (the row's
+      # own `status` when the roster has none) and the process tree's word on
+      # where it is driven from. `blocked_kind` stays nil: a blocked row
+      # carries no `waitingFor`, and an interactive one's is free text such
+      # as "permission prompt".
+      def self.session(h, job: nil, origin: nil, bridge: nil, busy: nil)
         remote = origin == :remote
         bridge ||= job&.bridge_id
+        busy = busy?(h, nil) if busy.nil?
         s = Session.new(
           harness: :claude,
           actions: actions_for(h["kind"], remote),
@@ -67,7 +72,7 @@ module ClaudeInbox
           status: h["status"],
           waiting_for: h["waitingFor"],
           in_flight: job&.in_flight_label,
-          waiting_on_work: job&.waiting_on_work? == true,
+          busy: busy,
           remote: remote,
           remote_control: remote || job&.remote_control? == true,
           remote_url: remote_url(bridge),
@@ -78,6 +83,13 @@ module ClaudeInbox
           pr_urls: job&.pr_urls
         )
         job ? s.with(line: job.summary(s.effective_state)) : s
+      end
+
+      # The JSON folds the roster's `shell` into `busy`, so the roster's own
+      # word wins when there is one; a row without a process has no status.
+      def self.busy?(h, roster_status)
+        return roster_status == "busy" if roster_status
+        h["status"] && h["status"] == "busy"
       end
 
       def self.actions_for(kind, remote)
@@ -243,7 +255,8 @@ module ClaudeInbox
           origin = origins.fetch(h["pid"], :terminal) if interactive
           next if UNATTENDED.include?(origin)
           job = JobState.read(h["id"], jobs_dir: @jobs_dir) if h["kind"] == "background"
-          self.class.session(h, job: job, origin: origin, bridge: (bridges[h["pid"]] if interactive))
+          busy = self.class.busy?(h, Roster.status(h["pid"], dir: @sessions_dir))
+          self.class.session(h, job: job, origin: origin, bridge: (bridges[h["pid"]] if interactive), busy: busy)
         end
         @transcripts.enrich(found)
       end
@@ -308,7 +321,7 @@ module ClaudeInbox
     # Reads a committed JSON fixture instead of the daemon.
     class FixtureClient < AgentsClient
       def initialize(path, origins: {}, bridges: {})
-        super(jobs_dir: File.join(File.dirname(path), "jobs"))
+        super(jobs_dir: File.join(File.dirname(path), "jobs"), sessions_dir: File.join(File.dirname(path), "sessions"))
         @path = path
         @origins = origins
         @bridges = bridges

@@ -12,13 +12,14 @@ module ClaudeInbox
   # harness's adapter. Immutable, and the enrichers hand back copies via
   # `with`, so a list already given to another thread cannot move under it.
   # `line` is the session's own account of where it is, `in_flight` the work
-  # it started that is still open, `remote` a session driven from another
+  # it started that is still open, `busy` its process's word on whether it
+  # is at work (nil when it has none), `remote` a session driven from another
   # device and `remote_control` one that can be. `branch` and `origin_url`
   # are the git branch and remote it works on, when its harness says. `actions` are what its
   # harness can do to it from here.
   Session = Data.define(
     :harness, :actions, :id, :cwd, :kind, :started_at, :created_at, :session_id, :name,
-    :state, :blocked_kind, :pid, :status, :waiting_for, :line, :in_flight, :waiting_on_work,
+    :state, :blocked_kind, :pid, :status, :waiting_for, :line, :in_flight, :busy,
     :remote, :remote_control, :remote_url, :color, :intent, :transcript_path, :worktree_path, :pr_urls, :prs, :last_message_at,
     :branch, :origin_url
   ) do
@@ -52,8 +53,13 @@ module ClaudeInbox
     # Selection handle: short id for background sessions, the UUID otherwise.
     def key = id || session_id
 
-    # "working" covers an agent thinking and one gone quiet on work it started.
-    def waiting_on_work? = effective_state == "working" && waiting_on_work == true
+    def busy? = busy == true
+
+    # The daemon calls a session working while anything it started is open,
+    # a shell included, and after a reply it read as work in progress; the
+    # process says whether it is at work. Working but not busy is a session
+    # gone quiet on what it started, or stopped saying it would be back.
+    def waiting_on_work? = effective_state == "working" && busy == false
 
     def needs_you? = %w[blocked error].include?(effective_state)
 

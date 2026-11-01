@@ -34,7 +34,7 @@ RSpec.describe ClaudeInbox::Claude::JobState do
       expect(described_class.new("createdAt" => "soon").created_at).to be_nil
       expect(js).to be_remote_control
       expect(described_class.new({})).not_to be_remote_control
-      expect(js).to be_waiting_on_work
+      expect(js).to be_in_flight
       expect(js.in_flight_label).to eq("1 shell")
     end
   end
@@ -61,21 +61,26 @@ RSpec.describe ClaudeInbox::Claude::JobState do
   end
 
   it "falls back to a bare count when the file does not name the work" do
-    js = described_class.new("tempo" => "idle", "inFlight" => {"tasks" => 2})
+    js = described_class.new("inFlight" => {"tasks" => 2})
     expect(js.in_flight_label).to eq("2 tasks")
-    expect(js).to be_waiting_on_work
+    expect(js).to be_in_flight
   end
 
-  it "says nothing about work when the agent is thinking or nothing is open" do
-    thinking = described_class.new("tempo" => "active", "inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "shell"}])
-    expect(thinking).not_to be_waiting_on_work
-    expect(thinking.in_flight_label).to eq("1 shell")
+  it "counts only the pieces still open, and claims nothing once the file lists none" do
+    # A finished piece stays in the fan with `doneAt`; a teammate gone idle carries 0.
+    js = described_class.new("inFlight" => {"tasks" => 1},
+      "fan" => [{"kind" => "shell", "doneAt" => 1793409689178}, {"kind" => "in_process_teammate", "doneAt" => 0}, {"kind" => "shell"}])
+    expect(js.in_flight_label).to eq("1 shell")
 
-    # A session whose process died leaves an idle pulse behind with nothing in
-    # flight; that is not the same as waiting, so it claims nothing.
-    stalled = described_class.new("tempo" => "idle", "inFlight" => {"tasks" => 0})
-    expect(stalled).not_to be_waiting_on_work
+    stalled = described_class.new("inFlight" => {"tasks" => 0}, "fan" => [{"kind" => "shell", "doneAt" => 1793409689178}])
+    expect(stalled).not_to be_in_flight
     expect(stalled.in_flight_label).to be_nil
+
+    # A teammate gone idle stays counted in `tasks` for as long as it lives, with nothing open to name.
+    idle_teammate = described_class.new("inFlight" => {"tasks" => 1}, "fan" => [{"kind" => "in_process_teammate", "doneAt" => 0}])
+    expect(idle_teammate).to be_in_flight
+    expect(idle_teammate.in_flight_label).to be_nil
+    expect(described_class.new({})).not_to be_in_flight
   end
 
   it "falls back to the detail line when the file has no needs or result" do
