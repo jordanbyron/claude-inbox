@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "stringio"
 require "tmpdir"
 
 RSpec.describe ClaudeInbox::App do
