@@ -30,7 +30,7 @@ module ClaudeInbox
 
     private
 
-    # How wide the box wants to be; box_width caps it at the terminal.
+    # How wide the box wants to be.
     def fit = self.class::WIDTH
 
     def box_width(width) = [width - 4, fit].min
@@ -42,10 +42,9 @@ module ClaudeInbox
 
     def key(name) = @theme.cyan_bold(name)
 
-    # A key and what it does.
     def hint(name, action) = "#{key(name)}  #{@theme.dim(action)}"
 
-    # Esc or q closes a box. Prompt skips this, since q is text there.
+    # Prompt skips this, since q is text there.
     def dismiss?(name, key) = name == :escape || key == "q"
 
     # `s` snooze: one key per choice, and the choice is read from `choice`.
