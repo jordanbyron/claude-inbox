@@ -120,7 +120,6 @@ module ClaudeInbox
           name: squish(thread["name"]) || preview,
           intent: preview,
           state: state,
-          blocked_kind: blocked_kind,
           line: LINES[blocked_kind],
           started_at: time(thread["createdAt"]),
           last_message_at: time(thread["updatedAt"]),
