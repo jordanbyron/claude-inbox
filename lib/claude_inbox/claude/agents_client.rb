@@ -55,9 +55,7 @@ module ClaudeInbox
       # One row of the JSON as a Session, with its job file (nil when it has
       # none), the roster's word on whether its process is `busy` (the row's
       # own `status` when the roster has none) and the process tree's word on
-      # where it is driven from. `blocked_kind` stays nil: a blocked row
-      # carries no `waitingFor`, and an interactive one's is free text such
-      # as "permission prompt".
+      # where it is driven from.
       def self.session(h, job: nil, origin: nil, bridge: nil, busy: nil)
         remote = origin == :remote
         bridge ||= job&.bridge_id
