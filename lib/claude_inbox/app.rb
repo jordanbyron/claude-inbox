@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative "claude/agents_client"
-require_relative "codex/threads_client"
 require_relative "harnesses"
 require_relative "debug"
 require_relative "dialog"
