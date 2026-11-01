@@ -224,7 +224,7 @@ module ClaudeInbox
       title = " #{SECTION_TITLES[name]} "
       count_s = " #{count} "
       fill = [width - 3 - Text.width(title) - Text.width(count_s), 0].max
-      Text.pad(" " + section_color(name, "▎") + section_color(name, @p.bold(title)) + @p.dim("─" * fill) + @p.dim(count_s), width)
+      " " + section_color(name, "▎") + section_color(name, @p.bold(title)) + @p.dim("─" * fill) + @p.dim(count_s)
     end
 
     def section_color(name, s) = @theme.tint(SECTION_HUES[name], s)
@@ -232,7 +232,7 @@ module ClaudeInbox
     # ----- body ---------------------------------------------------------------
 
     def body_lines(sections, width, view)
-      return [empty_state(width), []] if sections.all.empty?
+      return [empty_state, []] if sections.all.empty?
       lines = []
       items = []
       selected = view.selected
@@ -241,7 +241,7 @@ module ClaudeInbox
         lines << "" << section_title(name, rows.size, width)
         items << nil << nil
         if Store.folded?(name, view.expanded)
-          lines << fold_toggle_line(name, rows.size, selected, width, (view.arrival if view.arrival&.section == name))
+          lines << fold_toggle_line(name, rows.size, selected, (view.arrival if view.arrival&.section == name))
           items << Store::Selection.fold(name)
           next
         end
@@ -290,19 +290,19 @@ module ClaudeInbox
 
     def centered(s, width)
       left = [(width - Text.width(s)) / 2, 0].max
-      Text.pad(" " * left + s, width)
+      " " * left + s
     end
 
-    def empty_state(width)
+    def empty_state
       [
         "", "",
-        Text.pad("   " + @p.bold("Nothing running."), width),
-        Text.pad("   " + @p.dim("Start one from any terminal with ") + @theme.cyan("claude --bg \"task\""), width),
-        Text.pad("   " + @p.dim("or press ") + @theme.cyan("R") + @p.dim(" to poll again."), width)
+        "   " + @p.bold("Nothing running."),
+        "   " + @p.dim("Start one from any terminal with ") + @theme.cyan("claude --bg \"task\""),
+        "   " + @p.dim("or press ") + @theme.cyan("R") + @p.dim(" to poll again.")
       ]
     end
 
-    def fold_toggle_line(name, count, selected, width, arrival)
+    def fold_toggle_line(name, count, selected, arrival)
       sel = selected == name
       marker = sel ? @theme.yellow_bold("▶") : " "
       summary = "… #{count} #{SECTION_TITLES[name].downcase}"
@@ -310,7 +310,7 @@ module ClaudeInbox
         if arrival then section_color(name, @p.bold(summary)) + section_color(name, "  + #{arrival.label}")
         else @p.dim(summary) + (sel ? @p.dim("   ⏎ or zo to expand") : "")
         end
-      Text.pad(" #{marker} " + text, width)
+      " #{marker} " + text
     end
 
     def row_lines(row, section, selected, width, now, tick)
@@ -338,12 +338,12 @@ module ClaudeInbox
       label = style_label(label, row, quiet, sel || unread)
       first = " #{marker} #{glyph} " + Text.pad(label, label_w) + "  " + meta + "  " + project + " "
 
-      return [Text.pad(first, width)] unless live
+      return [first] unless live
 
       # The session's own line when it has one; the path is what is left to
       # say about a terminal, which has none.
       detail = @p.dim("       ↳ " + Text.truncate(s.line || short_path(s.cwd), [width - 10, 0].max))
-      [Text.pad(first, width), Text.pad(detail, width)]
+      [first, detail]
     end
 
     # The caret takes the column. Otherwise a blue dot asks for a look, in
