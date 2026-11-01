@@ -40,10 +40,6 @@ module ClaudeInbox
       Row.new(session: session, entry: hash && Entry.new(hash))
     end
 
-    # `activity` puts the session that spoke most recently first in every
-    # section but Snoozed, which stays in wake order. The default keeps each
-    # section's own order: Pinned by pin, Needs You and Settled by the state
-    # clock, Active and Working by start with running sessions first.
     SORTS = %w[default activity].freeze
 
     # Working is empty unless `fold_working` asks for it: `--fold-working`
