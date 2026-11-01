@@ -47,6 +47,11 @@ module ClaudeInbox
         sessions(rows, origins_from(ps), self.class.bridge_ids(ps))
       end
 
+      # Moves when a session's status changes, or one starts or ends, so a
+      # poller can act on that between polls. A job file moves on every tool
+      # call and the transcript on every message, so neither is watched.
+      def pulse = Roster.pulse(dir: @sessions_dir)
+
       # One row of the JSON as a Session, with its job file (nil when it has
       # none), the roster's word on whether its process is `busy` (the row's
       # own `status` when the roster has none) and the process tree's word on

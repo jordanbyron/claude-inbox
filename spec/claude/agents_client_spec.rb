@@ -98,6 +98,17 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
     end
   end
 
+  it "has a pulse that moves with the roster" do
+    Dir.mktmpdir do |dir|
+      File.write(File.join(dir, "agents.json"), "[]")
+      client = ClaudeInbox::Claude::FixtureClient.new(File.join(dir, "agents.json"))
+      before = client.pulse
+      FileUtils.mkdir_p(File.join(dir, "sessions"))
+      File.write(File.join(dir, "sessions", "7.json"), JSON.generate("pid" => 7, "status" => "busy", "statusUpdatedAt" => 1))
+      expect(client.pulse).not_to eq(before)
+    end
+  end
+
   describe "a row of the JSON as a session" do
     let(:row) { {"id" => "abc12345", "kind" => "background", "state" => "working"} }
 
