@@ -41,7 +41,7 @@ a fullscreen terminal.
 
 `/inbox` opens it, `ctrl+x tab` focuses it and `esc` leaves. The keys are the
 ones below, with `ge` for `G`, `n` `p` for `Tab` `Shift+Tab`, and no `a`,
-`P`, `X`, `Ctrl-x`, `/`, `R` or `U`, and `s` has no `5`. `Enter`, or a click on a row, switches to the
+`r`, `P`, `X`, `Ctrl-x`, `/`, `R` or `U`, and `s` has no `5`. `Enter`, or a click on a row, switches to the
 session when you attached through `claude-inbox`.
 
 It opens when a session starts. To stop that, set
@@ -57,8 +57,9 @@ It opens when a session starts. To stop that, set
 3. **Active.** Everything else that's running or not yet settled, including
    interactive terminals.
 4. **Working.** With `--fold-working`, sessions still at work, until they
-   stop or you pin them. Collapsed; one you start with `n` lights the fold
-   line with its name instead of opening it.
+   stop or you pin them. A sub-agent still running keeps a session at work;
+   one waiting only on a shell stays in Active. Collapsed; one you start
+   with `n` lights the fold line with its name instead of opening it.
 5. **Snoozed.** Sorted by wake time. Collapsed.
 6. **Settled.** Settled with `x`, or every pull request is merged or closed.
    Collapsed.
@@ -72,7 +73,7 @@ status line. A row with a pull request shows it as `#885 open`, `#885 merged`
 and so on, with `✗ checks`, `changes requested` or `conflicts` after it when
 something is wrong, and `+2` after it when the session has two more.
 A steady `◌` with `idle · 1 shell` means the agent stopped
-and is waiting on a shell or sub-agent it started. A blue `●` marks a session you
+and is waiting on a shell it started. A blue `●` marks a session you
 haven't attached to since it got blocked or finished; one you have attached
 to since is dimmed, unless `/color` tints it. The age after the badge is how
 long since the session last said anything, read from its transcript: a
@@ -98,6 +99,7 @@ Vim bindings. Arrows and the mouse work too.
 | `u` | wake a snoozed session, or bring back a settled one |
 | `x` | settle by hand |
 | `a` | set a local alias |
+| `r` | ask Claude for a new title, kept as the alias |
 | `o` | open the pull request in the browser; with several, `o` again opens the one that matters, `1`… another |
 | `w` | open the session at claude.ai/code |
 | `y` | copy the pull request url, or the session's address; with several, `y` again copies the one that matters, `1`… another |
@@ -105,7 +107,7 @@ Vim bindings. Arrows and the mouse work too.
 | `X` | stop the session; `Enter` resumes it later |
 | `Ctrl-x` | delete the session, transcript and worktree for good |
 | `/` | filter by name, directory, prompt, status or pull request (`#885` or its title); `Enter` keeps it, `Esc` clears |
-| `R` | poll now |
+| `R` | poll now (the list also refreshes on its own when a session's status changes) |
 | `U` | update claude-inbox when the header says a newer one is out |
 | `q` | quit |
 

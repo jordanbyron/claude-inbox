@@ -14,6 +14,8 @@ module ClaudeInbox
 
     def list = @adapters.values.flat_map(&:list)
 
+    def pulse = @adapters.values.map(&:pulse)
+
     def attach(session, &) = adapter(session).attach(session, &)
 
     def stop(session) = adapter(session).stop(session)

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative "../snooze_time"
+
 module ClaudeInbox
   class Store
     # What the inbox remembers about one session between polls, over the hash

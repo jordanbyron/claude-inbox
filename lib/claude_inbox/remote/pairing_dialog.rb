@@ -24,7 +24,7 @@ module ClaudeInbox
 
       def lines(width, _caret)
         s = @snapshot.call
-        out = ["  " + state_line(s)]
+        out = ["  " + state_line(s), ""]
         out += (s.state == :listening) ? listening_lines(s) : advice(s, width)
         if s.recent.any?
           out << "" << "  recent:"
@@ -68,7 +68,7 @@ module ClaudeInbox
 
       def listening_lines(s)
         urls = s.urls ? s.urls.map { |url| "  " + elide(url) } : ["  looking up this Mac's addresses…"]
-        out = [""] + urls + ["", "  phone may use: #{s.allowed_modes.join(", ")}"]
+        out = urls + ["", "  phone may use: #{s.allowed_modes.join(", ")}"]
         out << "  " + FIREWALL.fetch(s.firewall) if s.lan && s.firewall
         out
       end
@@ -77,10 +77,10 @@ module ClaudeInbox
 
       def advice(s, width)
         case s.state
-        when :in_use then ["", "  trying again every few seconds; or pick another port with", "  --listen=PORT"]
-        when :held then ["", "  this one takes over once that one quits"]
-        when :failed then ["", *Text.wrap(s.error.to_s, width - 2).map { |l| "  " + l }, "", "  restart the inbox once that is fixed"]
-        else ["", "  or set CLAUDE_INBOX_LISTEN=lan in your shell; the README's", "  \"Starting sessions from your phone\" has the rest"]
+        when :in_use then ["  trying again every few seconds; or pick another port with", "  --listen=PORT"]
+        when :held then ["  this one takes over once that one quits"]
+        when :failed then [*Text.wrap(s.error.to_s, width - 2).map { |l| "  " + l }, "", "  restart the inbox once that is fixed"]
+        else ["  or set CLAUDE_INBOX_LISTEN=lan in your shell; the README's", "  \"Starting sessions from your phone\" has the rest"]
         end
       end
 

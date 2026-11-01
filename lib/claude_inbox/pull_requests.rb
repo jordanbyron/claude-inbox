@@ -114,7 +114,7 @@ module ClaudeInbox
     def status(url)
       @mutex.synchronize do
         pr = @known[url] ||= seed(url)
-        return pr if pr.final? || !due?(url)
+        return pr if pr.final? || !due?(@checked_at, url)
         @checked_at[url] = @clock.call.to_i
         fresh = fetch(url)
         return pr unless fresh
@@ -187,7 +187,7 @@ module ClaudeInbox
     def list_branch(repo, branch)
       key = "#{repo}:#{branch}"
       @mutex.synchronize do
-        return unless @gh && @clock.call.to_i - @branch_checked_at.fetch(key, 0) >= REFRESH_AFTER
+        return unless due?(@branch_checked_at, key)
         @branch_checked_at[key] = now = @clock.call.to_i
         found = fetch_branch(repo, branch) or return
         found.each do |pr|
@@ -205,8 +205,8 @@ module ClaudeInbox
       @mutex.synchronize { @known[url] ||= seed(url) }
     end
 
-    def due?(url)
-      @gh && @clock.call.to_i - @checked_at.fetch(url, 0) >= REFRESH_AFTER
+    def due?(checked_at, key)
+      @gh && @clock.call.to_i - checked_at.fetch(key, 0) >= REFRESH_AFTER
     end
 
     def seed(url)

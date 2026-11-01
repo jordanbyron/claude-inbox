@@ -4,11 +4,8 @@ require "json"
 require "fileutils"
 
 module ClaudeInbox
-  # The inbox's own records — the snooze table, the resolved PRs — kept
-  # under ~/.config/claude-inbox between launches. Saved atomically (a temp
-  # file beside the target, renamed over it) so a poll mid-write never
-  # reads half a record. Reading a missing or unparsable record yields {}
-  # so callers start from empty instead of failing.
+  # The JSON files the inbox keeps between launches. A save is atomic, so
+  # a poll mid-write never reads half a record.
   module Records
     module_function
 

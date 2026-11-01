@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative "records"
-require_relative "snooze_time"
 require_relative "store/entry"
 require_relative "store/row"
 require_relative "store/selection"
