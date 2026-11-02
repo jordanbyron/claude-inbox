@@ -103,7 +103,6 @@ module ClaudeInbox
 
     def launch
       options
-      # Crash traces go here instead of the alt screen when set.
       $stderr.reopen(@env["CLAUDE_INBOX_STDERR"], "a") if @env["CLAUDE_INBOX_STDERR"]
       return headless if options[:headless]
       auto_update if options[:auto_update]
@@ -141,9 +140,9 @@ module ClaudeInbox
     end
 
     # The only place the reaper is armed, and only with --reap: deleting
-    # sessions is opt-in. Everything else — tests, --fixture, anything
-    # embedding App — gets one that deletes nothing. The listener, likewise,
-    # comes only from here, and only when asked for.
+    # sessions is opt-in. Tests, --fixture and anything else embedding App
+    # get one that deletes nothing. The listener, likewise, comes only from
+    # here, and only when asked for.
     def live_options
       client = live_client
       store = new_store
@@ -160,7 +159,6 @@ module ClaudeInbox
       @updater ||= Updater.new if options[:update_check] && !options[:fixture]
     end
 
-    # The sectioning flags apply to every store a launch builds.
     def new_store(**opts) = Store.new(sort: options[:sort], fold_working: options[:fold_working], **opts)
 
     def notifier = options[:notify] ? Notifier.new : Notifier.disabled
