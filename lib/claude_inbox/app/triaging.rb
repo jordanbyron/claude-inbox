@@ -65,7 +65,7 @@ module ClaudeInbox
       def retitle_selected
         return unless require_storable && require_writable("retitle")
         key, session = @selected.key, selected_session
-        current = @store.alias_for(key) || session.display_name
+        current = @store.row(session).label
         notice("asking claude for a title…")
         in_background do
           title = @titler.title(session, current: current)
