@@ -12,8 +12,10 @@ module ClaudeInbox
   module Codex
     # A JSON-RPC connection to Codex's shared app-server daemon, the only
     # server that knows which threads are live (docs/cli-quirks.md). It
-    # opens on the first call, stays open between calls and opens again
-    # once it drops. With no codex or no daemon, every call answers nil.
+    # starts the daemon when it is down, as `claude agents` starts
+    # Claude's, opens on the first call, stays open between calls and opens
+    # again once it drops. With no codex, or a daemon that will not start,
+    # every call answers nil.
     class Daemon
       # The daemon answered, with an error.
       class Error < Harnesses::Error; end
@@ -75,12 +77,11 @@ module ClaudeInbox
         raise
       end
 
-      # `codex app-server daemon version` says whether the daemon is up and where its socket is.
+      # `codex app-server daemon start` leaves a running daemon alone and
+      # names its socket either way.
       def socket_path
-        r = Subprocess.capture(@bin, "app-server", "daemon", "version")
-        return unless r.success?
-        info = JSON.parse(r.out)
-        info["socketPath"] if info["status"] == "running"
+        r = Subprocess.capture(@bin, "app-server", "daemon", "start")
+        JSON.parse(r.out)["socketPath"] if r.success?
       rescue JSON::ParserError
         nil
       end

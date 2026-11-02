@@ -35,6 +35,21 @@ RSpec.describe ClaudeInbox::Codex::Daemon do
     expect(fake.connections).to eq(1)
   end
 
+  it "starts the daemon, then asks the socket it names" do
+    bin = File.join(dir, "codex")
+    File.write(bin, <<~SH)
+      #!/bin/sh
+      echo "$*" >> #{dir}/ran
+      echo '{"status":"started","socketPath":"#{fake.path}"}'
+    SH
+    File.chmod(0o755, bin)
+    started = described_class.new(bin: bin, timeout: 1)
+    expect(started.call("thread/list")).to include("data" => [])
+    expect(File.read(File.join(dir, "ran"))).to eq("app-server daemon start\n")
+  ensure
+    started&.close
+  end
+
   it "answers nil with no daemon to ask" do
     expect(described_class.new(socket: File.join(dir, "missing.sock")).call("thread/list")).to be_nil
     expect(described_class.new(bin: File.join(dir, "no-codex")).call("thread/list")).to be_nil

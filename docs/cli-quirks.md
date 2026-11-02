@@ -192,6 +192,11 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   JSON-RPC, one message per WebSocket text frame: plain JSON gets an EOF,
   so the client upgrades first, masks what it sends and answers the
   daemon's pings (checked on 0.165.0).
+- Nothing starts the daemon until a Codex TUI does, unlike Claude's,
+  which `claude agents` brings up. `codex app-server daemon start` leaves a
+  running daemon alone (`status: "alreadyRunning"`) and prints the same
+  JSON as `version`, `socketPath` included, so the inbox calls it in place
+  of `version` (checked on 0.166.0).
 - `initialize` fails with `missing field clientInfo` unless it names a
   `clientInfo` with `name` and `version`, and every other call before it
   is `Not initialized` (checked on 0.165.0).
