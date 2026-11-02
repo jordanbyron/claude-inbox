@@ -53,8 +53,6 @@ module ClaudeInbox
     # Selection handle: short id for background sessions, the UUID otherwise.
     def key = id || session_id
 
-    def busy? = busy == true
-
     # The daemon calls a session working while anything it started is open,
     # a shell included, and after a reply it read as work in progress; the
     # process says whether it is at work. Working but not busy is a session
