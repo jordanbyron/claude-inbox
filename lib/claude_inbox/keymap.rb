@@ -1,14 +1,7 @@
 # frozen_string_literal: true
 
 module ClaudeInbox
-  # Pure key -> action resolver with vim-style chords. The App feeds it one
-  # keypress at a time (the tty-reader key name plus the raw string) and gets
-  # back an action symbol, or nil while a chord is pending.
-  #
-  #   km = Keymap.new
-  #   km.press(:down, "j")   # => :down
-  #   km.press("g", "g")     # => nil   (pending)
-  #   km.press("g", "g")     # => :top
+  # Which action each key means, with vim-style chords like `gg` and `za`.
   class Keymap
     CHORD_TIMEOUT = 1.0
 
@@ -47,7 +40,7 @@ module ClaudeInbox
       if @pending
         table = CHORDS[@pending]
         @pending = nil
-        return table[raw] # nil on an unknown second key, chord dropped
+        return table[raw]
       end
       if CHORDS.key?(raw)
         @pending = raw
