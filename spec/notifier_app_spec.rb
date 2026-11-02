@@ -5,7 +5,6 @@ require "tmpdir"
 RSpec.describe ClaudeInbox::NotifierApp do
   let(:dir) { Dir.mktmpdir }
   let(:prefix) { File.join(dir, "Cellar", "terminal-notifier", "3.1.0") }
-  let(:source) { File.realpath(File.join(prefix, "terminal-notifier.app")) }
   let(:path) { File.join(dir, "notifier.app") }
   let(:runs) { [] }
   let(:steps_succeed) { true }
