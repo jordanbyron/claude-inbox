@@ -85,15 +85,15 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
       client = ClaudeInbox::Claude::FixtureClient.new(File.join(dir, "agents.json"))
       bg, term = client.list
       expect(bg.in_flight).to eq("1 shell")
-      expect(bg).not_to be_busy
+      expect(bg.busy).to be(false)
       expect(bg).to be_waiting_on_work
       expect(term.in_flight).to be_nil
-      expect(term).to be_busy
+      expect(term.busy).to be(true)
       expect(term).not_to be_waiting_on_work
 
       File.write(File.join(dir, "sessions", "7.json"), JSON.generate("pid" => 7, "jobId" => "aaa11111", "status" => "busy"))
       bg, = client.list
-      expect(bg).to be_busy
+      expect(bg.busy).to be(true)
       expect(bg).not_to be_waiting_on_work
     end
   end
@@ -115,7 +115,7 @@ RSpec.describe ClaudeInbox::Claude::AgentsClient do
     it "takes busy from the row's status unless the roster has a word" do
       expect(described_class.session(row).busy).to be_nil
       expect(described_class.session(row)).not_to be_waiting_on_work
-      expect(described_class.session(row.merge("status" => "busy"))).to be_busy
+      expect(described_class.session(row.merge("status" => "busy")).busy).to be(true)
       expect(described_class.session(row.merge("status" => "busy"), busy: false)).to be_waiting_on_work
       # Stopped after a reply the daemon read as work in progress: working, nothing open, not busy.
       expect(described_class.session(row.merge("status" => "idle"))).to be_waiting_on_work
