@@ -269,6 +269,11 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   missing id, exiting 1 once ruby and `claude` had started, did not
   (checked on 0.1.0).
 - `rex block ls --json` lists each pane's `label`, which `rex run --label`
-  sets apart from the tab's name, so a renamed tab is still found by it.
-  `rex focus BLOCK` also makes that pane's tab the active one (checked
-  on 0.1.0).
+  sets apart from the tab's name, so a renamed tab is still found by it
+  (checked on 0.1.0).
+- `rex focus BLOCK` makes that pane's tab the session's `active_window_id`,
+  but the app goes on showing the tab it had. Only the app moves itself,
+  through its `session.select` action with `window_id`, and it refuses
+  every action (`Rex.app is not accepting actions. Turn on Remote Control
+  in its Settings under Rex Server.`) until that setting is on (checked on
+  0.1.0).

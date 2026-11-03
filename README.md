@@ -155,6 +155,7 @@ attached directly, so `Enter` offers to adopt it as a background session.
 Run the inbox in a [Rex](https://www.superlogical.com/rex/docs/) pane and
 `Enter` opens the session in a Rex tab of its own, or brings back the one
 already open. Leaving the session closes the tab and returns to the inbox.
+Switching tabs needs Remote Control on in Rex's Settings, under Rex Server.
 
 ## Starting sessions from your phone
 

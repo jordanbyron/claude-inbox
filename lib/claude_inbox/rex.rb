@@ -31,13 +31,17 @@ module ClaudeInbox
     def open(session)
       label = LABEL + session.key
       tab = blocks.find { |b| b["label"] == label }
-      return focus(tab["block_id"]) if tab
+      return bring(tab["block_id"], tab["window_id"]) if tab
       cwd = (session.cwd && File.directory?(session.cwd)) ? ["-c", session.cwd] : []
-      opened = rex("run", "--label", label, *cwd, "--json", command: attach_command(session))
-      rex("window", "rename", JSON.parse(opened)["window_id"], session.display_name)
+      window = JSON.parse(rex("run", "--label", label, *cwd, "--json", command: attach_command(session)))["window_id"]
+      rex("window", "rename", window, session.display_name)
+      select(window)
     end
 
-    def focus(block) = rex("focus", block)
+    def show(block)
+      window = blocks.find { |b| b["block_id"] == block }&.fetch("window_id") or raise Error, "rex: no pane #{block}"
+      bring(block, window)
+    end
 
     # A tab starts in the login shell's environment, whose PATH can find
     # another ruby than the one running this inbox (docs/cli-quirks.md).
@@ -48,11 +52,30 @@ module ClaudeInbox
 
     private
 
+    def bring(block, window)
+      rex("focus", block)
+      select(window)
+    end
+
     def blocks = JSON.parse(rex("block", "ls", "--json"))["blocks"]
 
-    def rex(*args, command: [])
-      r = @run.call(@bin, *args, "-s", @session, *(["--", *command] if command.any?))
-      raise Error, "rex #{args.first}: #{r.err.strip}" unless r.success?
+    # The server's focus leaves each app on the tab it was showing; only the
+    # app can move itself, and only with Remote Control on (docs/cli-quirks.md).
+    def select(window)
+      apps.each { |app| call("-C", app, "do", "session.select", "session_id=#{@session}", "window_id=#{window}") }
+    end
+
+    def apps
+      JSON.parse(call("client", "ls", "--json"))["clients"]
+        .select { |c| c.dig("info", "kind") == "app" && c["session_ids"]&.include?(@session) }
+        .map { |c| c["client_id"] }
+    end
+
+    def rex(*args, command: []) = call(*args, "-s", @session, *(["--", *command] if command.any?))
+
+    def call(*args)
+      r = @run.call(@bin, *args)
+      raise Error, "rex: #{r.err.strip.delete_prefix("Error: ")}" unless r.success?
       r.out
     end
   end

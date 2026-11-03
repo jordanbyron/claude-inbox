@@ -133,7 +133,7 @@ RSpec.describe ClaudeInbox::CLI do
 
     describe "attach" do
       let(:harnesses) { instance_double(ClaudeInbox::Harnesses) }
-      let(:rex) { instance_double(ClaudeInbox::Rex, focus: "") }
+      let(:rex) { instance_double(ClaudeInbox::Rex, show: "") }
 
       before do
         env.merge!("REX_SESSION" => "session:inbox", "REX_BLOCK" => "block:tab")
@@ -145,7 +145,7 @@ RSpec.describe ClaudeInbox::CLI do
         allow(harnesses).to receive(:attach).and_return(true)
         expect(cli["attach", "--harness=codex", "--cwd=/tmp/proj", "--return-to=block:inbox", "thr_1"].run).to be(true)
         expect(harnesses).to have_received(:attach).with(having_attributes(harness: :codex, id: "thr_1", cwd: "/tmp/proj"))
-        expect(rex).to have_received(:focus).with("block:inbox")
+        expect(rex).to have_received(:show).with("block:inbox")
       end
 
       it "holds the tab on a failed attach until Enter, so its reason can be read" do
@@ -153,7 +153,7 @@ RSpec.describe ClaudeInbox::CLI do
         expect(cli["attach", "--return-to=block:inbox", "abc12345"].run).to be(false)
         expect(out.string).to eq("\nPress Enter to close. ")
         expect(input).to be_eof
-        expect(rex).not_to have_received(:focus)
+        expect(rex).not_to have_received(:show)
       end
 
       it "needs the session's id, and only that" do

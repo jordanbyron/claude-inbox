@@ -117,12 +117,19 @@ module ClaudeInbox
       end
       attached = live_client.attach(Session.new(harness: harness.to_sym, id:, cwd:))
       if attached
-        Rex.from_env(@env)&.focus(back) if back
+        go_back(back) if back
       else
         @out.print "\nPress Enter to close. "
         @input.gets
       end
       attached
+    end
+
+    # The tab is closing either way; the inbox's own open already said why Rex refused.
+    def go_back(block)
+      Rex.from_env(@env)&.show(block)
+    rescue Rex::Error
+      nil
     end
 
     def launch
