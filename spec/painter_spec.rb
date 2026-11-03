@@ -9,8 +9,7 @@ RSpec.describe ClaudeInbox::Painter do
 
   it "paints only changed lines" do
     painter.paint(%w[a b c])
-    out.truncate(0)
-    out.rewind
+    drain(out)
     painter.paint(%w[a X c])
     expect(out.string).to include "X"
     expect(out.string).not_to include "a"
