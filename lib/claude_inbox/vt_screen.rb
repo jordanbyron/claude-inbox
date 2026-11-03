@@ -16,7 +16,7 @@ module ClaudeInbox
     def initialize(rows: 300, cols: 300)
       @rows = rows
       @cols = cols
-      @grid = Array.new(rows) { Array.new(cols) { " " } }
+      @grid = Array.new(rows) { blank_row }
       @row = 0
       @col = 0
     end
@@ -62,11 +62,13 @@ module ClaudeInbox
     def newline
       if @row >= @rows - 1
         @grid.shift
-        @grid << Array.new(@cols) { " " }
+        @grid << blank_row
       else
         @row += 1
       end
     end
+
+    def blank_row = Array.new(@cols) { " " }
 
     def put(ch)
       o = ch.ord
