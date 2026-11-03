@@ -42,10 +42,9 @@ module ClaudeInbox
         nil
       end
 
-      # The job file is there by the time `claude --bg` returns, and the daemon
-      # updates it read-modify-write, so the color stays through work, stop and
-      # respawn (checked on 2.1.296). A color is cosmetic: failing to write one
-      # must not report a started session as failed.
+      # The color holds through work, stop and respawn (docs/cli-quirks.md). A
+      # color is cosmetic: failing to write one must not report a started
+      # session as failed.
       # ponytail: a daemon write racing this one can drop the color; re-apply on poll if that shows up.
       def self.write_color(id, color, jobs_dir:)
         path = job_file(id, jobs_dir)
@@ -97,10 +96,9 @@ module ClaudeInbox
       end
 
       # "1 shell", "2 agents · 1 shell": the pieces of the fan still open. A
-      # finished one stays listed with `doneAt` (0 for a teammate gone idle)
-      # and a teammate gone idle stays counted in `tasks`, so a fan with
-      # nothing open names nothing. Falls back to a bare count for a state
-      # file that counts the open tasks without naming them.
+      # finished piece and an idle teammate stay listed (docs/cli-quirks.md),
+      # so a fan with nothing open names nothing. Falls back to a bare count
+      # for a state file that counts the open tasks without naming them.
       def in_flight_label
         return nil unless in_flight?
         return count_label if pieces.zero?
