@@ -11,6 +11,7 @@ require_relative "renderer"
 require_relative "terminal"
 require_relative "keymap"
 require_relative "remote/listener"
+require_relative "rex"
 require_relative "new_session_form"
 require_relative "pull_requests"
 
@@ -54,13 +55,14 @@ module ClaudeInbox
       rate_limits: RateLimits.new, reaper: Reaper.disabled, snapshot: Snapshot.disabled, switch: Switch.disabled,
       actions: Actions.disabled, notifier: Notifier.disabled, listen: nil, updater: nil, argv: [], out: $stdout, input: $stdin, color: true,
       trust: Trust.method(:projects), terminal: Terminal.new(out, input), queue: Queue.new, pane_offer: Mod::Offer.disabled,
-      clipboard: Clipboard.method(:copy), titler: Titler.new)
+      clipboard: Clipboard.method(:copy), titler: Titler.new, rex: nil)
       @client = client
       @clipboard = clipboard
       @titler = titler
       @store = store
       @snapshot = snapshot
       @switch = switch
+      @rex = rex
       @rate_limits = rate_limits
       @terminal = terminal
       @updater = updater

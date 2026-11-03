@@ -150,6 +150,12 @@ Sessions with Remote Control show `⇅`, and `w` opens them at claude.ai/code.
 A session started from your phone through `claude remote-control` can't be
 attached directly, so `Enter` offers to adopt it as a background session.
 
+## Rex
+
+Run the inbox in a [Rex](https://www.superlogical.com/rex/docs/) pane and
+`Enter` opens the session in a Rex tab of its own, or brings back the one
+already open. Leaving the session closes the tab and returns to the inbox.
+
 ## Starting sessions from your phone
 
 With `--listen-lan`, a phone on your network can start sessions.

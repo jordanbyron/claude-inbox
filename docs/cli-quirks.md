@@ -253,3 +253,22 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
 - A thread from `thread/start` is not in `thread/list` until it has a
   turn, so a start is `thread/start` then `turn/start`. The turn carries
   on after the connection that started it closes (checked on 0.165.0).
+
+## Rex
+
+- Every Rex pane gets `REX_SESSION`, `REX_BLOCK`, `REX_SERVER` and
+  `REX_BIN_DIR`, the directory holding the `rex` the server ships, which
+  is not always on `PATH` outside Rex (checked on 0.1.0).
+- `rex run` starts its command in the login shell's environment, not the
+  caller's. There `PATH` can put Homebrew's ruby ahead of asdf's, so
+  `bin/claude-inbox` failed with `You must use Bundler 4 or greater with
+  this lockfile`. Handing the tab `env PATH=…` with the inbox's own `PATH`
+  fixes that (checked on 0.1.0).
+- A pane whose program exits closes, unless the program failed quickly:
+  a bundler error at once kept its pane, while `claude-inbox attach` on a
+  missing id, exiting 1 once ruby and `claude` had started, did not
+  (checked on 0.1.0).
+- `rex block ls --json` lists each pane's `label`, which `rex run --label`
+  sets apart from the tab's name, so a renamed tab is still found by it.
+  `rex focus BLOCK` also makes that pane's tab the active one (checked
+  on 0.1.0).
