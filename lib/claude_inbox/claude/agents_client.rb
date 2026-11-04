@@ -103,9 +103,8 @@ module ClaudeInbox
       end
       private_class_method :actions_for
 
-      # Where claude.ai/code shows a session. A background session with Remote
-      # Control on records its bridge in the job file; a worker a `claude
-      # remote-control` server spawned carries it on its command line.
+      # Where claude.ai/code shows the session with this bridge id;
+      # docs/cli-quirks.md says where each kind of session keeps one.
       def self.remote_url(bridge) = bridge && "https://claude.ai/code/session_#{bridge.delete_prefix("cse_")}"
 
       # The page for a session just started, once its bridge is in the job file.
@@ -176,9 +175,8 @@ module ClaudeInbox
 
       # Pull a conversation a `claude remote-control` server is serving into
       # the daemon, as a background session under the same id. Returns the
-      # short id. The worker goes first: while it is open, a resume only makes
-      # a copy. The server marks the session failed and leaves it be; the
-      # resumed session gets a bridge of its own.
+      # short id. The worker goes first, since a resume while it is open only
+      # makes a copy (docs/cli-quirks.md).
       def adopt(session_id:, cwd:, pid:)
         raise Error, "nothing to adopt yet — send it a message from your phone first" if transcript_empty?(cwd, session_id)
         Process.kill("TERM", pid)
@@ -246,13 +244,11 @@ module ClaudeInbox
         nil
       end
 
-      # The JSON reports Remote Control workers, local sub-agents and headless
-      # runs as `interactive`, same as a terminal you opened yourself, each named
-      # after its directory. The process tree tells them apart; see `origins`.
+      # The JSON calls remote workers, sub-agents and headless runs
+      # `interactive` (docs/cli-quirks.md); `origins` tells them apart.
       # Everything but a terminal and a remote worker is dropped here rather than
       # merely flagged: attach lands on the session that asked for it, so there
-      # is nothing useful to show or act on directly. Only a background session
-      # has a job file.
+      # is nothing useful to show or act on directly.
       def sessions(rows, origins, bridges)
         found = rows.filter_map do |h|
           interactive = h["kind"] == "interactive"
@@ -334,8 +330,8 @@ module ClaudeInbox
       # Fixture rows carry no process tree.
       def list = sessions(JSON.parse(File.read(@path)), @origins, @bridges)
 
-      # Stand-in child: prints, waits for a line, exits — enough to prove the
-      # terminal round-trips through cooked mode and back.
+      # Stand-in child that prints, waits for a line and exits, enough to prove
+      # the terminal round-trips through cooked mode and back.
       def attach(session) = system("sh", "-c", "printf 'fake attach to %s\\npress enter to detach: ' \"$1\"; read -r _", "attach", session.id)
 
       def stop(_session) = true
