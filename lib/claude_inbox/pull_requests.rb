@@ -83,7 +83,7 @@ module ClaudeInbox
       @clock = clock
       @known = {}      # url => PullRequest
       @checked_at = {} # url => epoch seconds of the last gh call
-      @branches = {}   # "owner/repo:branch" => urls gh listed for it
+      @branches = {}   # [owner/repo, branch] => urls gh listed for it
       @branch_checked_at = {}
       @mutex = Mutex.new
       @stacks = StackLinks.new
@@ -179,13 +179,12 @@ module ClaudeInbox
     end
 
     def branch_urls(session)
-      key = head(session)&.join(":")
-      @mutex.synchronize { @branches.fetch(key, []) }
+      @mutex.synchronize { @branches.fetch(head(session), []) }
     end
 
     # What gh lists comes with its state, so each PR also counts as checked.
     def list_branch(repo, branch)
-      key = "#{repo}:#{branch}"
+      key = [repo, branch]
       @mutex.synchronize do
         return unless due?(@branch_checked_at, key)
         @branch_checked_at[key] = now = @clock.call.to_i
