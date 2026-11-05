@@ -7,9 +7,8 @@ module ClaudeInbox
   module Claude
     # A session's transcript, read from the end for when its last message was
     # sent and for what its last few messages said. Only the `user` and
-    # `assistant` records are messages: the CLI appends undated bookkeeping
-    # records long after a session has finished, so the file's mtime says
-    # nothing.
+    # `assistant` records are messages, and the file's mtime is not when
+    # either was sent (docs/cli-quirks.md).
     #
     # Every poll asks for the time, and a transcript that ends in a long run
     # of other records costs a scan each time, so each file is read again only
