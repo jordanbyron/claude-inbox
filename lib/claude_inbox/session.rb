@@ -65,7 +65,7 @@ module ClaudeInbox
 
     def alive? = !pid.nil?
 
-    def display_name = name || id || session_id || "(unnamed)"
+    def display_name = name || key || "(unnamed)"
 
     def project = cwd ? File.basename(cwd) : ""
 
