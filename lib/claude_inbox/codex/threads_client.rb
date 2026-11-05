@@ -12,15 +12,12 @@ module ClaudeInbox
     # The Codex adapter: lists the daemon's threads as Sessions and acts on
     # them through it. Swap in FixtureClient for tests.
     class ThreadsClient
-      # What the inbox can do to a thread: open it in `codex resume`,
-      # interrupt its turn, delete it. Never reap it: `thread/delete` takes
-      # unpushed work with it, where `claude rm` refuses.
+      # No reap: `thread/delete` takes unpushed work with it, where `claude rm` refuses.
       ACTIONS = %i[attach stop delete].freeze
 
-      # `codex exec` threads are left out, as `claude -p` sessions are: another
-      # program drives them, and one still running cannot be resumed. The
-      # daemon never forgets a thread, so the list stops where the reaper
-      # would: at one quiet for longer than Store::REAP_AFTER.
+      # `codex exec` threads are left out, as `claude -p` sessions are, and
+      # the daemon keeps every thread, so `list` stops at Store::REAP_AFTER
+      # (docs/cli-quirks.md).
       LIST = {sourceKinds: %w[cli vscode appServer], sortKey: "updated_at", limit: 100}.freeze
 
       # A thread's status, or the flag an active one waits on, in OSC 7501's words with the kind of block.
@@ -67,11 +64,10 @@ module ClaudeInbox
         sessions
       end
 
-      # Hands the terminal to `codex resume`, which joins the daemon's live
-      # copy of the thread, through a Relay, and returns when it exits or ←
-      # leaves it. False when it failed. Run anywhere but the thread's
-      # directory, it first asks which to use. The block, polled alongside,
-      # ends the attach early when it answers true.
+      # Hands the terminal to `codex resume` through a Relay and returns when
+      # it exits or ← leaves it. False when it failed. Run anywhere but the
+      # thread's directory, it first asks which to use. The block, polled
+      # alongside, ends the attach early when it answers true.
       def attach(session, &stop)
         here = (session.cwd && File.directory?(session.cwd)) ? {chdir: session.cwd} : {}
         Relay.run(Subprocess.command(@bin, "resume", session.id, **here), tty: @tty, out: @out, &stop)
@@ -93,9 +89,8 @@ module ClaudeInbox
       # socket; empty without a daemon, which is also no way to start a thread.
       def choices = @choices || {}
 
-      # Starts a thread and its first turn and returns the thread's id. A
-      # thread with no turn is not listed, so the row shows once the turn
-      # has started; the turn carries on after this connection closes.
+      # Starts a thread and its first turn, without which it is not listed
+      # (docs/cli-quirks.md), and returns the thread's id.
       def spawn(prompt:, cwd:, model: nil, effort: nil, permission_mode: nil, images: [])
         thread = @daemon.call!("thread/start", {cwd: cwd, model: model, **PERMISSIONS.fetch(permission_mode, {})}.compact)["thread"]
         input = [{type: "text", text: prompt}, *images.map { |path| {type: "localImage", path: path} }]
@@ -110,7 +105,7 @@ module ClaudeInbox
       end
 
       # A thread with a turn nobody has read is done, as a finished Claude
-      # session is; the TUI never marks one read, so it stays done.
+      # session is, and stays done (docs/cli-quirks.md).
       def self.session(thread, read_state = nil)
         state, blocked_kind = state(thread["status"] || {}, unread: !read_state&.dig("firstUnread").nil?)
         preview = squish(thread["preview"])
