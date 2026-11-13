@@ -11,13 +11,9 @@ require_relative "web_socket"
 module ClaudeInbox
   module Codex
     # A JSON-RPC connection to Codex's shared app-server daemon, the only
-    # server that knows which threads are live (docs/cli-quirks.md). It
-    # starts the daemon when it is down, as `claude agents` starts
-    # Claude's, opens on the first call, stays open between calls and opens
-    # again once it drops. With no codex, or a daemon that will not start,
-    # every call answers nil.
+    # server that knows which threads are live (docs/cli-quirks.md). With no
+    # codex, or a daemon that will not start, every `call` answers nil.
     class Daemon
-      # The daemon answered, with an error.
       class Error < Harnesses::Error; end
 
       TIMEOUT = 2
@@ -86,7 +82,6 @@ module ClaudeInbox
         nil
       end
 
-      # Notifications and anything else not answering this id are skipped.
       def request(ws, method, params)
         id = (@id += 1)
         ws.write_text(JSON.generate(id: id, method: method, params: params))
