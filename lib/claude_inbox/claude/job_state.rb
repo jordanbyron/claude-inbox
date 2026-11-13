@@ -63,8 +63,9 @@ module ClaudeInbox
         @detail = hash["detail"]
         @needs = hash["needs"]
         @result = (hash["output"] || {})["result"]
-        @pieces = (hash["fan"] || []).size
-        @kinds = (hash["fan"] || []).filter_map { |f| f["kind"] if f["doneAt"].nil? }
+        fan = hash["fan"] || []
+        @pieces = fan.size
+        @kinds = fan.filter_map { |f| f["kind"] if f["doneAt"].nil? }
         @tasks = (hash["inFlight"] || {})["tasks"].to_i
         @pr_urls = (hash["children"] || []).filter_map { |c| c["href"] if c["kind"] == "pr" }
         @transcript_path = hash["linkScanPath"]
