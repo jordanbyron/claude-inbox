@@ -58,7 +58,7 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(plain).to match(/^ ● ✓ fresh /)
     expect(plain).to match(/^   ✓ seen /)
     expect(plain).to match(/^ ● \? stuck /)
-    colored = described_class.new(home: "/Users/byron").frame(sec, view.with(width: 60, height: 12)).lines
+    colored = renderer.frame(sec, view.with(width: 60, height: 12)).lines
     expect(colored.find { |l| l.include?("fresh") }).to include("\e[38;5;75m●\e[0m")
     expect(colored.find { |l| l.include?("fresh") }).to include("\e[1mfresh")
     expect(colored.find { |l| l.include?("seen") }).to include("\e[38;5;208mseen\e[39m")
@@ -67,9 +67,9 @@ RSpec.describe ClaudeInbox::Renderer do
     acknowledged = ClaudeInbox::Store.merge_entries({"ccc33333" => {"last_state" => "blocked", "state_since" => now.to_i - 60, "acknowledged_at" => now.to_i - 30, "last_visited_at" => now.to_i - 30}}, [blocked], now)
     seen_blocked = renderer.frame(ClaudeInbox::Store.sectionize([blocked], acknowledged, now), view.with(width: 60, height: 12)).plain.lines.join("\n")
     expect(seen_blocked).to match(/^   \? stuck .*needs you/)
-    seen_blocked = described_class.new(home: "/Users/byron").frame(ClaudeInbox::Store.sectionize([blocked], acknowledged, now), view.with(width: 60, height: 12)).lines
+    seen_blocked = renderer.frame(ClaudeInbox::Store.sectionize([blocked], acknowledged, now), view.with(width: 60, height: 12)).lines
     expect(seen_blocked.find { |l| l.include?("stuck") }).to include("\e[2mstuck").and(include("\e[38;5;203;1m?"))
-    selected = described_class.new(home: "/Users/byron").frame(sec, view.with(width: 60, height: 12, selected: "aaa11111")).lines
+    selected = renderer.frame(sec, view.with(width: 60, height: 12, selected: "aaa11111")).lines
     expect(selected.find { |l| l.include?("fresh") }).to include("\e[38;5;179;1m▶\e[0m")
     expect(selected.find { |l| l.include?("fresh") }).not_to include("\e[38;5;75m●")
   end
@@ -227,9 +227,8 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(header.call(nil)).not_to include("◉")
     expect(header.call(snapshot.call(:listening), width: 60)).to include("● 1  ✻ 1  ○ 1  ◉ :7433")
 
-    colored = ClaudeInbox::Renderer.new(home: "/Users/byron")
     chip = ->(state) {
-      colored.frame(sections, view.with(width: 140, height: 10, listening: snapshot.call(state))).lines.first
+      renderer.frame(sections, view.with(width: 140, height: 10, listening: snapshot.call(state))).lines.first
     }
     expect(chip.call(:listening)).to include("\e[38;5;#{ClaudeInbox::Theme::HUES[:blue]}m◉ :7433")
     expect(chip.call(:held)).to include("\e[38;5;#{ClaudeInbox::Theme::HUES[:red]}m◉ :7433 held by another inbox")
