@@ -284,10 +284,9 @@ RSpec.describe ClaudeInbox::NewSessionForm do
   end
 
   it "draws the cursor on the cell it sits on" do
-    f = described_class.new(cwd: Dir.pwd, home: home)
-    "ab".each_char { |c| f.press(c, c) }
-    f.press(:left, "\e[D")
-    expect(f.screen(80, 24).join("\n")).to include("a\e[7mb\e[0m")
+    type(form, "ab")
+    form.press(:left, "\e[D")
+    expect(form.screen(80, 24).join("\n")).to include("a\e[7mb\e[0m")
   end
 
   it "cancels on escape when the prompt is empty" do
