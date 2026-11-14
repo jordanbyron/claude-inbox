@@ -29,6 +29,7 @@ module ClaudeInbox
       # poller keeps running meanwhile, so the pane's snapshot stays fresh. A
       # failed attach leaves its reason on screen until a key is pressed.
       def attach(session)
+        return open_in_rex(session) if @rex
         while session
           @switch.clear
           from = session.session_id
@@ -39,6 +40,16 @@ module ClaudeInbox
           end
           @poller.soon
           session = session_for(@switch.take(@store.attachable_keys))
+        end
+      end
+
+      # Rex runs the attach in a tab, so the inbox never knows when it ends:
+      # the visit is the moment the tab came forward.
+      def open_in_rex(session)
+        @store.visit(session.key) {}
+        in_background do
+          @rex.open(session)
+          @poller.soon
         end
       end
 

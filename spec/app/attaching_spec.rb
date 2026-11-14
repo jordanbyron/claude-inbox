@@ -25,6 +25,25 @@ RSpec.describe ClaudeInbox::App do
     end
   end
 
+  describe "attaching inside Rex" do
+    let(:opened) { Queue.new }
+    let(:rex) { instance_double(ClaudeInbox::Rex).tap { |r| allow(r).to receive(:open) { |s| opened << s.id } } }
+    let(:app) { build_app(client:, store:, pull_requests:, queue:, terminal:, rex:) }
+
+    it "opens the session in a Rex tab and keeps the inbox's own terminal" do
+      press(app, "\r")
+      expect(opened.pop(timeout: 2)).to eq("f23c8673")
+      expect(client.attached).to be_empty
+      expect(store.sections.active.find { |row| row.key == "f23c8673" }).not_to be_unread
+    end
+
+    it "shows why when Rex refuses" do
+      allow(rex).to receive(:open).and_raise(ClaudeInbox::Rex::Error, "rex run: no such session")
+      press(app, "\r")
+      expect(wait_for { screen(app).join.include?("rex run: no such session") }).to be(true)
+    end
+  end
+
   describe "a row whose harness can't do what the key asks" do
     before do
       app

@@ -9,6 +9,7 @@ require_relative "config"
 require_relative "headless"
 require_relative "mod"
 require_relative "notifier"
+require_relative "rex"
 require_relative "updater"
 require_relative "writer_lock"
 
@@ -20,11 +21,13 @@ module ClaudeInbox
       Usage: claude-inbox [options]
              claude-inbox install [--force]
              claude-inbox update
+             claude-inbox attach [--harness=NAME] [--cwd=DIR] [--return-to=BLOCK] ID
     USAGE
 
     # `lock` stands in for the writer lock a live launch takes.
-    def initialize(argv, env: ENV, config: Config::PATH, lock: nil, out: $stdout)
+    def initialize(argv, env: ENV, config: Config::PATH, lock: nil, out: $stdout, input: $stdin)
       @argv = argv
+      @input = input
       @env = env
       @config = config
       @lock = lock
@@ -35,6 +38,7 @@ module ClaudeInbox
       case @argv.first
       when "install" then install
       when "update" then update
+      when "attach" then attach
       else launch
       end
     end
@@ -101,6 +105,33 @@ module ClaudeInbox
       true
     end
 
+    # The tab closes when this exits, so a failed attach holds it until Enter:
+    # Rex keeps a pane up only after a failure faster than ruby starts.
+    def attach
+      harness = "claude"
+      cwd = back = nil
+      id, = subcommand("attach", operands: 1) do |p|
+        p.on("--harness=NAME", %w[claude codex]) { |name| harness = name }
+        p.on("--cwd=DIR") { |dir| cwd = dir }
+        p.on("--return-to=BLOCK") { |block| back = block }
+      end
+      attached = live_client.attach(Session.new(harness: harness.to_sym, id:, cwd:))
+      if attached
+        go_back(back) if back
+      else
+        @out.print "\nPress Enter to close. "
+        @input.gets
+      end
+      attached
+    end
+
+    # The tab is closing either way; the inbox's own open already said why Rex refused.
+    def go_back(block)
+      Rex.from_env(@env)&.show(block)
+    rescue Rex::Error
+      nil
+    end
+
     def launch
       options
       $stderr.reopen(@env["CLAUDE_INBOX_STDERR"], "a") if @env["CLAUDE_INBOX_STDERR"]
@@ -148,7 +179,7 @@ module ClaudeInbox
       store = new_store
       {client: client, store: store, reaper: options[:reap] ? Reaper.new(client, store) : Reaper.disabled,
        snapshot: Snapshot.new, switch: Switch.new, actions: Actions.new, pane_offer: Mod::Offer.new,
-       listen: options[:listen], updater: updater,
+       listen: options[:listen], updater: updater, rex: Rex.from_env(@env, launcher: Mod::COMMAND || "claude-inbox"),
        # The typed arguments, not the config's: a relaunch reads the config again.
        argv: @argv}
     end
@@ -195,19 +226,21 @@ module ClaudeInbox
       opts
     end
 
-    def subcommand(name)
+    def subcommand(name, operands: 0)
       parser = OptionParser.new(USAGE)
       yield parser if block_given?
-      strictly(parser, @argv.drop(1))
+      strictly(parser, @argv.drop(1), operands:)
     rescue OptionParser::ParseError => e
       abort "claude-inbox #{name}: #{e.message}"
     end
 
     # Exact names only, so a typo is an error rather than the flag it abbreviates.
-    def strictly(parser, argv)
+    def strictly(parser, argv, operands: 0)
       parser.require_exact = true
       rest = parser.parse(argv)
-      raise OptionParser::InvalidArgument, rest.first if rest.any?
+      raise OptionParser::InvalidArgument, rest[operands] if rest.size > operands
+      raise OptionParser::MissingArgument, "#{operands - rest.size} operand(s)" if rest.size < operands
+      rest
     end
   end
 end

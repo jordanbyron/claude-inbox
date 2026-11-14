@@ -7,12 +7,13 @@ RSpec.describe ClaudeInbox::CLI do
   let(:config) { File.join(dir, "config") }
   let(:env) { {} }
   let(:out) { StringIO.new }
+  let(:input) { StringIO.new("\n") }
   let(:lock) { ClaudeInbox::WriterLock.disabled }
   let(:agents) { fixture_path("agents.json") }
 
   after { FileUtils.remove_entry(dir) }
 
-  let(:cli) { ->(*argv) { described_class.new(argv, env: env, config: config, lock: lock, out: out) } }
+  let(:cli) { ->(*argv) { described_class.new(argv, env: env, config: config, lock: lock, out: out, input: input) } }
 
   describe "#options" do
     it "puts the config file's flags before the typed ones" do
@@ -89,6 +90,13 @@ RSpec.describe ClaudeInbox::CLI do
       expect(cli["--reap"].app_options).to include(argv: ["--reap"], color: false)
     end
 
+    it "opens sessions in Rex tabs only when the inbox runs in Rex" do
+      expect(cli[].app_options[:rex]).to be_nil
+      env.merge!("REX_SESSION" => "session:inbox", "REX_BLOCK" => "block:inbox")
+      expect(cli[].app_options[:rex]).to be_a(ClaudeInbox::Rex)
+      expect(cli["--fixture", agents].app_options).not_to include(:rex)
+    end
+
     it "reads along without writing when another inbox holds the writer lock" do
       first, second = Array.new(2) { described_class.new(["--reap"], env: env, config: config, lock: ClaudeInbox::WriterLock.new(path: File.join(dir, "writer.lock")), out: out) }
       expect(first.app_options[:store]).to be_writable
@@ -121,6 +129,37 @@ RSpec.describe ClaudeInbox::CLI do
     it "takes no launch flag after a subcommand" do
       expect { cli["install", "--reap"].run }.to raise_error(SystemExit).and output(/\Aclaude-inbox install: invalid option: --reap/).to_stderr
       expect { cli["update", "now"].run }.to raise_error(SystemExit).and output(/\Aclaude-inbox update: invalid argument: now/).to_stderr
+    end
+
+    describe "attach" do
+      let(:harnesses) { instance_double(ClaudeInbox::Harnesses) }
+      let(:rex) { instance_double(ClaudeInbox::Rex, show: "") }
+
+      before do
+        env.merge!("REX_SESSION" => "session:inbox", "REX_BLOCK" => "block:tab")
+        allow(ClaudeInbox::Harnesses).to receive(:new).and_return(harnesses)
+        allow(ClaudeInbox::Rex).to receive(:new).and_return(rex)
+      end
+
+      it "attaches to the session it names, then hands focus back to the inbox" do
+        allow(harnesses).to receive(:attach).and_return(true)
+        expect(cli["attach", "--harness=codex", "--cwd=/tmp/proj", "--return-to=block:inbox", "thr_1"].run).to be(true)
+        expect(harnesses).to have_received(:attach).with(having_attributes(harness: :codex, id: "thr_1", cwd: "/tmp/proj"))
+        expect(rex).to have_received(:show).with("block:inbox")
+      end
+
+      it "holds the tab on a failed attach until Enter, so its reason can be read" do
+        allow(harnesses).to receive(:attach).and_return(false)
+        expect(cli["attach", "--return-to=block:inbox", "abc12345"].run).to be(false)
+        expect(out.string).to eq("\nPress Enter to close. ")
+        expect(input).to be_eof
+        expect(rex).not_to have_received(:show)
+      end
+
+      it "needs the session's id, and only that" do
+        expect { cli["attach"].run }.to raise_error(SystemExit).and output(/\Aclaude-inbox attach: missing argument/).to_stderr
+        expect { cli["attach", "a", "b"].run }.to raise_error(SystemExit).and output(/invalid argument: b/).to_stderr
+      end
     end
 
     it "says when there is nothing to update" do
