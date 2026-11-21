@@ -151,6 +151,15 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(text).to match(/^   ✓ finished\s+done · codex · /)
   end
 
+  it "tags an Antigravity row as working or stopped" do
+    agy = {harness: :antigravity, actions: ClaudeInbox::Antigravity::ConversationsClient::ACTIONS}
+    rows = [session(id: "a1", name: "running", state: "working", **agy), session(id: "a2", name: "quiet", state: "idle", **agy)]
+    sec = ClaudeInbox::Store.sectionize(rows, ClaudeInbox::Store.merge_entries({}, rows, now), now)
+    text = renderer.frame(sec, view.with(width: 90, height: 12, tick: 0)).plain.lines.join("\n")
+    expect(text).to match(/^   ⠋ running\s+working · antigravity · /)
+    expect(text).to match(/^ ● ■ quiet\s+stopped · antigravity · /)
+  end
+
   it "lists settled rows when expanded" do
     f = renderer.frame(sections, view.with(width: 80, height: 30, expanded: {settled: true})).plain
     expect(f.items.compact.map(&:key)).to eq(["f23c8673", "4a93393d-1c06-57da-9fb8-12f5b1535d95", "823b882f", "dcbc1d98", "b0b18338", "fbf5253a", "b03695b1"])

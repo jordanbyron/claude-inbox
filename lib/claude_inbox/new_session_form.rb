@@ -38,8 +38,16 @@ module ClaudeInbox
     # then s, and that Esc asked to discard the prompt.
     SLIPS = {alt_s: "that's option-s — ctrl-s starts it", alt_o: "that's option-o — ctrl-o starts and attaches"}.freeze
 
-    # thread/start has no name, worktree, Remote Control or color.
-    CLAUDE_ONLY = %i[name worktree remote color].freeze
+    # Every harness takes prompt, harness (when more than one) and cwd, plus
+    # whichever choice fields its adapter offers. Extra fields and value rules
+    # are per harness.
+    COMMON_FIELDS = %i[prompt harness cwd].freeze
+    CHOICE_FIELDS = %i[model effort permission_mode].freeze
+    HARNESSES = {
+      claude: {extra: %i[name worktree remote color], values: :claude},
+      codex: {default_label: "codex config", values: :codex},
+      antigravity: {default_label: "agy default", values: :plain}
+    }.freeze
 
     # `choices` holds each harness that can start a session, with what it
     # offers for the model, effort and permissions fields; the Harness field
@@ -140,12 +148,11 @@ module ClaudeInbox
       v = fields.to_h { |f| [f.key, (f.kind == :choice && f.value == DEFAULT) ? nil : f.value.to_s] }
       v[:harness] = harness
       v[:cwd] = directory
-      return codex_values(v) if harness == :codex
-      v[:prompt] = field(:prompt).value.expand { |chip| Claude::AgentsClient.mention(chip.path) }.strip
-      v[:worktree] = v[:worktree] == "yes"
-      v[:name] = nil if v[:name].strip.empty?
-      v[:remote] = SessionRequest::FLAGS[v[:remote]]
-      SessionRequest.resolve(v, defaults)
+      case HARNESSES.dig(harness, :values)
+      when :claude then claude_values(v)
+      when :codex then codex_values(v)
+      else v.merge(prompt: mentioned_prompt)
+      end
     end
 
     # Settings resolve against the directory the session will run in, so
@@ -205,9 +212,23 @@ module ClaudeInbox
 
     private
 
-    def harness = field(:harness)&.value&.to_sym || :claude
+    def harness = field(:harness)&.value&.to_sym || @choices.keys.first || :claude
 
-    def fields = @fields.reject { |f| harness == :codex && CLAUDE_ONLY.include?(f.key) }
+    def fields
+      offered = @choices.fetch(harness)
+      extra = HARNESSES.dig(harness, :extra) || []
+      @fields.select { |f| COMMON_FIELDS.include?(f.key) || offered.key?(f.key) || extra.include?(f.key) }
+    end
+
+    def mentioned_prompt = field(:prompt).value.expand { |chip| Claude::AgentsClient.mention(chip.path) }.strip
+
+    def claude_values(v)
+      v[:prompt] = mentioned_prompt
+      v[:worktree] = v[:worktree] == "yes"
+      v[:name] = nil if v[:name].strip.empty?
+      v[:remote] = SessionRequest::FLAGS[v[:remote]]
+      SessionRequest.resolve(v, defaults)
+    end
 
     # An image goes to Codex as a file of its own, its chip left in the text.
     def codex_values(v)
@@ -219,8 +240,9 @@ module ClaudeInbox
 
     # Each harness has its own choices; a switch starts every one over at default.
     def choose_harness
-      @choices.fetch(harness).each do |key, choices|
-        field(key).choices = choices
+      offered = @choices.fetch(harness)
+      CHOICE_FIELDS.each do |key|
+        field(key).choices = offered[key] || []
         field(key).value = DEFAULT
       end
     end
@@ -358,7 +380,8 @@ module ClaudeInbox
 
     def default_text(f)
       return "none" if f.key == :color
-      return "codex config" if harness == :codex
+      label = HARNESSES.dig(harness, :default_label)
+      return label if label
       resolved = defaults[f.key]
       resolved ? "#{resolved} (settings)" : "auto (cli default)"
     end

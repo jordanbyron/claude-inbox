@@ -475,17 +475,18 @@ RSpec.describe ClaudeInbox::NewSessionForm do
     end
   end
 
-  describe "with Codex to start in too" do
+  describe "with Codex and Antigravity to start in too" do
     let(:clip) { ClaudeInbox::Images::Clipboard.new("/tmp/shot.png", nil) }
     let(:form) do
       described_class.new(cwd: Dir.pwd, home: home, clipboard: -> { clip },
         choices: {claude: ClaudeInbox::Claude::AgentsClient::CHOICES,
-                  codex: {model: %w[default gpt-6.1-sol], effort: %w[default low high], permission_mode: ClaudeInbox::Codex::ThreadsClient::PERMISSION_MODES}})
+                  codex: {model: %w[default gpt-6.1-sol], effort: %w[default low high], permission_mode: ClaudeInbox::Codex::ThreadsClient::PERMISSION_MODES},
+                  antigravity: {model: %w[default gemini-4-neon-high gemini-4-neon-low]}})
     end
     let(:rows) { -> { form.screen(100, 30).map { |r| ClaudeInbox::Text.strip_ansi(r) } } }
     let(:labels) { -> { rows.call.filter_map { |r| r[/\A  (?:▶ |  )(\S.{13})/, 1]&.strip } } }
 
-    it "asks which harness under the prompt, and keeps only Codex's fields for Codex" do
+    it "asks which harness under the prompt, and keeps only each harness's own fields" do
       form.press(:tab, "\t")
       expect(form.focused.key).to eq(:harness)
       expect(labels.call).to eq(["Prompt", "Harness", "Name", "Directory", "Model", "Effort", "Permissions", "Worktree", "Remote Control", "Color"])
@@ -493,6 +494,9 @@ RSpec.describe ClaudeInbox::NewSessionForm do
       expect(labels.call).to eq(%w[Prompt Harness Directory Model Effort Permissions])
       expect(rows.call.find { |r| r.include?("Model") }).to include("codex config", "gpt-6.1-sol")
       expect(rows.call.find { |r| r.include?("Permissions") }).to include("workspace-write", "full-access")
+      form.press("l", "l")
+      expect(labels.call).to eq(%w[Prompt Harness Directory Model])
+      expect(rows.call.find { |r| r.include?("Model") }).to include("agy default", "gemini-4-neon-high")
     end
 
     it "submits Codex's values, an image as a file beside the text" do
@@ -510,6 +514,17 @@ RSpec.describe ClaudeInbox::NewSessionForm do
       expect(form.press(:ctrl_s, "\x13")).to eq(:start)
     end
 
+    it "submits Antigravity's values with only prompt, cwd and model" do
+      type(form, "check it")
+      form.press(:tab, "\t")
+      2.times { form.press("l", "l") }
+      2.times { form.press(:tab, "\t") }
+      expect(form.focused.key).to eq(:model)
+      form.press("l", "l")
+      expect(form.values).to eq(harness: :antigravity, prompt: "check it", cwd: Dir.pwd, model: "gemini-4-neon-high")
+      expect(form.press(:ctrl_s, "\x13")).to eq(:start)
+    end
+
     it "starts the model and permissions over when the harness changes" do
       form.press(:tab, "\t")
       form.press("l", "l")
@@ -517,6 +532,8 @@ RSpec.describe ClaudeInbox::NewSessionForm do
       form.press("l", "l")
       expect(form.values[:model]).to eq("gpt-6.1-sol")
       2.times { form.press(:back_tab, "\e[Z") }
+      form.press("l", "l")
+      expect(form.values).to include(harness: :antigravity, model: nil)
       form.press("l", "l")
       expect(form.values).to include(harness: :claude, model: nil)
     end

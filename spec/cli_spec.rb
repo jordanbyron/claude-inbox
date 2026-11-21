@@ -65,9 +65,9 @@ RSpec.describe ClaudeInbox::CLI do
   end
 
   describe "#app_options" do
-    it "reads a fixture's sessions, Codex's beside Claude's, and keeps its listener apart from the real one" do
+    it "reads a fixture's sessions, Codex's and Antigravity's beside Claude's, and keeps its listener apart from the real one" do
       opts = cli["--fixture", agents, "--listen=0"].app_options
-      expect(opts[:client].list.map(&:harness).uniq).to eq(%i[claude codex])
+      expect(opts[:client].list.map(&:harness).uniq).to eq(%i[claude codex antigravity])
       expect(opts[:listen]).to include(fixture: true, port: 0, lock_path: File.join(Dir.tmpdir, "claude-inbox-fixture", "listen.lock"))
       expect(opts).not_to include(:reaper, :updater, :argv)
     end
@@ -146,6 +146,9 @@ RSpec.describe ClaudeInbox::CLI do
         expect(cli["attach", "--harness=codex", "--cwd=/tmp/proj", "--return-to=block:inbox", "thr_1"].run).to be(true)
         expect(harnesses).to have_received(:attach).with(having_attributes(harness: :codex, id: "thr_1", cwd: "/tmp/proj"))
         expect(rex).to have_received(:show).with("block:inbox")
+
+        expect(cli["attach", "--harness=antigravity", "--cwd=/tmp/proj", "conv_1"].run).to be(true)
+        expect(harnesses).to have_received(:attach).with(having_attributes(harness: :antigravity, id: "conv_1", cwd: "/tmp/proj"))
       end
 
       it "holds the tab on a failed attach until Enter, so its reason can be read" do

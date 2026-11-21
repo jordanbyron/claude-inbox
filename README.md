@@ -1,8 +1,8 @@
 # claude-inbox
 
-An inbox for Claude Code's background sessions and Codex threads. It lists
-what `claude agents` lists and adds snooze, settle, pinning and each session's
-pull request.
+An inbox for Claude Code's background sessions, Codex threads and Antigravity
+conversations. It lists what `claude agents` lists and adds snooze, settle,
+pinning and each session's pull request.
 
 Inspired by [T3 Code](https://github.com/pingdotgg/t3code)'s functionality and
 inbox-style UX, I wanted a better way to manage my Claude agents, so I built
@@ -88,7 +88,7 @@ Vim bindings. Arrows and the mouse work too.
 | `j` `k` | move down / up |
 | `gg` `G` | first / last row |
 | `Ctrl-d` `Ctrl-u` | half page down / up (`Ctrl-f` `Ctrl-b` full page) |
-| `Enter` `l` | attach (`←` or `Ctrl+Z` returns here; in Codex, `←` at the start of the prompt), adopt a remote session, or expand Snoozed / Settled |
+| `Enter` `l` | attach (`←` or `Ctrl+Z` returns here; in Codex, `←` at the start of the prompt; in Antigravity, `Ctrl+D` twice or `/exit`), adopt a remote session, or expand Snoozed / Settled |
 | `Tab` `Shift+Tab` | next / previous section |
 | `h` | collapse the current fold |
 | `za` `zo` `zc` | toggle / open / close the fold under the cursor |
@@ -105,7 +105,7 @@ Vim bindings. Arrows and the mouse work too.
 | `y` | copy the pull request url, or the session's address; with several, `y` again copies the one that matters, `1`… another |
 | `P` | link a pull request by hand (empty clears) |
 | `X` | stop the session; `Enter` resumes it later |
-| `Ctrl-x` | delete the session, transcript and worktree for good |
+| `Ctrl-x` | delete the session, transcript and worktree for good (not Antigravity) |
 | `/` | filter by name, directory, prompt, status or pull request (`#885` or its title); `Enter` keeps it, `Esc` clears |
 | `R` | poll now (the list also refreshes on its own when a session's status changes) |
 | `U` | update claude-inbox when the header says a newer one is out |
@@ -115,9 +115,9 @@ Vim bindings. Arrows and the mouse work too.
 
 ### New session
 
-`n` opens a form for the prompt, Claude or Codex, name, directory, model,
-effort, permissions, worktree, Remote Control and color, which tints the row
-as `/color` would.
+`n` opens a form for the prompt, Claude, Codex or Antigravity, name, directory,
+model, effort, permissions, worktree, Remote Control and color, which tints the
+row as `/color` would.
 `Tab` moves between fields, `Ctrl-S` starts the session and `Ctrl-O` starts
 it and attaches. `Option-S` or `Option-O` by mistake only says which key you
 meant; it no longer reads as `Esc` and asks to discard the prompt.

@@ -158,4 +158,27 @@ RSpec.describe ClaudeInbox::App do
       expect(client.spawns).to be_empty
     end
   end
+
+  describe "starting an Antigravity conversation" do
+    let(:antigravity) { ClaudeInbox::Antigravity::FixtureClient.new(fixture_path("antigravity-conversations.json")) }
+    let(:app) { build_app(client:, antigravity:, store:, pull_requests:, queue:, terminal:, trust: -> { trusted }) }
+
+    let(:attached) { [] }
+
+    before do
+      allow(antigravity).to receive(:spawn).and_return("a9")
+      allow(antigravity).to receive(:attach) { |s| attached << s }
+    end
+
+    it "starts it through Antigravity and attaches in its directory on ctrl-o" do
+      press(app, "n", "h", "i", "\t", "l", "\t", ctrl_u, *Dir.pwd.chars, "\x0f")
+      expect(wait_for {
+        app.step
+        attached.any?
+      }).to be(true)
+      expect(antigravity).to have_received(:spawn).with(prompt: "hi", cwd: Dir.pwd, model: nil)
+      expect(attached).to contain_exactly(have_attributes(harness: :antigravity, id: "a9", cwd: Dir.pwd))
+      expect(client.spawns).to be_empty
+    end
+  end
 end

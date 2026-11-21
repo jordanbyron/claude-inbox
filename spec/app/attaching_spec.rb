@@ -178,4 +178,26 @@ RSpec.describe ClaudeInbox::App do
       expect(client.removed).to be_empty
     end
   end
+
+  describe "an Antigravity conversation" do
+    let(:antigravity) { ClaudeInbox::Antigravity::FixtureClient.new(fixture_path("antigravity-conversations.json")) }
+    let(:app) { build_app(client:, antigravity:, store:, pull_requests:, queue:, terminal:) }
+
+    before { press(app, "/", *"Antigravity".chars, "\r") }
+
+    it "stops through Antigravity on X, and says so when nobody holds its lock" do
+      stopped = []
+      allow(antigravity).to receive(:stop) { |s| stopped << s.id and false }
+      press(app, "X", "y")
+      expect(wait_for { screen(app).first.include?("Add Antigravity harness adapter has no turn running") }).to be(true)
+      expect(stopped).to eq(["9f2a1c4e-7b3d-4e8a-9c10-3d5e6f7a8b9c"])
+      expect(client.stopped).to be_empty
+    end
+
+    it "does nothing on ctrl-x since Antigravity conversations cannot be deleted" do
+      press(app, ctrl_x)
+      expect(app).not_to paint(/Delete .*\?/)
+      expect(client.removed).to be_empty
+    end
+  end
 end

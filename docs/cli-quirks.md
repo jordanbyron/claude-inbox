@@ -254,6 +254,85 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   turn, so a start is `thread/start` then `turn/start`. The turn carries
   on after the connection that started it closes (checked on 0.165.0).
 
+## Antigravity
+
+Checked against `agy` 1.5.14 on 2026-11-21.
+
+- There is no shared daemon. State lives under `~/.gemini/antigravity-cli/`:
+  `conversation_summaries.db` (SQLite, table `conversation_summaries`) holds
+  one row per conversation (`conversation_id`, `title`, `preview`,
+  `step_count`, `last_modified_time`, `last_user_input_time`,
+  `workspace_uris` as a JSON array of `file://` URIs, `status`,
+  `parent_conversation_id`, `not_fully_idle`, `killed`, `project_id`,
+  `agent_name`). `title` is model-written for interactive runs and empty
+  for headless `agy -p` ones. Subagent conversations carry a non-empty
+  `parent_conversation_id`. `conversations/<id>.db` holds steps as protobuf
+  blobs and is not read here.
+- `conversation_summaries.db` uses WAL mode. While an `agy` process has it
+  open, `sqlite3 -readonly -json` reads both the main file and uncommitted
+  WAL writes; `file:<path>?immutable=1` ignores the `-wal` file and misses
+  them (verified against macOS `/usr/bin/sqlite3` 3.54.0). Once every `agy`
+  process exits, `-wal` and `-shm` are gone and `-readonly` (as well as
+  `mode=ro`) fails with `unable to open database file (14)`, whereas
+  `file:<path>?immutable=1` reads it without creating `-wal`/`-shm`. A
+  plain read-write open creates `-wal`/`-shm` in agy's directory. The
+  adapter tries `-readonly` first and falls back to `immutable=1`, so it
+  reads live WAL state when open and never writes to agy's directory.
+- `pulse` watches `mtime` and `size` of `conversation_summaries.db` and
+  `conversation_summaries.db-wal`. Measured on a live headless run: the main
+  file's mtime moves at start and end, `-wal` and `-shm` disappear at the
+  end, and nothing moves per step (across a 35 s run with five tool calls
+  neither the row nor `-wal` mtime moved until exit).
+- `presence/<conversation_id>.lock` is an empty file that the `agy` process
+  running that conversation holds an exclusive `flock` on from start to
+  exit; the file remains after exit without the lock. A non-blocking
+  `LOCK_EX` probe tells whether a process is on it, and `lsof -t <lockfile>`
+  names the pid.
+- For the first ~15 s of a new run (seen across three runs), its row in
+  `conversation_summaries` is a placeholder: empty `title` and `preview`,
+  `step_count` 0, `status` `CASCADE_RUN_STATUS_RUNNING`, and Go's zero
+  `time.Time` (`0001-01-01 00:00:00+00:00`) in `last_modified_time` and
+  `last_user_input_time`. The adapter treats year-1 timestamps as unset,
+  falls back to the presence lock file's mtime (nil without a lock file) so
+  the row sorts as new, and never drops a timeless row at the reap horizon.
+- `status` is `CASCADE_RUN_STATUS_RUNNING` while a turn runs, else
+  `CASCADE_RUN_STATUS_IDLE`, but headless rows are unreliable mid-turn: a
+  run writes `RUNNING` (`not_fully_idle` 1, `step_count` 0) at start, then
+  can rewrite `IDLE` while still at work (as early as ~5 s in on a fresh
+  run; a 40 s run read `IDLE` with `not_fully_idle` 1 for ~6 s
+  mid-tool-call; a 5-minute run read `IDLE` with `not_fully_idle` 0 and a
+  stale `step_count` during a long generation). A headless `agy -p` process exits when its turn ends,
+  so a held presence lock whose holder carries `-p`, `--print` or
+  `--prompt` means working even when the row says `IDLE`. An interactive
+  `agy` holds the lock while sitting at its prompt, so there `RUNNING` is
+  required. SIGINT ends a turn cleanly (`IDLE`, `killed` 0, stream-json
+  result with `"status":"ERROR","error":"interrupted"`). A hard kill can
+  leave `RUNNING` behind, so `RUNNING` without a held presence lock is
+  treated as idle. There is no read/unread marker and no way found to
+  detect a conversation waiting on a permission prompt.
+- `agy -p "<prompt>" --model <id> --output-format stream-json` runs
+  headlessly and prints NDJSON starting with
+  `{"event":"init","conversation_id":"<uuid>","init":{"model":…,"cwd":…}}`
+  and ending with `{"event":"result",…}` (`--output-format json` prints a
+  single object with `conversation_id`, `status`, `response`, `usage`).
+  Headless runs write files and run shell commands without asking and skip
+  the interactive trust dialog for directories outside `settings.json`'s
+  `trustedWorkspaces`.
+- `agy --conversation <id>` resumes interactively (`Ctrl+D` twice, `/exit`
+  or `/quit` leaves); `agy -p … --conversation <id>` continues headlessly.
+  An interactive `agy --conversation <id>` shows the "Do you trust the
+  contents of this project?" dialog first in a directory not in
+  `trustedWorkspaces`, and a git worktree under a trusted checkout still
+  counted as untrusted; whether a second `agy` can join a conversation a
+  headless run still holds was not verified.
+- `agy models` prints `id<TAB>label` lines after `Fetching available
+  models...`, with effort baked into the model id (e.g.
+  `gemini-4-neon-high`). Signed out, it prints an `Error:` line and no
+  models. `--mode` takes `accept-edits`, `auto` or `plan`; `auto` is
+  refused on some accounts with a warning and falls back to the default.
+- There is no CLI command to delete a conversation (only an HTTP API inside
+  a running agent's shell).
+
 ## Rex
 
 - Every Rex pane gets `REX_SESSION`, `REX_BLOCK`, `REX_SERVER` and

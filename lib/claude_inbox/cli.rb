@@ -2,6 +2,7 @@
 
 require "optparse"
 require "tmpdir"
+require_relative "antigravity/conversations_client"
 require_relative "app"
 require_relative "codex/threads_client"
 require_relative "harnesses"
@@ -111,7 +112,7 @@ module ClaudeInbox
       harness = "claude"
       cwd = back = nil
       id, = subcommand("attach", operands: 1) do |p|
-        p.on("--harness=NAME", %w[claude codex]) { |name| harness = name }
+        p.on("--harness=NAME", %w[claude codex antigravity]) { |name| harness = name }
         p.on("--cwd=DIR") { |dir| cwd = dir }
         p.on("--return-to=BLOCK") { |block| back = block }
       end
@@ -163,7 +164,9 @@ module ClaudeInbox
       # Its own token, lock and images, so a test inbox can neither rotate the
       # token phones are paired with nor hold the real inbox's lock.
       dir = File.join(Dir.tmpdir, "claude-inbox-fixture")
-      {client: Harnesses.new(claude: Claude::FixtureClient.new(options[:fixture]), codex: Codex::FixtureClient.new(File.join(fixtures, "codex-threads.json"))),
+      {client: Harnesses.new(claude: Claude::FixtureClient.new(options[:fixture]),
+        codex: Codex::FixtureClient.new(File.join(fixtures, "codex-threads.json")),
+        antigravity: Antigravity::FixtureClient.new(File.join(fixtures, "antigravity-conversations.json"))),
        store: new_store(path: nil),
        pull_requests: PullRequests.new(cache_path: File.join(fixtures, "gh-pr-status-cache.json"), resolved_path: nil, gh: nil),
        listen: options[:listen]&.merge(fixture: true, pairing: Remote::Pairing.new(path: File.join(dir, "listen.json")),
@@ -184,7 +187,10 @@ module ClaudeInbox
        argv: @argv}
     end
 
-    def live_client = Harnesses.new(claude: Claude::AgentsClient.new, codex: Codex::ThreadsClient.new)
+    def live_client
+      Harnesses.new(claude: Claude::AgentsClient.new, codex: Codex::ThreadsClient.new,
+        antigravity: Antigravity::ConversationsClient.new)
+    end
 
     def updater
       @updater ||= Updater.new if options[:update_check] && !options[:fixture]

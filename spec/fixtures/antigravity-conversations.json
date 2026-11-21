@@ -1,0 +1,32 @@
+[
+  {
+    "conversation_id": "9f2a1c4e-7b3d-4e8a-9c10-3d5e6f7a8b9c",
+    "title": "Add Antigravity harness adapter",
+    "preview": "Wire agy conversations into the inbox alongside Claude and Codex",
+    "step_count": 14,
+    "last_modified_time": "2026-09-16 21:30:00.000000+00:00",
+    "last_user_input_time": "2026-09-16 21:10:00.000000+00:00",
+    "workspace_uris": "[\"file:///Users/byron/code/claude-inbox\"]",
+    "status": "CASCADE_RUN_STATUS_RUNNING",
+    "parent_conversation_id": "",
+    "not_fully_idle": 1,
+    "killed": 0,
+    "project_id": "",
+    "agent_name": ""
+  },
+  {
+    "conversation_id": "4e8b2d1a-5c6f-4a90-8b21-1f2e3d4c5b6a",
+    "title": "",
+    "preview": "Audit the staging backup\n  retention policy and report gaps",
+    "step_count": 6,
+    "last_modified_time": "2026-09-15 17:15:00.000000+00:00",
+    "last_user_input_time": "2026-09-15 17:00:00.000000+00:00",
+    "workspace_uris": "[\"file:///Users/byron/code/parks_genie\"]",
+    "status": "CASCADE_RUN_STATUS_IDLE",
+    "parent_conversation_id": "",
+    "not_fully_idle": 0,
+    "killed": 0,
+    "project_id": "",
+    "agent_name": ""
+  }
+]
