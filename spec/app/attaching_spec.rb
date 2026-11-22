@@ -139,6 +139,47 @@ RSpec.describe ClaudeInbox::App do
     end
   end
 
+  describe "a T3 thread" do
+    let(:dir) { Dir.mktmpdir("t3") }
+    let(:shell) do
+      {"projects" => [], "threads" => [{"id" => "t3-thread", "title" => "On T3", "providerInstanceId" => "codex", "status" => "completed",
+                                        "worktreePath" => dir, "createdAt" => "2026-09-15T19:00:00Z", "updatedAt" => "2026-09-15T19:30:00Z"}]}
+    end
+    let(:server) { instance_double(ClaudeInbox::T3::Server, shell: shell, call: nil) }
+    let(:handoff) { nil }
+    let(:tria) do
+      File.join(dir, "tria").tap do |path|
+        File.write(path, "#!/bin/sh\npwd > #{dir}/ran\necho \"$@\" >> #{dir}/ran\n#{"printf '{\"attach\": \"#{handoff}\"}' > \"$4\"\n" if handoff}")
+        File.chmod(0o755, path)
+      end
+    end
+    let(:t3) { ClaudeInbox::T3::ThreadsClient.new(server: server, tria: tria, out: StringIO.new, clock: -> { Time.utc(2026, 9, 15, 20) }) }
+    let(:app) { build_app(client:, t3:, store:, pull_requests:, queue:, terminal:) }
+
+    after { FileUtils.remove_entry(dir) }
+
+    before { press(app, "/", *"On T3".chars, "\r") }
+
+    it "runs tria on the thread in its directory, with a handoff file it cleans up" do
+      press(app, "\r")
+      pwd, args = File.read(File.join(dir, "ran")).lines.map(&:strip)
+      expect(File.realpath(pwd)).to eq(File.realpath(dir))
+      expect(args).to match(%r{\Aattach t3-thread --handoff \S+claude-inbox-handoff-\h+\.json\z})
+      expect(File.exist?(args.split.last)).to be(false)
+      expect(client.attached).to be_empty
+    end
+
+    context "when tria's pane hands off to another row" do
+      let(:handoff) { "f23c8673" }
+
+      it "attaches that row next and deletes the file" do
+        press(app, "\r")
+        expect(client.attached).to eq(%w[f23c8673])
+        expect(File.exist?(File.read(File.join(dir, "ran")).split.last)).to be(false)
+      end
+    end
+  end
+
   describe "a Codex thread" do
     let(:dir) { Dir.mktmpdir("codex") }
     let(:turns) { {"data" => [{"id" => "turn9", "status" => "inProgress"}]} }

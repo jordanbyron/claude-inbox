@@ -63,4 +63,41 @@ RSpec.describe ClaudeInbox::T3::ThreadsClient do
     expect(late.list.map(&:name)).to eq(["Rename the reservations table", "Check the park hours scraper", "Pick a cache for the forecast"])
     expect(ClaudeInbox::T3::FixtureClient.new("/nonexistent/t3-shell.json").list).to eq([])
   end
+
+  it "says so when tria will not start, and counts that a failed attach" do
+    out = StringIO.new
+    tria = described_class.new(server: server, tria: "/nonexistent/tria", out: out)
+    expect(tria.attach(session(harness: :t3, id: "t1", cwd: nil))).to be(false)
+    expect(out.string).to eq("/nonexistent/tria would not start\n")
+  end
+
+  describe "acting on a thread over the server" do
+    let(:dir) { Dir.mktmpdir("t3") }
+    let(:fake) { FakeT3Server.new(File.join(dir, "home"), shell: shell, answers: {"orchestration.dispatchCommand" => {"sequence" => 1}}) }
+    let(:live) { ClaudeInbox::T3::Server.new(home: fake.home, token_path: File.join(dir, "token.json"), timeout: 2) }
+    let(:client) { described_class.new(server: live, clock: clock) }
+    let(:commands) { -> { drain(fake.requests).filter_map { |tag, body| body if tag == "orchestration.dispatchCommand" } } }
+
+    before { ClaudeInbox::Records.save(File.join(dir, "token.json"), {"token" => "good"}) }
+
+    after do
+      fake.stop
+      FileUtils.remove_entry(dir)
+    end
+
+    it "interrupts the run under way, and says when there is none" do
+      running, approval, = ClaudeInbox::T3::FixtureClient.new(fixture_path("t3-shell.json")).list
+      expect(client.stop(running)).to be(true)
+      expect(commands.call).to contain_exactly(include("type" => "run.interrupt", "threadId" => running.id, "runId" => "run:1", "commandId" => match(/\A\h{8}-/)))
+      shell["threads"][1]["activeRunId"] = nil
+      fake.shell = shell
+      expect(client.stop(approval)).to be(false)
+      expect(commands.call).to be_empty
+    end
+
+    it "deletes a thread" do
+      client.rm(session(harness: :t3, id: "ad5a6e84"))
+      expect(commands.call).to contain_exactly(include("type" => "thread.delete", "threadId" => "ad5a6e84"))
+    end
+  end
 end

@@ -1,9 +1,13 @@
 # frozen_string_literal: true
 
 require "json"
+require "securerandom"
 require "time"
+require "tmpdir"
+require_relative "../records"
 require_relative "../session"
 require_relative "../store"
+require_relative "../subprocess"
 require_relative "server"
 
 module ClaudeInbox
@@ -21,8 +25,10 @@ module ClaudeInbox
       # Provider status and models change rarely, and the answer is 200KB.
       CONFIG_EVERY = 60
 
-      def initialize(server: Server.new, clock: -> { Time.now })
+      def initialize(server: Server.new, tria: "tria", out: $stdout, clock: -> { Time.now })
         @server = server
+        @tria = tria
+        @out = out
         @clock = clock
         @config = nil
         @config_at = nil
@@ -37,6 +43,26 @@ module ClaudeInbox
         horizon = @clock.call - Store::REAP_AFTER
         self.class.sessions(shell, drivers).reject { |s| s.last_message_at && s.last_message_at < horizon }
       end
+
+      def attach(session)
+        handoff = File.join(Dir.tmpdir, "claude-inbox-handoff-#{SecureRandom.hex(8)}.json")
+        here = (session.cwd && File.directory?(session.cwd)) ? {chdir: session.cwd} : {}
+        ran = system(*Subprocess.command(@tria, "attach", session.id, "--handoff", handoff, **here))
+        @out.puts "#{@tria} would not start" if ran.nil?
+        next_row = Records.read(handoff)["attach"]
+        next_row || ran == true
+      ensure
+        File.delete(handoff) if File.exist?(handoff)
+      end
+
+      # The Session does not carry the run's id, so the shell is read for it.
+      def stop(session)
+        run = @server.shell!["threads"]&.find { |t| t["id"] == session.id }&.dig("activeRunId") or return false
+        dispatch("run.interrupt", threadId: session.id, runId: run)
+        true
+      end
+
+      def rm(session) = dispatch("thread.delete", threadId: session.id)
 
       def self.sessions(shell, drivers = {})
         projects = (shell["projects"] || []).to_h { |p| [p["id"], p] }
@@ -99,6 +125,8 @@ module ClaudeInbox
 
       private
 
+      def dispatch(type, **fields) = @server.call!("orchestration.dispatchCommand", {type: type, commandId: SecureRandom.uuid, **fields})
+
       def forget_config
         @config = @config_at = nil
         []
@@ -122,6 +150,13 @@ module ClaudeInbox
       end
 
       def list = File.exist?(@path) ? self.class.sessions(JSON.parse(File.read(@path))) : []
+
+      # Stand-in child, as the Claude fixture's attach is.
+      def attach(session) = system("sh", "-c", "printf 'fake tria attach %s\\npress enter to detach: ' \"$1\"; read -r _", "attach", session.id)
+
+      def stop(_session) = true
+
+      def rm(_session) = nil
     end
   end
 end

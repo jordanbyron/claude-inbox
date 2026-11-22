@@ -186,7 +186,9 @@ module ClaudeInbox
        argv: @argv}
     end
 
-    def live_client = Harnesses.new(claude: Claude::AgentsClient.new, codex: Codex::ThreadsClient.new, t3: T3::ThreadsClient.new)
+    # tria is built beside the inbox, so CLAUDE_INBOX_TRIA can point at a checkout's.
+    def live_client = Harnesses.new(claude: Claude::AgentsClient.new, codex: Codex::ThreadsClient.new,
+      t3: T3::ThreadsClient.new(tria: @env.fetch("CLAUDE_INBOX_TRIA", "tria")))
 
     def updater
       @updater ||= Updater.new if options[:update_check] && !options[:fixture]

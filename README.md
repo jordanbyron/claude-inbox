@@ -89,7 +89,7 @@ Vim bindings. Arrows and the mouse work too.
 | `j` `k` | move down / up |
 | `gg` `G` | first / last row |
 | `Ctrl-d` `Ctrl-u` | half page down / up (`Ctrl-f` `Ctrl-b` full page) |
-| `Enter` `l` | attach (`←` or `Ctrl+Z` returns here; in Codex, `←` at the start of the prompt), adopt a remote session, or expand Snoozed / Settled |
+| `Enter` `l` | attach (`←` or `Ctrl+Z` returns here; in Codex, `←` at the start of the prompt), adopt a remote session, or expand Snoozed / Settled. A T3 thread opens in [tria](https://github.com/jordanbyron/tria) |
 | `Tab` `Shift+Tab` | next / previous section |
 | `h` | collapse the current fold |
 | `za` `zo` `zc` | toggle / open / close the fold under the cursor |
