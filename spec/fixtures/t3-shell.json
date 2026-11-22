@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 1,
+  "snapshotSequence": 42,
+  "projects": [
+    {
+      "id": "p-parks",
+      "title": "parks_genie",
+      "workspaceRoot": "/Users/byron/code/parks_genie",
+      "repositoryIdentity": {
+        "canonicalKey": "github.com/jordanbyron/parks_genie",
+        "locator": {
+          "source": "git-remote",
+          "remoteName": "origin",
+          "remoteUrl": "git@github.com:jordanbyron/parks_genie.git"
+        }
+      }
+    },
+    {
+      "id": "p-inbox",
+      "title": "claude-inbox",
+      "workspaceRoot": "/Users/byron/code/claude-inbox",
+      "repositoryIdentity": null
+    }
+  ],
+  "threads": [
+    {
+      "id": "6f1c2a40-0d1e-4b7a-9c55-1a2b3c4d5e60",
+      "projectId": "p-parks",
+      "title": "Rename the reservations table",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-6-luna"
+      },
+      "runtimeMode": "full-access",
+      "interactionMode": "default",
+      "branch": "t3/rename-reservations",
+      "worktreePath": "/Users/byron/.t3/worktrees/parks_genie/rename-reservations",
+      "pullRequests": [
+        {
+          "host": "github.com",
+          "repository": "jordanbyron/parks_genie",
+          "number": 412,
+          "url": "https://github.com/jordanbyron/parks_genie/pull/412",
+          "source": "agent"
+        }
+      ],
+      "lineage": {
+        "parentThreadId": null,
+        "relationshipToParent": null,
+        "rootThreadId": "6f1c2a40-0d1e-4b7a-9c55-1a2b3c4d5e60"
+      },
+      "latestRunId": "run:1",
+      "activeRunId": "run:1",
+      "status": "running",
+      "lastError": null,
+      "pendingRuntimeRequest": null,
+      "pendingBackgroundTasks": [],
+      "createdAt": "2026-09-15T19:21:40.000Z",
+      "updatedAt": "2026-09-15T19:30:00.000Z",
+      "archivedAt": null,
+      "deletedAt": null
+    },
+    {
+      "id": "7a2d3b51-1e2f-4c8b-8d66-2b3c4d5e6f71",
+      "projectId": "p-parks",
+      "title": "Check the park hours scraper",
+      "providerInstanceId": "antigravity",
+      "modelSelection": {
+        "instanceId": "antigravity",
+        "model": "gemini-4-neon"
+      },
+      "runtimeMode": "full-access",
+      "interactionMode": "default",
+      "branch": null,
+      "worktreePath": null,
+      "pullRequests": [],
+      "lineage": {
+        "parentThreadId": null,
+        "relationshipToParent": null,
+        "rootThreadId": "7a2d3b51-1e2f-4c8b-8d66-2b3c4d5e6f71"
+      },
+      "latestRunId": "run:2",
+      "activeRunId": "run:2",
+      "status": "waiting",
+      "lastError": null,
+      "pendingRuntimeRequest": {
+        "id": "req:1",
+        "kind": "command",
+        "createdAt": "2026-09-15T19:27:00.000Z",
+        "blocking": true
+      },
+      "pendingBackgroundTasks": [],
+      "createdAt": "2026-09-15T19:21:40.000Z",
+      "updatedAt": "2026-09-15T19:28:00.000Z",
+      "archivedAt": null,
+      "deletedAt": null
+    },
+    {
+      "id": "8b3e4c62-2f30-4d9c-9e77-3c4d5e6f7082",
+      "projectId": "p-inbox",
+      "title": "Pick a cache for the forecast",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-6-luna"
+      },
+      "runtimeMode": "full-access",
+      "interactionMode": "default",
+      "branch": null,
+      "worktreePath": null,
+      "pullRequests": [],
+      "lineage": {
+        "parentThreadId": null,
+        "relationshipToParent": null,
+        "rootThreadId": "8b3e4c62-2f30-4d9c-9e77-3c4d5e6f7082"
+      },
+      "latestRunId": "run:3",
+      "activeRunId": "run:3",
+      "status": "waiting",
+      "lastError": null,
+      "pendingRuntimeRequest": {
+        "id": "req:2",
+        "kind": "user_input",
+        "createdAt": "2026-09-15T19:25:00.000Z",
+        "blocking": true
+      },
+      "pendingBackgroundTasks": [],
+      "createdAt": "2026-09-15T19:21:40.000Z",
+      "updatedAt": "2026-09-15T19:26:00.000Z",
+      "archivedAt": null,
+      "deletedAt": null
+    },
+    {
+      "id": "9c4f5d73-3041-4ead-af88-4d5e6f708193",
+      "projectId": "p-parks",
+      "title": "Upgrade the Rails app",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-6-luna"
+      },
+      "runtimeMode": "full-access",
+      "interactionMode": "default",
+      "branch": null,
+      "worktreePath": null,
+      "pullRequests": [],
+      "lineage": {
+        "parentThreadId": null,
+        "relationshipToParent": null,
+        "rootThreadId": "9c4f5d73-3041-4ead-af88-4d5e6f708193"
+      },
+      "latestRunId": "run:4",
+      "activeRunId": null,
+      "status": "failed",
+      "lastError": "The provider session exited unexpectedly.",
+      "pendingRuntimeRequest": null,
+      "pendingBackgroundTasks": [],
+      "createdAt": "2026-09-15T19:21:40.000Z",
+      "updatedAt": "2026-09-15T19:24:00.000Z",
+      "archivedAt": null,
+      "deletedAt": null
+    },
+    {
+      "id": "ad5a6e84-4152-4fbe-b099-5e6f708192a4",
+      "projectId": "p-inbox",
+      "title": "Write the release notes",
+      "providerInstanceId": "antigravity",
+      "modelSelection": {
+        "instanceId": "antigravity",
+        "model": "gemini-4-neon"
+      },
+      "runtimeMode": "full-access",
+      "interactionMode": "default",
+      "branch": null,
+      "worktreePath": null,
+      "pullRequests": [],
+      "lineage": {
+        "parentThreadId": null,
+        "relationshipToParent": null,
+        "rootThreadId": "ad5a6e84-4152-4fbe-b099-5e6f708192a4"
+      },
+      "latestRunId": "run:5",
+      "activeRunId": null,
+      "status": "completed",
+      "lastError": null,
+      "pendingRuntimeRequest": null,
+      "pendingBackgroundTasks": [],
+      "createdAt": "2026-09-15T19:21:40.000Z",
+      "updatedAt": "2026-09-15T19:22:00.000Z",
+      "archivedAt": null,
+      "deletedAt": null
+    },
+    {
+      "id": "import:claudeAgent:828c28ee-ab67-48b3-9613-97b25e5d010b",
+      "projectId": "p-parks",
+      "title": "An imported Claude Code session",
+      "providerInstanceId": "claudeAgent",
+      "modelSelection": {
+        "instanceId": "claudeAgent",
+        "model": "gemini-4-neon"
+      },
+      "runtimeMode": "full-access",
+      "interactionMode": "default",
+      "branch": null,
+      "worktreePath": null,
+      "pullRequests": [],
+      "lineage": {
+        "parentThreadId": null,
+        "relationshipToParent": null,
+        "rootThreadId": "import:claudeAgent:828c28ee-ab67-48b3-9613-97b25e5d010b"
+      },
+      "latestRunId": null,
+      "activeRunId": null,
+      "status": "idle",
+      "lastError": null,
+      "pendingRuntimeRequest": null,
+      "pendingBackgroundTasks": [],
+      "createdAt": "2026-09-15T19:21:40.000Z",
+      "updatedAt": "2026-09-15T19:35:00.000Z",
+      "archivedAt": null,
+      "deletedAt": null
+    },
+    {
+      "id": "be6b7f95-5263-4a0f-b1aa-6f708192a3b5",
+      "projectId": "p-parks",
+      "title": "A sub-agent's thread",
+      "providerInstanceId": "codex",
+      "modelSelection": {
+        "instanceId": "codex",
+        "model": "gpt-6-luna"
+      },
+      "runtimeMode": "full-access",
+      "interactionMode": "default",
+      "branch": null,
+      "worktreePath": null,
+      "pullRequests": [],
+      "lineage": {
+        "parentThreadId": "6f1c2a40-0d1e-4b7a-9c55-1a2b3c4d5e60",
+        "relationshipToParent": "subagent",
+        "rootThreadId": "6f1c2a40-0d1e-4b7a-9c55-1a2b3c4d5e60"
+      },
+      "latestRunId": null,
+      "activeRunId": null,
+      "status": "running",
+      "lastError": null,
+      "pendingRuntimeRequest": null,
+      "pendingBackgroundTasks": [],
+      "createdAt": "2026-09-15T19:21:40.000Z",
+      "updatedAt": "2026-09-15T19:34:00.000Z",
+      "archivedAt": null,
+      "deletedAt": null
+    }
+  ],
+  "archivedThreads": []
+}

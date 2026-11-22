@@ -410,7 +410,7 @@ module ClaudeInbox
     end
 
     # Claude is the default; any other harness names itself.
-    def harness_tag(s) = (s.harness == :claude) ? "" : " · #{s.harness}"
+    def harness_tag(s) = (s.harness == :claude) ? "" : " · #{s.harness_name}"
 
     # The headline PR, with a count of the rest. A settled row dims it.
     def pr_badge(s, section)

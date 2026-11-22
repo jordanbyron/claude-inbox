@@ -30,6 +30,19 @@ RSpec.describe ClaudeInbox::Snapshot do
     end
   end
 
+  it "names a T3 row by its provider, with the thread and directory tria opens it by" do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, "snapshot.json")
+      t3 = session(id: "6f1c", harness: :t3, provider: :codex, cwd: "/tmp/wt")
+      described_class.new(path: path).write(ClaudeInbox::Store.sectionize([t3, session(id: "a")], {}, now), now)
+      rows = JSON.parse(File.read(path))["sections"]["active"]
+      expect(rows.map { |r| r.slice("id", "harness", "backend", "thread", "cwd") }).to contain_exactly(
+        {"id" => "6f1c", "harness" => "codex", "backend" => "t3", "thread" => "6f1c", "cwd" => "/tmp/wt"},
+        {"id" => "a", "harness" => "claude"}
+      )
+    end
+  end
+
   it "rewrites on a change and on the heartbeat, and otherwise leaves the file alone" do
     Dir.mktmpdir do |dir|
       path = File.join(dir, "snapshot.json")

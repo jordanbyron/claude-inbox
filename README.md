@@ -1,6 +1,7 @@
 # claude-inbox
 
-An inbox for Claude Code's background sessions and Codex threads. It lists
+An inbox for Claude Code's background sessions, Codex threads and
+[T3 Code](https://github.com/pingdotgg/t3code)'s Codex and Antigravity threads. It lists
 what `claude agents` lists and adds snooze, settle, pinning and each session's
 pull request.
 
