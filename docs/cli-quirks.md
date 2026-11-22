@@ -281,6 +281,20 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   say which `driver` each instance runs, and whether it is `ready`. That
   answer is about 220KB, mostly models, skills and slash commands
   (checked on 0.1.11).
+- T3 runs Codex on the same `~/.codex`, so each T3 Codex thread is also in
+  the Codex daemon's `thread/list`, with `originator: "T3 Code"` and
+  `source: "vscode"`, under a uuid of Codex's own. The T3 thread does not
+  name that uuid: its `activeProviderThreadId` reads
+  `…:native-thread:pending%3Arun…`. `thread.delete` on T3 leaves the Codex
+  rollout in place (checked on 0.1.11 with Codex 0.165.0).
+- `orchestration.launchThread` needs a `projectId`, and runs in the
+  project's folder unless `workspaceStrategy` is `existing_worktree` with a
+  `worktreePath`; `t3 thread start` sends neither, so started from a
+  worktree it runs in the main checkout. Each driver names its reasoning
+  option in its own way (`reasoningEffort`, `effort`, `thought_level`),
+  from the model's `capabilities.optionDescriptors`. A thread the server
+  starts has an id like `thread:project:<project id>:<uuid>`, colons
+  included (checked on 0.1.11).
 
 ## Rex
 

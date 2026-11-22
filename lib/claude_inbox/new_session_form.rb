@@ -38,12 +38,13 @@ module ClaudeInbox
     # then s, and that Esc asked to discard the prompt.
     SLIPS = {alt_s: "that's option-s — ctrl-s starts it", alt_o: "that's option-o — ctrl-o starts and attaches"}.freeze
 
-    # thread/start has no name, worktree, Remote Control or color.
+    # Neither thread/start nor T3's launch has a name, worktree, Remote Control or color.
     CLAUDE_ONLY = %i[name worktree remote color].freeze
 
     # `choices` holds each harness that can start a session, with what it
-    # offers for the model, effort and permissions fields; the Harness field
-    # shows only when there is more than one.
+    # offers for the model, effort and permissions fields and, as `default`,
+    # what default means there; nil for one that can't start now. The
+    # Harness field shows only when there is more than one.
     def initialize(cwd:, dirs: [], choices: {claude: Claude::AgentsClient::CHOICES}, home: Dir.home, clipboard: Images.method(:from_clipboard))
       @p = Pastel.new(enabled: true)
       @theme = Theme.new
@@ -140,7 +141,7 @@ module ClaudeInbox
       v = fields.to_h { |f| [f.key, (f.kind == :choice && f.value == DEFAULT) ? nil : f.value.to_s] }
       v[:harness] = harness
       v[:cwd] = directory
-      return codex_values(v) if harness == :codex
+      return with_image_files(v) unless harness == :claude
       v[:prompt] = field(:prompt).value.expand { |chip| Claude::AgentsClient.mention(chip.path) }.strip
       v[:worktree] = v[:worktree] == "yes"
       v[:name] = nil if v[:name].strip.empty?
@@ -207,10 +208,14 @@ module ClaudeInbox
 
     def harness = field(:harness)&.value&.to_sym || :claude
 
-    def fields = @fields.reject { |f| harness == :codex && CLAUDE_ONLY.include?(f.key) }
+    def fields = @fields.reject { |f| harness != :claude && CLAUDE_ONLY.include?(f.key) }
 
-    # An image goes to Codex as a file of its own, its chip left in the text.
-    def codex_values(v)
+    def unavailable?(name = harness) = @choices.key?(name) && @choices[name].nil?
+
+    def unavailable_note = "#{harness} needs T3 Code, which is not running"
+
+    # An image goes as a file of its own, its chip left in the text.
+    def with_image_files(v)
       prompt = field(:prompt).value
       images = []
       text = prompt.expand { |chip| chip.to_s.tap { images << chip.path } }.strip
@@ -219,10 +224,12 @@ module ClaudeInbox
 
     # Each harness has its own choices; a switch starts every one over at default.
     def choose_harness
-      @choices.fetch(harness).each do |key, choices|
+      offered = @choices.fetch(harness) || {model: [DEFAULT], effort: [DEFAULT], permission_mode: [DEFAULT]}
+      offered.except(:default).each do |key, choices|
         field(key).choices = choices
         field(key).value = DEFAULT
       end
+      @error = unavailable_note if unavailable?
     end
 
     def menu_query
@@ -348,6 +355,7 @@ module ClaudeInbox
       else
         f.choices.map { |c|
           text = (c == DEFAULT) ? default_text(f) : c
+          text = "#{c} (unavailable)" if f.key == :harness && unavailable?(c.to_sym)
           if c == f.value then (on ? @theme.pill(" #{text} ", :cyan) : @theme.cyan_bold(" #{text} "))
           elsif f.key == :color then Palette.paint(" #{text} ", c)
           else @p.dim(" #{text} ")
@@ -358,7 +366,7 @@ module ClaudeInbox
 
     def default_text(f)
       return "none" if f.key == :color
-      return "codex config" if harness == :codex
+      return @choices[harness]&.dig(:default) || "#{harness} config" unless harness == :claude
       resolved = defaults[f.key]
       resolved ? "#{resolved} (settings)" : "auto (cli default)"
     end
@@ -431,7 +439,7 @@ module ClaudeInbox
     end
 
     def submit(attach:)
-      field, message = SessionRequest.problem(values)
+      field, message = unavailable? ? [:harness, unavailable_note] : SessionRequest.problem(values)
       if field
         @error = message
         focus_on(field)

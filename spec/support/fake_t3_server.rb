@@ -4,7 +4,8 @@ require "socket"
 require "fileutils"
 
 # T3 Code's local server for the T3 specs, on a port of its own with its
-# runtime file under `home`. It serves `shell` at /api/orchestration/shell,
+# runtime file under `home`. It serves `shell` (or what it returns, if it
+# is a lambda) at /api/orchestration/shell,
 # a ticket for the WebSocket, and answers each RPC from `answers` (tag =>
 # value, a lambda of the payload, or an Exception for a failure). Only
 # `token` is let in; `requests` holds what arrived, as [path or tag, body].
@@ -53,7 +54,7 @@ class FakeT3Server
     if head[/^authorization: Bearer (\S+)/i, 1] != @token
       reply(io, 401, {error: "unauthorized"})
     elsif verb == "GET" && path == "/api/orchestration/shell"
-      reply(io, 200, @shell)
+      reply(io, 200, @shell.respond_to?(:call) ? @shell.call : @shell)
     elsif verb == "POST" && path == "/api/auth/websocket-ticket"
       reply(io, 200, {ticket: "ticket-#{@token}"})
     else

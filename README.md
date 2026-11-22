@@ -116,7 +116,7 @@ Vim bindings. Arrows and the mouse work too.
 
 ### New session
 
-`n` opens a form for the prompt, Claude or Codex, name, directory, model,
+`n` opens a form for the prompt, Claude, Codex or Antigravity, name, directory, model,
 effort, permissions, worktree, Remote Control and color, which tints the row
 as `/color` would.
 `Tab` moves between fields, `Ctrl-S` starts the session and `Ctrl-O` starts

@@ -39,4 +39,28 @@ RSpec.describe ClaudeInbox::Harnesses do
     allow(codex).to receive(:choices).and_return({})
     expect(harnesses.choices).to eq(claude: ClaudeInbox::Claude::AgentsClient::CHOICES)
   end
+
+  describe "with T3 Code beside them" do
+    let(:offered) { {model: %w[default gpt-6-luna], effort: %w[default], permission_mode: %w[default], default: "t3 default"} }
+    let(:t3) { instance_double(ClaudeInbox::T3::ThreadsClient, choices: {codex: offered, antigravity: offered}, spawn: "t3-id") }
+    let(:harnesses) { described_class.new(claude: claude, codex: codex, t3: t3) }
+
+    it "starts Codex and Antigravity on T3 while it has them ready, saying which harness" do
+      expect(harnesses.choices).to include(codex: offered, antigravity: offered)
+      expect(harnesses.route(:codex)).to eq(:t3)
+      expect(harnesses.route(:claude)).to eq(:claude)
+      expect(harnesses.spawn(harness: :antigravity, prompt: "hi", cwd: "/tmp")).to eq("t3-id")
+      expect(t3).to have_received(:spawn).with(harness: :antigravity, prompt: "hi", cwd: "/tmp")
+    end
+
+    it "starts Codex on its own daemon when T3 has no Codex ready, and refuses Antigravity" do
+      allow(t3).to receive(:choices).and_return(antigravity: nil)
+      allow(codex).to receive(:spawn).and_return("t9")
+      expect(harnesses.choices).to include(codex: codex.choices, antigravity: nil)
+      expect(harnesses.route(:codex)).to eq(:codex)
+      expect(harnesses.spawn(harness: :codex, prompt: "hi", cwd: "/tmp")).to eq("t9")
+      expect { harnesses.spawn(harness: :antigravity, prompt: "hi", cwd: "/tmp") }.to raise_error(ClaudeInbox::Harnesses::Error, /antigravity runs on T3 Code/)
+      expect(t3).not_to have_received(:spawn)
+    end
+  end
 end

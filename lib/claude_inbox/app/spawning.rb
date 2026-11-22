@@ -31,11 +31,12 @@ module ClaudeInbox
         v, note = SessionRequest.without_stray_worktree(form.values)
         notice("starting session…")
         in_background do
+          route = @client.route(v[:harness])
           id = @client.spawn(**v)
           @queue << [:notice, ["started #{id}", note].compact.join(" — ")]
           @queue << [:form_started, form]
           @queue << [:select, id]
-          attach ? @queue << [:attach, started(id, harness: v[:harness], cwd: v[:cwd])] : @poller.soon
+          attach ? @queue << [:attach, started(id, harness: route, cwd: v[:cwd])] : @poller.soon
         rescue Harnesses::Error => e
           @queue << [:form_failed, form, e.message]
         end

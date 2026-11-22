@@ -5,10 +5,12 @@ require "securerandom"
 require "time"
 require "tmpdir"
 require_relative "../records"
+require_relative "../session_request"
 require_relative "../session"
 require_relative "../store"
 require_relative "../subprocess"
 require_relative "server"
+require_relative "workspace"
 
 module ClaudeInbox
   module T3
@@ -21,6 +23,15 @@ module ClaudeInbox
       LIVE = %w[preparing queued starting running waiting].freeze
       STATES = {"failed" => "error", "completed" => "done"}.freeze
       LINES = {"permission" => "waiting on approval", "question" => "waiting on input"}.freeze
+
+      STARTS = %i[codex antigravity].freeze
+      T3_ONLY = %i[antigravity].freeze
+
+      RUNTIME_MODES = %w[approval-required auto-accept-edits auto full-access].freeze
+      # T3 wants a mode on every launch; this is its own default.
+      DEFAULT_RUNTIME = "full-access"
+      DEFAULT = "default"
+      TITLE_MAX = 80
 
       # Provider status and models change rarely, and the answer is 200KB.
       CONFIG_EVERY = 60
@@ -63,6 +74,31 @@ module ClaudeInbox
       end
 
       def rm(session) = dispatch("thread.delete", threadId: session.id)
+
+      # A harness only T3 runs is there as nil while it can't, so the form can say so.
+      def choices
+        return {} unless @server.installed?
+        ready = providers.select { |p| p["enabled"] && p["status"] == "ready" }
+        offered = STARTS.filter_map do |harness|
+          provider = ready.find { |p| HARNESS_BY_DRIVER[p["driver"]] == harness }
+          [harness, provider && choices_for(provider)] if provider || T3_ONLY.include?(harness)
+        end
+        offered.to_h
+      end
+
+      def spawn(harness:, prompt:, cwd:, model: nil, effort: nil, permission_mode: nil, images: [])
+        provider = providers.find { |p| HARNESS_BY_DRIVER[p["driver"]] == harness && p["status"] == "ready" } or
+          raise Server::Error, "T3 Code has no #{harness} ready"
+        text = images.empty? ? prompt : SessionRequest.attach(prompt, images)
+        result = @server.call!("orchestration.launchThread", {
+          commandId: SecureRandom.uuid, creationSource: "web", **Workspace.new(@server, cwd).launch,
+          title: title(prompt), generateTitle: true,
+          modelSelection: model_selection(provider, model, effort),
+          runtimeMode: permission_mode || DEFAULT_RUNTIME, interactionMode: "default",
+          initialMessage: {messageId: SecureRandom.uuid, text: text, attachments: []}
+        })
+        result["threadId"]
+      end
 
       def self.sessions(shell, drivers = {})
         projects = (shell["projects"] || []).to_h { |p| [p["id"], p] }
@@ -139,6 +175,32 @@ module ClaudeInbox
       end
 
       def providers = @config&.dig("providers") || []
+
+      def choices_for(provider)
+        models = provider["models"] || []
+        efforts = models.flat_map { |m| reasoning(m)&.dig("options")&.map { |o| o["id"] } || [] }.uniq
+        modes = provider["supportedRuntimeModes"] || RUNTIME_MODES
+        {model: [DEFAULT, *models.map { |m| m["slug"] }], effort: [DEFAULT, *efforts], permission_mode: [DEFAULT, *modes], default: "t3 default"}
+      end
+
+      # Each driver names its reasoning option its own way: reasoningEffort, effort, thought_level.
+      def reasoning(model)
+        descriptors = model.dig("capabilities", "optionDescriptors") || []
+        descriptors.find { |d| d["role"] == "reasoning" } || descriptors.find { |d| d["type"] == "select" && d["id"].match?(/effort|reason|thought/i) }
+      end
+
+      def model_selection(provider, slug, effort)
+        models = provider["models"] || []
+        model = models.find { |m| m["slug"] == slug } || models.find { |m| m["isDefault"] } || models.first or
+          raise Server::Error, "T3 Code offers no #{provider["instanceId"]} model"
+        option = reasoning(model) if effort
+        {instanceId: provider["instanceId"], model: model["slug"], options: option ? [{id: option["id"], value: effort}] : []}
+      end
+
+      def title(prompt)
+        line = prompt.lines.map(&:strip).find { |l| !l.empty? }.to_s
+        (line.length > TITLE_MAX) ? "#{line[0, TITLE_MAX - 1].rstrip}…" : line
+      end
 
       def drivers = providers.to_h { |p| [p["instanceId"], p["driver"]] }
     end

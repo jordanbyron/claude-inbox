@@ -100,4 +100,76 @@ RSpec.describe ClaudeInbox::T3::ThreadsClient do
       expect(commands.call).to contain_exactly(include("type" => "thread.delete", "threadId" => "ad5a6e84"))
     end
   end
+
+  describe "starting a thread" do
+    let(:dir) { File.realpath(Dir.mktmpdir("t3")) }
+    let(:repo) { File.join(dir, "repo").tap { |r| FileUtils.mkdir_p(r) && system("git", "-C", r, "init", "-q", "-b", "main") && system("git", "-C", r, "remote", "add", "origin", "git@github.com:o/repo.git") } }
+    let(:projects) { [{"id" => "p1", "workspaceRoot" => repo, "repositoryIdentity" => {"locator" => {"remoteUrl" => "git@github.com:o/repo.git"}}}] }
+    let(:models) do
+      [{"slug" => "gpt-old", "isLegacy" => true}, {"slug" => "gpt-6-luna", "isDefault" => true,
+                                                   "capabilities" => {"optionDescriptors" => [{"id" => "reasoningEffort", "type" => "select", "options" => [{"id" => "low"}, {"id" => "high"}]}]}}]
+    end
+    let(:providers) do
+      [{"instanceId" => "codex", "driver" => "codex", "enabled" => true, "status" => "ready", "models" => models},
+        {"instanceId" => "antigravity", "driver" => "antigravity", "enabled" => true, "status" => "error", "models" => []}]
+    end
+    let(:launched) { [] }
+    let(:fake) do
+      FakeT3Server.new(File.join(dir, "home"), shell: -> { {"projects" => projects, "threads" => []} },
+        answers: {"server.getConfig" => {"providers" => providers}, "orchestration.launchThread" => ->(input) { launched << input && {"threadId" => "new-thread"} }})
+    end
+    let(:bin) { File.join(dir, "t3").tap { |path| File.write(path, "#!/bin/sh\necho \"$@\" >> #{dir}/t3.log\n") && File.chmod(0o755, path) } }
+    let(:live) { ClaudeInbox::T3::Server.new(home: fake.home, bin: bin, token_path: File.join(dir, "token.json"), timeout: 5) }
+    let(:client) { described_class.new(server: live, clock: clock) }
+
+    before do
+      ClaudeInbox::Records.save(File.join(dir, "token.json"), {"token" => "good"})
+      client.list
+    end
+
+    after do
+      fake.stop
+      FileUtils.remove_entry(dir)
+    end
+
+    it "offers each provider T3 has ready, and Antigravity as unavailable while it is not" do
+      expect(client.choices).to eq(
+        codex: {model: %w[default gpt-old gpt-6-luna], effort: %w[default low high], permission_mode: %w[default approval-required auto-accept-edits auto full-access], default: "t3 default"},
+        antigravity: nil
+      )
+      fake.stop
+      client.list
+      expect(client.choices).to eq(antigravity: nil)
+    end
+
+    it "launches in the project's folder with T3's default model and mode, its effort as the model's own option" do
+      expect(client.spawn(harness: :codex, prompt: "Rename the table\nand the model", cwd: repo, effort: "high")).to eq("new-thread")
+      expect(launched.first).to include("projectId" => "p1", "workspaceStrategy" => {"type" => "root"}, "title" => "Rename the table",
+        "modelSelection" => {"instanceId" => "codex", "model" => "gpt-6-luna", "options" => [{"id" => "reasoningEffort", "value" => "high"}]},
+        "runtimeMode" => "full-access", "interactionMode" => "default")
+      expect(launched.first["initialMessage"]).to include("text" => "Rename the table\nand the model", "attachments" => [])
+    end
+
+    it "launches in a worktree of the project's repository as that checkout" do
+      worktree = File.join(dir, "wt")
+      system("git", "-C", repo, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "x", exception: true)
+      system("git", "-C", repo, "worktree", "add", "-q", worktree, exception: true)
+      client.spawn(harness: :codex, prompt: "hi", cwd: worktree, model: "gpt-old", permission_mode: "auto")
+      expect(launched.first).to include("projectId" => "p1", "workspaceStrategy" => {"type" => "existing_worktree", "worktreePath" => worktree},
+        "modelSelection" => {"instanceId" => "codex", "model" => "gpt-old", "options" => []}, "runtimeMode" => "auto")
+    end
+
+    it "adds a directory in no project as one first" do
+      elsewhere = File.join(dir, "elsewhere").tap { |d| FileUtils.mkdir_p(d) }
+      File.write(bin, "#!/bin/sh\necho \"$@\" >> #{dir}/t3.log\n")
+      fake.shell = -> { {"projects" => projects + (File.exist?(File.join(dir, "t3.log")) ? [{"id" => "p2", "workspaceRoot" => elsewhere}] : []), "threads" => []} }
+      client.spawn(harness: :codex, prompt: "hi", cwd: elsewhere)
+      expect(File.read(File.join(dir, "t3.log"))).to eq("project add --base-dir #{fake.home} #{elsewhere}\n")
+      expect(launched.first).to include("projectId" => "p2", "workspaceStrategy" => {"type" => "root"})
+    end
+
+    it "refuses a harness T3 has no provider ready for" do
+      expect { client.spawn(harness: :antigravity, prompt: "hi", cwd: repo) }.to raise_error(ClaudeInbox::Harnesses::Error, "T3 Code has no antigravity ready")
+    end
+  end
 end
