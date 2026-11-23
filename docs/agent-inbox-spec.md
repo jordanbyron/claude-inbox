@@ -5,7 +5,7 @@ repository. This file moves there as its first commit.
 
 [Problem statement](#problem-statement) · [Proposed solution](#proposed-solution) · [Decisions](#decisions) · [Terms](#terms) · [Architecture](#architecture) ·
 [Agents, status and families](#agents-status-and-families) · [Triage rules](#triage-rules) · [Starting, restoring and deleting](#starting-restoring-and-deleting) ·
-[Pull requests](#pull-requests) · [The watcher](#the-watcher) · [Views and verbs](#views-and-verbs) · [Recipes and config](#recipes-and-config) ·
+[Pull requests](#pull-requests) · [The watcher](#the-watcher) · [Views and verbs](#views-and-verbs) · [Recipes and config](#recipes-and-config) · [Prior art: rexuikit](#prior-art-rexuikit) ·
 [What ports from claude-inbox](#what-ports-from-claude-inbox) · [Build order](#build-order) · [Alternatives considered](#alternatives-considered) ·
 [Open questions](#open-questions) · [Appendix: what this rests on](#appendix-what-this-rests-on) · [Changelog](#changelog)
 
@@ -48,12 +48,10 @@ agent-inbox watch           the watcher (started for you)
 
 To anchor the discussion, here is one agent's life:
 
-1. You press a Rex hotkey. A Lua binding opens `agent-inbox new` in a
-   floating layer. You type a prompt, leave Harness on Claude and press
-   `Ctrl-O`.
+1. You press a Rex hotkey and `agent-inbox new` opens in a floating layer.
+   You type a prompt, leave Harness on Claude and press `Ctrl-O`.
 2. agent-inbox creates a worktree at `<repo>/.worktrees/fix-login`, writes a
-   record for the agent and starts `claude` in a new Rex tab labelled with
-   the agent's id.
+   record, and starts `claude` in a new Rex tab labelled with the agent's id.
 3. Claude reports `working`, then `blocked` on a permission prompt. The
    watcher sees both. The row moves to Needs you and a notification fires.
 4. You press `Enter` on the row. Rex shows the tab, the watcher marks the
@@ -111,7 +109,8 @@ Settled on 2026-11-23.
 | Verbs | Milliseconds | State | State (what you decided), and Rex when a tab closes or opens |
 | `ls --json` | Milliseconds | Snapshot | Nothing |
 
-Files, per Rex server, under `~/.local/state/agent-inbox/<server>/`:
+Config is `~/.config/agent-inbox/config.toml`. State is kept per Rex server,
+under `~/.local/state/agent-inbox/<server>/`:
 
 - `state.json` holds records, triage entries and remembered pull requests.
   Every writer takes one file lock, re-reads, edits and renames into place.
@@ -120,8 +119,6 @@ Files, per Rex server, under `~/.local/state/agent-inbox/<server>/`:
   into sections, with the watcher's version and a heartbeat. Only the
   watcher writes it.
 - `watcher.lock` is held by the running watcher.
-
-Config is `~/.config/agent-inbox/config.toml`.
 
 The watcher is the only process that subscribes to Rex or calls `gh`. A view
 never works out a row's section, so the triage rules run in one place, as
@@ -247,8 +244,8 @@ nothing is left half made:
    (`worktree.base = "head"` branches from the checkout's HEAD instead). A
    taken name gets `-2`. A path inside the repository is added to
    `.git/info/exclude`, so nothing is committed to ignore it.
-3. Start the recipe's command with `rex run --label agent-inbox:<id>` in the
-   chosen session and directory, and name the tab.
+3. Start the recipe's command in a new tab of the chosen session, in that
+   directory, with the block labelled `agent-inbox:<id>`, and name the tab.
 4. With `Ctrl-O`, show the tab.
 
 **Restoring** (`Enter` or `u` on a settled row) starts the recipe's resume
@@ -276,9 +273,8 @@ message names it. The harness's own transcripts are left alone.
 
 Every pull request found is remembered in the state, since a closed block
 can't be captured again. The watcher refreshes the unresolved ones through
-`gh` on the schedule `PullRequests` uses now. The health rules port
-unchanged: failing checks, changes requested and conflicts. GitHub through
-`gh` is the only host in v1.
+`gh` on the schedule `PullRequests` uses now, and the health rules port
+unchanged. GitHub through `gh` is the only host in v1.
 
 ## The watcher
 
@@ -291,17 +287,14 @@ unchanged: failing checks, changes requested and conflicts. GitHub through
   anything changed. A view that finds it older than 15 seconds starts the
   watcher again and says so in its header. It never shows old rows as
   current.
-- **Observing.** It streams `rex events --json` for the server and for each
-  session. From those it records each agent's state and when it began, which
-  tab each app is showing, and which blocks closed.
+- **Observing.** It holds one connection to Rex and reads the events for
+  the server and each session. From those it records each agent's state,
+  which tab each app is showing, and which blocks closed.
 - **Acting.** It applies the automatic rules: wake, auto-settle, and
   settling an agent whose block closed. With `notify = true` it sends a
   desktop notification when a family starts needing you or finishes.
 - **Reacting to you.** It watches `state.json`, so a verb's edit reaches the
   snapshot at once.
-
-`agent-inbox watch --foreground` runs it in a terminal with its log on
-screen.
 
 ## Views and verbs
 
@@ -326,8 +319,6 @@ without the inbox open:
 
 ```
 agent-inbox snooze 1h          # also 15m, tomorrow, until-woken, or a time
-agent-inbox settle
-agent-inbox pin
 ```
 
 A verb aimed at a block that isn't an agent exits non-zero and says so.
@@ -355,7 +346,6 @@ commands = ["~/.claude/skills", "~/.claude/commands"]
 [recipes.claude.choices]
 model       = ["default", "fable", "opus", "sonnet", "haiku"]
 effort      = ["default", "low", "medium", "high", "xhigh", "max"]
-permissions = ["default", "acceptEdits", "auto", "plan", "bypassPermissions"]
 ```
 
 A flag whose value is `default` is left out along with its value. A recipe
@@ -376,14 +366,49 @@ branch  = "{name}"
 base    = "fresh"           # or "head"
 ```
 
+## Prior art: rexuikit
+
+[rexuikit](https://github.com/dphaener/rexuikit) is Darin Haener's Go
+toolkit for programs that run as Rex floating layers (MIT, Bubble Tea v2).
+Read on 2026-11-23, when it tracked Rex API revision 7.
+
+| Package | What it does | Where it fits here |
+|---|---|---|
+| `client` | One WebSocket connection to Rex, with typed methods and an event channel. A call takes 0.1-3 ms, against about 76 ms for the `rex` CLI. | The Rex client in step 2 and the watcher's event stream. |
+| `surface` | Opens a program as a modal, drawer or split and reports when it closes. It can pre-warm a program so the layer appears at once. | The form as a modal; the compact list as a drawer or split. |
+| `ui` | Form, list, dialog, hint bar and notice components, with golden-frame tests. | The form's plain fields, the snooze menu and the confirms. Its text area has no image paste or slash menu. |
+| `entry` | Runs a quick action before the rest of the program loads, and measures time to first paint. | The verbs, and the form's startup. |
+
+Its `docs/rex-behaviors.md` records what Rex does that the API reference
+leaves out, most of it with a live test. This spec leans on these:
+
+- A floating layer and its block go away, with `block_closed`, when the
+  program exits.
+- The connection that creates a block owns it, and the app won't size the
+  block until that connection disowns it or closes. `new` and `restore` are
+  short-lived, so they're fine. The watcher never creates a block.
+- A focus change emits only `session_view_changed`. "Seen" is therefore read
+  per tab, from the session's `active_window_id`.
+- Lua in `init.lua` runs with the Rex server's environment, whose `PATH`
+  lacks most tools (inferred there, not tested). `agent-inbox lua` writes
+  the binary's absolute path into the snippet.
+- A minimal Bubble Tea program paints in about 85 ms warm, and the form it
+  was built for took about 390 ms. Go alone doesn't make the form instant,
+  which is what warm surfaces are for.
+
+Its snapshot of the Rex API gives the result of `program_status`: a
+`records` array with `state`, `kind`, `app`, `effective_app`, `title`, `msg`
+and an `updated_at` set by the server. A row's "last changed" age comes from
+Rex, then, and survives a watcher restart.
+
 ## What ports from claude-inbox
 
 | claude-inbox | Lines | In agent-inbox |
 |---|---|---|
 | `Store`, `Entry`, `Row`, `SnoozeTime` | ~650 | Ported to Go, re-keyed by agent id, minus the writer and relay half. |
 | `PullRequests`, `StackLinks` | ~300 | Ported. Discovery changes; health and refresh don't. |
-| `NewSessionForm`, `TextBuffer`, `SlashCommands`, `Images`, `Paste` | ~950 | Rewritten on a TUI library. The specs list the cases. |
-| `Renderer`, `Dialog`, `Keymap`, `Theme`, `Text` | ~960 | Rewritten on a TUI library. `bin/screens` output is the reference. |
+| `NewSessionForm`, `TextBuffer`, `SlashCommands`, `Images`, `Paste` | ~950 | Rewritten on Bubble Tea, with rexuikit's fields where they fit. The specs list the cases. |
+| `Renderer`, `Dialog`, `Keymap`, `Theme`, `Text` | ~960 | Rewritten on Bubble Tea. `bin/screens` output is the reference. |
 | `Notifier`, `Reaper` | ~180 | Ported into the watcher. |
 | `Rex` and `claude-inbox attach` | ~110 | Becomes the Rex client the whole program uses. |
 | `Poller`, `Snapshot`, `Headless` | ~260 | The idea survives as the watcher. The code doesn't. |
@@ -399,20 +424,17 @@ Each step is one pull request unless noted. Step 0 comes first because three
 later steps rest on what it finds.
 
 0. **Spike, written up as `docs/rex-quirks.md`.** No code kept. In Rex, run
-   Claude Code and Codex and record: whether each reports OSC 7501, with
-   which `app`, and whether sub-agents show up as child records; the JSON of
-   `rex block ls`, the `program_status` method and the status events; how
-   much of each harness's output `rex capture` returns; and that a Lua
-   binding can open a program in a floating layer that closes on exit.
+   Claude Code and Codex and record whether each reports OSC 7501, with
+   which `app`, whether sub-agents show up as child records, and how much of
+   each harness's output `rex capture` returns.
 1. Repository, local CI with signoff as here, and the state file with the
    triage rules as table tests ported from the specs.
-2. The Rex client over `rex ... --json`, with a fake for tests.
+2. The Rex client. Try rexuikit's `client` and its fake server first.
 3. The watcher: observe, write the snapshot, start on demand, heartbeat.
 4. `ls --json` and the verbs.
 5. The list view, then its compact layout.
 6. Recipes, `new` with flags only, and worktrees.
-7. The form. Probably three pull requests: fields, the prompt editor, then
-   image paste and the slash menu.
+7. The form, in three pull requests: fields, prompt editor, paste and menu.
 8. Pull requests: worktree branches, the capture fallback, auto-settle.
 9. Families.
 10. Notifications, reap, the Lua snippet and the README.
@@ -421,29 +443,23 @@ later steps rest on what it finds.
 
 - **Adapt claude-inbox in place.** Every change would have to keep the
   daemon world working too, and the name would be wrong either way.
-- **Stay in Ruby.** Lazy requires get a verb to about 150 ms, which is
-  tolerable but has to be defended forever, and the launch environment stays
-  fragile.
+- **Stay in Ruby.** Lazy requires get a verb to about 150 ms, a budget to
+  defend forever, and the launch environment stays fragile.
 - **No watcher, with views observing.** Fine with one view. With a split in
   every tab it means duplicate observations, duplicate `gh` polling and an
   unread dot that is wrong whenever no inbox is on screen.
 - **One small binary per job.** Each would need to know the state file's
   format. One binary with subcommands gives the same interface without
   spreading that knowledge.
-- **Scanning transcripts for pull requests.** Exact, but every recipe would
-  need a path template for its harness's files.
-- **Letting each harness make its worktree.** Only Claude has a flag for it,
-  and nothing would tell us where the worktree went.
 
 ## Open questions
 
-Step 0 answers the first three.
-
 1. Do Claude Code and Codex report OSC 7501 inside Rex today? Rex's docs
-   name no adopters. If either doesn't, how small a hook makes it?
-2. What does Rex call a floating layer in Lua, and does it close when its
-   program exits? The docs read so far have `rex.session.new_layer` and
-   `float_block` and nothing named a modal.
+   name no adopters. If either doesn't, how small a hook makes it? (Step 0.)
+2. Do we depend on rexuikit or only read it? I'd take `client` and
+   `surface`, which hold Rex behaviour we would otherwise measure again, and
+   try `ui` for all but the prompt editor. The risk is one maintainer on a
+   beta Rex.
 3. Is there a way to get every block's status in one call? None is
    documented, so the watcher asks each block once at startup.
 4. Rex's roadmap lists "a unified priority inbox view". If it ships, how
@@ -461,23 +477,14 @@ Step 0 answers the first three.
 **From Rex's docs**, read 2026-11-23. About three quarters of the full docs
 text was not read.
 
-- Sessions, tabs, blocks and clients have ids that never change, plus
-  labels. `rex run --label` sets a block's label and `rex block ls --json`
-  lists it.
 - Program status is OSC 7501. Each report replaces its record. `working` and
   `blocked` clear when the process exits; `done` and `error` survive.
-- `rex events --json` streams one JSON object per line, including
-  `terminal.program_status_changed`, `terminal.child_exited`,
-  `block_closed` and `active_window_changed`.
 - `rex capture` returns a block's screen and scrollback as text.
-- A terminal in Rex has `REX_SESSION`, `REX_BLOCK`, `REX_SERVER` and
-  `REX_BIN_DIR`.
 - A block has no documented parent, and Rex has no notion of a project.
 
 **From claude-inbox on Rex 0.1.0**, in [cli-quirks.md](cli-quirks.md): `rex
-run` starts its command in the login shell's environment. A pane closes when
-its program exits unless it failed very quickly. The app only changes tab
-through its `session.select` action, with Remote Control on.
+run` starts its command in the login shell's environment, and the app only
+changes tab through its `session.select` action, with Remote Control on.
 
 **Startup, measured here**, median of five runs: `/usr/bin/true` 8 ms,
 `ruby -e ''` 108 ms, Ruby loading only `claude_inbox/store` 147 ms, Ruby
@@ -489,4 +496,4 @@ reports status in Rex, and what `rex capture` returns for them.
 
 ## Changelog
 
-- 2026-11-23: first draft.
+- 2026-11-23: first draft, then rexuikit added as prior art.
