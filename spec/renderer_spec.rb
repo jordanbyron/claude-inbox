@@ -151,6 +151,12 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(text).to match(/^   ✓ finished\s+done · codex · /)
   end
 
+  it "tags a T3 row with its provider, never with T3" do
+    rows = [session(id: "t1", name: "on t3", harness: :t3, provider: :antigravity, actions: [])]
+    sec = ClaudeInbox::Store.sectionize(rows, {}, now)
+    expect(renderer.frame(sec, view.with(width: 90, height: 12)).plain.lines.join("\n")).to match(/on t3\s+working · antigravity · /)
+  end
+
   it "lists settled rows when expanded" do
     f = renderer.frame(sections, view.with(width: 80, height: 30, expanded: {settled: true})).plain
     expect(f.items.compact.map(&:key)).to eq(["f23c8673", "4a93393d-1c06-57da-9fb8-12f5b1535d95", "823b882f", "dcbc1d98", "b0b18338", "fbf5253a", "b03695b1"])

@@ -158,4 +158,25 @@ RSpec.describe ClaudeInbox::App do
       expect(client.spawns).to be_empty
     end
   end
+
+  describe "starting a thread on T3" do
+    let(:t3) { ClaudeInbox::T3::FixtureClient.new(fixture_path("t3-shell.json")) }
+    let(:app) { build_app(client:, t3:, store:, pull_requests:, queue:, terminal:, trust: -> { trusted }) }
+    let(:attached) { [] }
+
+    before do
+      allow(t3).to receive_messages(choices: {codex: {model: %w[default], effort: %w[default], permission_mode: %w[default]}}, spawn: "t3-new")
+      allow(t3).to receive(:attach) { |s| attached << s }
+    end
+
+    it "starts Codex there and attaches the thread through T3 on ctrl-o" do
+      press(app, "n", "h", "i", "\t", "l", "\t", ctrl_u, *Dir.pwd.chars, "\x0f")
+      expect(wait_for {
+        app.step
+        attached.any?
+      }).to be(true)
+      expect(t3).to have_received(:spawn).with(harness: :codex, prompt: "hi", cwd: Dir.pwd, model: nil, effort: nil, permission_mode: nil, images: [])
+      expect(attached).to contain_exactly(have_attributes(harness: :t3, id: "t3-new", cwd: Dir.pwd))
+    end
+  end
 end

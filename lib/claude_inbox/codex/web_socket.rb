@@ -4,9 +4,9 @@ require "securerandom"
 
 module ClaudeInbox
   module Codex
-    # The client half of RFC 6455 that Codex's daemon socket needs: one
-    # upgrade, masked text frames out, text frames in, pings answered.
-    # Nothing here knows JSON-RPC.
+    # The client half of RFC 6455 that Codex's daemon socket and T3's server
+    # need: one upgrade, masked text frames out, text frames in, pings
+    # answered. Nothing here knows JSON-RPC.
     class WebSocket
       class Error < StandardError; end
 
@@ -26,9 +26,9 @@ module ClaudeInbox
         @buf = +"".b
       end
 
-      def handshake
+      def handshake(path: "/", host: "localhost")
         key = [SecureRandom.random_bytes(16)].pack("m0")
-        @io.write("GET / HTTP/1.1\r\nHost: localhost\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" \
+        @io.write("GET #{path} HTTP/1.1\r\nHost: #{host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n" \
           "Sec-WebSocket-Key: #{key}\r\nSec-WebSocket-Version: 13\r\n\r\n")
         deadline = monotonic + @timeout
         until (i = @buf.index("\r\n\r\n"))

@@ -103,10 +103,13 @@ module ClaudeInbox
         thread["id"]
       end
 
+      # The T3 adapter lists T3's threads, which Codex keeps too (docs/cli-quirks.md).
+      T3_ORIGINATOR = "T3 Code"
+
       # A `thread/list` result as Sessions.
       def self.sessions(result)
         read_states = result["readStates"] || {}
-        (result["data"] || []).map { |thread| session(thread, read_states[thread["id"]]) }
+        (result["data"] || []).reject { |t| t["originator"] == T3_ORIGINATOR }.map { |thread| session(thread, read_states[thread["id"]]) }
       end
 
       # A thread with a turn nobody has read is done, as a finished Claude

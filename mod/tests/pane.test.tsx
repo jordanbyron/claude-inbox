@@ -395,7 +395,7 @@ test("the ring steps over a row's PR chip: down to the next row, up onto its own
   mock.clock(on, { now: 1_700_000_000_000 })
   on('state.get', ($, e, next) => (e.key === 'rows' ? seeded(ROWS) : e.key === 'writtenAt' ? seeded(1_700_000_000) : next(e)))
   const landed: (string | undefined)[] = []
-  on('ui.focus', ($, e) => {
+  on('ui.focus', { plugin: '*' }, ($, e) => {
     landed.push(e.element)
     return {}
   })

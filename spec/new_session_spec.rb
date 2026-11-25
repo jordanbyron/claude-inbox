@@ -522,6 +522,39 @@ RSpec.describe ClaudeInbox::NewSessionForm do
     end
   end
 
+  describe "with T3 Code to start in too" do
+    let(:t3) { {model: %w[default gemini-4-neon], effort: %w[default low high], permission_mode: %w[default auto full-access], default: "t3 default"} }
+    let(:choices) { {claude: ClaudeInbox::Claude::AgentsClient::CHOICES, codex: t3, antigravity: t3} }
+    let(:form) { described_class.new(cwd: Dir.pwd, home: home, choices: choices) }
+    let(:rows) { -> { form.screen(100, 30).map { |r| ClaudeInbox::Text.strip_ansi(r) } } }
+
+    it "offers Antigravity with T3's choices and default, and submits it as Codex's are" do
+      type(form, "hi")
+      form.press(:tab, "\t")
+      2.times { form.press("l", "l") }
+      expect(rows.call.find { |r| r.include?("Model") }).to include("t3 default", "gemini-4-neon")
+      expect(rows.call.find { |r| r.include?("Name") }).to be_nil
+      expect(form.values).to eq(harness: :antigravity, prompt: "hi", cwd: Dir.pwd, model: nil, effort: nil, permission_mode: nil, images: [])
+      expect(form.press(:ctrl_s, "\x13")).to eq(:start)
+    end
+
+    context "when T3 is down" do
+      let(:choices) { {claude: ClaudeInbox::Claude::AgentsClient::CHOICES, antigravity: nil} }
+
+      it "says Antigravity is unavailable, and will not start it" do
+        type(form, "hi")
+        form.press(:tab, "\t")
+        form.press("l", "l")
+        expect(rows.call.find { |r| r.include?("Harness") }).to include("antigravity (unavailable)")
+        expect(form.footer).to include("antigravity needs T3 Code, which is not running")
+        expect(form.press(:ctrl_s, "\x13")).to eq(:changed)
+        expect(form.focused.key).to eq(:harness)
+        form.press("l", "l")
+        expect(form.values[:harness]).to eq(:claude)
+      end
+    end
+  end
+
   it "asks no harness when only Claude can start one" do
     form.press(:tab, "\t")
     expect(form.focused.key).to eq(:name)

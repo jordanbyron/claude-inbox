@@ -37,6 +37,11 @@ RSpec.describe ClaudeInbox::Codex::ThreadsClient do
     expect(described_class.session("id" => "t", "status" => {"type" => "active", "activeFlags" => ["waitingOnUserInput"]}).line).to eq("waiting on input")
   end
 
+  it "leaves out the threads T3 Code runs, which the T3 adapter lists" do
+    result = {"data" => [{"id" => "mine", "originator" => "codex-tui"}, {"id" => "t3s", "originator" => "T3 Code"}]}
+    expect(described_class.sessions(result).map(&:id)).to eq(%w[mine])
+  end
+
   it "has no name for a thread with neither a name nor a prompt yet" do
     s = described_class.session("id" => "t", "name" => nil, "preview" => "", "status" => {"type" => "idle"})
     expect(s.name).to be_nil

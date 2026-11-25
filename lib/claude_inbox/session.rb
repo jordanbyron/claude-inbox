@@ -16,12 +16,13 @@ module ClaudeInbox
   # is at work (nil when it has none), `remote` a session driven from another
   # device and `remote_control` one that can be. `branch` and `origin_url`
   # are the git branch and remote it works on, when its harness says. `actions` are what its
-  # harness can do to it from here.
+  # harness can do to it from here. `provider` is the harness a session
+  # shows as when its adapter runs others' agents, as T3 runs Codex.
   Session = Data.define(
     :harness, :actions, :id, :cwd, :kind, :started_at, :created_at, :session_id, :name,
     :state, :pid, :status, :waiting_for, :line, :in_flight, :busy,
     :remote, :remote_control, :remote_url, :color, :intent, :transcript_path, :worktree_path, :pr_urls, :prs, :last_message_at,
-    :branch, :origin_url
+    :branch, :origin_url, :provider
   ) do
     # Every member is optional so the adapter and the specs name only what
     # they have; prs is [] rather than nil so nobody asks whether
@@ -66,6 +67,8 @@ module ClaudeInbox
     def alive? = !pid.nil?
 
     def display_name = name || key || "(unnamed)"
+
+    def harness_name = provider || harness
 
     def project = cwd ? File.basename(cwd) : ""
 

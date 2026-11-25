@@ -254,6 +254,48 @@ against 2.1.273 unless noted; re-check after a CLI upgrade.
   turn, so a start is `thread/start` then `turn/start`. The turn carries
   on after the connection that started it closes (checked on 0.165.0).
 
+## T3 Code
+
+- A running server names its `origin` in `~/.t3/userdata/server-runtime.json`
+  (`$T3CODE_HOME/userdata` when that is set), `http://127.0.0.1:3773` by
+  default. `t3 thread list --json` lists one project's threads and leaves
+  out their directory and branch; `GET /api/orchestration/shell` with
+  `x-t3-orchestration-protocol: 2` has every project and every thread not
+  archived, `worktreePath`, `branch` and `pendingRuntimeRequest` included
+  (checked on 0.1.11).
+- Every request wants a bearer token. `t3 auth session issue --token-only`
+  writes one straight into the running server's database, scoped and with
+  a TTL; the `t3` CLI itself issues a two-minute one per command. A revoked
+  or expired token gets a 401 (checked on 0.1.11).
+- Commands and the provider list are on the WebSocket only: `POST
+  /api/auth/websocket-ticket` with the bearer gives a ticket for
+  `/ws?orchestrationProtocol=2&wsTicket=…`. It speaks Effect RPC, one JSON
+  value per text frame: `{"_tag": "Request", "id", "tag", "payload",
+  "headers": []}` out, and an `Exit` for that `requestId` back, its `exit`
+  a `Success` with a `value` or a `Failure` whose `cause` holds the
+  reason. A frame can be an array of several messages (checked on 0.1.11).
+- T3 imports every Claude Code session as a thread with an id of
+  `import:claudeAgent:<session id>`: 106 of 108 threads on the machine it
+  was checked on. A thread names its provider by `providerInstanceId`,
+  which a person can name as they like; `server.getConfig`'s `providers`
+  say which `driver` each instance runs, and whether it is `ready`. That
+  answer is about 220KB, mostly models, skills and slash commands
+  (checked on 0.1.11).
+- T3 runs Codex on the same `~/.codex`, so each T3 Codex thread is also in
+  the Codex daemon's `thread/list`, with `originator: "T3 Code"` and
+  `source: "vscode"`, under a uuid of Codex's own. The T3 thread does not
+  name that uuid: its `activeProviderThreadId` reads
+  `…:native-thread:pending%3Arun…`. `thread.delete` on T3 leaves the Codex
+  rollout in place (checked on 0.1.11 with Codex 0.165.0).
+- `orchestration.launchThread` needs a `projectId`, and runs in the
+  project's folder unless `workspaceStrategy` is `existing_worktree` with a
+  `worktreePath`; `t3 thread start` sends neither, so started from a
+  worktree it runs in the main checkout. Each driver names its reasoning
+  option in its own way (`reasoningEffort`, `effort`, `thought_level`),
+  from the model's `capabilities.optionDescriptors`. A thread the server
+  starts has an id like `thread:project:<project id>:<uuid>`, colons
+  included (checked on 0.1.11).
+
 ## Rex
 
 - Every Rex pane gets `REX_SESSION`, `REX_BLOCK`, `REX_SERVER` and

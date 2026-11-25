@@ -1,6 +1,7 @@
 # claude-inbox
 
-An inbox for Claude Code's background sessions and Codex threads. It lists
+An inbox for Claude Code's background sessions, Codex threads and
+[T3 Code](https://github.com/pingdotgg/t3code)'s Codex and Antigravity threads. It lists
 what `claude agents` lists and adds snooze, settle, pinning and each session's
 pull request.
 
@@ -88,7 +89,7 @@ Vim bindings. Arrows and the mouse work too.
 | `j` `k` | move down / up |
 | `gg` `G` | first / last row |
 | `Ctrl-d` `Ctrl-u` | half page down / up (`Ctrl-f` `Ctrl-b` full page) |
-| `Enter` `l` | attach (`←` or `Ctrl+Z` returns here; in Codex, `←` at the start of the prompt), adopt a remote session, or expand Snoozed / Settled |
+| `Enter` `l` | attach (`←` or `Ctrl+Z` returns here; in Codex, `←` at the start of the prompt), adopt a remote session, or expand Snoozed / Settled. A T3 thread opens in [tria](https://github.com/jordanbyron/tria) |
 | `Tab` `Shift+Tab` | next / previous section |
 | `h` | collapse the current fold |
 | `za` `zo` `zc` | toggle / open / close the fold under the cursor |
@@ -115,7 +116,7 @@ Vim bindings. Arrows and the mouse work too.
 
 ### New session
 
-`n` opens a form for the prompt, Claude or Codex, name, directory, model,
+`n` opens a form for the prompt, Claude, Codex or Antigravity, name, directory, model,
 effort, permissions, worktree, Remote Control and color, which tints the row
 as `/color` would.
 `Tab` moves between fields, `Ctrl-S` starts the session and `Ctrl-O` starts

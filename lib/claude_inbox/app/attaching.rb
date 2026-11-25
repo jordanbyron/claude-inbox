@@ -33,13 +33,17 @@ module ClaudeInbox
         while session
           @switch.clear
           from = session.session_id
+          attached = nil
           @store.visit(session.key) do
             @terminal.release do
-              @terminal.pause unless @client.attach(session) { @switch.requested_for?(from) }
+              attached = @client.attach(session) { @switch.requested_for?(from) }
+              @terminal.pause unless attached
             end
           end
           @poller.soon
-          session = session_for(@switch.take(@store.attachable_keys))
+          keys = @store.attachable_keys
+          handed_off = (attached.is_a?(String) && keys.include?(attached)) ? attached : nil
+          session = session_for(@switch.take(keys) || handed_off)
         end
       end
 

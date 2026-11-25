@@ -43,11 +43,15 @@ module ClaudeInbox
       s = row.session
       pr = s.pr
       {
-        "id" => row.key, "harness" => s.harness.to_s, "session" => s.session_id, "label" => row.label, "state" => STATE_WORDS.fetch(s.effective_state, s.effective_state), "actionable" => s.attachable?,
+        "id" => row.key, "harness" => s.harness_name.to_s, "session" => s.session_id, "label" => row.label, "state" => STATE_WORDS.fetch(s.effective_state, s.effective_state), "actionable" => s.attachable?,
         "waiting" => s.waiting_on_work? || nil, "unread" => row.unread? || nil, "line" => s.line, "wake_at" => row.wake_at, "remote" => s.remote_url, "color" => s.color,
         "last_message_at" => s.last_message_at&.to_i,
-        "pr" => pr && {"short" => pr.short, "state" => pr.state&.downcase, "url" => pr.url}
+        "pr" => pr && {"short" => pr.short, "state" => pr.state&.downcase, "url" => pr.url},
+        **backend(s)
       }.compact
     end
+
+    # What tria needs to open a row itself, for the rows its server runs.
+    def backend(s) = s.provider ? {"backend" => s.harness.to_s, "thread" => s.id, "cwd" => s.cwd} : {}
   end
 end
