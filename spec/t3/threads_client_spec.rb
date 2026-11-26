@@ -86,7 +86,7 @@ RSpec.describe ClaudeInbox::T3::ThreadsClient do
     end
 
     it "interrupts the run under way, and says when there is none" do
-      running, approval, = ClaudeInbox::T3::FixtureClient.new(fixture_path("t3-shell.json")).list
+      running, approval, = sessions
       expect(client.stop(running)).to be(true)
       expect(commands.call).to contain_exactly(include("type" => "run.interrupt", "threadId" => running.id, "runId" => "run:1", "commandId" => match(/\A\h{8}-/)))
       shell["threads"][1]["activeRunId"] = nil
