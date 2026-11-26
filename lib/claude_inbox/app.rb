@@ -11,7 +11,6 @@ require_relative "renderer"
 require_relative "terminal"
 require_relative "keymap"
 require_relative "remote/listener"
-require_relative "rex"
 require_relative "new_session_form"
 require_relative "pull_requests"
 
