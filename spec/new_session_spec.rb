@@ -193,54 +193,43 @@ RSpec.describe ClaudeInbox::NewSessionForm do
   end
 
   it "shows what the defaults resolve to" do
-    Dir.mktmpdir do |home|
-      FileUtils.mkdir_p("#{home}/.claude")
-      File.write("#{home}/.claude/settings.json", {model: "opus", effortLevel: "high"}.to_json)
-      f = described_class.new(cwd: Dir.pwd, home: home)
-      rows = f.screen(100, 24)
-      expect(rows.find { |r| r.include?("Model") }).to include("opus (settings)")
-      expect(rows.find { |r| r.include?("Effort") }).to include("high (settings)")
-      expect(rows.find { |r| r.include?("Permissions") }).to include("auto (cli default)")
-      expect(f.values[:model]).to be_nil
-    end
+    FileUtils.mkdir_p("#{home}/.claude")
+    File.write("#{home}/.claude/settings.json", {model: "opus", effortLevel: "high"}.to_json)
+    rows = form.screen(100, 24)
+    expect(rows.find { |r| r.include?("Model") }).to include("opus (settings)")
+    expect(rows.find { |r| r.include?("Effort") }).to include("high (settings)")
+    expect(rows.find { |r| r.include?("Permissions") }).to include("auto (cli default)")
+    expect(form.values[:model]).to be_nil
   end
 
   it "reads project settings from the target directory" do
-    Dir.mktmpdir do |home|
-      Dir.mktmpdir do |proj|
-        FileUtils.mkdir_p("#{home}/.claude")
-        FileUtils.mkdir_p("#{proj}/.claude")
-        File.write("#{home}/.claude/settings.json", {model: "opus"}.to_json)
-        File.write("#{proj}/.claude/settings.local.json", {permissions: {defaultMode: "plan"}}.to_json)
-        f = described_class.new(cwd: proj, home: home)
-        rows = f.screen(100, 24)
-        expect(rows.find { |r| r.include?("Model") }).to include("opus (settings)")
-        expect(rows.find { |r| r.include?("Permissions") }).to include("plan (settings)")
-      end
+    Dir.mktmpdir do |proj|
+      FileUtils.mkdir_p("#{home}/.claude")
+      FileUtils.mkdir_p("#{proj}/.claude")
+      File.write("#{home}/.claude/settings.json", {model: "opus"}.to_json)
+      File.write("#{proj}/.claude/settings.local.json", {permissions: {defaultMode: "plan"}}.to_json)
+      f = described_class.new(cwd: proj, home: home)
+      rows = f.screen(100, 24)
+      expect(rows.find { |r| r.include?("Model") }).to include("opus (settings)")
+      expect(rows.find { |r| r.include?("Permissions") }).to include("plan (settings)")
     end
   end
 
   it "starts with Remote Control when settings turn it on for all sessions" do
-    Dir.mktmpdir do |home|
-      FileUtils.mkdir_p("#{home}/.claude")
-      File.write("#{home}/.claude/settings.json", {remoteControlAtStartup: true}.to_json)
-      f = described_class.new(cwd: Dir.pwd, home: home)
-      expect(f.screen(100, 24).find { |r| r.include?("Remote Control") }).to include("yes (settings)")
-      expect(f.values[:remote]).to be(true)
-      7.times { f.press(:tab, "\t") }
-      f.press("l", "l")
-      expect(f.values[:remote]).to be(false)
-    end
+    FileUtils.mkdir_p("#{home}/.claude")
+    File.write("#{home}/.claude/settings.json", {remoteControlAtStartup: true}.to_json)
+    expect(form.screen(100, 24).find { |r| r.include?("Remote Control") }).to include("yes (settings)")
+    expect(form.values[:remote]).to be(true)
+    7.times { form.press(:tab, "\t") }
+    form.press("l", "l")
+    expect(form.values[:remote]).to be(false)
   end
 
   it "leaves Remote Control off when nothing turns it on" do
-    Dir.mktmpdir do |home|
-      f = described_class.new(cwd: Dir.pwd, home: home)
-      expect(f.values[:remote]).to be(false)
-      7.times { f.press(:tab, "\t") }
-      f.press("h", "h")
-      expect(f.values[:remote]).to be(true)
-    end
+    expect(form.values[:remote]).to be(false)
+    7.times { form.press(:tab, "\t") }
+    form.press("h", "h")
+    expect(form.values[:remote]).to be(true)
   end
 
   it "tab-completes the directory" do
