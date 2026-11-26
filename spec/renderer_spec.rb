@@ -355,105 +355,103 @@ RSpec.describe ClaudeInbox::Renderer do
     expect(header.call(30)).to match(/\A ▌ claude-inbox   settled — … $/)
     [140, 100, 60, 30, 16, 5].each { |w| expect(ClaudeInbox::Text.width(header.call(w))).to eq(w) }
   end
-end
 
-RSpec.describe "renderer session colors" do
-  let(:now) { Time.at(1_789_604_500) }
-  let(:renderer) { ClaudeInbox::Renderer.new(home: "/Users/byron") }
-  let(:orange) { "\e[38;5;208m" }
-  let(:view) { ClaudeInbox::Renderer::View.new(width: 80, height: 14, now: now) }
-  let(:line_of) do
-    ->(s, label) {
-      sec = ClaudeInbox::Store.sectionize([s], ClaudeInbox::Store.merge_entries({}, [s], now), now)
-      renderer.frame(sec, view).lines.find { |l| l.include?(label) }
-    }
-  end
-
-  it "still calls an error failed and an idle session stopped" do
-    expect(ClaudeInbox::Text.strip_ansi(line_of.call(session(name: "broke", state: "error"), "broke"))).to include("✗ broke", "failed · ")
-    expect(ClaudeInbox::Text.strip_ansi(line_of.call(session(name: "halted", state: "idle"), "halted"))).to include("■ halted", "stopped · ")
-  end
-
-  it "paints the label of a session /color gave a color" do
-    s = session(id: "z", name: "tinted", color: "orange")
-    line = line_of.call(s, "tinted")
-    expect(line).to include("#{orange}tinted")
-  end
-
-  it "leaves a session with no color exactly as it was" do
-    s = session(id: "z", name: "plain")
-    line = line_of.call(s, "plain")
-    expect(line).not_to match(/\e\[38;5;(208|205)mplain/)
-  end
-
-  it "keeps the glyph in the state's color while the label takes the session's" do
-    s = session(id: "z", name: "tinted", state: "blocked", color: "green")
-    line = line_of.call(s, "tinted")
-    expect(line).to include("\e[38;5;75m●")
-    expect(line).to include("\e[38;5;203;1mneeds you")
-    expect(line).to include("\e[32m\e[1mtinted")
-  end
-
-  it "keeps a settled row's color at full strength, since a faint tint is unreadable" do
-    s = session(id: "z", name: "tinted", state: "done", color: "orange")
-    entries = ClaudeInbox::Store.merge_entries({"z" => {"settled_at" => now.to_i}}, [s], now)
-    sec = ClaudeInbox::Store.sectionize([s], entries, now)
-    line = renderer.frame(sec, view.with(expanded: {settled: true})).lines.find { |l| l.include?("tinted") }
-    expect(line).to include("#{orange}tinted\e[39m")
-  end
-
-  it "badges a session's PR on its row, saying what is wrong with an open one" do
-    theme = ClaudeInbox::Theme.new
-    [["OPEN", "FAILING"], ["OPEN", "CONFLICTING"], ["DRAFT", "FAILING"], ["MERGED", nil], [nil, nil]].each do |state, health|
-      pr = ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: state, health: health)
-      line = line_of.call(session(id: "z", name: "shipit", state: "done", prs: [pr]), "shipit")
-      expect(line).to include(theme.pr_badge(pr))
-      expect(ClaudeInbox::Text.width(line)).to eq(80)
+  describe "session colors" do
+    let(:orange) { "\e[38;5;208m" }
+    let(:view) { described_class::View.new(width: 80, height: 14, now: now) }
+    let(:line_of) do
+      ->(s, label) {
+        sec = ClaudeInbox::Store.sectionize([s], ClaudeInbox::Store.merge_entries({}, [s], now), now)
+        renderer.frame(sec, view).lines.find { |l| l.include?(label) }
+      }
     end
-  end
 
-  it "links a row's PR by its number, so a click there can open it" do
-    pr = ClaudeInbox::PullRequest.new(number: 3413, url: "https://gitlab.com/c/uk43/-/merge_requests/3413", state: "OPEN")
-    sec = ClaudeInbox::Store.sectionize([session(id: "z", name: "shipit", prs: [pr])], {}, now)
-    frame = renderer.frame(sec, view)
-    row = frame.lines.index { |l| l.include?("shipit") } + 1
-    text = ClaudeInbox::Text.strip_ansi(frame.lines[row - 1])
-    col = text.index("#3413") + 1
-    expect(text).to include("#3413 open")
-    expect(frame.link_at(row, col).to_h.slice(:url, :text)).to eq(url: pr.url, text: "#3413")
-    expect(frame.link_at(row, col + 4)&.url).to eq(pr.url)
-    expect(frame.link_at(row, col - 2)).to be_nil
-    expect(frame.link_at(row, col + 6)).to be_nil
-    expect(frame.plain.link_at(row, col)&.url).to eq(pr.url)
-  end
-
-  it "counts the PRs past the headline after its badge, and dims it once settled" do
-    theme = ClaudeInbox::Theme.new
-    prs = [7, 8, 9].map { |n| ClaudeInbox::PullRequest.new(number: n, url: "https://github.com/o/r/pull/#{n}", state: "OPEN") }
-    s = session(id: "z", name: "shipit", state: "done", prs: prs)
-    expect(line_of.call(s, "shipit")).to include(theme.pr_badge(prs.first) + "\e[2m · +2\e[0m")
-    entries = ClaudeInbox::Store.merge_entries({"z" => {"settled_at" => now.to_i}}, [s], now)
-    line = renderer.frame(ClaudeInbox::Store.sectionize([s], entries, now), view.with(expanded: {settled: true}))
-      .lines.find { |l| l.include?("shipit") }
-    expect(line).to include(theme.pr_badge(prs.first, quiet: true) + "\e[2m · +2\e[0m")
-  end
-
-  it "still pads a colored row to exactly the frame width" do
-    s = session(id: "z", name: "tinted", color: "pink")
-    sec = ClaudeInbox::Store.sectionize([s], {}, now)
-    renderer.frame(sec, view.with(width: 64, height: 12)).lines.each do |l|
-      expect(ClaudeInbox::Text.width(l)).to eq(64)
+    it "still calls an error failed and an idle session stopped" do
+      expect(ClaudeInbox::Text.strip_ansi(line_of.call(session(name: "broke", state: "error"), "broke"))).to include("✗ broke", "failed · ")
+      expect(ClaudeInbox::Text.strip_ansi(line_of.call(session(name: "halted", state: "idle"), "halted"))).to include("■ halted", "stopped · ")
     end
-  end
 
-  it "turns a usage bar yellow from 70% and red from 90%" do
-    bar = ->(pct) {
-      usage = [ClaudeInbox::RateLimits::Window.new("session", pct, nil)]
-      renderer.frame(ClaudeInbox::Store.sectionize([], {}, now), view.with(width: 100, height: 5, usage: usage))
-        .lines.first
-    }
-    expect(bar.call(69)).to include("\e[38;5;108m██████░░░░")
-    expect(bar.call(70)).to include("\e[38;5;179m███████░░░")
-    expect(bar.call(90)).to include("\e[38;5;203m█████████░")
+    it "paints the label of a session /color gave a color" do
+      s = session(id: "z", name: "tinted", color: "orange")
+      line = line_of.call(s, "tinted")
+      expect(line).to include("#{orange}tinted")
+    end
+
+    it "leaves a session with no color exactly as it was" do
+      s = session(id: "z", name: "plain")
+      line = line_of.call(s, "plain")
+      expect(line).not_to match(/\e\[38;5;(208|205)mplain/)
+    end
+
+    it "keeps the glyph in the state's color while the label takes the session's" do
+      s = session(id: "z", name: "tinted", state: "blocked", color: "green")
+      line = line_of.call(s, "tinted")
+      expect(line).to include("\e[38;5;75m●")
+      expect(line).to include("\e[38;5;203;1mneeds you")
+      expect(line).to include("\e[32m\e[1mtinted")
+    end
+
+    it "keeps a settled row's color at full strength, since a faint tint is unreadable" do
+      s = session(id: "z", name: "tinted", state: "done", color: "orange")
+      entries = ClaudeInbox::Store.merge_entries({"z" => {"settled_at" => now.to_i}}, [s], now)
+      sec = ClaudeInbox::Store.sectionize([s], entries, now)
+      line = renderer.frame(sec, view.with(expanded: {settled: true})).lines.find { |l| l.include?("tinted") }
+      expect(line).to include("#{orange}tinted\e[39m")
+    end
+
+    it "badges a session's PR on its row, saying what is wrong with an open one" do
+      theme = ClaudeInbox::Theme.new
+      [["OPEN", "FAILING"], ["OPEN", "CONFLICTING"], ["DRAFT", "FAILING"], ["MERGED", nil], [nil, nil]].each do |state, health|
+        pr = ClaudeInbox::PullRequest.new(number: 7, url: "https://github.com/o/r/pull/7", state: state, health: health)
+        line = line_of.call(session(id: "z", name: "shipit", state: "done", prs: [pr]), "shipit")
+        expect(line).to include(theme.pr_badge(pr))
+        expect(ClaudeInbox::Text.width(line)).to eq(80)
+      end
+    end
+
+    it "links a row's PR by its number, so a click there can open it" do
+      pr = ClaudeInbox::PullRequest.new(number: 3413, url: "https://gitlab.com/c/uk43/-/merge_requests/3413", state: "OPEN")
+      sec = ClaudeInbox::Store.sectionize([session(id: "z", name: "shipit", prs: [pr])], {}, now)
+      frame = renderer.frame(sec, view)
+      row = frame.lines.index { |l| l.include?("shipit") } + 1
+      text = ClaudeInbox::Text.strip_ansi(frame.lines[row - 1])
+      col = text.index("#3413") + 1
+      expect(text).to include("#3413 open")
+      expect(frame.link_at(row, col).to_h.slice(:url, :text)).to eq(url: pr.url, text: "#3413")
+      expect(frame.link_at(row, col + 4)&.url).to eq(pr.url)
+      expect(frame.link_at(row, col - 2)).to be_nil
+      expect(frame.link_at(row, col + 6)).to be_nil
+      expect(frame.plain.link_at(row, col)&.url).to eq(pr.url)
+    end
+
+    it "counts the PRs past the headline after its badge, and dims it once settled" do
+      theme = ClaudeInbox::Theme.new
+      prs = [7, 8, 9].map { |n| ClaudeInbox::PullRequest.new(number: n, url: "https://github.com/o/r/pull/#{n}", state: "OPEN") }
+      s = session(id: "z", name: "shipit", state: "done", prs: prs)
+      expect(line_of.call(s, "shipit")).to include(theme.pr_badge(prs.first) + "\e[2m · +2\e[0m")
+      entries = ClaudeInbox::Store.merge_entries({"z" => {"settled_at" => now.to_i}}, [s], now)
+      line = renderer.frame(ClaudeInbox::Store.sectionize([s], entries, now), view.with(expanded: {settled: true}))
+        .lines.find { |l| l.include?("shipit") }
+      expect(line).to include(theme.pr_badge(prs.first, quiet: true) + "\e[2m · +2\e[0m")
+    end
+
+    it "still pads a colored row to exactly the frame width" do
+      s = session(id: "z", name: "tinted", color: "pink")
+      sec = ClaudeInbox::Store.sectionize([s], {}, now)
+      renderer.frame(sec, view.with(width: 64, height: 12)).lines.each do |l|
+        expect(ClaudeInbox::Text.width(l)).to eq(64)
+      end
+    end
+
+    it "turns a usage bar yellow from 70% and red from 90%" do
+      bar = ->(pct) {
+        usage = [ClaudeInbox::RateLimits::Window.new("session", pct, nil)]
+        renderer.frame(ClaudeInbox::Store.sectionize([], {}, now), view.with(width: 100, height: 5, usage: usage))
+          .lines.first
+      }
+      expect(bar.call(69)).to include("\e[38;5;108m██████░░░░")
+      expect(bar.call(70)).to include("\e[38;5;179m███████░░░")
+      expect(bar.call(90)).to include("\e[38;5;203m█████████░")
+    end
   end
 end
