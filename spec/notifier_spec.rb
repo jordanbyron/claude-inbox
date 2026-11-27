@@ -95,7 +95,7 @@ RSpec.describe ClaudeInbox::Notifier do
       notifier.deliver(*poll[blocked])
       sleep 0.05
       expect(runs).to be_empty
-      notifier.deliver(*poll[session(state: "working"), session(id: "def67890", state: "blocked", name: "other")])
+      notifier.deliver(*poll[working, session(id: "def67890", state: "blocked", name: "other")])
       wait_for { runs.size >= 1 }
       expect(runs).to eq([[*ClaudeInbox::NotifierApp::FALLBACK, "-title", "other", "-message", "🔴 needs you", "-group", "def67890"]])
     end
