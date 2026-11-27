@@ -74,8 +74,7 @@ RSpec.describe ClaudeInbox::T3::ThreadsClient do
   describe "acting on a thread over the server" do
     let(:dir) { Dir.mktmpdir("t3") }
     let(:fake) { FakeT3Server.new(File.join(dir, "home"), shell: shell, answers: {"orchestration.dispatchCommand" => {"sequence" => 1}}) }
-    let(:live) { ClaudeInbox::T3::Server.new(home: fake.home, token_path: File.join(dir, "token.json"), timeout: 2) }
-    let(:client) { described_class.new(server: live, clock: clock) }
+    let(:server) { ClaudeInbox::T3::Server.new(home: fake.home, token_path: File.join(dir, "token.json"), timeout: 2) }
     let(:commands) { -> { drain(fake.requests).filter_map { |tag, body| body if tag == "orchestration.dispatchCommand" } } }
 
     before { ClaudeInbox::Records.save(File.join(dir, "token.json"), {"token" => "good"}) }
@@ -119,8 +118,7 @@ RSpec.describe ClaudeInbox::T3::ThreadsClient do
         answers: {"server.getConfig" => {"providers" => providers}, "orchestration.launchThread" => ->(input) { launched << input && {"threadId" => "new-thread"} }})
     end
     let(:bin) { File.join(dir, "t3").tap { |path| File.write(path, "#!/bin/sh\necho \"$@\" >> #{dir}/t3.log\n") && File.chmod(0o755, path) } }
-    let(:live) { ClaudeInbox::T3::Server.new(home: fake.home, bin: bin, token_path: File.join(dir, "token.json"), timeout: 5) }
-    let(:client) { described_class.new(server: live, clock: clock) }
+    let(:server) { ClaudeInbox::T3::Server.new(home: fake.home, bin: bin, token_path: File.join(dir, "token.json"), timeout: 5) }
 
     before do
       ClaudeInbox::Records.save(File.join(dir, "token.json"), {"token" => "good"})
