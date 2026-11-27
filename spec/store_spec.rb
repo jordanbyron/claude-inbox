@@ -4,6 +4,7 @@ require "tmpdir"
 
 RSpec.describe ClaudeInbox::Store do
   let(:now) { Time.at(1_789_600_000) }
+  let(:store) { described_class.new(path: nil, clock: -> { now }) }
   let(:interactive) { {id: nil, kind: "interactive", state: nil, actions: []} }
   let(:merged) { {prs: [ClaudeInbox::PullRequest.new(state: "MERGED", resolved_at: now.to_i - 60)]} }
 
@@ -192,7 +193,6 @@ RSpec.describe ClaudeInbox::Store do
     end
 
     it "keeps the pin through a snooze and a wake" do
-      store = described_class.new(path: nil, clock: -> { now })
       store.update([session(id: "a")])
       store.toggle_pin("a")
       store.snooze("a", :h1)
@@ -664,7 +664,6 @@ RSpec.describe ClaudeInbox::Store do
 
   describe "#attachable_keys" do
     it "names only the sessions whose harness can attach to them" do
-      store = described_class.new(path: nil, clock: -> { now })
       store.update([session(id: "a"), session(**interactive, session_id: "uuid")])
       expect(store.attachable_keys).to eq(%w[a])
     end
@@ -682,7 +681,7 @@ RSpec.describe ClaudeInbox::Store do
   end
 
   describe "alias and pull request overrides" do
-    let(:store) { described_class.new(path: nil, clock: -> { now }).tap { |st| st.update([session(id: "a")]) } }
+    before { store.update([session(id: "a")]) }
 
     it "reads back what set_alias and set_pr wrote, and nil once cleared" do
       expect(store.alias_for("a")).to be_nil
@@ -707,7 +706,6 @@ RSpec.describe ClaudeInbox::Store do
 
   describe "row" do
     it "pairs a session with its entry, and carries the last refused reap" do
-      store = described_class.new(path: nil, clock: -> { now })
       s = session(id: "a")
       store.update([s])
 
@@ -720,7 +718,6 @@ RSpec.describe ClaudeInbox::Store do
     end
 
     it "has no entry for a session with nothing to key on" do
-      store = described_class.new(path: nil, clock: -> { now })
       row = store.row(session(id: nil, session_id: nil, kind: "interactive"))
       expect(row.entry).to be_nil
       expect(row.reap_failed_at).to be_nil
@@ -729,7 +726,6 @@ RSpec.describe ClaudeInbox::Store do
 
   describe "forget" do
     it "drops the entry and the row without waiting for the prune window" do
-      store = described_class.new(path: nil, clock: -> { now })
       store.update([session(id: "a"), session(id: "b")])
       store.toggle_pin("a")
 
@@ -739,14 +735,12 @@ RSpec.describe ClaudeInbox::Store do
     end
 
     it "leaves an unknown id alone" do
-      store = described_class.new(path: nil, clock: -> { now })
       store.update([session(id: "a")])
       store.forget("nope")
       expect(store.sections.all.map(&:key)).to eq(%w[a])
     end
 
     it "keeps the session hidden while the daemon still lists it" do
-      store = described_class.new(path: nil, clock: -> { now })
       store.update([session(id: "a"), session(id: "b")])
       store.forget("a")
 
@@ -757,7 +751,6 @@ RSpec.describe ClaudeInbox::Store do
     end
 
     it "shows the key again once a poll without it has gone by" do
-      store = described_class.new(path: nil, clock: -> { now })
       store.update([session(id: "a")])
       store.forget("a")
       store.update([session(id: "a")])
