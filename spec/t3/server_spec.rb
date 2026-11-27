@@ -5,10 +5,10 @@ require "tmpdir"
 RSpec.describe ClaudeInbox::T3::Server do
   let(:dir) { Dir.mktmpdir("t3") }
   let(:token_path) { File.join(dir, "t3-token.json") }
-  let(:issued) { [] }
+  let(:issued) { File.join(dir, "issued") }
   let(:issuer) do
     path = File.join(dir, "t3")
-    File.write(path, "#!/bin/sh\necho \"$@\" >> #{File.join(dir, "issued")}\necho fresh\n")
+    File.write(path, "#!/bin/sh\necho \"$@\" >> #{issued}\necho fresh\n")
     File.chmod(0o755, path)
     path
   end
@@ -21,7 +21,7 @@ RSpec.describe ClaudeInbox::T3::Server do
     ClaudeInbox::Records.save(token_path, {"token" => "good"})
     expect(server.shell).to eq("threads" => [{"id" => "t1"}])
     expect(drain(fake.requests)).to eq([["/api/orchestration/shell", "2"]])
-    expect(File.exist?(File.join(dir, "issued"))).to be(false)
+    expect(File.exist?(issued)).to be(false)
     fake.stop
   end
 
@@ -29,12 +29,12 @@ RSpec.describe ClaudeInbox::T3::Server do
     fake = FakeT3Server.new(File.join(dir, "home"), token: "fresh")
     ClaudeInbox::Records.save(token_path, {"token" => "revoked"})
     expect(server.shell).to eq("projects" => [], "threads" => [])
-    expect(File.read(File.join(dir, "issued"))).to eq("auth session issue --base-dir #{File.join(dir, "home")} --scope orchestration:read --scope orchestration:operate --label claude-inbox --ttl 30d --token-only\n")
+    expect(File.read(issued)).to eq("auth session issue --base-dir #{File.join(dir, "home")} --scope orchestration:read --scope orchestration:operate --label claude-inbox --ttl 30d --token-only\n")
     expect(ClaudeInbox::Records.read(token_path)).to eq("token" => "fresh")
     expect(File.stat(token_path).mode & 0o777).to eq(0o600)
     fake.token = "newer"
     expect(server.shell).to be_nil
-    expect(File.read(File.join(dir, "issued")).lines.size).to eq(2)
+    expect(File.read(issued).lines.size).to eq(2)
     fake.stop
   end
 
