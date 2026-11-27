@@ -7,6 +7,7 @@ RSpec.describe ClaudeInbox::Claude::Transcript do
 
   let(:home) { Dir.mktmpdir }
   let(:path) { ClaudeInbox::Claude::AgentsClient.transcript_path("/Users/x/code/app", "u1", home: home) }
+  let(:term) { session(id: nil, kind: "interactive", cwd: "/Users/x/code/app", session_id: "u1", status: "busy") }
   let(:user) do
     {"type" => "user", "timestamp" => "2026-10-21T15:00:00.000Z",
      "message" => {"role" => "user", "content" => "hi"}}
@@ -59,7 +60,6 @@ RSpec.describe ClaudeInbox::Claude::Transcript do
   end
 
   describe "the last messages" do
-    let(:term) { session(id: nil, kind: "interactive", cwd: "/Users/x/code/app", session_id: "u1", status: "busy") }
     let(:reminder) { user.merge("message" => {"role" => "user", "content" => "<system-reminder>\nnew tools\n</system-reminder>"}) }
     let(:tool_call) { assistant.merge("message" => {"role" => "assistant", "content" => [{"type" => "tool_use", "name" => "Bash"}]}) }
     let(:tool_result) { user.merge("message" => {"role" => "user", "content" => [{"type" => "tool_result", "content" => "ok"}]}) }
@@ -89,7 +89,6 @@ RSpec.describe ClaudeInbox::Claude::Transcript do
     named = File.join(home, "elsewhere.jsonl")
     File.write(named, JSON.generate(assistant) + "\n")
     bg = session(id: "abc12345", cwd: "/moved", session_id: "u1", transcript_path: named)
-    term = session(id: nil, kind: "interactive", cwd: "/Users/x/code/app", session_id: "u1", status: "busy")
     lost = session(id: nil, kind: "interactive", cwd: "/Users/x/other", session_id: "u2", status: "busy")
     at = transcript.enrich([bg, term, lost], home: home).map(&:last_message_at)
     expect(at).to eq([Time.utc(2026, 10, 21, 15, 1, 30), Time.utc(2026, 10, 21, 15, 0, 0), nil])
