@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 RSpec.describe ClaudeInbox::Session do
+  let(:pr) { ->(number, state, **rest) { ClaudeInbox::PullRequest.new(number: number, state: state, **rest) } }
+
   it "needs only the members it is given" do
     s = described_class.new(id: "abc12345")
     expect(s.id).to eq("abc12345")
@@ -20,7 +22,6 @@ RSpec.describe ClaudeInbox::Session do
   end
 
   describe "pr" do
-    let(:pr) { ->(number, state, **rest) { ClaudeInbox::PullRequest.new(number: number, state: state, **rest) } }
     let(:old) { pr.call(1, "MERGED", resolved_at: session.created_at.to_i - 60) }
 
     it "is the troubled one, then an open one, then the first" do
@@ -41,8 +42,6 @@ RSpec.describe ClaudeInbox::Session do
   end
 
   describe "prs_by_status" do
-    let(:pr) { ->(number, state, **rest) { ClaudeInbox::PullRequest.new(number: number, state: state, **rest) } }
-
     it "puts open PRs first, then drafts, oldest first; then the resolved, newest first; the mentioned last" do
       later = session.created_at.to_i + 60
       prs = [pr.call(281, "DRAFT", health: "CONFLICTING"), pr.call(279, "DRAFT"),
