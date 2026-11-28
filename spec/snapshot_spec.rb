@@ -10,77 +10,67 @@ RSpec.describe ClaudeInbox::Snapshot do
     ClaudeInbox::Store.sectionize([session(id: "a", state: "blocked", session_id: "u-a", color: "pink", last_message_at: now - 600), session(id: "b", state: "done", prs: [merged])], entries, now)
   end
 
+  let(:dir) { Dir.mktmpdir }
+  let(:path) { File.join(dir, "snapshot.json") }
+
+  after { FileUtils.remove_entry(dir) }
+
   it "writes each section's rows as the screen shows them" do
-    Dir.mktmpdir do |dir|
-      path = File.join(dir, "snapshot.json")
-      described_class.new(path: path).write(sections, now)
-      data = JSON.parse(File.read(path))
-      expect(data["written_at"]).to eq(now.to_i)
-      expect(data["sections"].keys).to eq(%w[pinned needs_you active working snoozed settled])
-      expect(data["sections"]["needs_you"].map { |r| r.slice("id", "session", "color", "unread") }).to eq([{"id" => "a", "session" => "u-a", "color" => "pink", "unread" => true}])
-      row = data["sections"]["snoozed"].first
-      expect(row).not_to have_key("color")
-      expect(row).not_to have_key("unread")
-      expect(data["sections"]["needs_you"].first["last_message_at"]).to eq(now.to_i - 600)
-      expect(row).not_to have_key("last_message_at")
-      expect(row.slice("id", "label", "state", "actionable", "wake_at")).to eq(
-        "id" => "b", "label" => "renamed", "state" => "done", "actionable" => true, "wake_at" => "until_woken"
-      )
-      expect(row["pr"]).to eq("short" => "#7", "state" => "merged", "url" => "https://github.com/o/r/pull/7")
-    end
+    described_class.new(path: path).write(sections, now)
+    data = JSON.parse(File.read(path))
+    expect(data["written_at"]).to eq(now.to_i)
+    expect(data["sections"].keys).to eq(%w[pinned needs_you active working snoozed settled])
+    expect(data["sections"]["needs_you"].map { |r| r.slice("id", "session", "color", "unread") }).to eq([{"id" => "a", "session" => "u-a", "color" => "pink", "unread" => true}])
+    row = data["sections"]["snoozed"].first
+    expect(row).not_to have_key("color")
+    expect(row).not_to have_key("unread")
+    expect(data["sections"]["needs_you"].first["last_message_at"]).to eq(now.to_i - 600)
+    expect(row).not_to have_key("last_message_at")
+    expect(row.slice("id", "label", "state", "actionable", "wake_at")).to eq(
+      "id" => "b", "label" => "renamed", "state" => "done", "actionable" => true, "wake_at" => "until_woken"
+    )
+    expect(row["pr"]).to eq("short" => "#7", "state" => "merged", "url" => "https://github.com/o/r/pull/7")
   end
 
   it "names a T3 row by its provider, with the thread and directory tria opens it by" do
-    Dir.mktmpdir do |dir|
-      path = File.join(dir, "snapshot.json")
-      t3 = session(id: "6f1c", harness: :t3, provider: :codex, cwd: "/tmp/wt")
-      described_class.new(path: path).write(ClaudeInbox::Store.sectionize([t3, session(id: "a")], {}, now), now)
-      rows = JSON.parse(File.read(path))["sections"]["active"]
-      expect(rows.map { |r| r.slice("id", "harness", "backend", "thread", "cwd") }).to contain_exactly(
-        {"id" => "6f1c", "harness" => "codex", "backend" => "t3", "thread" => "6f1c", "cwd" => "/tmp/wt"},
-        {"id" => "a", "harness" => "claude"}
-      )
-    end
+    t3 = session(id: "6f1c", harness: :t3, provider: :codex, cwd: "/tmp/wt")
+    described_class.new(path: path).write(ClaudeInbox::Store.sectionize([t3, session(id: "a")], {}, now), now)
+    rows = JSON.parse(File.read(path))["sections"]["active"]
+    expect(rows.map { |r| r.slice("id", "harness", "backend", "thread", "cwd") }).to contain_exactly(
+      {"id" => "6f1c", "harness" => "codex", "backend" => "t3", "thread" => "6f1c", "cwd" => "/tmp/wt"},
+      {"id" => "a", "harness" => "claude"}
+    )
   end
 
   it "rewrites on a change and on the heartbeat, and otherwise leaves the file alone" do
-    Dir.mktmpdir do |dir|
-      path = File.join(dir, "snapshot.json")
-      snapshot = described_class.new(path: path)
-      snapshot.write(sections, now)
-      File.write(path, "stale")
-      snapshot.write(sections, now + 1)
-      expect(File.read(path)).to eq("stale")
-      snapshot.write(sections, now + described_class::HEARTBEAT)
-      expect(JSON.parse(File.read(path))["written_at"]).to eq(now.to_i + described_class::HEARTBEAT)
-      File.write(path, "stale")
-      snapshot.write(ClaudeInbox::Store.sectionize([session(id: "a")], {}, now), now + described_class::HEARTBEAT + 1)
-      expect(JSON.parse(File.read(path))["sections"]["active"].map { |r| r["id"] }).to eq(%w[a])
-    end
+    snapshot = described_class.new(path: path)
+    snapshot.write(sections, now)
+    File.write(path, "stale")
+    snapshot.write(sections, now + 1)
+    expect(File.read(path)).to eq("stale")
+    snapshot.write(sections, now + described_class::HEARTBEAT)
+    expect(JSON.parse(File.read(path))["written_at"]).to eq(now.to_i + described_class::HEARTBEAT)
+    File.write(path, "stale")
+    snapshot.write(ClaudeInbox::Store.sectionize([session(id: "a")], {}, now), now + described_class::HEARTBEAT + 1)
+    expect(JSON.parse(File.read(path))["sections"]["active"].map { |r| r["id"] }).to eq(%w[a])
   end
 
   it "carries the update notice once told of one, and a new notice alone rewrites the file" do
-    Dir.mktmpdir do |dir|
-      path = File.join(dir, "snapshot.json")
-      snapshot = described_class.new(path: path)
-      snapshot.write(sections, now)
-      expect(JSON.parse(File.read(path))).not_to have_key("update")
-      snapshot.update = "v0.6.0 available"
-      snapshot.write(sections, now + 1)
-      expect(JSON.parse(File.read(path))["update"]).to eq("v0.6.0 available")
-      File.write(path, "stale")
-      snapshot.write(sections, now + 2)
-      expect(File.read(path)).to eq("stale")
-    end
+    snapshot = described_class.new(path: path)
+    snapshot.write(sections, now)
+    expect(JSON.parse(File.read(path))).not_to have_key("update")
+    snapshot.update = "v0.6.0 available"
+    snapshot.write(sections, now + 1)
+    expect(JSON.parse(File.read(path))["update"]).to eq("v0.6.0 available")
+    File.write(path, "stale")
+    snapshot.write(sections, now + 2)
+    expect(File.read(path)).to eq("stale")
   end
 
   it "gives the pane the words it has always read for an error and an idle session" do
-    Dir.mktmpdir do |dir|
-      path = File.join(dir, "snapshot.json")
-      described_class.new(path: path).write(ClaudeInbox::Store.sectionize([session(id: "e", state: "error"), session(id: "i", state: "idle")], {}, now), now)
-      rows = JSON.parse(File.read(path))["sections"].values.flatten
-      expect(rows.to_h { |r| [r["id"], r["state"]] }).to eq("e" => "failed", "i" => "stopped")
-    end
+    described_class.new(path: path).write(ClaudeInbox::Store.sectionize([session(id: "e", state: "error"), session(id: "i", state: "idle")], {}, now), now)
+    rows = JSON.parse(File.read(path))["sections"].values.flatten
+    expect(rows.to_h { |r| [r["id"], r["state"]] }).to eq("e" => "failed", "i" => "stopped")
   end
 
   it "writes nothing when disabled" do
